@@ -15,7 +15,6 @@
       <th>No. Transaksi</th>
       <th>Uraian</th>
       <th>Item</th>
-      <th>Prefiks</th>
       <th>Aksi</th>
     </tr>
   </thead>
@@ -23,17 +22,16 @@
     {% for obj in object_list %}
     <tr>
       <td>{{ obj.tanggal|date:"Y-m-d" }}</td>
-      <td><a href="{% url 'jurnal:header_detail' obj.pk %}">{{ obj.nomor_transaksi }}</a></td>
+      <td><a href="{% url 'jurnal:header_detail' obj.pk %}">{% if obj.transaction_prefix %}{{ obj.transaction_prefix.kode }}-{% endif %}{{ obj.nomor_transaksi }}</a></td>
       <td>{{ obj.uraian_transaksi }}</td>
       <td>{{ obj.item|default:"-" }}</td>
-      <td>{{ obj.transaction_prefix|default:"-" }}</td>
       <td>
         <a href="{% url 'jurnal:header_update' obj.pk %}" class="btn btn-sm btn-warning">Edit</a>
         <a href="{% url 'jurnal:header_delete' obj.pk %}" class="btn btn-sm btn-danger">Hapus</a>
       </td>
     </tr>
     {% empty %}
-    <tr><td colspan="6" class="text-center">Belum ada data.</td></tr>
+    <tr><td colspan="5" class="text-center">Belum ada data.</td></tr>
     {% endfor %}
   </tbody>
 </table>
