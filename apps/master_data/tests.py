@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 
 from .models import (
     AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2,
-    TipeTransaksi, Bukti, Akun, _compute_kode_akun,
+    TipeTransaksi, Bukti, Akun, _compute_kode_akun, KATEGORI_PREFIX,
 )
 
 User = get_user_model()
@@ -85,28 +85,28 @@ class ComputeKodeAkunTests(TestCase):
         lv1 = AsetLv1.objects.create(kode='1', nama='Aset Lancar')
         lv2 = AsetLv2.objects.create(kode='101', nama='Kas', aset=lv1)
         kode = _compute_kode_akun('aset', lv2.pk)
-        self.assertEqual(kode, f'1.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(kode, f'{KATEGORI_PREFIX["aset"]}.{lv1.kode}.{lv2.kode}')
 
     def test_kewajiban_kode(self):
         lv1 = KewajibanLv1.objects.create(kode='2', nama='Utang Jk Pendek')
         lv2 = KewajibanLv2.objects.create(kode='201', nama='Utang Usaha', kewajiban=lv1)
         kode = _compute_kode_akun('kewajiban', lv2.pk)
-        self.assertEqual(kode, f'2.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(kode, f'{KATEGORI_PREFIX["kewajiban"]}.{lv1.kode}.{lv2.kode}')
 
     def test_ekuitas_kode(self):
         lv1 = EkuitasLv1.objects.create(kode='3', nama='Modal')
         lv2 = EkuitasLv2.objects.create(kode='301', nama='Modal Disetor', ekuitas=lv1)
         kode = _compute_kode_akun('ekuitas', lv2.pk)
-        self.assertEqual(kode, f'3.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(kode, f'{KATEGORI_PREFIX["ekuitas"]}.{lv1.kode}.{lv2.kode}')
 
     def test_no_kategori_akun(self):
         kode = _compute_kode_akun('aset', None)
-        self.assertTrue(kode.startswith('1.'))
+        self.assertEqual(kode, f'{KATEGORI_PREFIX["aset"]}.?.?')
 
     def test_lv2_without_lv1(self):
         lv2 = AsetLv2.objects.create(kode='102', nama='Kas Tanpa Parent', aset=None)
         kode = _compute_kode_akun('aset', lv2.pk)
-        self.assertEqual(kode, f'1.?.{lv2.kode}')
+        self.assertEqual(kode, f'{KATEGORI_PREFIX["aset"]}.?.{lv2.kode}')
 
 
 class AkunSignalTests(TestCase):
@@ -115,21 +115,21 @@ class AkunSignalTests(TestCase):
         lv2 = AsetLv2.objects.create(kode='101', nama='Kas', aset=lv1)
         akun = Akun.objects.filter(kategori_id='aset', kategori_akun=lv2.pk).first()
         self.assertIsNotNone(akun)
-        self.assertEqual(akun.kode_akun, f'1.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(akun.kode_akun, f'{KATEGORI_PREFIX["aset"]}.{lv1.kode}.{lv2.kode}')
 
     def test_kewajiban_lv2_save_creates_akun_with_kode(self):
         lv1 = KewajibanLv1.objects.create(kode='2', nama='Utang')
         lv2 = KewajibanLv2.objects.create(kode='201', nama='Utang Usaha', kewajiban=lv1)
         akun = Akun.objects.filter(kategori_id='kewajiban', kategori_akun=lv2.pk).first()
         self.assertIsNotNone(akun)
-        self.assertEqual(akun.kode_akun, f'2.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(akun.kode_akun, f'{KATEGORI_PREFIX["kewajiban"]}.{lv1.kode}.{lv2.kode}')
 
     def test_ekuitas_lv2_save_creates_akun_with_kode(self):
         lv1 = EkuitasLv1.objects.create(kode='3', nama='Modal')
         lv2 = EkuitasLv2.objects.create(kode='301', nama='Modal Disetor', ekuitas=lv1)
         akun = Akun.objects.filter(kategori_id='ekuitas', kategori_akun=lv2.pk).first()
         self.assertIsNotNone(akun)
-        self.assertEqual(akun.kode_akun, f'3.{lv1.kode}.{lv2.kode}')
+        self.assertEqual(akun.kode_akun, f'{KATEGORI_PREFIX["ekuitas"]}.{lv1.kode}.{lv2.kode}')
 
     def test_aset_lv2_delete_removes_akun(self):
         lv1 = AsetLv1.objects.create(kode='1', nama='Aset Lancar')

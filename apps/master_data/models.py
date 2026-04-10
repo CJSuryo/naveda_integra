@@ -99,7 +99,7 @@ def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
     """Compute the Kode Akun string from the Lv2 record."""
     prefix = KATEGORI_PREFIX.get(kategori_id, '?')
     if not kategori_akun:
-        return f'{prefix}.?.{kategori_akun}'
+        return f'{prefix}.?.?'
 
     lv1_kode: str = '?'
     lv2_kode: str = '?'
