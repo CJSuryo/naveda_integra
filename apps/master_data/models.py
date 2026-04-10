@@ -112,7 +112,7 @@ def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
         lv2 = EkuitasLv2.objects.filter(pk=kategori_akun).select_related('ekuitas').first()
         lv1_id = lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
 
-    return f'{prefix}.{lv1_id}.{kategori_akun}'
+    return f'{prefix}.{lv1_id.kode}.{kategori_akun.kode}'
 
 
 class Akun(models.Model):
