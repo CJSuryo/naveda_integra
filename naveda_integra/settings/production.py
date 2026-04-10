@@ -15,6 +15,9 @@ RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
 if RENDER_EXTERNAL_HOSTNAME:
     ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
+# Custom domain
+ALLOWED_HOSTS += ['navedafinance.com', 'www.navedafinance.com']
+
 # ── Database (Neon.tech via DATABASE_URL) ────────────────────────────────────
 DATABASES = {
     'default': dj_database_url.config(
@@ -37,7 +40,7 @@ CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
     if origin.strip()
-]
+] + ['https://navedafinance.com', 'https://www.navedafinance.com']
 
 # ── Static files (WhiteNoise on Render) ──────────────────────────────────────
 STORAGES = {
