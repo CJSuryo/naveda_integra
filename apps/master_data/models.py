@@ -99,20 +99,27 @@ def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
     """Compute the Kode Akun string from the Lv2 record."""
     prefix = KATEGORI_PREFIX.get(kategori_id, '?')
     if not kategori_akun:
-        return f'{prefix}.?.{kategori_akun}'
+        return f'{prefix}.?.?'
 
-    lv1_id: int | str = '?'
+    lv1_kode: str = '?'
+    lv2_kode: str = '?'
     if kategori_id == 'aset':
         lv2 = AsetLv2.objects.filter(pk=kategori_akun).select_related('aset').first()
-        lv1_id = lv2.aset_id if lv2 and lv2.aset_id else '?'
+        if lv2:
+            lv2_kode = lv2.kode
+            lv1_kode = lv2.aset.kode if lv2.aset else '?'
     elif kategori_id == 'kewajiban':
         lv2 = KewajibanLv2.objects.filter(pk=kategori_akun).select_related('kewajiban').first()
-        lv1_id = lv2.kewajiban_id if lv2 and lv2.kewajiban_id else '?'
+        if lv2:
+            lv2_kode = lv2.kode
+            lv1_kode = lv2.kewajiban.kode if lv2.kewajiban else '?'
     elif kategori_id == 'ekuitas':
         lv2 = EkuitasLv2.objects.filter(pk=kategori_akun).select_related('ekuitas').first()
-        lv1_id = lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
+        if lv2:
+            lv2_kode = lv2.kode
+            lv1_kode = lv2.ekuitas.kode if lv2.ekuitas else '?'
 
-    return f'{prefix}.{lv1_id.kode}.{kategori_akun.kode}'
+    return f'{prefix}.{lv1_kode}.{lv2_kode}'
 
 
 class Akun(models.Model):

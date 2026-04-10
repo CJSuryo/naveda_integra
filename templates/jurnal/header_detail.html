@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
-{% block title %}{{ object.nomor_transaksi }}{% endblock %}
+{% block title %}{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>{{ object.nomor_transaksi }}</h2>
+  <h2>{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}</h2>
   <div>
     <a href="{% url 'jurnal:detail_create' object.pk %}" class="btn btn-success">+ Tambah Detail</a>
     <a href="{% url 'jurnal:header_update' object.pk %}" class="btn btn-warning">Edit Header</a>
@@ -16,7 +16,7 @@
       <dt class="col-sm-3">Tanggal</dt>
       <dd class="col-sm-9">{{ object.tanggal|date:"Y-m-d" }}</dd>
       <dt class="col-sm-3">No. Transaksi</dt>
-      <dd class="col-sm-9">{{ object.nomor_transaksi }}</dd>
+      <dd class="col-sm-9">{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}</dd>
       <dt class="col-sm-3">Uraian</dt>
       <dd class="col-sm-9">{{ object.uraian_transaksi }}</dd>
       <dt class="col-sm-3">Item</dt>

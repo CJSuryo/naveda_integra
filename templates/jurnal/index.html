@@ -29,7 +29,7 @@
         {% if forloop.first %}
         <td rowspan="{{ header.details.count }}">{{ header.tanggal|date:"Y-m-d" }}</td>
         <td rowspan="{{ header.details.count }}">
-          <a href="{% url 'jurnal:header_detail' header.pk %}">{{ header.nomor_transaksi }}</a>
+          <a href="{% url 'jurnal:header_detail' header.pk %}">{% if header.transaction_prefix %}{{ header.transaction_prefix.kode }}-{% endif %}{{ header.nomor_transaksi }}</a>
         </td>
         <td rowspan="{{ header.details.count }}">{{ header.item.kode|default:"-" }}</td>
         <td rowspan="{{ header.details.count }}">{{ header.uraian_transaksi }}</td>
