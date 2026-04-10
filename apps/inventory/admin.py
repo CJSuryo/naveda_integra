@@ -11,9 +11,12 @@ class MutasiInventoryDetailInline(admin.TabularInline):
 @admin.register(MutasiInventoryHeader)
 class MutasiInventoryHeaderAdmin(admin.ModelAdmin):
     list_display = ('id', 'entitas_bisnis', 'dll')
+    list_select_related = ('entitas_bisnis',)
+    raw_id_fields = ('entitas_bisnis',)
     inlines = (MutasiInventoryDetailInline,)
 
 
 @admin.register(MutasiInventoryDetail)
 class MutasiInventoryDetailAdmin(admin.ModelAdmin):
     list_display = ('id', 'mutasi_inventory_header', 'dll')
+    list_select_related = ('mutasi_inventory_header',)

@@ -93,12 +93,16 @@ class Akun(models.Model):
         ('pendapatan', 'Pendapatan'),
         ('beban', 'Beban'),
     ]
-    kategori_id = models.CharField(max_length=50, choices=KATEGORI_CHOICES)
-    kategori_akun = models.BigIntegerField(null=True, blank=True)
+    kategori_id = models.CharField(max_length=50, choices=KATEGORI_CHOICES, db_index=True)
+    kategori_akun = models.BigIntegerField(null=True, blank=True, db_index=True)
 
     class Meta:
         verbose_name = 'Akun'
         verbose_name_plural = 'Akun'
+        indexes = [
+            # Composite index for chart-of-accounts lookups by category + sub-category
+            models.Index(fields=['kategori_id', 'kategori_akun'], name='idx_akun_kategori'),
+        ]
 
     def __str__(self) -> str:
         return f'Akun {self.id} ({self.kategori_id})'
@@ -130,6 +134,12 @@ class Bukti(models.Model):
     class Meta:
         verbose_name = 'Bukti'
         verbose_name_plural = 'Bukti'
+        indexes = [
+            # Document lookups by external reference + type
+            models.Index(fields=['referensi_eksternal', 'tipe_dokumen'], name='idx_bukti_ref_tipe'),
+            # Duplicate-detection by file hash
+            models.Index(fields=['file_hash'], name='idx_bukti_hash'),
+        ]
 
     def __str__(self) -> str:
         return f'{self.tipe_dokumen} - {self.referensi_eksternal}'

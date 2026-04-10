@@ -13,6 +13,10 @@ class PiutangHeader(models.Model):
     class Meta:
         verbose_name = 'Piutang Header'
         verbose_name_plural = 'Piutang Header'
+        indexes = [
+            # Per-entity receivable lookups
+            models.Index(fields=['entitas_bisnis'], name='idx_ph_entitas'),
+        ]
 
     def __str__(self) -> str:
         return f'Piutang {self.id} - {self.entitas_bisnis}'

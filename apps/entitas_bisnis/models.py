@@ -51,6 +51,12 @@ class EntitasBisnis(models.Model):
     class Meta:
         verbose_name = 'Entitas Bisnis'
         verbose_name_plural = 'Entitas Bisnis'
+        indexes = [
+            # Active-entity filtering (dashboards, dropdowns)
+            models.Index(fields=['status_aktif', 'nama'], name='idx_eb_aktif_nama'),
+            # Per-type lookups
+            models.Index(fields=['tipe_entitas', 'status_aktif'], name='idx_eb_tipe_aktif'),
+        ]
 
     def __str__(self) -> str:
         return self.nama
@@ -74,6 +80,10 @@ class CabangEntitasBisnis(models.Model):
     class Meta:
         verbose_name = 'Cabang Entitas Bisnis'
         verbose_name_plural = 'Cabang Entitas Bisnis'
+        indexes = [
+            # Per-entity branch list, filtered by active status
+            models.Index(fields=['entitas_bisnis', 'status_aktif'], name='idx_cab_entitas_aktif'),
+        ]
 
     def __str__(self) -> str:
         return f'{self.nama} ({self.entitas_bisnis.nama})'

@@ -13,6 +13,10 @@ class MutasiInventoryHeader(models.Model):
     class Meta:
         verbose_name = 'Mutasi Inventory Header'
         verbose_name_plural = 'Mutasi Inventory Header'
+        indexes = [
+            # Per-entity inventory mutation lookups
+            models.Index(fields=['entitas_bisnis'], name='idx_mih_entitas'),
+        ]
 
     def __str__(self) -> str:
         return f'MutasiInventory {self.id} - {self.entitas_bisnis}'

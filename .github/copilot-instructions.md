@@ -105,6 +105,22 @@ docs/                           # Markdown documentation
 - Always use Django migrations. Never write raw SQL in application code.
 - Use `Decimal` for monetary values (not `float`).
 
+### Database Indexing (Critical for Millions of Rows)
+
+The jurnal (double-entry ledger), akun, and sales tables are high-volume. Follow these rules:
+
+- **Every FK used in `list_display` or queryset filters** must have a corresponding `db_index=True` or a composite `models.Index`.
+- **Date fields** that appear in range queries (e.g. `tanggal`, `tanggal_transaksi`) should always have `db_index=True`.
+- **Composite indexes** go in `class Meta: indexes = [...]` with explicit `name='idx_<table>_<columns>'`.
+- Name indexes as `idx_<2-3 letter table abbrev>_<column hints>` (e.g. `idx_jh_tanggal_tipe`, `idx_jd_akun_header`).
+- For the **ledger** (jurnal):
+  - `JurnalHeader`: indexed on `(tanggal, tipe_transaksi)`, `(entitas_bisnis, tanggal)`, and `item`.
+  - `JurnalDetail`: indexed on `(akun, jurnal_header)` for trial-balance/ledger aggregation, and `(jurnal_header, akun)` for header→detail joins.
+  - `Akun`: indexed on `kategori_id`, `kategori_akun`, and composite `(kategori_id, kategori_akun)`.
+- For **sales**: indexed on `(entitas_bisnis, tanggal_transaksi)` and `(status_pengiriman, tanggal_transaksi)`.
+- **Admin N+1 prevention**: every `ModelAdmin` that displays FK fields in `list_display` must set `list_select_related`. Use `raw_id_fields` for high-cardinality FKs in admin forms.
+- **Views**: always use `select_related()` when accessing FK fields, and `prefetch_related()` for reverse/M2M relations.
+
 ### Security
 
 - Validate `next` redirect parameters with `url_has_allowed_host_and_scheme` + `resolve()` + `reverse()`.

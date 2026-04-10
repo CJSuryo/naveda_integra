@@ -19,6 +19,7 @@ class EntitasBisnisAdmin(admin.ModelAdmin):
     list_display = ('nama', 'tipe_entitas', 'relasi', 'email', 'telepon', 'status_aktif')
     list_filter = ('tipe_entitas', 'relasi', 'status_aktif')
     search_fields = ('nama', 'email', 'tax_id')
+    list_select_related = ('tipe_entitas',)
     filter_horizontal = ('users',)
     inlines = (CabangInline,)
 
@@ -28,3 +29,4 @@ class CabangEntitasBisnisAdmin(admin.ModelAdmin):
     list_display = ('nama', 'entitas_bisnis', 'email', 'telepon', 'status_aktif')
     list_filter = ('status_aktif', 'entitas_bisnis')
     search_fields = ('nama', 'email')
+    list_select_related = ('entitas_bisnis',)
