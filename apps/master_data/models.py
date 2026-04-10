@@ -95,6 +95,26 @@ KATEGORI_PREFIX = {
 }
 
 
+def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
+    """Compute the Kode Akun string from the Lv2 record."""
+    prefix = KATEGORI_PREFIX.get(kategori_id, '?')
+    if not kategori_akun:
+        return f'{prefix}.?.{kategori_akun}'
+
+    lv1_id: int | str = '?'
+    if kategori_id == 'aset':
+        lv2 = AsetLv2.objects.filter(pk=kategori_akun).select_related('aset').first()
+        lv1_id = lv2.aset_id if lv2 and lv2.aset_id else '?'
+    elif kategori_id == 'kewajiban':
+        lv2 = KewajibanLv2.objects.filter(pk=kategori_akun).select_related('kewajiban').first()
+        lv1_id = lv2.kewajiban_id if lv2 and lv2.kewajiban_id else '?'
+    elif kategori_id == 'ekuitas':
+        lv2 = EkuitasLv2.objects.filter(pk=kategori_akun).select_related('ekuitas').first()
+        lv1_id = lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
+
+    return f'{prefix}.{lv1_id}.{kategori_akun}'
+
+
 class Akun(models.Model):
     KATEGORI_CHOICES = [
         ('aset', 'Aset'),
@@ -106,6 +126,7 @@ class Akun(models.Model):
     kategori_id = models.CharField(max_length=50, choices=KATEGORI_CHOICES, db_index=True)
     kategori_akun = models.BigIntegerField(null=True, blank=True, db_index=True)
     nama = models.CharField(max_length=255, blank=True, default='')
+    kode_akun = models.CharField(max_length=50, blank=True, default='', db_index=True)
 
     class Meta:
         verbose_name = 'Akun'
@@ -114,26 +135,6 @@ class Akun(models.Model):
             # Composite index for chart-of-accounts lookups by category + sub-category
             models.Index(fields=['kategori_id', 'kategori_akun'], name='idx_akun_kategori'),
         ]
-
-    @property
-    def kode_akun(self) -> str:
-        """Return the computed 'Kode Akun' e.g. 1.1.8, 2.1.3, 3.1.1."""
-        prefix = KATEGORI_PREFIX.get(self.kategori_id, '?')
-        return f'{prefix}.{self.kategori_id_lv1}.{self.kategori_akun}'
-
-    @property
-    def kategori_id_lv1(self) -> int | str:
-        """Return the Lv1 id by looking up the source Lv2 record."""
-        if self.kategori_id == 'aset' and self.kategori_akun:
-            lv2 = AsetLv2.objects.filter(pk=self.kategori_akun).select_related('aset').first()
-            return lv2.aset_id if lv2 and lv2.aset_id else '?'
-        if self.kategori_id == 'kewajiban' and self.kategori_akun:
-            lv2 = KewajibanLv2.objects.filter(pk=self.kategori_akun).select_related('kewajiban').first()
-            return lv2.kewajiban_id if lv2 and lv2.kewajiban_id else '?'
-        if self.kategori_id == 'ekuitas' and self.kategori_akun:
-            lv2 = EkuitasLv2.objects.filter(pk=self.kategori_akun).select_related('ekuitas').first()
-            return lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
-        return '?'
 
     def __str__(self) -> str:
         return f'{self.kode_akun} - {self.nama}' if self.nama else f'Akun {self.id} ({self.kategori_id})'

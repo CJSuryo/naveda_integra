@@ -59,8 +59,7 @@ class JurnalDetailForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['akun'].queryset = Akun.objects.all().order_by('kategori_id', 'kategori_akun')
-        self.fields['akun'].label_from_instance = lambda obj: f'{obj.kode_akun} - {obj.nama}'
+        self.fields['akun'].queryset = Akun.objects.all().order_by('kode_akun')
 
 
 class JurnalAutomasiForm(forms.ModelForm):
@@ -82,8 +81,7 @@ class JurnalAutomasiAkunForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['akun'].queryset = Akun.objects.all().order_by('kategori_id', 'kategori_akun')
-        self.fields['akun'].label_from_instance = lambda obj: f'{obj.kode_akun} - {obj.nama}'
+        self.fields['akun'].queryset = Akun.objects.all().order_by('kode_akun')
 
 
 class AutomasiEntryForm(forms.Form):

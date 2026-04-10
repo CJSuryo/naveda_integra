@@ -265,22 +265,29 @@ def automasi_remove_akun(request: HttpRequest, pk: int, mapping_pk: int) -> Http
 
 
 def _next_nomor_transaksi(prefix_kode: str) -> str:
-    """Generate the next sequential transaction number for a prefix."""
-    last = (
-        JurnalHeader.objects
-        .filter(nomor_transaksi__startswith=prefix_kode + '-')
-        .order_by('-nomor_transaksi')
-        .values_list('nomor_transaksi', flat=True)
-        .first()
-    )
-    if last:
-        try:
-            seq = int(last.rsplit('-', 1)[1]) + 1
-        except (ValueError, IndexError):
+    """Generate the next sequential transaction number for a prefix.
+
+    Uses database-level locking to avoid race conditions.
+    """
+    from django.db import transaction
+
+    with transaction.atomic():
+        last = (
+            JurnalHeader.objects
+            .select_for_update()
+            .filter(nomor_transaksi__startswith=prefix_kode + '-')
+            .order_by('-nomor_transaksi')
+            .values_list('nomor_transaksi', flat=True)
+            .first()
+        )
+        if last:
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        else:
             seq = 1
-    else:
-        seq = 1
-    return f'{prefix_kode}-{seq:03d}'
+        return f'{prefix_kode}-{seq:03d}'
 
 
 @login_required

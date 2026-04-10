@@ -2,15 +2,16 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
-from .models import AsetLv2, KewajibanLv2, EkuitasLv2, Akun
+from .models import AsetLv2, KewajibanLv2, EkuitasLv2, Akun, _compute_kode_akun
 
 
 def _sync_akun(kategori: str, lv2_instance) -> None:
     """Create or update an Akun row that mirrors the given Lv2 record."""
+    kode = _compute_kode_akun(kategori, lv2_instance.pk)
     Akun.objects.update_or_create(
         kategori_id=kategori,
         kategori_akun=lv2_instance.pk,
-        defaults={'nama': lv2_instance.nama},
+        defaults={'nama': lv2_instance.nama, 'kode_akun': kode},
     )
 
 
