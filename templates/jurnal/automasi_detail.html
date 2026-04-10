@@ -1,0 +1,47 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.nama }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Automasi: {{ object.nama }}</h2>
+  <div>
+    <a href="{% url 'jurnal:automasi_entry' object.pk %}" class="btn btn-primary">Buat Jurnal</a>
+    <a href="{% url 'jurnal:automasi_update' object.pk %}" class="btn btn-warning">Edit</a>
+    <a href="{% url 'jurnal:automasi_list' %}" class="btn btn-secondary">Kembali</a>
+  </div>
+</div>
+
+<h5>Mapping Akun</h5>
+<table class="table table-striped">
+  <thead class="table-dark">
+    <tr><th>Kode Akun</th><th>Nama Akun</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    {% for m in mappings %}
+    <tr>
+      <td>{{ m.akun.kode_akun }}</td>
+      <td>{{ m.akun.nama }}</td>
+      <td>
+        <form method="post" action="{% url 'jurnal:automasi_remove_akun' object.pk m.pk %}" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="text-center">Belum ada mapping akun.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h5>Tambah Akun</h5>
+<form method="post" action="{% url 'jurnal:automasi_add_akun' object.pk %}" class="row g-2 align-items-end">
+  {% csrf_token %}
+  <div class="col-auto" style="min-width: 400px;">
+    <label class="form-label">Akun</label>
+    {{ add_form.akun }}
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-success">+ Tambah</button>
+  </div>
+</form>
+{% endblock %}

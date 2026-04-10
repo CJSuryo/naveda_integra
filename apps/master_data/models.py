@@ -85,6 +85,36 @@ class EkuitasLv2(models.Model):
 
 # ── Akun ──────────────────────────────────────────────────────────────────────
 
+# Prefix used to build the "Kode Akun" string (e.g. 1.1.8 for Aset)
+KATEGORI_PREFIX = {
+    'aset': '1',
+    'kewajiban': '2',
+    'ekuitas': '3',
+    'pendapatan': '4',
+    'beban': '5',
+}
+
+
+def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
+    """Compute the Kode Akun string from the Lv2 record."""
+    prefix = KATEGORI_PREFIX.get(kategori_id, '?')
+    if not kategori_akun:
+        return f'{prefix}.?.{kategori_akun}'
+
+    lv1_id: int | str = '?'
+    if kategori_id == 'aset':
+        lv2 = AsetLv2.objects.filter(pk=kategori_akun).select_related('aset').first()
+        lv1_id = lv2.aset_id if lv2 and lv2.aset_id else '?'
+    elif kategori_id == 'kewajiban':
+        lv2 = KewajibanLv2.objects.filter(pk=kategori_akun).select_related('kewajiban').first()
+        lv1_id = lv2.kewajiban_id if lv2 and lv2.kewajiban_id else '?'
+    elif kategori_id == 'ekuitas':
+        lv2 = EkuitasLv2.objects.filter(pk=kategori_akun).select_related('ekuitas').first()
+        lv1_id = lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
+
+    return f'{prefix}.{lv1_id}.{kategori_akun}'
+
+
 class Akun(models.Model):
     KATEGORI_CHOICES = [
         ('aset', 'Aset'),
@@ -95,6 +125,8 @@ class Akun(models.Model):
     ]
     kategori_id = models.CharField(max_length=50, choices=KATEGORI_CHOICES, db_index=True)
     kategori_akun = models.BigIntegerField(null=True, blank=True, db_index=True)
+    nama = models.CharField(max_length=255, blank=True, default='')
+    kode_akun = models.CharField(max_length=50, blank=True, default='', db_index=True)
 
     class Meta:
         verbose_name = 'Akun'
@@ -105,7 +137,7 @@ class Akun(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f'Akun {self.id} ({self.kategori_id})'
+        return f'{self.kode_akun} - {self.nama}' if self.nama else f'Akun {self.id} ({self.kategori_id})'
 
 
 # ── TipeTransaksi ─────────────────────────────────────────────────────────────

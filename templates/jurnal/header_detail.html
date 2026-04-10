@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.nomor_transaksi }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>{{ object.nomor_transaksi }}</h2>
+  <div>
+    <a href="{% url 'jurnal:detail_create' object.pk %}" class="btn btn-success">+ Tambah Detail</a>
+    <a href="{% url 'jurnal:header_update' object.pk %}" class="btn btn-warning">Edit Header</a>
+    <a href="{% url 'jurnal:header_list' %}" class="btn btn-secondary">Kembali</a>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Tanggal</dt>
+      <dd class="col-sm-9">{{ object.tanggal|date:"Y-m-d" }}</dd>
+      <dt class="col-sm-3">No. Transaksi</dt>
+      <dd class="col-sm-9">{{ object.nomor_transaksi }}</dd>
+      <dt class="col-sm-3">Uraian</dt>
+      <dd class="col-sm-9">{{ object.uraian_transaksi }}</dd>
+      <dt class="col-sm-3">Item</dt>
+      <dd class="col-sm-9">{{ object.item|default:"-" }}</dd>
+      <dt class="col-sm-3">Prefiks Transaksi</dt>
+      <dd class="col-sm-9">{{ object.transaction_prefix|default:"-" }}</dd>
+      <dt class="col-sm-3">Tipe Transaksi</dt>
+      <dd class="col-sm-9">{{ object.tipe_transaksi|default:"-" }}</dd>
+      <dt class="col-sm-3">Entitas Bisnis</dt>
+      <dd class="col-sm-9">{{ object.entitas_bisnis|default:"-" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<h5>Detail Jurnal</h5>
+<table class="table table-striped">
+  <thead class="table-dark">
+    <tr>
+      <th>Kode Akun</th>
+      <th>Nama Akun</th>
+      <th class="text-end">Debit</th>
+      <th class="text-end">Kredit</th>
+      <th>Aksi</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in details %}
+    <tr>
+      <td>{{ d.akun.kode_akun }}</td>
+      <td>{{ d.akun.nama }}</td>
+      <td class="text-end">Rp{{ d.debit|floatformat:0 }}</td>
+      <td class="text-end">Rp{{ d.kredit|floatformat:0 }}</td>
+      <td>
+        <a href="{% url 'jurnal:detail_update' object.pk d.pk %}" class="btn btn-sm btn-warning">Edit</a>
+        <a href="{% url 'jurnal:detail_delete' object.pk d.pk %}" class="btn btn-sm btn-danger">Hapus</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-center">Belum ada detail.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

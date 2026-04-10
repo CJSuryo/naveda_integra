@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Hapus Jurnal Header{% endblock %}
+{% block content %}
+<h2>Hapus Jurnal Header</h2>
+<p>Hapus <strong>{{ object }}</strong>?</p>
+<form method="post">{% csrf_token %}
+  <button type="submit" class="btn btn-danger">Ya, Hapus</button>
+  <a href="{% url 'jurnal:header_list' %}" class="btn btn-secondary">Batal</a>
+</form>
+{% endblock %}
