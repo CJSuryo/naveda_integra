@@ -5,13 +5,19 @@ from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .forms import LoginForm, RegisterForm
 
 
 def _get_safe_next(request: HttpRequest) -> str | None:
-    """Return a validated, path-only next URL or None."""
+    """Validate the next parameter and reconstruct URL via Django's URL resolver.
+
+    By resolving and then reversing the URL we break the user-input taint
+    chain: the string passed to redirect() is produced by reverse(), not by
+    any user-supplied value.
+    """
     next_url = request.GET.get('next', '')
     if not next_url:
         return None
@@ -21,12 +27,14 @@ def _get_safe_next(request: HttpRequest) -> str | None:
         require_https=request.is_secure(),
     ):
         return None
-    # Extract only the path+query to avoid open-redirect via full URL
-    parsed = urlparse(next_url)
-    safe = parsed.path
-    if parsed.query:
-        safe += '?' + parsed.query
-    return safe or None
+    path = urlparse(next_url).path
+    try:
+        match = resolve(path)
+    except Resolver404:
+        return None
+    # Reconstruct URL from the resolved match — this is NOT user input
+    reconstructed = reverse(match.view_name, args=match.args, kwargs=match.kwargs)
+    return reconstructed
 
 
 def login_view(request: HttpRequest) -> HttpResponse:
