@@ -46,6 +46,21 @@ class LoginViewTests(TestCase):
         response = self.client.post(self.url, {'username': 'login@example.com', 'password': 'pass1234'})
         self.assertRedirects(response, reverse('home'))
 
+    def test_login_with_safe_next(self):
+        next_url = reverse('entitas_bisnis:list')
+        response = self.client.post(
+            f'{self.url}?next={next_url}',
+            {'username': 'login@example.com', 'password': 'pass1234'},
+        )
+        self.assertRedirects(response, next_url)
+
+    def test_login_with_unsafe_next_redirects_home(self):
+        response = self.client.post(
+            f'{self.url}?next=http://evil.com/steal',
+            {'username': 'login@example.com', 'password': 'pass1234'},
+        )
+        self.assertRedirects(response, reverse('home'))
+
     def test_login_wrong_password(self):
         response = self.client.post(self.url, {'username': 'login@example.com', 'password': 'wrong'})
         self.assertEqual(response.status_code, 200)
