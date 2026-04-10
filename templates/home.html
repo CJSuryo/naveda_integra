@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard - Naveda Integra{% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <h1 class="mb-4">Dashboard</h1>
+  </div>
+  <div class="col-md-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Entitas Bisnis</h5>
+        <a href="{% url 'entitas_bisnis:list' %}" class="btn btn-primary">Kelola</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Aset</h5>
+        <a href="{% url 'master_data:aset_lv1_list' %}" class="btn btn-primary">Kelola</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Kewajiban</h5>
+        <a href="{% url 'master_data:kewajiban_lv1_list' %}" class="btn btn-primary">Kelola</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Ekuitas</h5>
+        <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="btn btn-primary">Kelola</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4 mb-3">
+    <div class="card">
+      <div class="card-body">
+        <h5 class="card-title">Tipe Transaksi</h5>
+        <a href="{% url 'master_data:tipe_transaksi_list' %}" class="btn btn-primary">Kelola</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
