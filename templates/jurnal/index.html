@@ -14,8 +14,10 @@
     <tr>
       <th>Tanggal</th>
       <th>No. Transaksi</th>
+      <th>Entitas Bisnis</th>
+      <th>Uraian Transaksi</th>
       <th>Item</th>
-      <th>Uraian</th>
+      <th>No. Bukti</th>
       <th>Kode Akun</th>
       <th>Nama Akun</th>
       <th class="text-end">Debit</th>
@@ -24,24 +26,46 @@
   </thead>
   <tbody>
     {% for header in headers %}
+      {% with detail_count=header.details.count %}
       {% for detail in header.details.all %}
       <tr>
         {% if forloop.first %}
-        <td rowspan="{{ header.details.count }}">{{ header.tanggal|date:"Y-m-d" }}</td>
-        <td rowspan="{{ header.details.count }}">
+        <td rowspan="{{ detail_count }}">{{ header.tanggal|date:"Y-m-d" }}</td>
+        <td rowspan="{{ detail_count }}">
           <a href="{% url 'jurnal:header_detail' header.pk %}">{% if header.transaction_prefix %}{{ header.transaction_prefix.kode }}-{% endif %}{{ header.nomor_transaksi }}</a>
         </td>
-        <td rowspan="{{ header.details.count }}">{{ header.item.kode|default:"-" }}</td>
-        <td rowspan="{{ header.details.count }}">{{ header.uraian_transaksi }}</td>
+        <td rowspan="{{ detail_count }}">
+          {% if header.entitas_bisnis %}
+            <a href="{% url 'entitas_bisnis:detail' header.entitas_bisnis.pk %}">{{ header.entitas_bisnis.nama }}</a>
+          {% else %}-{% endif %}
+        </td>
+        <td rowspan="{{ detail_count }}">{{ header.uraian_transaksi }}</td>
+        <td rowspan="{{ detail_count }}">
+          {% if header.item %}
+            <a href="{% url 'jurnal:item_update' header.item.pk %}">{{ header.item.nama }}</a>
+          {% else %}-{% endif %}
+        </td>
+        <td rowspan="{{ detail_count }}">
+          {% if header.no_bukti %}
+            <a href="{% url 'master_data:bukti_detail' header.no_bukti.pk %}">{{ header.no_bukti.pk }}</a>
+          {% else %}-{% endif %}
+        </td>
         {% endif %}
-        <td>{{ detail.akun.kode_akun }}</td>
+        <td>
+          {% if detail.akun.lv2_url %}
+            <a href="{{ detail.akun.lv2_url }}">{{ detail.akun.kode_akun }}</a>
+          {% else %}
+            {{ detail.akun.kode_akun }}
+          {% endif %}
+        </td>
         <td>{{ detail.akun.nama }}</td>
         <td class="text-end">Rp{{ detail.debit|floatformat:0 }}</td>
         <td class="text-end">Rp{{ detail.kredit|floatformat:0 }}</td>
       </tr>
       {% endfor %}
+      {% endwith %}
     {% empty %}
-      <tr><td colspan="8" class="text-center">Belum ada data jurnal.</td></tr>
+      <tr><td colspan="10" class="text-center">Belum ada data jurnal.</td></tr>
     {% endfor %}
   </tbody>
 </table>

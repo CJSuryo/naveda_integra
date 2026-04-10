@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Bukti #{{ object.pk }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h2>Bukti #{{ object.pk }}</h2>
+  <a href="javascript:history.back()" class="btn btn-secondary">Kembali</a>
+</div>
+<table class="table table-striped">
+  <tbody>
+    <tr><th style="width:220px">ID</th><td>{{ object.pk }}</td></tr>
+    <tr><th>Referensi Eksternal</th><td>{{ object.referensi_eksternal|default:'-' }}</td></tr>
+    <tr><th>Tipe Dokumen</th><td>{{ object.tipe_dokumen|default:'-' }}</td></tr>
+    <tr><th>File Path</th><td>{{ object.filepath|default:'-' }}</td></tr>
+    <tr><th>Diunggah Pada</th><td>{{ object.uploaded_at }}</td></tr>
+  </tbody>
+</table>
+{% endblock %}

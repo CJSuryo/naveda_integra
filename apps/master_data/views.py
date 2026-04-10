@@ -16,6 +16,7 @@ from .models import (
     KewajibanLv1, KewajibanLv2,
     EkuitasLv1, EkuitasLv2,
     TipeTransaksi,
+    Bukti,
 )
 
 
@@ -349,3 +350,11 @@ def tipe_transaksi_delete(request: HttpRequest, pk: int) -> HttpResponse:
             return redirect('master_data:tipe_transaksi_list')
         return redirect('master_data:tipe_transaksi_list')
     return render(request, 'master_data/tipe_transaksi/confirm_delete.html', {'object': obj})
+
+
+# ── Bukti ─────────────────────────────────────────────────────────────────────
+
+@login_required
+def bukti_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(Bukti, pk=pk)
+    return render(request, 'master_data/bukti/detail.html', {'object': obj})
