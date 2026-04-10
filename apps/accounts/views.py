@@ -1,4 +1,6 @@
 """Account views."""
+from urllib.parse import urlparse
+
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
@@ -8,20 +10,33 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from .forms import LoginForm, RegisterForm
 
 
+def _get_safe_next(request: HttpRequest) -> str | None:
+    """Return a validated, path-only next URL or None."""
+    next_url = request.GET.get('next', '')
+    if not next_url:
+        return None
+    if not url_has_allowed_host_and_scheme(
+        url=next_url,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return None
+    # Extract only the path+query to avoid open-redirect via full URL
+    parsed = urlparse(next_url)
+    safe = parsed.path
+    if parsed.query:
+        safe += '?' + parsed.query
+    return safe or None
+
+
 def login_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         return redirect('home')
     form = LoginForm(request, data=request.POST or None)
     if request.method == 'POST' and form.is_valid():
         login(request, form.get_user())
-        next_url = request.GET.get('next', '')
-        if next_url and url_has_allowed_host_and_scheme(
-            url=next_url,
-            allowed_hosts={request.get_host()},
-            require_https=request.is_secure(),
-        ):
-            return redirect(next_url)
-        return redirect('home')
+        safe_next = _get_safe_next(request)
+        return redirect(safe_next) if safe_next else redirect('home')
     return render(request, 'accounts/login.html', {'form': form})
 
 
