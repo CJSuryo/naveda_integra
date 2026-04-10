@@ -40,4 +40,6 @@ urlpatterns = [
     path('tipe-transaksi/create/', views.tipe_transaksi_create, name='tipe_transaksi_create'),
     path('tipe-transaksi/<int:pk>/edit/', views.tipe_transaksi_update, name='tipe_transaksi_update'),
     path('tipe-transaksi/<int:pk>/delete/', views.tipe_transaksi_delete, name='tipe_transaksi_delete'),
+    # Bukti
+    path('bukti/<int:pk>/', views.bukti_detail, name='bukti_detail'),
 ]

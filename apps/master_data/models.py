@@ -146,6 +146,25 @@ class Akun(models.Model):
     def __str__(self) -> str:
         return f'{self.kode_akun} - {self.nama}' if self.nama else f'Akun {self.id} ({self.kategori_id})'
 
+    def get_lv2_url(self) -> str | None:
+        """Return the URL to the associated Lv1 detail page (which lists Lv2 records), or None."""
+        from django.urls import reverse
+        if not self.kategori_akun:
+            return None
+        if self.kategori_id == 'aset':
+            lv1_pk = AsetLv2.objects.filter(pk=self.kategori_akun).values_list('aset_id', flat=True).first()
+            if lv1_pk:
+                return reverse('master_data:aset_lv1_detail', args=[lv1_pk])
+        elif self.kategori_id == 'kewajiban':
+            lv1_pk = KewajibanLv2.objects.filter(pk=self.kategori_akun).values_list('kewajiban_id', flat=True).first()
+            if lv1_pk:
+                return reverse('master_data:kewajiban_lv1_detail', args=[lv1_pk])
+        elif self.kategori_id == 'ekuitas':
+            lv1_pk = EkuitasLv2.objects.filter(pk=self.kategori_akun).values_list('ekuitas_id', flat=True).first()
+            if lv1_pk:
+                return reverse('master_data:ekuitas_lv1_detail', args=[lv1_pk])
+        return None
+
 
 # ── TipeTransaksi ─────────────────────────────────────────────────────────────
 

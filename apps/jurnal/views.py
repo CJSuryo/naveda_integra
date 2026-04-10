@@ -28,7 +28,7 @@ def index(request: HttpRequest) -> HttpResponse:
     """Combined jurnal index showing headers with their details."""
     headers = (
         JurnalHeader.objects
-        .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix')
+        .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix', 'no_bukti')
         .prefetch_related('details__akun')
         .order_by('-tanggal', 'nomor_transaksi')
     )
