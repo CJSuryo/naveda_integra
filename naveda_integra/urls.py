@@ -1,0 +1,18 @@
+"""naveda_integra URL Configuration."""
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('accounts/', include('apps.accounts.urls')),
+    path('entitas-bisnis/', include('apps.entitas_bisnis.urls')),
+    path('master-data/', include('apps.master_data.urls')),
+    path('', include('apps.accounts.urls_home')),
+]
+
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns = [path('__debug__/', include(debug_toolbar.urls))] + urlpatterns
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

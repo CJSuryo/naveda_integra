@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Hapus Cabang{% endblock %}
+{% block content %}
+<h2>Hapus Cabang</h2>
+<p>Apakah Anda yakin ingin menghapus cabang <strong>{{ object.nama }}</strong> dari <strong>{{ parent.nama }}</strong>?</p>
+<form method="post">
+  {% csrf_token %}
+  <button type="submit" class="btn btn-danger">Ya, Hapus</button>
+  <a href="{% url 'entitas_bisnis:detail' parent.pk %}" class="btn btn-secondary">Batal</a>
+</form>
+{% endblock %}
