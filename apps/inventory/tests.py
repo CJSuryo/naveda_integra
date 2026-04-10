@@ -1,12 +1,13 @@
 """Unit tests for the inventory app."""
 from django.test import TestCase
-from apps.entitas_bisnis.models import EntitasBisnis
+from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from .models import MutasiInventoryHeader, MutasiInventoryDetail
 
 
 class InventoryModelTests(TestCase):
     def setUp(self):
-        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas='pelanggan')
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
 
     def test_mutasi_header_str(self):
         h = MutasiInventoryHeader.objects.create(entitas_bisnis=self.entitas)

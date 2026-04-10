@@ -2,7 +2,7 @@
 from decimal import Decimal
 from django.test import TestCase
 
-from apps.entitas_bisnis.models import EntitasBisnis
+from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from .models import ItemMaster, SalesHeader, SalesDetail
 
 
@@ -20,7 +20,8 @@ class ItemMasterTests(TestCase):
 
 class SalesHeaderTests(TestCase):
     def setUp(self):
-        self.entitas = EntitasBisnis.objects.create(nama='PT Pelanggan', tipe_entitas='pelanggan')
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Pelanggan', tipe_entitas=self.tipe)
 
     def test_str(self):
         h = SalesHeader.objects.create(
@@ -50,7 +51,8 @@ class SalesHeaderTests(TestCase):
 
 class SalesDetailTests(TestCase):
     def setUp(self):
-        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas='pelanggan')
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
         self.item = ItemMaster.objects.create(kode='ITM001', nama='Barang A')
         self.header = SalesHeader.objects.create(
             nomor_invoice='INV001',

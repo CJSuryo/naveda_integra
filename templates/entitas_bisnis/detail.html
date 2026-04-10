@@ -10,12 +10,39 @@
   </div>
 </div>
 <table class="table table-bordered">
-  <tr><th>Tipe Entitas</th><td>{{ object.get_tipe_entitas_display }}</td></tr>
+  <tr><th>Tipe Entitas</th><td>{{ object.tipe_entitas }}</td></tr>
+  <tr><th>Relasi Bisnis</th><td>{{ object.get_relasi_display }}</td></tr>
   <tr><th>Email</th><td>{{ object.email|default:'-' }}</td></tr>
   <tr><th>Telepon</th><td>{{ object.telepon|default:'-' }}</td></tr>
   <tr><th>Alamat</th><td>{{ object.alamat_lengkap|default:'-' }}</td></tr>
   <tr><th>Tax ID</th><td>{{ object.tax_id|default:'-' }}</td></tr>
   <tr><th>Tanggal Bergabung</th><td>{{ object.tanggal_bergabung|default:'-' }}</td></tr>
   <tr><th>Status</th><td>{% if object.status_aktif %}Aktif{% else %}Nonaktif{% endif %}</td></tr>
+</table>
+
+<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+  <h4>Cabang</h4>
+  <a href="{% url 'entitas_bisnis:cabang_create' object.pk %}" class="btn btn-sm btn-success">+ Tambah Cabang</a>
+</div>
+<table class="table table-striped table-hover">
+  <thead class="table-dark">
+    <tr><th>Nama</th><th>Email</th><th>Telepon</th><th>Status</th><th>Aksi</th></tr>
+  </thead>
+  <tbody>
+    {% for c in cabang_list %}
+    <tr>
+      <td>{{ c.nama }}</td>
+      <td>{{ c.email|default:'-' }}</td>
+      <td>{{ c.telepon|default:'-' }}</td>
+      <td>{% if c.status_aktif %}<span class="badge bg-success">Aktif</span>{% else %}<span class="badge bg-secondary">Nonaktif</span>{% endif %}</td>
+      <td>
+        <a href="{% url 'entitas_bisnis:cabang_update' object.pk c.pk %}" class="btn btn-sm btn-warning">Edit</a>
+        <a href="{% url 'entitas_bisnis:cabang_delete' object.pk c.pk %}" class="btn btn-sm btn-danger">Hapus</a>
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-center">Belum ada cabang.</td></tr>
+    {% endfor %}
+  </tbody>
 </table>
 {% endblock %}
