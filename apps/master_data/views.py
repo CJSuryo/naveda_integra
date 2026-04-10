@@ -1,5 +1,7 @@
 """Master data views."""
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -98,7 +100,11 @@ def aset_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
 def aset_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(AsetLv1, pk=pk)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
+            return redirect('master_data:aset_lv1_list')
         return redirect('master_data:aset_lv1_list')
     return render(request, 'master_data/aset/lv1_confirm_delete.html', {'object': obj})
 
@@ -131,7 +137,11 @@ def aset_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
     parent = get_object_or_404(AsetLv1, pk=lv1_pk)
     obj = get_object_or_404(AsetLv2, pk=pk, aset=parent)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
+            return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
         return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
     return render(request, 'master_data/aset/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
@@ -173,7 +183,11 @@ def kewajiban_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
 def kewajiban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(KewajibanLv1, pk=pk)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
+            return redirect('master_data:kewajiban_lv1_list')
         return redirect('master_data:kewajiban_lv1_list')
     return render(request, 'master_data/kewajiban/lv1_confirm_delete.html', {'object': obj})
 
@@ -206,7 +220,11 @@ def kewajiban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResp
     parent = get_object_or_404(KewajibanLv1, pk=lv1_pk)
     obj = get_object_or_404(KewajibanLv2, pk=pk, kewajiban=parent)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
+            return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
         return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
     return render(request, 'master_data/kewajiban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
@@ -248,7 +266,11 @@ def ekuitas_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
 def ekuitas_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(EkuitasLv1, pk=pk)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
+            return redirect('master_data:ekuitas_lv1_list')
         return redirect('master_data:ekuitas_lv1_list')
     return render(request, 'master_data/ekuitas/lv1_confirm_delete.html', {'object': obj})
 
@@ -281,7 +303,11 @@ def ekuitas_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRespon
     parent = get_object_or_404(EkuitasLv1, pk=lv1_pk)
     obj = get_object_or_404(EkuitasLv2, pk=pk, ekuitas=parent)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
+            return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
         return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
     return render(request, 'master_data/ekuitas/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
@@ -316,6 +342,10 @@ def tipe_transaksi_update(request: HttpRequest, pk: int) -> HttpResponse:
 def tipe_transaksi_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(TipeTransaksi, pk=pk)
     if request.method == 'POST':
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena tipe transaksi ini masih digunakan dalam jurnal.')
+            return redirect('master_data:tipe_transaksi_list')
         return redirect('master_data:tipe_transaksi_list')
     return render(request, 'master_data/tipe_transaksi/confirm_delete.html', {'object': obj})
