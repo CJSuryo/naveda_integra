@@ -6,7 +6,7 @@ import dj_database_url
 from .base import *  # noqa: F401, F403
 
 # ── Core ─────────────────────────────────────────────────────────────────────
-DEBUG = True
+DEBUG = False
 SECRET_KEY = os.environ['SECRET_KEY']
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
