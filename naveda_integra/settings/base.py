@@ -5,6 +5,8 @@ Base Django settings for naveda_integra project.
 import os
 from pathlib import Path
 
+import dj_database_url
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 SECRET_KEY = os.environ.get(
@@ -39,6 +41,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -67,15 +70,24 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'naveda_integra.wsgi.application'
 
+# Database — prefers DATABASE_URL (for Neon/Render/Heroku), falls back to
+# individual DB_* env vars, then to local PostgreSQL defaults.
 DATABASES = {
-    'default': {
-        'ENGINE': os.environ.get('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.environ.get('DB_NAME', 'naveda_integra'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-    }
+    'default': dj_database_url.config(
+        default=os.environ.get(
+            'DATABASE_URL',
+            'postgres://{user}:{password}@{host}:{port}/{name}'.format(
+                user=os.environ.get('DB_USER', 'postgres'),
+                password=os.environ.get('DB_PASSWORD', ''),
+                host=os.environ.get('DB_HOST', 'localhost'),
+                port=os.environ.get('DB_PORT', '5432'),
+                name=os.environ.get('DB_NAME', 'naveda_integra'),
+            ),
+        ),
+        conn_max_age=600,
+        conn_health_checks=True,
+        ssl_require=bool(os.environ.get('DATABASE_URL')),
+    )
 }
 
 AUTH_USER_MODEL = 'accounts.User'
@@ -109,3 +121,48 @@ INTERNAL_IPS = ['127.0.0.1']
 
 SHELL_PLUS = 'ipython'
 SHELL_PLUS_PRINT_SQL = True
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{asctime} {levelname} {name} {module}:{lineno} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+        'django.db.backends': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'apps': {
+            'handlers': ['console'],
+            'level': LOG_LEVEL,
+            'propagate': False,
+        },
+    },
+}

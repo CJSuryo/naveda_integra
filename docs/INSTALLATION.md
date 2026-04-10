@@ -72,7 +72,7 @@ You should see `(venv)` at the start of your prompt.
 pip install -r requirements.txt
 ```
 
-This installs Django 6.x, django-extensions, django-debug-toolbar, ipython, and psycopg2-binary.
+This installs Django 6.x, django-extensions, django-debug-toolbar, ipython, psycopg2-binary, dj-database-url, gunicorn, and whitenoise.
 
 ---
 

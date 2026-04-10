@@ -18,6 +18,59 @@ This project uses **PostgreSQL** for production-ready, scalable data storage. SQ
 
 ---
 
+## Cloud PostgreSQL — Neon.tech (Recommended for Production)
+
+[Neon.tech](https://neon.tech) is a serverless PostgreSQL provider with a generous free tier.
+This is the recommended approach for production and staging deployments.
+
+### Quick Setup
+
+1. Go to [neon.tech](https://neon.tech) → sign in with GitHub.
+2. **Create Project** → name it `naveda-integra`, region `ap-southeast-1` (Singapore), Postgres 16.
+3. Copy the connection string from the **Connection Details** panel.
+4. Set it as `DATABASE_URL` in your `.env` or Render environment variables.
+
+### Connection String Format
+
+```
+postgresql://neondb_owner:YOUR_PASSWORD@ep-cool-cloud-123456.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+```
+
+### Django Configuration
+
+The project uses `dj-database-url` to parse `DATABASE_URL` automatically:
+
+```dotenv
+# .env
+DATABASE_URL=postgresql://neondb_owner:AbCdEf123456@ep-cool-cloud-123456.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
+```
+
+No other `DB_*` vars are needed when `DATABASE_URL` is set.
+
+### Neon Free Tier Limits
+
+| Resource | Limit |
+|----------|-------|
+| Compute | 0.25 CU (auto-scales to 1 CU) |
+| Storage | 512 MB |
+| Branches | 10 |
+| PITR (point-in-time recovery) | 7 days |
+| Auto-suspend | After 5 min idle |
+
+### Neon Backup via `pg_dump`
+
+```bash
+# Manual backup:
+python manage.py backup_db
+
+# With custom options:
+python manage.py backup_db --output-dir ./backups --keep 14
+```
+
+See [`DEPLOYMENT.md`](DEPLOYMENT.md) for automated nightly backups on Render.
+
+---
+
 ## Install PostgreSQL on Windows 11
 
 ### Option A — Official Installer (recommended)
