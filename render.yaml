@@ -36,22 +36,22 @@ services:
         sync: false          # e.g. https://naveda-integra.onrender.com
 
   # ── Nightly Backup Cron Job (1 AM WIB = 18:00 UTC) ─────────────────────────
-  - type: cron
-    name: naveda-nightly-backup
-    runtime: python
-    region: singapore
-    plan: free
-    schedule: "0 18 * * *"   # 18:00 UTC = 01:00 WIB (Asia/Jakarta)
-    buildCommand: pip install -r requirements.txt
-    startCommand: python manage.py backup_db --keep 7
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12"
-      - key: DJANGO_SETTINGS_MODULE
-        value: naveda_integra.settings.production
-      - key: DATABASE_URL
-        sync: false
-      - key: SECRET_KEY
-        sync: false
-      - key: BACKUP_DIR
-        value: /tmp/backups
+  # - type: cron
+  #   name: naveda-nightly-backup
+  #   runtime: python
+  #   region: singapore
+  #   plan: free
+  #   schedule: "0 18 * * *"   # 18:00 UTC = 01:00 WIB (Asia/Jakarta)
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: python manage.py backup_db --keep 7
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: "3.12"
+  #     - key: DJANGO_SETTINGS_MODULE
+  #       value: naveda_integra.settings.production
+  #     - key: DATABASE_URL
+  #       sync: false
+  #     - key: SECRET_KEY
+  #       sync: false
+  #     - key: BACKUP_DIR
+  #       value: /tmp/backups
