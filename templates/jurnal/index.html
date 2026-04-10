@@ -52,13 +52,11 @@
         </td>
         {% endif %}
         <td>
-          {% with lv2_url=detail.akun.get_lv2_url %}
-          {% if lv2_url %}
-            <a href="{{ lv2_url }}">{{ detail.akun.kode_akun }}</a>
+          {% if detail.akun.lv2_url %}
+            <a href="{{ detail.akun.lv2_url }}">{{ detail.akun.kode_akun }}</a>
           {% else %}
             {{ detail.akun.kode_akun }}
           {% endif %}
-          {% endwith %}
         </td>
         <td>{{ detail.akun.nama }}</td>
         <td class="text-end">Rp{{ detail.debit|floatformat:0 }}</td>

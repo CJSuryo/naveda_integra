@@ -5,8 +5,9 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Max
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
-from apps.master_data.models import Akun
+from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
 
 from .forms import (
     ItemForm, TransactionPrefixForm,
@@ -21,17 +22,75 @@ from .models import (
 )
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _annotate_akun_lv2_urls(headers) -> None:
+    """Batch-compute Lv2 detail URLs for all akuns in the given headers.
+
+    Sets ``akun._lv2_url`` on each Akun instance found in the prefetched
+    details, using at most three database queries (one per account category).
+    """
+    aset_lv2_pks: set[int] = set()
+    kewajiban_lv2_pks: set[int] = set()
+    ekuitas_lv2_pks: set[int] = set()
+
+    for header in headers:
+        for detail in header.details.all():
+            akun = detail.akun
+            if not akun.kategori_akun:
+                continue
+            if akun.kategori_id == 'aset':
+                aset_lv2_pks.add(akun.kategori_akun)
+            elif akun.kategori_id == 'kewajiban':
+                kewajiban_lv2_pks.add(akun.kategori_akun)
+            elif akun.kategori_id == 'ekuitas':
+                ekuitas_lv2_pks.add(akun.kategori_akun)
+
+    aset_map: dict[int, int] = (
+        dict(AsetLv2.objects.filter(pk__in=aset_lv2_pks).values_list('pk', 'aset_id'))
+        if aset_lv2_pks else {}
+    )
+    kewajiban_map: dict[int, int] = (
+        dict(KewajibanLv2.objects.filter(pk__in=kewajiban_lv2_pks).values_list('pk', 'kewajiban_id'))
+        if kewajiban_lv2_pks else {}
+    )
+    ekuitas_map: dict[int, int] = (
+        dict(EkuitasLv2.objects.filter(pk__in=ekuitas_lv2_pks).values_list('pk', 'ekuitas_id'))
+        if ekuitas_lv2_pks else {}
+    )
+
+    for header in headers:
+        for detail in header.details.all():
+            akun = detail.akun
+            url = None
+            if akun.kategori_akun:
+                if akun.kategori_id == 'aset':
+                    lv1_pk = aset_map.get(akun.kategori_akun)
+                    if lv1_pk:
+                        url = reverse('master_data:aset_lv1_detail', args=[lv1_pk])
+                elif akun.kategori_id == 'kewajiban':
+                    lv1_pk = kewajiban_map.get(akun.kategori_akun)
+                    if lv1_pk:
+                        url = reverse('master_data:kewajiban_lv1_detail', args=[lv1_pk])
+                elif akun.kategori_id == 'ekuitas':
+                    lv1_pk = ekuitas_map.get(akun.kategori_akun)
+                    if lv1_pk:
+                        url = reverse('master_data:ekuitas_lv1_detail', args=[lv1_pk])
+            akun.lv2_url = url
+
+
 # ── Index ─────────────────────────────────────────────────────────────────────
 
 @login_required
 def index(request: HttpRequest) -> HttpResponse:
     """Combined jurnal index showing headers with their details."""
-    headers = (
+    headers = list(
         JurnalHeader.objects
         .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix', 'no_bukti')
         .prefetch_related('details__akun')
         .order_by('-tanggal', 'nomor_transaksi')
     )
+    _annotate_akun_lv2_urls(headers)
     return render(request, 'jurnal/index.html', {'headers': headers})
 
 
