@@ -68,8 +68,9 @@ class EkuitasLv2Admin(admin.ModelAdmin):
 
 @admin.register(Akun)
 class AkunAdmin(admin.ModelAdmin):
-    list_display = ('id', 'kategori_id', 'kategori_akun')
+    list_display = ('id', 'kategori_id', 'kategori_akun', 'nama')
     list_filter = ('kategori_id',)
+    search_fields = ('nama',)
 
 
 @admin.register(TipeTransaksi)

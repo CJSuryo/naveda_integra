@@ -85,6 +85,16 @@ class EkuitasLv2(models.Model):
 
 # ── Akun ──────────────────────────────────────────────────────────────────────
 
+# Prefix used to build the "Kode Akun" string (e.g. 1.1.8 for Aset)
+KATEGORI_PREFIX = {
+    'aset': '1',
+    'kewajiban': '2',
+    'ekuitas': '3',
+    'pendapatan': '4',
+    'beban': '5',
+}
+
+
 class Akun(models.Model):
     KATEGORI_CHOICES = [
         ('aset', 'Aset'),
@@ -95,6 +105,7 @@ class Akun(models.Model):
     ]
     kategori_id = models.CharField(max_length=50, choices=KATEGORI_CHOICES, db_index=True)
     kategori_akun = models.BigIntegerField(null=True, blank=True, db_index=True)
+    nama = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
         verbose_name = 'Akun'
@@ -104,8 +115,28 @@ class Akun(models.Model):
             models.Index(fields=['kategori_id', 'kategori_akun'], name='idx_akun_kategori'),
         ]
 
+    @property
+    def kode_akun(self) -> str:
+        """Return the computed 'Kode Akun' e.g. 1.1.8, 2.1.3, 3.1.1."""
+        prefix = KATEGORI_PREFIX.get(self.kategori_id, '?')
+        return f'{prefix}.{self.kategori_id_lv1}.{self.kategori_akun}'
+
+    @property
+    def kategori_id_lv1(self) -> int | str:
+        """Return the Lv1 id by looking up the source Lv2 record."""
+        if self.kategori_id == 'aset' and self.kategori_akun:
+            lv2 = AsetLv2.objects.filter(pk=self.kategori_akun).select_related('aset').first()
+            return lv2.aset_id if lv2 and lv2.aset_id else '?'
+        if self.kategori_id == 'kewajiban' and self.kategori_akun:
+            lv2 = KewajibanLv2.objects.filter(pk=self.kategori_akun).select_related('kewajiban').first()
+            return lv2.kewajiban_id if lv2 and lv2.kewajiban_id else '?'
+        if self.kategori_id == 'ekuitas' and self.kategori_akun:
+            lv2 = EkuitasLv2.objects.filter(pk=self.kategori_akun).select_related('ekuitas').first()
+            return lv2.ekuitas_id if lv2 and lv2.ekuitas_id else '?'
+        return '?'
+
     def __str__(self) -> str:
-        return f'Akun {self.id} ({self.kategori_id})'
+        return f'{self.kode_akun} - {self.nama}' if self.nama else f'Akun {self.id} ({self.kategori_id})'
 
 
 # ── TipeTransaksi ─────────────────────────────────────────────────────────────

@@ -9,6 +9,7 @@ urlpatterns = [
     path('accounts/', include('apps.accounts.urls')),
     path('entitas-bisnis/', include('apps.entitas_bisnis.urls')),
     path('master-data/', include('apps.master_data.urls')),
+    path('jurnal/', include('apps.jurnal.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 

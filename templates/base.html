@@ -38,6 +38,18 @@
             <li><a class="dropdown-item" href="{% url 'master_data:tipe_transaksi_list' %}">Tipe Transaksi</a></li>
           </ul>
         </li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Jurnal</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{% url 'jurnal:index' %}">Jurnal Umum</a></li>
+            <li><a class="dropdown-item" href="{% url 'jurnal:header_list' %}">Jurnal Header</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'jurnal:item_list' %}">Item</a></li>
+            <li><a class="dropdown-item" href="{% url 'jurnal:prefix_list' %}">Prefiks Transaksi</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="{% url 'jurnal:automasi_list' %}">Automasi Jurnal</a></li>
+          </ul>
+        </li>
       </ul>
       <ul class="navbar-nav">
         <li class="nav-item">
