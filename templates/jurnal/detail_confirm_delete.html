@@ -1,10 +1,23 @@
 {% extends 'base.html' %}
 {% block title %}Hapus Jurnal Detail{% endblock %}
 {% block content %}
-<h2>Hapus Jurnal Detail</h2>
-<p>Hapus <strong>{{ object }}</strong>?</p>
-<form method="post">{% csrf_token %}
-  <button type="submit" class="btn btn-danger">Ya, Hapus</button>
-  <a href="{% url 'jurnal:header_detail' header.pk %}" class="btn btn-secondary">Batal</a>
-</form>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Jurnal Detail</h1>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p>Hapus <strong>{{ object }}</strong>?</p>
+    <form method="post">{% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger"><i data-lucide="trash-2" style="width:16px;height:16px"></i> Ya, Hapus</button>
+        <a href="{% url 'jurnal:header_detail' header.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

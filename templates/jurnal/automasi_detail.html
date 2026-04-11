@@ -1,47 +1,61 @@
 {% extends 'base.html' %}
 {% block title %}{{ object.nama }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>Automasi: {{ object.nama }}</h2>
+<div class="ni-page-header">
   <div>
-    <a href="{% url 'jurnal:automasi_entry' object.pk %}" class="btn btn-primary">Buat Jurnal</a>
-    <a href="{% url 'jurnal:automasi_update' object.pk %}" class="btn btn-warning">Edit</a>
-    <a href="{% url 'jurnal:automasi_list' %}" class="btn btn-secondary">Kembali</a>
+    <h1 class="ni-page-header__title">Automasi: {{ object.nama }}</h1>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'jurnal:automasi_entry' object.pk %}" class="ni-btn ni-btn--primary"><i data-lucide="zap" style="width:16px;height:16px"></i> Buat Jurnal</a>
+    <a href="{% url 'jurnal:automasi_update' object.pk %}" class="ni-btn ni-btn--warning"><i data-lucide="pencil" style="width:16px;height:16px"></i> Edit</a>
+    <a href="{% url 'jurnal:automasi_list' %}" class="ni-btn ni-btn--secondary"><i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali</a>
   </div>
 </div>
 
-<h5>Mapping Akun</h5>
-<table class="table table-striped">
-  <thead class="table-dark">
-    <tr><th>Kode Akun</th><th>Nama Akun</th><th>Aksi</th></tr>
-  </thead>
-  <tbody>
-    {% for m in mappings %}
-    <tr>
-      <td>{{ m.akun.kode_akun }}</td>
-      <td>{{ m.akun.nama }}</td>
-      <td>
-        <form method="post" action="{% url 'jurnal:automasi_remove_akun' object.pk m.pk %}" style="display:inline">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-sm btn-danger">Hapus</button>
-        </form>
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="3" class="text-center">Belum ada mapping akun.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Mapping Akun</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr><th>Kode Akun</th><th>Nama Akun</th><th>Aksi</th></tr>
+        </thead>
+        <tbody>
+          {% for m in mappings %}
+          <tr>
+            <td>{{ m.akun.kode_akun }}</td>
+            <td>{{ m.akun.nama }}</td>
+            <td>
+              <form method="post" action="{% url 'jurnal:automasi_remove_akun' object.pk m.pk %}" style="display:inline">
+                {% csrf_token %}
+                <button type="submit" class="ni-btn ni-btn--danger ni-btn--sm"><i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus</button>
+              </form>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada mapping akun.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-<h5>Tambah Akun</h5>
-<form method="post" action="{% url 'jurnal:automasi_add_akun' object.pk %}" class="row g-2 align-items-end">
-  {% csrf_token %}
-  <div class="col-auto" style="min-width: 400px;">
-    <label class="form-label">Akun</label>
-    {{ add_form.akun }}
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Tambah Akun</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post" action="{% url 'jurnal:automasi_add_akun' object.pk %}">
+      {% csrf_token %}
+      <div class="ni-form-group" style="max-width:400px;display:inline-block;vertical-align:bottom;">
+        <label class="ni-form-label">Akun</label>
+        {{ add_form.akun }}
+      </div>
+      <button type="submit" class="ni-btn ni-btn--success" style="vertical-align:bottom;"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah</button>
+    </form>
   </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-success">+ Tambah</button>
-  </div>
-</form>
+</div>
 {% endblock %}

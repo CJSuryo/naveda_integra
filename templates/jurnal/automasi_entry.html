@@ -1,49 +1,64 @@
 {% extends 'base.html' %}
 {% block title %}Buat Jurnal - {{ automasi.nama }}{% endblock %}
 {% block content %}
-<h2>Buat Jurnal Otomatis: {{ automasi.nama }}</h2>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Buat Jurnal Otomatis</h1>
+    <p class="ni-page-header__subtitle">{{ automasi.nama }}</p>
+  </div>
+</div>
 
 <form method="post">{% csrf_token %}
-  <div class="card mb-3">
-    <div class="card-body">
-      <div class="row g-3">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
         {% for field in form %}
-        <div class="col-md-6">
-          <label class="form-label">{{ field.label }}</label>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
           {{ field }}
-          {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
         {% endfor %}
       </div>
     </div>
   </div>
 
-  <h5>Detail Akun</h5>
-  <p class="text-muted">Masukkan jumlah Debit dan Kredit untuk setiap akun yang dimapping.</p>
-  <table class="table table-striped">
-    <thead class="table-dark">
-      <tr>
-        <th>Kode Akun</th>
-        <th>Nama Akun</th>
-        <th>Debit</th>
-        <th>Kredit</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in mappings %}
-      <tr>
-        <td>{{ m.akun.kode_akun }}</td>
-        <td>{{ m.akun.nama }}</td>
-        <td><input type="number" name="debit_{{ m.pk }}" class="form-control" step="0.01" value="0"></td>
-        <td><input type="number" name="kredit_{{ m.pk }}" class="form-control" step="0.01" value="0"></td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="4" class="text-center">Belum ada mapping akun. Silakan tambahkan terlebih dahulu.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="ni-section-header">
+    <h2 class="ni-section-header__title">Detail Akun</h2>
+  </div>
+  <p class="ni-text-muted">Masukkan jumlah Debit dan Kredit untuk setiap akun yang dimapping.</p>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-table">
+          <thead>
+            <tr>
+              <th>Kode Akun</th>
+              <th>Nama Akun</th>
+              <th>Debit</th>
+              <th>Kredit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in mappings %}
+            <tr>
+              <td>{{ m.akun.kode_akun }}</td>
+              <td>{{ m.akun.nama }}</td>
+              <td><input type="number" name="debit_{{ m.pk }}" class="ni-input" step="0.01" value="0"></td>
+              <td><input type="number" name="kredit_{{ m.pk }}" class="ni-input" step="0.01" value="0"></td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada mapping akun. Silakan tambahkan terlebih dahulu.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 
-  <button type="submit" class="btn btn-primary">Buat Jurnal</button>
-  <a href="{% url 'jurnal:automasi_detail' automasi.pk %}" class="btn btn-secondary">Batal</a>
+  <div class="ni-btn-row">
+    <button type="submit" class="ni-btn ni-btn--primary"><i data-lucide="zap" style="width:16px;height:16px"></i> Buat Jurnal</button>
+    <a href="{% url 'jurnal:automasi_detail' automasi.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
 </form>
 {% endblock %}
