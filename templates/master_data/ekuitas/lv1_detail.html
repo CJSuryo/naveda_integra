@@ -1,27 +1,40 @@
 {% extends 'base.html' %}
 {% block title %}{{ object }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>{{ object.kode }} - {{ object.nama }}</h2>
+<div class="ni-page-header">
   <div>
-    <a href="{% url 'master_data:ekuitas_lv2_create' object.pk %}" class="btn btn-success">+ Tambah Level 2</a>
-    <a href="{% url 'master_data:ekuitas_lv1_update' object.pk %}" class="btn btn-warning">Edit</a>
-    <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="btn btn-secondary">Kembali</a>
+    <h1 class="ni-page-header__title">{{ object.kode }} - {{ object.nama }}</h1>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'master_data:ekuitas_lv2_create' object.pk %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Level 2
+    </a>
+    <a href="{% url 'master_data:ekuitas_lv1_update' object.pk %}" class="ni-btn ni-btn--warning">Edit</a>
+    <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
   </div>
 </div>
-<h5>Sub-Ekuitas (Level 2)</h5>
-<table class="table table-striped">
-  <thead class="table-dark"><tr><th>Kode</th><th>Nama</th><th>Aksi</th></tr></thead>
-  <tbody>
-    {% for child in children %}
-    <tr>
-      <td>{{ child.kode }}</td><td>{{ child.nama }}</td>
-      <td>
-        <a href="{% url 'master_data:ekuitas_lv2_update' object.pk child.pk %}" class="btn btn-sm btn-warning">Edit</a>
-        <a href="{% url 'master_data:ekuitas_lv2_delete' object.pk child.pk %}" class="btn btn-sm btn-danger">Hapus</a>
-      </td>
-    </tr>
-    {% empty %}<tr><td colspan="3" class="text-center">Belum ada data.</td></tr>{% endfor %}
-  </tbody>
-</table>
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Sub-Ekuitas (Level 2)</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Kode</th><th>Nama</th><th>Aksi</th></tr></thead>
+      <tbody>
+        {% for child in children %}
+        <tr>
+          <td>{{ child.kode }}</td>
+          <td>{{ child.nama }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'master_data:ekuitas_lv2_update' object.pk child.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'master_data:ekuitas_lv2_delete' object.pk child.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
