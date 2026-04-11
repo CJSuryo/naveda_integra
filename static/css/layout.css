@@ -1,0 +1,186 @@
+/* ==========================================================================
+   Naveda Integra — layout.css
+   Design tokens (CSS custom properties), resets, sidebar + content grid
+   ========================================================================== */
+
+/* ---------- Design tokens ---------- */
+:root {
+  /* Brand */
+  --ni-primary: #0054a6;
+  --ni-primary-light: #e8f0fe;
+  --ni-primary-dark: #003d7a;
+  --ni-accent: #6366f1;
+
+  /* Semantic */
+  --ni-success: #10b981;
+  --ni-warning: #f59e0b;
+  --ni-danger: #ef4444;
+  --ni-info: #06b6d4;
+
+  /* Backgrounds */
+  --ni-bg: #f8fafc;
+  --ni-bg-card: #ffffff;
+  --ni-bg-sidebar: #0f172a;
+  --ni-bg-sidebar-hover: #1e293b;
+
+  /* Text */
+  --ni-text: #1e293b;
+  --ni-text-muted: #64748b;
+  --ni-text-sidebar: #94a3b8;
+  --ni-text-sidebar-active: #ffffff;
+
+  /* Borders */
+  --ni-border: #e2e8f0;
+  --ni-border-focus: #0054a6;
+
+  /* Radii */
+  --ni-radius-sm: 6px;
+  --ni-radius: 10px;
+  --ni-radius-lg: 16px;
+
+  /* Shadows */
+  --ni-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --ni-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --ni-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --ni-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+
+  /* Motion */
+  --ni-transition: 200ms ease;
+
+  /* Layout */
+  --ni-sidebar-width: 260px;
+  --ni-sidebar-collapsed-width: 72px;
+  --ni-topbar-height: 0px;
+
+  /* Typography */
+  --ni-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* ---------- Box-sizing reset ---------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- Base reset ---------- */
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: var(--ni-bg);
+}
+
+img, svg { display: block; max-width: 100%; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+button { cursor: pointer; font: inherit; }
+input, select, textarea { font: inherit; }
+
+/* ---------- App shell ---------- */
+.ni-app {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ---------- Sidebar ---------- */
+.ni-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--ni-sidebar-width);
+  background: var(--ni-bg-sidebar);
+  color: var(--ni-text-sidebar);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: width var(--ni-transition), transform var(--ni-transition);
+  overflow: hidden;
+}
+
+.ni-sidebar.ni-sidebar--collapsed {
+  width: var(--ni-sidebar-collapsed-width);
+}
+
+/* ---------- Main content ---------- */
+.ni-main {
+  flex: 1;
+  margin-left: var(--ni-sidebar-width);
+  min-height: 100vh;
+  background: var(--ni-bg);
+  transition: margin-left var(--ni-transition);
+  display: flex;
+  flex-direction: column;
+}
+
+.ni-sidebar.ni-sidebar--collapsed ~ .ni-main,
+.ni-app.ni-sidebar-collapsed .ni-main {
+  margin-left: var(--ni-sidebar-collapsed-width);
+}
+
+/* ---------- Mobile overlay ---------- */
+.ni-sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 999;
+}
+
+.ni-sidebar-overlay.ni-sidebar-overlay--visible {
+  display: block;
+}
+
+/* ---------- Responsive: tablet & mobile ---------- */
+@media (max-width: 1024px) {
+  .ni-sidebar {
+    width: var(--ni-sidebar-collapsed-width);
+  }
+
+  .ni-main {
+    margin-left: var(--ni-sidebar-collapsed-width);
+  }
+
+  .ni-sidebar.ni-sidebar--expanded {
+    width: var(--ni-sidebar-width);
+  }
+}
+
+@media (max-width: 768px) {
+  .ni-sidebar {
+    transform: translateX(-100%);
+    width: var(--ni-sidebar-width);
+  }
+
+  .ni-sidebar.ni-sidebar--open {
+    transform: translateX(0);
+  }
+
+  .ni-main {
+    margin-left: 0;
+  }
+}
+
+/* ---------- Scrollbar (Webkit) ---------- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ni-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ni-text-muted);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ni-border) transparent;
+}

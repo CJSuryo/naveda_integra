@@ -1,0 +1,261 @@
+/* ==========================================================================
+   Naveda Integra — photos.css
+   Avatars, image cards, thumbnails, upload area
+   ========================================================================== */
+
+/* ---------- Avatar ---------- */
+.ni-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+  font-weight: 600;
+  overflow: hidden;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.ni-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Sizes */
+.ni-avatar--xs { width: 24px; height: 24px; font-size: 0.625rem; }
+.ni-avatar--sm { width: 32px; height: 32px; font-size: 0.75rem; }
+.ni-avatar--md { width: 40px; height: 40px; font-size: 0.875rem; }
+.ni-avatar--lg { width: 56px; height: 56px; font-size: 1.125rem; }
+.ni-avatar--xl { width: 80px; height: 80px; font-size: 1.5rem; }
+
+/* Color variants */
+.ni-avatar--success { background: #d1fae5; color: var(--ni-success); }
+.ni-avatar--warning { background: #fef3c7; color: var(--ni-warning); }
+.ni-avatar--danger  { background: #fee2e2; color: var(--ni-danger); }
+.ni-avatar--accent  { background: #e0e7ff; color: var(--ni-accent); }
+
+/* Avatar group (stacked) */
+.ni-avatar-group {
+  display: flex;
+}
+
+.ni-avatar-group .ni-avatar {
+  border: 2px solid var(--ni-bg-card);
+  margin-left: -8px;
+}
+
+.ni-avatar-group .ni-avatar:first-child {
+  margin-left: 0;
+}
+
+.ni-avatar-group__more {
+  background: var(--ni-bg);
+  color: var(--ni-text-muted);
+  border: 2px solid var(--ni-bg-card);
+  margin-left: -8px;
+}
+
+/* ---------- Image card ---------- */
+.ni-image-card {
+  border-radius: var(--ni-radius);
+  overflow: hidden;
+  border: 1px solid var(--ni-border);
+  background: var(--ni-bg-card);
+}
+
+.ni-image-card__img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  display: block;
+}
+
+.ni-image-card__body {
+  padding: 12px;
+}
+
+.ni-image-card__title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ni-image-card__meta {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  margin-top: 4px;
+}
+
+/* ---------- Thumbnail grid ---------- */
+.ni-thumbnail-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+
+.ni-thumbnail {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--ni-radius);
+  overflow: hidden;
+  border: 1px solid var(--ni-border);
+  cursor: pointer;
+  transition: box-shadow var(--ni-transition);
+}
+
+.ni-thumbnail:hover {
+  box-shadow: var(--ni-shadow-md);
+}
+
+.ni-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ni-thumbnail__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-thumbnail:hover .ni-thumbnail__overlay {
+  opacity: 1;
+}
+
+.ni-thumbnail__overlay svg {
+  width: 24px;
+  height: 24px;
+  color: #fff;
+}
+
+/* ---------- Upload area ---------- */
+.ni-upload-area {
+  border: 2px dashed var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color var(--ni-transition),
+    background var(--ni-transition);
+}
+
+.ni-upload-area:hover,
+.ni-upload-area--dragover {
+  border-color: var(--ni-primary);
+  background: var(--ni-primary-light);
+}
+
+.ni-upload-area__icon {
+  width: 48px;
+  height: 48px;
+  color: var(--ni-text-muted);
+  margin-bottom: 12px;
+}
+
+.ni-upload-area:hover .ni-upload-area__icon,
+.ni-upload-area--dragover .ni-upload-area__icon {
+  color: var(--ni-primary);
+}
+
+.ni-upload-area__title {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--ni-text);
+  margin-bottom: 4px;
+}
+
+.ni-upload-area__desc {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+}
+
+/* Hidden file input */
+.ni-upload-area input[type="file"] {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+/* ---------- Preview list ---------- */
+.ni-file-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--ni-bg);
+  border-radius: var(--ni-radius);
+  margin-top: 8px;
+}
+
+.ni-file-preview__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--ni-radius-sm);
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ni-file-preview__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ni-file-preview__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ni-file-preview__name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ni-file-preview__size {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+}
+
+.ni-file-preview__remove {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--ni-text-muted);
+  border-radius: var(--ni-radius-sm);
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--ni-transition);
+}
+
+.ni-file-preview__remove:hover {
+  background: #fef2f2;
+  color: var(--ni-danger);
+}

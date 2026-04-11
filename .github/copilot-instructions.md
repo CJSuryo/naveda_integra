@@ -8,7 +8,8 @@
 ## Project Overview
 
 Naveda Integra is a **Django 6.x** financial admin panel / ERP-lite for Indonesian businesses. It uses
-Bootstrap 5 for the frontend, PostgreSQL for production, and SQLite for quick local development.
+a custom CSS design system (`ni-` prefix) for the frontend, Lucide icons, Chart.js for charts,
+PostgreSQL for production, and SQLite for quick local development.
 
 ---
 
@@ -29,8 +30,10 @@ apps/
   sales/                        # Sales invoices (header + detail)
   piutang/                      # Receivables (header + detail)
   inventory/                    # Inventory mutations (header + detail)
-templates/                      # Django templates (Bootstrap 5)
-static/                         # Static assets (CSS, JS)
+templates/                      # Django templates (ni- design system)
+static/
+  css/                          # Modular CSS files (see Front-End section below)
+  js/                           # Modular JS modules (sidebar.js, toast.js, etc.)
 docs/                           # Markdown documentation
 ```
 
@@ -61,16 +64,18 @@ docs/                           # Markdown documentation
 ### Forms
 
 - Always use `forms.ModelForm`.
-- Add Bootstrap `form-control` class to every widget.
-- Checkbox inputs use `form-check-input`.
+- Add `ni-input` class to text/select widgets, `ni-checkbox` for checkboxes.
 - Date fields use `type='date'` in the widget attrs.
+- Wrap each field in `<div class="ni-form-group">` with `<label class="ni-form-label">`.
+- Error messages use `<div class="ni-form-error">{{ field.errors }}</div>`.
 
 ### Templates
 
 - Extend `base.html`.
-- Use `{% block title %}` and `{% block content %}`.
-- Tables use Bootstrap classes: `table table-striped table-hover`, `table-dark` for thead.
-- Status badges: `<span class="badge bg-success">Aktif</span>` / `bg-secondary` for Nonaktif.
+- Use `{% block title %}`, `{% block content %}` (authenticated), `{% block content_auth %}` (login/register).
+- Use `{% block extra_css %}` and `{% block extra_js %}` for page-specific assets.
+- **Do NOT use Bootstrap classes.** Use the `ni-` design system exclusively (see Front-End section).
+- Status badges: `<span class="ni-badge ni-badge--success">Aktif</span>` / `ni-badge--secondary` for Nonaktif.
 - Use `{{ field|default:'-' }}` for optional fields in detail views.
 - All user-facing text is in **Bahasa Indonesia**.
 
@@ -129,6 +134,213 @@ The jurnal (double-entry ledger), akun, and sales tables are high-volume. Follow
 
 ---
 
+## Front-End Design System — MUST FOLLOW
+
+The project uses a custom CSS design system with the `ni-` prefix. **Do NOT use Bootstrap.**
+External CDN libraries: Lucide Icons (SVG), Chart.js 4.x (charts only).
+
+### CSS Architecture
+
+CSS is split into modular files under `static/css/`. Each file owns a single concern:
+
+| File | Purpose |
+|------|---------|
+| `fonts.css` | Google Fonts (Inter), base typography |
+| `layout.css` | CSS custom properties (design tokens), resets, app shell grid (sidebar + main) |
+| `menubar.css` | Sidebar navigation: logo, nav items, submenus, user area, collapse/expand |
+| `button.css` | `.ni-btn` base + variants (`--primary`, `--success`, `--warning`, `--danger`, `--secondary`, `--outline`, `--outline-danger`, `--ghost`), sizes (`--sm`, `--lg`), icon buttons, button groups |
+| `card.css` | `.ni-card` + stat cards (`.ni-stat-card`), card grids |
+| `chart.css` | Chart.js container styles |
+| `dropdown.css` | Dropdown menus |
+| `forms.css` | `.ni-form-group`, `.ni-form-label`, `.ni-input`, `.ni-select`, `.ni-checkbox`, `.ni-form-error` |
+| `modal.css` | Modal dialogs with backdrop blur |
+| `paginator.css` | Pagination |
+| `photos.css` | Avatars, thumbnails, upload areas |
+| `report.css` | KPI cards, report summaries, print styles |
+| `section.css` | `.ni-page-header`, `.ni-section-header`, `.ni-detail-grid`, breadcrumbs, tabs, dividers |
+| `table.css` | `.ni-table` + wrapper, badges (`.ni-badge`), toolbar, sticky headers |
+| `toast.css` | Toast notifications (`.ni-toast`) + inline alerts (`.ni-alert`) |
+| `wrapper.css` | `.ni-content-wrapper`, containers, auth layout, two-col/three-col grids |
+| `animation.css` | Keyframe animations: `ni-animate-fade-in`, `ni-animate-slide-up`, skeleton loaders |
+| `utilities.css` | Spacing (`.ni-m-*`, `.ni-p-*`), text (`.ni-text-center`, `.ni-text-muted`, `.ni-text-right`), flex, display |
+
+### Design Tokens (CSS Custom Properties)
+
+All colors, spacing, shadows, and radii are defined as CSS custom properties in `layout.css` under `:root`.
+Always use these variables — never hardcode colors:
+
+```css
+--ni-primary: #0054a6;          /* Brand blue */
+--ni-primary-light: #e8f0fe;
+--ni-primary-dark: #003d7a;
+--ni-accent: #6366f1;           /* Purple accent */
+--ni-success: #10b981;
+--ni-warning: #f59e0b;
+--ni-danger: #ef4444;
+--ni-info: #06b6d4;
+--ni-bg: #f8fafc;               /* Page background */
+--ni-bg-card: #ffffff;
+--ni-bg-sidebar: #0f172a;       /* Dark sidebar */
+--ni-text: #1e293b;
+--ni-text-muted: #64748b;
+--ni-border: #e2e8f0;
+--ni-radius: 10px;
+--ni-radius-sm: 6px;
+--ni-radius-lg: 16px;
+--ni-shadow-sm / --ni-shadow / --ni-shadow-md / --ni-shadow-lg
+--ni-transition: 200ms ease;
+--ni-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+```
+
+### CSS Class Naming Convention
+
+- **BEM-like with `ni-` prefix:** `ni-block`, `ni-block__element`, `ni-block--modifier`.
+- Examples: `ni-card`, `ni-card__header`, `ni-card--hover`, `ni-btn--primary`, `ni-btn--sm`.
+- When adding new components, follow this pattern.
+- Put new styles in the appropriate modular CSS file (e.g., new button style → `button.css`).
+
+### Template Patterns
+
+Every template must follow these patterns. **Copy these exactly when creating new pages.**
+
+#### List Page Pattern
+
+```html
+{% extends 'base.html' %}
+{% block title %}Page Title{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Page Title</h1>
+    <p class="ni-page-header__subtitle">Short description</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'app:create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
+    </a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Column</th><th>Aksi</th></tr></thead>
+      <tbody>
+        {% for obj in object_list %}
+        <tr>
+          <td>{{ obj.field }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'app:update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'app:delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="2" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+```
+
+#### Detail Page Pattern
+
+```html
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Label</dt><dd>{{ object.field|default:'-' }}</dd>
+      <dt>Status</dt><dd><span class="ni-badge ni-badge--success">Aktif</span></dd>
+    </dl>
+  </div>
+</div>
+```
+
+#### Form Page Pattern
+
+```html
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'app:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+```
+
+#### Delete Confirmation Pattern
+
+```html
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:24px;">Hapus <strong>{{ object }}</strong>?</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'app:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+```
+
+### JavaScript Architecture
+
+JS is split into modular files under `static/js/`:
+
+| File | Purpose |
+|------|---------|
+| `sidebar.js` | Sidebar collapse/expand, mobile toggle, submenu toggle. Auto-loads. |
+| `toast.js` | Auto-dismiss toast notifications after 5 seconds. Auto-loads. |
+| `chart-init.js` | Chart.js helpers: `niCharts.line()`, `niCharts.doughnut()`, `niCharts.bar()`. Load on dashboard pages via `{% block extra_js %}`. |
+| `modal.js` | Modal open/close via `data-modal-open` / `data-modal-close` attributes. Load when modals are needed. |
+| `table-utils.js` | Clickable rows via `data-href` attribute on `<tr>`. Load on table pages. |
+
+**Rules for JS:**
+- Use **IIFE** pattern `(function () { 'use strict'; ... })();` for every module to avoid global scope pollution.
+- Export public APIs on `window` only when needed (e.g., `window.niModal`, `window.niCharts`).
+- Use `data-*` attributes for JS hooks — never rely on `ni-` CSS classes for behaviour.
+- Include page-specific JS via `{% block extra_js %}` with `{% load static %}`.
+- CDN scripts (Chart.js, Lucide) are loaded before project JS.
+- Lucide icons are initialized in `sidebar.js` via `lucide.createIcons()`.
+
+### Icons
+
+Use **Lucide** icons (loaded via CDN in base.html). Syntax:
+```html
+<i data-lucide="icon-name" style="width:16px;height:16px"></i>
+```
+Common icons: `plus`, `pencil`, `trash-2`, `chevron-right`, `building-2`, `book-open`, `database`, `tags`, `wallet`, `credit-card`, `landmark`, `layout-dashboard`, `user-plus`, `menu`, `chevrons-left`.
+
+Browse all icons: https://lucide.dev/icons/
+
+### Responsive Design
+
+- **Desktop (>1024px):** Full sidebar (260px) + content area.
+- **Tablet (768–1024px):** Collapsed sidebar (72px icons-only) + content area.
+- **Mobile (<768px):** Sidebar hidden, hamburger menu to open as overlay.
+- Use CSS Grid / Flexbox for layouts. No fixed pixel widths for content.
+- Tables wrapped in `.ni-table-wrapper` for horizontal scroll on mobile.
+
+---
+
 ## Header + Detail Pattern
 
 Many apps follow this pattern (sales, jurnal, piutang, inventory):
@@ -151,6 +363,10 @@ django-debug-toolbar>=4.0,<7.0
 ipython>=9.0,<10.0
 psycopg2-binary>=2.9,<3.0
 ```
+
+**CDN Libraries (no pip install needed):**
+- Lucide Icons 0.460.0 — SVG icon library
+- Chart.js 4.4.7 — charts (loaded on dashboard pages only)
 
 Do not add new dependencies without explicit approval. Prefer Django's built-in utilities.
 

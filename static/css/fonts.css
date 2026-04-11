@@ -1,0 +1,96 @@
+/* ==========================================================================
+   Naveda Integra — fonts.css
+   Inter font import & base typography
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ---------- Base typography reset ---------- */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  font-family: var(--ni-font);
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.6;
+  color: var(--ni-text);
+  letter-spacing: -0.011em;
+}
+
+/* ---------- Headings ---------- */
+h1, h2, h3, h4, h5, h6,
+.ni-h1, .ni-h2, .ni-h3, .ni-h4, .ni-h5, .ni-h6 {
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  color: var(--ni-text);
+  margin: 0 0 0.5em;
+}
+
+h1, .ni-h1 { font-size: 1.875rem; font-weight: 700; }
+h2, .ni-h2 { font-size: 1.5rem; }
+h3, .ni-h3 { font-size: 1.25rem; }
+h4, .ni-h4 { font-size: 1.125rem; }
+h5, .ni-h5 { font-size: 1rem; }
+h6, .ni-h6 { font-size: 0.875rem; }
+
+/* ---------- Paragraph & inline ---------- */
+p {
+  margin: 0 0 1em;
+}
+
+a {
+  color: var(--ni-primary);
+  text-decoration: none;
+  transition: color var(--ni-transition);
+}
+
+a:hover {
+  color: var(--ni-primary-dark);
+}
+
+strong, b { font-weight: 600; }
+small, .ni-text-sm { font-size: 0.8125rem; }
+.ni-text-xs { font-size: 0.75rem; }
+.ni-text-lg { font-size: 1rem; }
+.ni-text-xl { font-size: 1.125rem; }
+
+/* ---------- Monospace ---------- */
+code, kbd, pre, samp {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  font-size: 0.8125em;
+}
+
+code {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary-dark);
+  padding: 0.15em 0.4em;
+  border-radius: var(--ni-radius-sm);
+}
+
+pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 1rem 1.25rem;
+  border-radius: var(--ni-radius);
+  overflow-x: auto;
+  margin: 0 0 1em;
+}
+
+pre code {
+  background: none;
+  color: inherit;
+  padding: 0;
+}
+
+/* ---------- Selection ---------- */
+::selection {
+  background: var(--ni-primary);
+  color: #fff;
+}

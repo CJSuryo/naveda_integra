@@ -1,16 +1,27 @@
 {% extends 'base.html' %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<h2>{{ title }} <small class="text-muted">({{ header }})</small></h2>
-<form method="post">{% csrf_token %}
-  {% for field in form %}
-  <div class="mb-3">
-    <label class="form-label">{{ field.label }}</label>
-    {{ field }}
-    {% if field.errors %}<div class="text-danger">{{ field.errors }}</div>{% endif %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">{{ header }}</p>
   </div>
-  {% endfor %}
-  <button type="submit" class="btn btn-primary">Simpan</button>
-  <a href="{% url 'jurnal:header_detail' header.pk %}" class="btn btn-secondary">Batal</a>
-</form>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">{% csrf_token %}
+      {% for field in form %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="ni-btn-row">
+        <button type="submit" class="ni-btn ni-btn--primary"><i data-lucide="save" style="width:16px;height:16px"></i> Simpan</button>
+        <a href="{% url 'jurnal:header_detail' header.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

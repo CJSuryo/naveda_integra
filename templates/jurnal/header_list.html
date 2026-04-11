@@ -1,38 +1,48 @@
 {% extends 'base.html' %}
 {% block title %}Jurnal Header{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>Jurnal Header</h2>
+<div class="ni-page-header">
   <div>
-    <a href="{% url 'jurnal:header_create' %}" class="btn btn-success">+ Tambah</a>
-    <a href="{% url 'jurnal:index' %}" class="btn btn-secondary">Lihat Jurnal Umum</a>
+    <h1 class="ni-page-header__title">Jurnal Header</h1>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'jurnal:header_create' %}" class="ni-btn ni-btn--success"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah</a>
+    <a href="{% url 'jurnal:index' %}" class="ni-btn ni-btn--secondary"><i data-lucide="book-open" style="width:16px;height:16px"></i> Lihat Jurnal Umum</a>
   </div>
 </div>
-<table class="table table-striped table-hover">
-  <thead class="table-dark">
-    <tr>
-      <th>Tanggal</th>
-      <th>No. Transaksi</th>
-      <th>Uraian</th>
-      <th>Item</th>
-      <th>Aksi</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for obj in object_list %}
-    <tr>
-      <td>{{ obj.tanggal|date:"Y-m-d" }}</td>
-      <td><a href="{% url 'jurnal:header_detail' obj.pk %}">{% if obj.transaction_prefix %}{{ obj.transaction_prefix.kode }}-{% endif %}{{ obj.nomor_transaksi }}</a></td>
-      <td>{{ obj.uraian_transaksi }}</td>
-      <td>{{ obj.item|default:"-" }}</td>
-      <td>
-        <a href="{% url 'jurnal:header_update' obj.pk %}" class="btn btn-sm btn-warning">Edit</a>
-        <a href="{% url 'jurnal:header_delete' obj.pk %}" class="btn btn-sm btn-danger">Hapus</a>
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="5" class="text-center">Belum ada data.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>No. Transaksi</th>
+            <th>Uraian</th>
+            <th>Item</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for obj in object_list %}
+          <tr>
+            <td>{{ obj.tanggal|date:"Y-m-d" }}</td>
+            <td><a href="{% url 'jurnal:header_detail' obj.pk %}">{% if obj.transaction_prefix %}{{ obj.transaction_prefix.kode }}-{% endif %}{{ obj.nomor_transaksi }}</a></td>
+            <td>{{ obj.uraian_transaksi }}</td>
+            <td>{{ obj.item|default:"-" }}</td>
+            <td>
+              <div class="ni-btn-row">
+                <a href="{% url 'jurnal:header_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+                <a href="{% url 'jurnal:header_delete' obj.pk %}" class="ni-btn ni-btn--danger ni-btn--sm">Hapus</a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 {% endblock %}

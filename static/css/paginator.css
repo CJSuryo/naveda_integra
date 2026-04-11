@@ -1,0 +1,121 @@
+/* ==========================================================================
+   Naveda Integra — paginator.css
+   Pagination with rounded pill buttons
+   ========================================================================== */
+
+/* ---------- Container ---------- */
+.ni-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Centered variant ---------- */
+.ni-pagination--center {
+  justify-content: center;
+}
+
+.ni-pagination--right {
+  justify-content: flex-end;
+}
+
+/* ---------- Page item ---------- */
+.ni-pagination__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ni-text);
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background var(--ni-transition),
+    color var(--ni-transition),
+    border-color var(--ni-transition);
+}
+
+.ni-pagination__item:hover {
+  background: var(--ni-bg);
+  border-color: #cbd5e1;
+}
+
+/* Active */
+.ni-pagination__item--active {
+  background: var(--ni-primary);
+  color: #fff;
+  border-color: var(--ni-primary);
+  pointer-events: none;
+}
+
+/* Disabled */
+.ni-pagination__item--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.ni-pagination__item svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Ellipsis */
+.ni-pagination__ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  user-select: none;
+}
+
+/* ---------- Pill variant ---------- */
+.ni-pagination--pill .ni-pagination__item {
+  border-radius: 999px;
+}
+
+/* ---------- Compact variant ---------- */
+.ni-pagination--compact .ni-pagination__item {
+  min-width: 30px;
+  height: 30px;
+  font-size: 0.75rem;
+  border-radius: var(--ni-radius-sm);
+}
+
+/* ---------- Summary text ---------- */
+.ni-pagination__info {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin-right: auto;
+}
+
+/* ---------- Pagination wrapper (info + controls) ---------- */
+.ni-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 16px 0;
+}
+
+@media (max-width: 768px) {
+  .ni-pagination-bar {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .ni-pagination__info {
+    margin-right: 0;
+  }
+}

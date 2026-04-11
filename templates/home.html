@@ -1,49 +1,108 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Dashboard - Naveda Integra{% endblock %}
 {% block content %}
-<div class="row">
-  <div class="col-12">
-    <h1 class="mb-4">Dashboard</h1>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Dashboard</h1>
+    <p class="ni-page-header__subtitle">Selamat datang di Naveda Integra</p>
   </div>
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">Entitas Bisnis</h5>
-        <a href="{% url 'entitas_bisnis:list' %}" class="btn btn-primary">Kelola</a>
+</div>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 28px;">
+  <a href="{% url 'entitas_bisnis:list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;">
+    <div class="ni-stat-card__icon" style="background:var(--ni-primary-light);color:var(--ni-primary);">
+      <i data-lucide="building-2"></i>
+    </div>
+    <div>
+      <div class="ni-stat-card__label">Entitas Bisnis</div>
+      <div class="ni-stat-card__value">Kelola</div>
+    </div>
+  </a>
+  <a href="{% url 'master_data:aset_lv1_list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:50ms;">
+    <div class="ni-stat-card__icon" style="background:#ecfdf5;color:var(--ni-success);">
+      <i data-lucide="wallet"></i>
+    </div>
+    <div>
+      <div class="ni-stat-card__label">Aset</div>
+      <div class="ni-stat-card__value">Kelola</div>
+    </div>
+  </a>
+  <a href="{% url 'master_data:kewajiban_lv1_list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:100ms;">
+    <div class="ni-stat-card__icon" style="background:#fef3c7;color:var(--ni-warning);">
+      <i data-lucide="credit-card"></i>
+    </div>
+    <div>
+      <div class="ni-stat-card__label">Kewajiban</div>
+      <div class="ni-stat-card__value">Kelola</div>
+    </div>
+  </a>
+  <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:150ms;">
+    <div class="ni-stat-card__icon" style="background:#ede9fe;color:var(--ni-accent);">
+      <i data-lucide="landmark"></i>
+    </div>
+    <div>
+      <div class="ni-stat-card__label">Ekuitas</div>
+      <div class="ni-stat-card__value">Kelola</div>
+    </div>
+  </a>
+  <a href="{% url 'master_data:tipe_transaksi_list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:200ms;">
+    <div class="ni-stat-card__icon" style="background:#ecfeff;color:var(--ni-info);">
+      <i data-lucide="tags"></i>
+    </div>
+    <div>
+      <div class="ni-stat-card__label">Tipe Transaksi</div>
+      <div class="ni-stat-card__value">Kelola</div>
+    </div>
+  </a>
+</div>
+
+<div style="display:grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+  <div class="ni-card ni-animate-fade-in" style="animation-delay:250ms;">
+    <div class="ni-card__header">
+      <h3 class="ni-card__title">Ringkasan Jurnal</h3>
+    </div>
+    <div class="ni-card__body">
+      <div class="ni-chart-container" style="height:300px;">
+        <canvas id="jurnalChart"></canvas>
       </div>
     </div>
   </div>
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">Aset</h5>
-        <a href="{% url 'master_data:aset_lv1_list' %}" class="btn btn-primary">Kelola</a>
-      </div>
+  <div class="ni-card ni-animate-fade-in" style="animation-delay:300ms;">
+    <div class="ni-card__header">
+      <h3 class="ni-card__title">Komposisi Akun</h3>
     </div>
-  </div>
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">Kewajiban</h5>
-        <a href="{% url 'master_data:kewajiban_lv1_list' %}" class="btn btn-primary">Kelola</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">Ekuitas</h5>
-        <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="btn btn-primary">Kelola</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-md-4 mb-3">
-    <div class="card">
-      <div class="card-body">
-        <h5 class="card-title">Tipe Transaksi</h5>
-        <a href="{% url 'master_data:tipe_transaksi_list' %}" class="btn btn-primary">Kelola</a>
+    <div class="ni-card__body">
+      <div class="ni-chart-container" style="height:300px;">
+        <canvas id="akunChart"></canvas>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="{% static 'js/chart-init.js' %}"></script>
+<script>
+  niCharts.line('jurnalChart',
+    ['Jan','Feb','Mar','Apr','Mei','Jun'],
+    [{
+      label: 'Debit',
+      data: [0,0,0,0,0,0],
+      borderColor: niCharts.COLORS.primary,
+      backgroundColor: 'rgba(0,84,166,0.1)',
+      fill: true
+    },{
+      label: 'Kredit',
+      data: [0,0,0,0,0,0],
+      borderColor: niCharts.COLORS.accent,
+      backgroundColor: 'rgba(99,102,241,0.1)',
+      fill: true
+    }]
+  );
+  niCharts.doughnut('akunChart',
+    ['Aset','Kewajiban','Ekuitas'],
+    [1,1,1]
+  );
+</script>
 {% endblock %}

@@ -1,0 +1,337 @@
+/* ==========================================================================
+   Naveda Integra — menubar.css
+   Sidebar navigation: logo, nav items, submenus, user profile, collapse
+   ========================================================================== */
+
+/* ---------- Logo area ---------- */
+.ni-sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  min-height: 64px;
+}
+
+.ni-sidebar-logo__icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: var(--ni-radius-sm);
+  background: var(--ni-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.ni-sidebar-logo__text {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-sidebar--collapsed .ni-sidebar-logo__text {
+  opacity: 0;
+  width: 0;
+}
+
+/* ---------- Nav section ---------- */
+.ni-sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0;
+}
+
+.ni-sidebar-nav::-webkit-scrollbar {
+  width: 3px;
+}
+
+.ni-sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* ---------- Nav label (section heading) ---------- */
+.ni-nav-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(148, 163, 184, 0.5);
+  padding: 16px 20px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-sidebar--collapsed .ni-nav-label {
+  opacity: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+/* ---------- Nav item ---------- */
+.ni-nav-item {
+  position: relative;
+}
+
+.ni-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 20px;
+  color: var(--ni-text-sidebar);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  border-left: 3px solid transparent;
+  transition: all var(--ni-transition);
+  cursor: pointer;
+}
+
+.ni-nav-link:hover {
+  background: var(--ni-bg-sidebar-hover);
+  color: var(--ni-text-sidebar-active);
+}
+
+.ni-nav-link.ni-nav-link--active {
+  background: var(--ni-bg-sidebar-hover);
+  color: var(--ni-text-sidebar-active);
+  border-left-color: var(--ni-primary);
+}
+
+.ni-nav-link__icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-nav-link:hover .ni-nav-link__icon,
+.ni-nav-link--active .ni-nav-link__icon {
+  opacity: 1;
+}
+
+.ni-nav-link__text {
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-sidebar--collapsed .ni-nav-link__text {
+  opacity: 0;
+  width: 0;
+}
+
+/* ---------- Nav badge (notification count) ---------- */
+.ni-nav-badge {
+  margin-left: auto;
+  background: var(--ni-danger);
+  color: #fff;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 10px;
+  line-height: 1.4;
+}
+
+.ni-sidebar--collapsed .ni-nav-badge {
+  display: none;
+}
+
+/* ---------- Submenu (dropdown children) ---------- */
+.ni-nav-link__arrow {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform var(--ni-transition);
+  opacity: 0.5;
+}
+
+.ni-nav-item--open > .ni-nav-link .ni-nav-link__arrow {
+  transform: rotate(90deg);
+}
+
+.ni-sidebar--collapsed .ni-nav-link__arrow {
+  display: none;
+}
+
+.ni-nav-submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 250ms ease;
+}
+
+.ni-nav-item--open > .ni-nav-submenu {
+  max-height: 500px;
+}
+
+.ni-nav-submenu .ni-nav-link {
+  padding-left: 55px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.ni-nav-submenu .ni-nav-link:hover {
+  color: var(--ni-text-sidebar-active);
+}
+
+.ni-nav-submenu .ni-nav-link.ni-nav-link--active {
+  color: var(--ni-text-sidebar-active);
+  border-left-color: transparent;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ni-nav-submenu .ni-nav-link::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.4;
+  flex-shrink: 0;
+  margin-left: -20px;
+  margin-right: 8px;
+}
+
+.ni-sidebar--collapsed .ni-nav-submenu {
+  display: none;
+}
+
+/* ---------- Sidebar divider ---------- */
+.ni-sidebar-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 8px 16px;
+}
+
+/* ---------- User profile area ---------- */
+.ni-sidebar-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background var(--ni-transition);
+}
+
+.ni-sidebar-user:hover {
+  background: var(--ni-bg-sidebar-hover);
+}
+
+.ni-sidebar-user__avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--ni-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+}
+
+.ni-sidebar-user__info {
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-sidebar--collapsed .ni-sidebar-user__info {
+  opacity: 0;
+  width: 0;
+}
+
+.ni-sidebar-user__name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ni-sidebar-user__role {
+  font-size: 0.6875rem;
+  color: var(--ni-text-sidebar);
+  white-space: nowrap;
+}
+
+/* ---------- Collapse / expand button ---------- */
+.ni-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  position: absolute;
+  top: 20px;
+  right: -14px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: 50%;
+  color: var(--ni-text-muted);
+  box-shadow: var(--ni-shadow-sm);
+  z-index: 1001;
+  transition: all var(--ni-transition);
+  cursor: pointer;
+  padding: 0;
+}
+
+.ni-sidebar-toggle:hover {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+}
+
+.ni-sidebar-toggle svg {
+  width: 14px;
+  height: 14px;
+  transition: transform var(--ni-transition);
+}
+
+.ni-sidebar--collapsed .ni-sidebar-toggle svg {
+  transform: rotate(180deg);
+}
+
+/* ---------- Mobile hamburger ---------- */
+.ni-mobile-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: none;
+  border: none;
+  color: var(--ni-text);
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .ni-mobile-toggle {
+    display: flex;
+  }
+
+  .ni-sidebar-toggle {
+    display: none;
+  }
+}

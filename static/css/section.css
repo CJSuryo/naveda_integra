@@ -1,0 +1,280 @@
+/* ==========================================================================
+   Naveda Integra — section.css
+   Page header, breadcrumbs, content sections, dividers
+   ========================================================================== */
+
+/* ---------- Page header ---------- */
+.ni-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.ni-page-header__left {
+  flex: 1;
+  min-width: 0;
+}
+
+.ni-page-header__title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.ni-page-header__desc {
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin-top: 4px;
+}
+
+.ni-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---------- Breadcrumb ---------- */
+.ni-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.ni-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ni-text-muted);
+  text-decoration: none;
+  transition: color var(--ni-transition);
+}
+
+.ni-breadcrumb__item:hover {
+  color: var(--ni-primary);
+}
+
+.ni-breadcrumb__item--active {
+  color: var(--ni-text);
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.ni-breadcrumb__sep {
+  color: var(--ni-border);
+  font-size: 0.75rem;
+  user-select: none;
+}
+
+.ni-breadcrumb__sep svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Section header (inline title + action) ---------- */
+.ni-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ni-section-header__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0;
+}
+
+/* ---------- Page header subtitle ---------- */
+.ni-page-header__subtitle {
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin: 4px 0 0;
+}
+
+/* ---------- Detail grid (key-value pairs) ---------- */
+.ni-detail-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0;
+  margin: 0;
+}
+
+.ni-detail-grid dt {
+  padding: 10px 16px 10px 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ni-text-muted);
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-detail-grid dd {
+  padding: 10px 0;
+  font-size: 0.8125rem;
+  color: var(--ni-text);
+  margin: 0;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-detail-grid dt:last-of-type,
+.ni-detail-grid dd:last-of-type {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .ni-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .ni-detail-grid dt {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .ni-detail-grid dd {
+    padding-top: 2px;
+  }
+}
+
+/* ---------- Section ---------- */
+.ni-section {
+  padding: 24px 0;
+}
+
+.ni-section + .ni-section {
+  border-top: 1px solid var(--ni-border);
+}
+
+.ni-section__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0 0 16px;
+}
+
+.ni-section__subtitle {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin-top: -12px;
+  margin-bottom: 16px;
+}
+
+/* ---------- Divider ---------- */
+.ni-divider {
+  height: 1px;
+  background: var(--ni-border);
+  margin: 24px 0;
+  border: none;
+}
+
+.ni-divider--thick {
+  height: 2px;
+}
+
+.ni-divider--dashed {
+  background: none;
+  border-top: 1px dashed var(--ni-border);
+}
+
+/* Divider with centered text */
+.ni-divider-text {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ni-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 24px 0;
+}
+
+.ni-divider-text::before,
+.ni-divider-text::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ni-border);
+}
+
+/* ---------- Tabs (inline section nav) ---------- */
+.ni-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--ni-border);
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+
+.ni-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ni-text-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  white-space: nowrap;
+  transition: all var(--ni-transition);
+  cursor: pointer;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.ni-tab:hover {
+  color: var(--ni-text);
+}
+
+.ni-tab--active {
+  color: var(--ni-primary);
+  border-bottom-color: var(--ni-primary);
+}
+
+.ni-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.ni-tab__count {
+  background: var(--ni-bg);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--ni-text-muted);
+}
+
+.ni-tab--active .ni-tab__count {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .ni-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ni-page-header__actions {
+    width: 100%;
+  }
+
+  .ni-page-header__actions .ni-btn {
+    flex: 1;
+  }
+}

@@ -10,8 +10,8 @@ from apps.master_data.models import Akun
 
 def _kode_nama_widgets():
     return {
-        'kode': forms.TextInput(attrs={'class': 'form-control'}),
-        'nama': forms.TextInput(attrs={'class': 'form-control'}),
+        'kode': forms.TextInput(attrs={'class': 'ni-input'}),
+        'nama': forms.TextInput(attrs={'class': 'ni-input'}),
     }
 
 
@@ -37,13 +37,13 @@ class JurnalHeaderForm(forms.ModelForm):
             'entitas_bisnis', 'tipe_transaksi', 'item', 'transaction_prefix',
         )
         widgets = {
-            'tanggal': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
-            'nomor_transaksi': forms.TextInput(attrs={'class': 'form-control'}),
-            'uraian_transaksi': forms.TextInput(attrs={'class': 'form-control'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'form-control'}),
-            'tipe_transaksi': forms.Select(attrs={'class': 'form-control'}),
-            'item': forms.Select(attrs={'class': 'form-control'}),
-            'transaction_prefix': forms.Select(attrs={'class': 'form-control'}),
+            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'nomor_transaksi': forms.TextInput(attrs={'class': 'ni-input'}),
+            'uraian_transaksi': forms.TextInput(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'tipe_transaksi': forms.Select(attrs={'class': 'ni-input'}),
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'transaction_prefix': forms.Select(attrs={'class': 'ni-input'}),
         }
 
 
@@ -52,9 +52,9 @@ class JurnalDetailForm(forms.ModelForm):
         model = JurnalDetail
         fields = ('akun', 'debit', 'kredit')
         widgets = {
-            'akun': forms.Select(attrs={'class': 'form-control'}),
-            'debit': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
-            'kredit': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'akun': forms.Select(attrs={'class': 'ni-input'}),
+            'debit': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
+            'kredit': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -67,7 +67,7 @@ class JurnalAutomasiForm(forms.ModelForm):
         model = JurnalAutomasi
         fields = ('nama',)
         widgets = {
-            'nama': forms.TextInput(attrs={'class': 'form-control'}),
+            'nama': forms.TextInput(attrs={'class': 'ni-input'}),
         }
 
 
@@ -76,7 +76,7 @@ class JurnalAutomasiAkunForm(forms.ModelForm):
         model = JurnalAutomasiAkun
         fields = ('akun',)
         widgets = {
-            'akun': forms.Select(attrs={'class': 'form-control'}),
+            'akun': forms.Select(attrs={'class': 'ni-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -86,16 +86,16 @@ class JurnalAutomasiAkunForm(forms.ModelForm):
 
 class AutomasiEntryForm(forms.Form):
     """Form for creating automated journal entries."""
-    tanggal = forms.DateField(widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}))
+    tanggal = forms.DateField(widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}))
     uraian_transaksi = forms.CharField(
         max_length=512,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
+        widget=forms.TextInput(attrs={'class': 'ni-input'}),
     )
     item = forms.ModelChoiceField(
         queryset=Item.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
     )
     transaction_prefix = forms.ModelChoiceField(
         queryset=TransactionPrefix.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
     )

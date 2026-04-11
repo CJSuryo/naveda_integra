@@ -1,0 +1,225 @@
+/* ==========================================================================
+   Naveda Integra — wrapper.css
+   Content wrappers, containers, scroll areas
+   ========================================================================== */
+
+/* ---------- Content wrapper (main page padding) ---------- */
+.ni-content-wrapper {
+  padding: 28px 32px;
+  flex: 1;
+}
+
+/* ---------- Container (max-width) ---------- */
+.ni-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.ni-container--sm { max-width: 640px; }
+.ni-container--md { max-width: 960px; }
+.ni-container--lg { max-width: 1280px; }
+.ni-container--xl { max-width: 1536px; }
+.ni-container--full { max-width: none; }
+
+/* ---------- Scroll area ---------- */
+.ni-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ni-scroll--x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ni-scroll--both {
+  overflow: auto;
+}
+
+.ni-scroll--hidden {
+  overflow: hidden;
+}
+
+/* Fixed height scroll containers */
+.ni-scroll--sm  { max-height: 200px; }
+.ni-scroll--md  { max-height: 400px; }
+.ni-scroll--lg  { max-height: 600px; }
+
+/* ---------- Panel (sidebar-like content areas) ---------- */
+.ni-panel {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  overflow: hidden;
+}
+
+.ni-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-panel__body {
+  padding: 20px;
+}
+
+/* ---------- Two-column layout ---------- */
+.ni-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.ni-two-col--sidebar {
+  grid-template-columns: 280px 1fr;
+}
+
+.ni-two-col--sidebar-right {
+  grid-template-columns: 1fr 280px;
+}
+
+/* ---------- Three-column layout ---------- */
+.ni-three-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+/* ---------- Content area (white box for form pages) ---------- */
+.ni-content-area {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  padding: 24px;
+}
+
+/* ---------- Footer bar (sticky bottom actions) ---------- */
+.ni-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 32px;
+  background: var(--ni-bg-card);
+  border-top: 1px solid var(--ni-border);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.ni-footer-bar--between {
+  justify-content: space-between;
+}
+
+/* ---------- Auth layout (unauthenticated pages: login, register) ---------- */
+.ni-auth-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--ni-bg) 0%, var(--ni-primary-light) 100%);
+  padding: 24px;
+}
+
+.ni-auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  box-shadow: var(--ni-shadow-lg);
+  padding: 40px 32px;
+}
+
+.ni-auth-card__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.ni-auth-card__logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ni-radius);
+  background: var(--ni-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.ni-auth-card__logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ni-text);
+}
+
+.ni-auth-card__title {
+  text-align: center;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  margin: 0 0 8px;
+}
+
+.ni-auth-card__subtitle {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin: 0 0 28px;
+}
+
+.ni-auth-card__footer {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+}
+
+.ni-auth-card__footer a {
+  color: var(--ni-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ni-auth-card__footer a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1024px) {
+  .ni-two-col--sidebar,
+  .ni-two-col--sidebar-right {
+    grid-template-columns: 1fr;
+  }
+
+  .ni-three-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .ni-content-wrapper {
+    padding: 20px 16px;
+  }
+
+  .ni-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .ni-footer-bar {
+    padding: 12px 16px;
+  }
+
+  .ni-content-area {
+    padding: 16px;
+  }
+}
