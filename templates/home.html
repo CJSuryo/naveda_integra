@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Dashboard - Naveda Integra{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -81,7 +82,6 @@
 {% endblock %}
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-{% load static %}
 <script src="{% static 'js/chart-init.js' %}"></script>
 <script>
   niCharts.line('jurnalChart',
