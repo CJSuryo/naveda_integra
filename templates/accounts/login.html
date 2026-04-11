@@ -1,31 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}Login - Naveda Integra{% endblock %}
-{% block content %}
-<div class="row justify-content-center">
-  <div class="col-md-4">
-    <div class="card shadow">
-      <div class="card-body p-4">
-        <h3 class="card-title text-center mb-4">Login</h3>
-        <form method="post">
-          {% csrf_token %}
-          <div class="mb-3">
-            <label class="form-label">Email</label>
-            {{ form.username }}
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Password</label>
-            {{ form.password }}
-          </div>
-          {% if form.errors %}
-            <div class="alert alert-danger">Email atau password salah.</div>
-          {% endif %}
-          <button type="submit" class="btn btn-primary w-100">Login</button>
-          <div class="text-center mt-3">
-            <a href="{% url 'accounts:register' %}">Belum punya akun? Daftar</a>
-          </div>
-        </form>
-      </div>
-    </div>
+{% block content_auth %}
+<div class="ni-auth-card ni-animate-fade-in">
+  <div class="ni-auth-card__logo">
+    <div class="ni-auth-card__logo-icon">NI</div>
+    <span class="ni-auth-card__logo-text">Naveda Integra</span>
   </div>
+  <h1 class="ni-auth-card__title">Selamat Datang</h1>
+  <p class="ni-auth-card__subtitle">Masuk ke akun Anda untuk melanjutkan</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="ni-form-group">
+      <label class="ni-form-label">Email</label>
+      {{ form.username }}
+    </div>
+    <div class="ni-form-group">
+      <label class="ni-form-label">Password</label>
+      {{ form.password }}
+    </div>
+    {% if form.errors %}
+      <div class="ni-alert ni-alert--danger">Email atau password salah.</div>
+    {% endif %}
+    <button type="submit" class="ni-btn ni-btn--primary ni-btn--block">Masuk</button>
+    <div class="ni-auth-card__footer">
+      <a href="{% url 'accounts:register' %}">Belum punya akun? Daftar</a>
+    </div>
+  </form>
 </div>
 {% endblock %}
