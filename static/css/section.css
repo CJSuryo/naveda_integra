@@ -80,6 +80,71 @@
   height: 14px;
 }
 
+/* ---------- Section header (inline title + action) ---------- */
+.ni-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ni-section-header__title {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0;
+}
+
+/* ---------- Page header subtitle ---------- */
+.ni-page-header__subtitle {
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin: 4px 0 0;
+}
+
+/* ---------- Detail grid (key-value pairs) ---------- */
+.ni-detail-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 0;
+  margin: 0;
+}
+
+.ni-detail-grid dt {
+  padding: 10px 16px 10px 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ni-text-muted);
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-detail-grid dd {
+  padding: 10px 0;
+  font-size: 0.8125rem;
+  color: var(--ni-text);
+  margin: 0;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-detail-grid dt:last-of-type,
+.ni-detail-grid dd:last-of-type {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .ni-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .ni-detail-grid dt {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+  .ni-detail-grid dd {
+    padding-top: 2px;
+  }
+}
+
 /* ---------- Section ---------- */
 .ni-section {
   padding: 24px 0;

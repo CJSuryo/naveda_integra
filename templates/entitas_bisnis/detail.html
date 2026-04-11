@@ -1,48 +1,66 @@
 {% extends 'base.html' %}
 {% block title %}{{ object.nama }}{% endblock %}
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <h2>{{ object.nama }}</h2>
+<div class="ni-page-header">
   <div>
-    <a href="{% url 'entitas_bisnis:update' object.pk %}" class="btn btn-warning">Edit</a>
-    <a href="{% url 'entitas_bisnis:delete' object.pk %}" class="btn btn-danger">Hapus</a>
-    <a href="{% url 'entitas_bisnis:list' %}" class="btn btn-secondary">Kembali</a>
+    <h1 class="ni-page-header__title">{{ object.nama }}</h1>
+    <p class="ni-page-header__subtitle">Detail entitas bisnis</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'entitas_bisnis:update' object.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'entitas_bisnis:delete' object.pk %}" class="ni-btn ni-btn--outline-danger">Hapus</a>
+    <a href="{% url 'entitas_bisnis:list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
   </div>
 </div>
-<table class="table table-bordered">
-  <tr><th>Tipe Entitas</th><td>{{ object.tipe_entitas }}</td></tr>
-  <tr><th>Relasi Bisnis</th><td>{{ object.get_relasi_display }}</td></tr>
-  <tr><th>Email</th><td>{{ object.email|default:'-' }}</td></tr>
-  <tr><th>Telepon</th><td>{{ object.telepon|default:'-' }}</td></tr>
-  <tr><th>Alamat</th><td>{{ object.alamat_lengkap|default:'-' }}</td></tr>
-  <tr><th>Tax ID</th><td>{{ object.tax_id|default:'-' }}</td></tr>
-  <tr><th>Tanggal Bergabung</th><td>{{ object.tanggal_bergabung|default:'-' }}</td></tr>
-  <tr><th>Status</th><td>{% if object.status_aktif %}Aktif{% else %}Nonaktif{% endif %}</td></tr>
-</table>
 
-<div class="d-flex justify-content-between align-items-center mt-4 mb-3">
-  <h4>Cabang</h4>
-  <a href="{% url 'entitas_bisnis:cabang_create' object.pk %}" class="btn btn-sm btn-success">+ Tambah Cabang</a>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:24px;">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Tipe Entitas</dt><dd>{{ object.tipe_entitas }}</dd>
+      <dt>Relasi Bisnis</dt><dd>{{ object.get_relasi_display }}</dd>
+      <dt>Email</dt><dd>{{ object.email|default:'-' }}</dd>
+      <dt>Telepon</dt><dd>{{ object.telepon|default:'-' }}</dd>
+      <dt>Alamat</dt><dd>{{ object.alamat_lengkap|default:'-' }}</dd>
+      <dt>Tax ID</dt><dd>{{ object.tax_id|default:'-' }}</dd>
+      <dt>Tanggal Bergabung</dt><dd>{{ object.tanggal_bergabung|default:'-' }}</dd>
+      <dt>Status</dt><dd>{% if object.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
+    </dl>
+  </div>
 </div>
-<table class="table table-striped table-hover">
-  <thead class="table-dark">
-    <tr><th>Nama</th><th>Email</th><th>Telepon</th><th>Status</th><th>Aksi</th></tr>
-  </thead>
-  <tbody>
-    {% for c in cabang_list %}
-    <tr>
-      <td>{{ c.nama }}</td>
-      <td>{{ c.email|default:'-' }}</td>
-      <td>{{ c.telepon|default:'-' }}</td>
-      <td>{% if c.status_aktif %}<span class="badge bg-success">Aktif</span>{% else %}<span class="badge bg-secondary">Nonaktif</span>{% endif %}</td>
-      <td>
-        <a href="{% url 'entitas_bisnis:cabang_update' object.pk c.pk %}" class="btn btn-sm btn-warning">Edit</a>
-        <a href="{% url 'entitas_bisnis:cabang_delete' object.pk c.pk %}" class="btn btn-sm btn-danger">Hapus</a>
-      </td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="5" class="text-center">Belum ada cabang.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+<div class="ni-section-header" style="margin-bottom:16px;">
+  <h2 class="ni-section-header__title">Cabang</h2>
+  <a href="{% url 'entitas_bisnis:cabang_create' object.pk %}" class="ni-btn ni-btn--success ni-btn--sm">
+    <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Cabang
+  </a>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr><th>Nama</th><th>Email</th><th>Telepon</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for c in cabang_list %}
+        <tr>
+          <td>{{ c.nama }}</td>
+          <td>{{ c.email|default:'-' }}</td>
+          <td>{{ c.telepon|default:'-' }}</td>
+          <td>{% if c.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'entitas_bisnis:cabang_update' object.pk c.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'entitas_bisnis:cabang_delete' object.pk c.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada cabang.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

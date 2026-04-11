@@ -77,6 +77,16 @@
   align-items: flex-start;
   gap: 16px;
   padding: 20px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  box-shadow: var(--ni-shadow-sm);
+  transition: box-shadow var(--ni-transition), transform var(--ni-transition);
+}
+
+.ni-stat-card:hover {
+  box-shadow: var(--ni-shadow-md);
+  transform: translateY(-2px);
 }
 
 .ni-stat-card__icon {

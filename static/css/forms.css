@@ -13,7 +13,7 @@
 }
 
 /* ---------- Label ---------- */
-.ni-label {
+.ni-form-label {
   display: block;
   margin-bottom: 6px;
   font-size: 0.8125rem;
@@ -21,7 +21,7 @@
   color: var(--ni-text);
 }
 
-.ni-label--required::after {
+.ni-form-label--required::after {
   content: ' *';
   color: var(--ni-danger);
 }
