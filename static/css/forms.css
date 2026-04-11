@@ -162,6 +162,46 @@
   user-select: none;
 }
 
+/* Standalone checkbox input (Django renders <input class="ni-checkbox" type="checkbox">) */
+input[type="checkbox"].ni-checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ni-border);
+  border-radius: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--ni-transition),
+    border-color var(--ni-transition);
+  position: relative;
+  display: inline-block;
+  gap: 0;
+}
+
+input[type="checkbox"].ni-checkbox:checked {
+  background: var(--ni-primary);
+  border-color: var(--ni-primary);
+}
+
+input[type="checkbox"].ni-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+input[type="checkbox"].ni-checkbox:focus-visible {
+  outline: 2px solid var(--ni-primary);
+  outline-offset: 2px;
+}
+
 .ni-checkbox__input {
   width: 18px;
   height: 18px;
@@ -291,6 +331,20 @@
 
 .ni-toggle__input:checked + .ni-toggle__track::after {
   transform: translateX(18px);
+}
+
+/* ---------- Form error (Django errors) ---------- */
+.ni-form-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--ni-danger);
+}
+
+.ni-form-error ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
 }
 
 /* ---------- Error state ---------- */

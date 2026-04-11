@@ -5,8 +5,8 @@ from .models import AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, Ek
 
 def _kode_nama_widgets():
     return {
-        'kode': forms.TextInput(attrs={'class': 'form-control'}),
-        'nama': forms.TextInput(attrs={'class': 'form-control'}),
+        'kode': forms.TextInput(attrs={'class': 'ni-input'}),
+        'nama': forms.TextInput(attrs={'class': 'ni-input'}),
     }
 
 
@@ -57,6 +57,6 @@ class TipeTransaksiForm(forms.ModelForm):
         model = TipeTransaksi
         fields = ('kode_transaksi', 'nama')
         widgets = {
-            'kode_transaksi': forms.TextInput(attrs={'class': 'form-control'}),
-            'nama': forms.TextInput(attrs={'class': 'form-control'}),
+            'kode_transaksi': forms.TextInput(attrs={'class': 'ni-input'}),
+            'nama': forms.TextInput(attrs={'class': 'ni-input'}),
         }

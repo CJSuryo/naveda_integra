@@ -7,20 +7,20 @@ User = get_user_model()
 
 
 class LoginForm(AuthenticationForm):
-    username = forms.EmailField(label='Email', widget=forms.EmailInput(attrs={'class': 'form-control', 'autofocus': True}))
-    password = forms.CharField(label='Password', widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    username = forms.EmailField(label='Email', widget=forms.EmailInput(attrs={'class': 'ni-input', 'autofocus': True}))
+    password = forms.CharField(label='Password', widget=forms.PasswordInput(attrs={'class': 'ni-input'}))
 
 
 class RegisterForm(forms.ModelForm):
-    password1 = forms.CharField(label='Password', widget=forms.PasswordInput(attrs={'class': 'form-control'}))
-    password2 = forms.CharField(label='Confirm Password', widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    password1 = forms.CharField(label='Password', widget=forms.PasswordInput(attrs={'class': 'ni-input'}))
+    password2 = forms.CharField(label='Confirm Password', widget=forms.PasswordInput(attrs={'class': 'ni-input'}))
 
     class Meta:
         model = User
         fields = ('email', 'name')
         widgets = {
-            'email': forms.EmailInput(attrs={'class': 'form-control'}),
-            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'ni-input'}),
+            'name': forms.TextInput(attrs={'class': 'ni-input'}),
         }
 
     def clean(self):
