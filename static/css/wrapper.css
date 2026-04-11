@@ -1,0 +1,146 @@
+/* ==========================================================================
+   Naveda Integra — wrapper.css
+   Content wrappers, containers, scroll areas
+   ========================================================================== */
+
+/* ---------- Content wrapper (main page padding) ---------- */
+.ni-content-wrapper {
+  padding: 28px 32px;
+  flex: 1;
+}
+
+/* ---------- Container (max-width) ---------- */
+.ni-container {
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.ni-container--sm { max-width: 640px; }
+.ni-container--md { max-width: 960px; }
+.ni-container--lg { max-width: 1280px; }
+.ni-container--xl { max-width: 1536px; }
+.ni-container--full { max-width: none; }
+
+/* ---------- Scroll area ---------- */
+.ni-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.ni-scroll--x {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.ni-scroll--both {
+  overflow: auto;
+}
+
+.ni-scroll--hidden {
+  overflow: hidden;
+}
+
+/* Fixed height scroll containers */
+.ni-scroll--sm  { max-height: 200px; }
+.ni-scroll--md  { max-height: 400px; }
+.ni-scroll--lg  { max-height: 600px; }
+
+/* ---------- Panel (sidebar-like content areas) ---------- */
+.ni-panel {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  overflow: hidden;
+}
+
+.ni-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-panel__body {
+  padding: 20px;
+}
+
+/* ---------- Two-column layout ---------- */
+.ni-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.ni-two-col--sidebar {
+  grid-template-columns: 280px 1fr;
+}
+
+.ni-two-col--sidebar-right {
+  grid-template-columns: 1fr 280px;
+}
+
+/* ---------- Three-column layout ---------- */
+.ni-three-col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+/* ---------- Content area (white box for form pages) ---------- */
+.ni-content-area {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  padding: 24px;
+}
+
+/* ---------- Footer bar (sticky bottom actions) ---------- */
+.ni-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 32px;
+  background: var(--ni-bg-card);
+  border-top: 1px solid var(--ni-border);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+.ni-footer-bar--between {
+  justify-content: space-between;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1024px) {
+  .ni-two-col--sidebar,
+  .ni-two-col--sidebar-right {
+    grid-template-columns: 1fr;
+  }
+
+  .ni-three-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .ni-content-wrapper {
+    padding: 20px 16px;
+  }
+
+  .ni-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .ni-footer-bar {
+    padding: 12px 16px;
+  }
+
+  .ni-content-area {
+    padding: 16px;
+  }
+}

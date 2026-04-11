@@ -1,0 +1,149 @@
+/* ==========================================================================
+   Naveda Integra — dropdown.css
+   Dropdown menus with slide animation, items, dividers, icons
+   ========================================================================== */
+
+/* ---------- Trigger wrapper ---------- */
+.ni-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+/* ---------- Menu panel ---------- */
+.ni-dropdown__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 200px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  box-shadow: var(--ni-shadow-lg);
+  padding: 6px;
+  z-index: 1100;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px) scale(0.97);
+  transform-origin: top left;
+  transition:
+    opacity 150ms ease,
+    visibility 150ms ease,
+    transform 150ms ease;
+}
+
+.ni-dropdown__menu--right {
+  left: auto;
+  right: 0;
+  transform-origin: top right;
+}
+
+.ni-dropdown__menu--up {
+  top: auto;
+  bottom: calc(100% + 4px);
+  transform-origin: bottom left;
+  transform: translateY(8px) scale(0.97);
+}
+
+/* Visible state */
+.ni-dropdown--open .ni-dropdown__menu,
+.ni-dropdown__menu--visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+/* ---------- Menu item ---------- */
+.ni-dropdown__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--ni-text);
+  background: none;
+  border: none;
+  border-radius: var(--ni-radius-sm);
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--ni-transition), color var(--ni-transition);
+}
+
+.ni-dropdown__item:hover {
+  background: var(--ni-bg);
+  color: var(--ni-text);
+}
+
+.ni-dropdown__item:focus-visible {
+  outline: 2px solid var(--ni-primary);
+  outline-offset: -2px;
+}
+
+.ni-dropdown__item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--ni-text-muted);
+}
+
+.ni-dropdown__item:hover svg {
+  color: var(--ni-text);
+}
+
+/* Danger item */
+.ni-dropdown__item--danger {
+  color: var(--ni-danger);
+}
+
+.ni-dropdown__item--danger:hover {
+  background: #fef2f2;
+  color: var(--ni-danger);
+}
+
+.ni-dropdown__item--danger svg {
+  color: var(--ni-danger);
+}
+
+/* Active / checked item */
+.ni-dropdown__item--active {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+  font-weight: 500;
+}
+
+/* Disabled item */
+.ni-dropdown__item--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ---------- Divider ---------- */
+.ni-dropdown__divider {
+  height: 1px;
+  background: var(--ni-border);
+  margin: 4px 0;
+}
+
+/* ---------- Section label ---------- */
+.ni-dropdown__label {
+  padding: 8px 12px 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ni-text-muted);
+}
+
+/* ---------- Item description ---------- */
+.ni-dropdown__desc {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  margin-top: 2px;
+}
+
+/* ---------- Wide menu ---------- */
+.ni-dropdown__menu--wide {
+  min-width: 280px;
+}

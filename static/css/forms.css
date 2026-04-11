@@ -1,0 +1,344 @@
+/* ==========================================================================
+   Naveda Integra — forms.css
+   Text inputs, selects, textareas, checkboxes, radios, form layout
+   ========================================================================== */
+
+/* ---------- Form group ---------- */
+.ni-form-group {
+  margin-bottom: 20px;
+}
+
+.ni-form-group:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- Label ---------- */
+.ni-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ni-text);
+}
+
+.ni-label--required::after {
+  content: ' *';
+  color: var(--ni-danger);
+}
+
+/* ---------- Help text ---------- */
+.ni-help-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+}
+
+/* ---------- Base input ---------- */
+.ni-input,
+.ni-select,
+.ni-textarea {
+  display: block;
+  width: 100%;
+  padding: 9px 14px;
+  font-family: var(--ni-font);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--ni-text);
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  transition:
+    border-color var(--ni-transition),
+    box-shadow var(--ni-transition);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.ni-input::placeholder,
+.ni-textarea::placeholder {
+  color: var(--ni-text-muted);
+  opacity: 0.6;
+}
+
+.ni-input:hover,
+.ni-select:hover,
+.ni-textarea:hover {
+  border-color: #cbd5e1;
+}
+
+.ni-input:focus,
+.ni-select:focus,
+.ni-textarea:focus {
+  outline: none;
+  border-color: var(--ni-border-focus);
+  box-shadow: 0 0 0 3px rgba(0, 84, 166, 0.12);
+}
+
+/* Disabled */
+.ni-input:disabled,
+.ni-select:disabled,
+.ni-textarea:disabled {
+  background: var(--ni-bg);
+  color: var(--ni-text-muted);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Read-only */
+.ni-input:read-only {
+  background: var(--ni-bg);
+  border-style: dashed;
+}
+
+/* ---------- Select ---------- */
+.ni-select {
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  cursor: pointer;
+}
+
+/* ---------- Textarea ---------- */
+.ni-textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+/* ---------- Input sizes ---------- */
+.ni-input--sm,
+.ni-select--sm {
+  padding: 6px 10px;
+  font-size: 0.8125rem;
+  border-radius: var(--ni-radius-sm);
+}
+
+.ni-input--lg,
+.ni-select--lg {
+  padding: 12px 18px;
+  font-size: 1rem;
+}
+
+/* ---------- Input with icon ---------- */
+.ni-input-group {
+  position: relative;
+}
+
+.ni-input-group .ni-input {
+  padding-left: 40px;
+}
+
+.ni-input-group__icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--ni-text-muted);
+  pointer-events: none;
+}
+
+.ni-input-group--right .ni-input {
+  padding-left: 14px;
+  padding-right: 40px;
+}
+
+.ni-input-group--right .ni-input-group__icon {
+  left: auto;
+  right: 14px;
+}
+
+/* ---------- Checkbox ---------- */
+.ni-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--ni-text);
+  user-select: none;
+}
+
+.ni-checkbox__input {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ni-border);
+  border-radius: 4px;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--ni-transition),
+    border-color var(--ni-transition);
+  position: relative;
+}
+
+.ni-checkbox__input:checked {
+  background: var(--ni-primary);
+  border-color: var(--ni-primary);
+}
+
+.ni-checkbox__input:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.ni-checkbox__input:focus-visible {
+  outline: 2px solid var(--ni-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- Radio ---------- */
+.ni-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: var(--ni-text);
+  user-select: none;
+}
+
+.ni-radio__input {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ni-border);
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--ni-transition),
+    border-color var(--ni-transition);
+  position: relative;
+}
+
+.ni-radio__input:checked {
+  border-color: var(--ni-primary);
+}
+
+.ni-radio__input:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  background: var(--ni-primary);
+  border-radius: 50%;
+}
+
+.ni-radio__input:focus-visible {
+  outline: 2px solid var(--ni-primary);
+  outline-offset: 2px;
+}
+
+/* ---------- Toggle / Switch ---------- */
+.ni-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  user-select: none;
+}
+
+.ni-toggle__track {
+  width: 40px;
+  height: 22px;
+  background: var(--ni-border);
+  border-radius: 11px;
+  position: relative;
+  transition: background var(--ni-transition);
+  flex-shrink: 0;
+}
+
+.ni-toggle__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ni-toggle__track::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--ni-transition);
+  box-shadow: var(--ni-shadow-sm);
+}
+
+.ni-toggle__input:checked + .ni-toggle__track {
+  background: var(--ni-primary);
+}
+
+.ni-toggle__input:checked + .ni-toggle__track::after {
+  transform: translateX(18px);
+}
+
+/* ---------- Error state ---------- */
+.ni-form-group--error .ni-input,
+.ni-form-group--error .ni-select,
+.ni-form-group--error .ni-textarea {
+  border-color: var(--ni-danger);
+}
+
+.ni-form-group--error .ni-input:focus,
+.ni-form-group--error .ni-select:focus,
+.ni-form-group--error .ni-textarea:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.12);
+}
+
+.ni-error-text {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--ni-danger);
+}
+
+/* ---------- Inline form ---------- */
+.ni-form-inline {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ni-form-inline .ni-form-group {
+  margin-bottom: 0;
+}
+
+/* ---------- Form row (grid) ---------- */
+.ni-form-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+@media (max-width: 768px) {
+  .ni-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ni-form-inline {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

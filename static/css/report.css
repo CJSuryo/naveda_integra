@@ -1,0 +1,215 @@
+/* ==========================================================================
+   Naveda Integra — report.css
+   Report layouts, KPI displays, summary cards, print styles
+   ========================================================================== */
+
+/* ---------- Report header ---------- */
+.ni-report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-report-header__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  margin: 0 0 4px;
+}
+
+.ni-report-header__period {
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+}
+
+.ni-report-header__actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ---------- KPI row ---------- */
+.ni-kpi-row {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 24px;
+}
+
+/* ---------- KPI card ---------- */
+.ni-kpi {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.ni-kpi__label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ni-text-muted);
+  margin-bottom: 8px;
+}
+
+.ni-kpi__value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.ni-kpi__value--primary { color: var(--ni-primary); }
+.ni-kpi__value--success { color: var(--ni-success); }
+.ni-kpi__value--warning { color: var(--ni-warning); }
+.ni-kpi__value--danger  { color: var(--ni-danger); }
+
+.ni-kpi__change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 8px;
+}
+
+.ni-kpi__change--up   { color: var(--ni-success); }
+.ni-kpi__change--down { color: var(--ni-danger); }
+.ni-kpi__change--flat { color: var(--ni-text-muted); }
+
+.ni-kpi__change svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Data summary ---------- */
+.ni-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.ni-summary__item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ni-border);
+  font-size: 0.8125rem;
+}
+
+.ni-summary__item:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+.ni-summary__label {
+  color: var(--ni-text-muted);
+}
+
+.ni-summary__value {
+  font-weight: 600;
+  color: var(--ni-text);
+  text-align: right;
+}
+
+/* Single-column variant */
+.ni-summary--single {
+  grid-template-columns: 1fr;
+}
+
+.ni-summary--single .ni-summary__item:last-child {
+  border-bottom: none;
+}
+
+/* ---------- Report section ---------- */
+.ni-report-section {
+  margin-bottom: 32px;
+}
+
+.ni-report-section__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ni-primary);
+  display: inline-block;
+}
+
+/* ---------- Report total row ---------- */
+.ni-report-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 20px;
+  background: var(--ni-primary-light);
+  border-radius: var(--ni-radius);
+  font-weight: 600;
+  margin-top: 12px;
+}
+
+.ni-report-total__label {
+  color: var(--ni-primary-dark);
+}
+
+.ni-report-total__value {
+  font-size: 1.125rem;
+  color: var(--ni-primary);
+}
+
+/* ---------- Print styles ---------- */
+@media print {
+  /* Hide non-printable elements */
+  .ni-sidebar,
+  .ni-sidebar-overlay,
+  .ni-mobile-toggle,
+  .ni-sidebar-toggle,
+  .ni-toast-container,
+  .ni-modal-backdrop,
+  .ni-btn:not(.ni-btn--print),
+  .ni-pagination,
+  .ni-report-header__actions {
+    display: none !important;
+  }
+
+  .ni-main {
+    margin-left: 0 !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+    font-size: 11pt;
+  }
+
+  .ni-card {
+    box-shadow: none;
+    border: 1px solid #ddd;
+    break-inside: avoid;
+  }
+
+  .ni-report-header {
+    border-bottom: 2px solid #000;
+  }
+
+  .ni-table th {
+    background: #eee !important;
+    color: #000;
+  }
+
+  a {
+    color: #000;
+    text-decoration: underline;
+  }
+
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+}

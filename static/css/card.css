@@ -1,0 +1,215 @@
+/* ==========================================================================
+   Naveda Integra — card.css
+   Card component, stat cards, card grid
+   ========================================================================== */
+
+/* ---------- Base card ---------- */
+.ni-card {
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  box-shadow: var(--ni-shadow-sm);
+  overflow: hidden;
+  transition:
+    box-shadow var(--ni-transition),
+    transform var(--ni-transition);
+}
+
+.ni-card--hover:hover {
+  box-shadow: var(--ni-shadow-md);
+  transform: translateY(-2px);
+}
+
+.ni-card--clickable {
+  cursor: pointer;
+}
+
+/* ---------- Card sections ---------- */
+.ni-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+.ni-card__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0;
+}
+
+.ni-card__subtitle {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin: 4px 0 0;
+}
+
+.ni-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ni-card__body {
+  padding: 20px;
+}
+
+.ni-card__body--flush {
+  padding: 0;
+}
+
+.ni-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--ni-border);
+  background: var(--ni-bg);
+}
+
+/* ---------- Stat card ---------- */
+.ni-stat-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+}
+
+.ni-stat-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--ni-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ni-stat-card__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.ni-stat-card__icon--primary {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+}
+
+.ni-stat-card__icon--success {
+  background: #d1fae5;
+  color: var(--ni-success);
+}
+
+.ni-stat-card__icon--warning {
+  background: #fef3c7;
+  color: var(--ni-warning);
+}
+
+.ni-stat-card__icon--danger {
+  background: #fee2e2;
+  color: var(--ni-danger);
+}
+
+.ni-stat-card__icon--info {
+  background: #cffafe;
+  color: var(--ni-info);
+}
+
+.ni-stat-card__icon--accent {
+  background: #e0e7ff;
+  color: var(--ni-accent);
+}
+
+.ni-stat-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.ni-stat-card__label {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin-bottom: 4px;
+}
+
+.ni-stat-card__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.ni-stat-card__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+.ni-stat-card__trend--up {
+  color: var(--ni-success);
+}
+
+.ni-stat-card__trend--down {
+  color: var(--ni-danger);
+}
+
+.ni-stat-card__trend svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ---------- Card grid ---------- */
+.ni-card-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.ni-card-grid--2 { grid-template-columns: repeat(2, 1fr); }
+.ni-card-grid--3 { grid-template-columns: repeat(3, 1fr); }
+.ni-card-grid--4 { grid-template-columns: repeat(4, 1fr); }
+
+@media (max-width: 1024px) {
+  .ni-card-grid--3,
+  .ni-card-grid--4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .ni-card-grid--2,
+  .ni-card-grid--3,
+  .ni-card-grid--4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Empty state card ---------- */
+.ni-card--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--ni-text-muted);
+}
+
+.ni-card--empty svg {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  opacity: 0.4;
+}
+
+.ni-card--empty p {
+  margin: 0 0 16px;
+  font-size: 0.9375rem;
+}

@@ -1,0 +1,252 @@
+/* ==========================================================================
+   Naveda Integra — button.css
+   Button base, variants, sizes, icon buttons, button groups
+   ========================================================================== */
+
+/* ---------- Base ---------- */
+.ni-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 18px;
+  font-family: var(--ni-font);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--ni-text);
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background var(--ni-transition),
+    color var(--ni-transition),
+    border-color var(--ni-transition),
+    box-shadow var(--ni-transition),
+    transform 120ms ease;
+}
+
+.ni-btn:hover {
+  background: var(--ni-bg);
+  transform: translateY(-1px);
+  box-shadow: var(--ni-shadow);
+}
+
+.ni-btn:active {
+  transform: translateY(0) scale(0.98);
+  box-shadow: none;
+}
+
+.ni-btn:focus-visible {
+  outline: 2px solid var(--ni-primary);
+  outline-offset: 2px;
+}
+
+.ni-btn:disabled,
+.ni-btn.ni-btn--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.ni-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+/* ---------- Variant: Primary ---------- */
+.ni-btn--primary {
+  background: var(--ni-primary);
+  color: #fff;
+  border-color: var(--ni-primary);
+}
+
+.ni-btn--primary:hover {
+  background: var(--ni-primary-dark);
+  border-color: var(--ni-primary-dark);
+  color: #fff;
+}
+
+/* ---------- Variant: Success ---------- */
+.ni-btn--success {
+  background: var(--ni-success);
+  color: #fff;
+  border-color: var(--ni-success);
+}
+
+.ni-btn--success:hover {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+/* ---------- Variant: Warning ---------- */
+.ni-btn--warning {
+  background: var(--ni-warning);
+  color: #fff;
+  border-color: var(--ni-warning);
+}
+
+.ni-btn--warning:hover {
+  background: #d97706;
+  border-color: #d97706;
+  color: #fff;
+}
+
+/* ---------- Variant: Danger ---------- */
+.ni-btn--danger {
+  background: var(--ni-danger);
+  color: #fff;
+  border-color: var(--ni-danger);
+}
+
+.ni-btn--danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+/* ---------- Variant: Secondary ---------- */
+.ni-btn--secondary {
+  background: var(--ni-bg);
+  color: var(--ni-text);
+  border-color: var(--ni-border);
+}
+
+.ni-btn--secondary:hover {
+  background: var(--ni-border);
+}
+
+/* ---------- Variant: Outline ---------- */
+.ni-btn--outline {
+  background: transparent;
+  color: var(--ni-primary);
+  border-color: var(--ni-primary);
+}
+
+.ni-btn--outline:hover {
+  background: var(--ni-primary);
+  color: #fff;
+}
+
+.ni-btn--outline-danger {
+  background: transparent;
+  color: var(--ni-danger);
+  border-color: var(--ni-danger);
+}
+
+.ni-btn--outline-danger:hover {
+  background: var(--ni-danger);
+  color: #fff;
+}
+
+/* ---------- Variant: Ghost ---------- */
+.ni-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ni-text-muted);
+}
+
+.ni-btn--ghost:hover {
+  background: var(--ni-bg);
+  color: var(--ni-text);
+}
+
+/* ---------- Sizes ---------- */
+.ni-btn--sm {
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  border-radius: var(--ni-radius-sm);
+  gap: 6px;
+}
+
+.ni-btn--sm svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ni-btn--lg {
+  padding: 12px 24px;
+  font-size: 0.9375rem;
+  border-radius: var(--ni-radius);
+  gap: 10px;
+}
+
+.ni-btn--lg svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* ---------- Icon-only button ---------- */
+.ni-btn--icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  gap: 0;
+}
+
+.ni-btn--icon.ni-btn--sm {
+  width: 30px;
+  height: 30px;
+}
+
+.ni-btn--icon.ni-btn--lg {
+  width: 44px;
+  height: 44px;
+}
+
+/* ---------- Full width ---------- */
+.ni-btn--block {
+  width: 100%;
+}
+
+/* ---------- Button group ---------- */
+.ni-btn-group {
+  display: inline-flex;
+}
+
+.ni-btn-group .ni-btn {
+  border-radius: 0;
+}
+
+.ni-btn-group .ni-btn:first-child {
+  border-radius: var(--ni-radius) 0 0 var(--ni-radius);
+}
+
+.ni-btn-group .ni-btn:last-child {
+  border-radius: 0 var(--ni-radius) var(--ni-radius) 0;
+}
+
+.ni-btn-group .ni-btn + .ni-btn {
+  margin-left: -1px;
+}
+
+/* ---------- Button row (flex container for action buttons) ---------- */
+.ni-btn-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Loading state ---------- */
+.ni-btn--loading {
+  pointer-events: none;
+  position: relative;
+  color: transparent !important;
+}
+
+.ni-btn--loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ni-spin 0.6s linear infinite;
+}

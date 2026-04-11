@@ -1,0 +1,203 @@
+/* ==========================================================================
+   Naveda Integra — chart.css
+   Chart.js container styles, legends, and custom tooltip styling
+   ========================================================================== */
+
+/* ---------- Responsive chart wrapper ---------- */
+.ni-chart-wrapper {
+  position: relative;
+  width: 100%;
+  padding: 4px;
+}
+
+.ni-chart-wrapper canvas {
+  width: 100% !important;
+}
+
+/* ---------- Aspect ratio containers ---------- */
+.ni-chart-wrapper--16x9 {
+  aspect-ratio: 16 / 9;
+}
+
+.ni-chart-wrapper--4x3 {
+  aspect-ratio: 4 / 3;
+}
+
+.ni-chart-wrapper--square {
+  aspect-ratio: 1;
+}
+
+.ni-chart-wrapper--wide {
+  aspect-ratio: 21 / 9;
+}
+
+/* Small inline chart (sparkline) */
+.ni-chart-wrapper--spark {
+  height: 48px;
+  width: 120px;
+}
+
+/* ---------- Chart header (title + legend) ---------- */
+.ni-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.ni-chart-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ni-text);
+  margin: 0;
+}
+
+/* ---------- Custom legend ---------- */
+.ni-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.ni-chart-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: opacity var(--ni-transition);
+}
+
+.ni-chart-legend__item:hover {
+  opacity: 0.7;
+}
+
+.ni-chart-legend__item--hidden {
+  opacity: 0.35;
+  text-decoration: line-through;
+}
+
+.ni-chart-legend__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* ---------- Chart.js custom tooltip override ---------- */
+.ni-chart-tooltip {
+  background: var(--ni-bg-sidebar) !important;
+  border-radius: var(--ni-radius) !important;
+  padding: 10px 14px !important;
+  box-shadow: var(--ni-shadow-lg) !important;
+  font-family: var(--ni-font) !important;
+  font-size: 0.8125rem !important;
+  color: #fff !important;
+  pointer-events: none;
+}
+
+.ni-chart-tooltip__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  color: var(--ni-text-sidebar);
+}
+
+.ni-chart-tooltip__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.ni-chart-tooltip__color {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ni-chart-tooltip__label {
+  color: var(--ni-text-sidebar);
+}
+
+.ni-chart-tooltip__value {
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* ---------- Chart loading overlay ---------- */
+.ni-chart-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: var(--ni-radius);
+  z-index: 2;
+}
+
+.ni-chart-loading__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--ni-border);
+  border-top-color: var(--ni-primary);
+  border-radius: 50%;
+  animation: ni-spin 0.7s linear infinite;
+}
+
+/* ---------- Empty chart state ---------- */
+.ni-chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  color: var(--ni-text-muted);
+  font-size: 0.875rem;
+}
+
+.ni-chart-empty svg {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 12px;
+  opacity: 0.3;
+}
+
+/* ---------- Period selector (tab-like) ---------- */
+.ni-chart-periods {
+  display: inline-flex;
+  background: var(--ni-bg);
+  border-radius: var(--ni-radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.ni-chart-period {
+  padding: 4px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ni-text-muted);
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--ni-transition);
+}
+
+.ni-chart-period:hover {
+  color: var(--ni-text);
+}
+
+.ni-chart-period--active {
+  background: var(--ni-bg-card);
+  color: var(--ni-text);
+  box-shadow: var(--ni-shadow-sm);
+}

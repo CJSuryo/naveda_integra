@@ -1,0 +1,253 @@
+/* ==========================================================================
+   Naveda Integra — table.css
+   Modern tables with clean lines, sticky header, hover rows, badges
+   ========================================================================== */
+
+/* ---------- Responsive wrapper ---------- */
+.ni-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--ni-radius);
+  border: 1px solid var(--ni-border);
+  background: var(--ni-bg-card);
+}
+
+/* ---------- Base table ---------- */
+.ni-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+/* ---------- Header ---------- */
+.ni-table thead th {
+  padding: 12px 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ni-text-muted);
+  background: var(--ni-bg);
+  border-bottom: 1px solid var(--ni-border);
+  text-align: left;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+/* Sortable header */
+.ni-table thead th.ni-table__sort {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--ni-transition);
+}
+
+.ni-table thead th.ni-table__sort:hover {
+  color: var(--ni-text);
+}
+
+.ni-table thead th.ni-table__sort::after {
+  content: '';
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-left: 6px;
+  vertical-align: middle;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.3;
+}
+
+.ni-table thead th.ni-table__sort--asc::after {
+  opacity: 1;
+  border-top: none;
+  border-bottom: 4px solid var(--ni-primary);
+}
+
+.ni-table thead th.ni-table__sort--desc::after {
+  opacity: 1;
+  border-top: 4px solid var(--ni-primary);
+}
+
+/* ---------- Body rows ---------- */
+.ni-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ni-border);
+  color: var(--ni-text);
+  vertical-align: middle;
+}
+
+.ni-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Subtle stripe */
+.ni-table--striped tbody tr:nth-child(even) {
+  background: rgba(248, 250, 252, 0.5);
+}
+
+/* Hover row */
+.ni-table tbody tr {
+  transition: background var(--ni-transition);
+}
+
+.ni-table tbody tr:hover {
+  background: var(--ni-primary-light);
+}
+
+/* Clickable row */
+.ni-table--clickable tbody tr {
+  cursor: pointer;
+}
+
+/* ---------- Alignment helpers ---------- */
+.ni-table .ni-text-right,
+.ni-table th.ni-text-right,
+.ni-table td.ni-text-right {
+  text-align: right;
+}
+
+.ni-table .ni-text-center,
+.ni-table th.ni-text-center,
+.ni-table td.ni-text-center {
+  text-align: center;
+}
+
+/* ---------- Compact variant ---------- */
+.ni-table--compact thead th { padding: 8px 12px; }
+.ni-table--compact tbody td { padding: 8px 12px; }
+
+/* ---------- Status badge ---------- */
+.ni-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.ni-badge--success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.ni-badge--warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.ni-badge--danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.ni-badge--info {
+  background: #cffafe;
+  color: #155e75;
+}
+
+.ni-badge--primary {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary-dark);
+}
+
+.ni-badge--secondary {
+  background: var(--ni-bg);
+  color: var(--ni-text-muted);
+}
+
+.ni-badge--accent {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+/* Badge dot indicator */
+.ni-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------- Table actions ---------- */
+.ni-table__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ---------- Empty state ---------- */
+.ni-table__empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--ni-text-muted);
+}
+
+.ni-table__empty svg {
+  width: 40px;
+  height: 40px;
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+
+.ni-table__empty p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+/* ---------- Table toolbar ---------- */
+.ni-table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ni-border);
+  flex-wrap: wrap;
+}
+
+.ni-table-toolbar__search {
+  position: relative;
+  min-width: 240px;
+}
+
+.ni-table-toolbar__search .ni-input {
+  padding-left: 36px;
+  border-radius: var(--ni-radius);
+}
+
+.ni-table-toolbar__search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--ni-text-muted);
+  pointer-events: none;
+}
+
+.ni-table-toolbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 768px) {
+  .ni-table-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ni-table-toolbar__search {
+    min-width: 0;
+    width: 100%;
+  }
+}
