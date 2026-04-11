@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Naveda Integra{% endblock %}</title>
   {% load static %}
-  <!-- Naveda Integra modular CSS -->
   <link rel="stylesheet" href="{% static 'css/fonts.css' %}">
   <link rel="stylesheet" href="{% static 'css/layout.css' %}">
   <link rel="stylesheet" href="{% static 'css/menubar.css' %}">
@@ -24,77 +23,165 @@
   <link rel="stylesheet" href="{% static 'css/wrapper.css' %}">
   <link rel="stylesheet" href="{% static 'css/animation.css' %}">
   <link rel="stylesheet" href="{% static 'css/utilities.css' %}">
+  {% block extra_css %}{% endblock %}
 </head>
 <body>
 {% if user.is_authenticated %}
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-  <div class="container-fluid">
-    <a class="navbar-brand" href="{% url 'home' %}">Naveda Integra</a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
-    <div class="collapse navbar-collapse" id="mainNav">
-      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'accounts:register' %}">Registrasi User</a>
-        </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Entitas Bisnis</a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'entitas_bisnis:list' %}">Entitas Bisnis</a></li>
-            <li><a class="dropdown-item" href="{% url 'entitas_bisnis:tipe_entitas_list' %}">Tipe Entitas</a></li>
-          </ul>
-        </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Master Data</a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'master_data:aset_lv1_list' %}">Aset</a></li>
-            <li><a class="dropdown-item" href="{% url 'master_data:kewajiban_lv1_list' %}">Kewajiban</a></li>
-            <li><a class="dropdown-item" href="{% url 'master_data:ekuitas_lv1_list' %}">Ekuitas</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{% url 'master_data:tipe_transaksi_list' %}">Tipe Transaksi</a></li>
-          </ul>
-        </li>
-        <li class="nav-item dropdown">
-          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">Jurnal</a>
-          <ul class="dropdown-menu">
-            <li><a class="dropdown-item" href="{% url 'jurnal:index' %}">Jurnal Umum</a></li>
-            <li><a class="dropdown-item" href="{% url 'jurnal:header_list' %}">Jurnal Header</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{% url 'jurnal:item_list' %}">Item</a></li>
-            <li><a class="dropdown-item" href="{% url 'jurnal:prefix_list' %}">Prefiks Transaksi</a></li>
-            <li><hr class="dropdown-divider"></li>
-            <li><a class="dropdown-item" href="{% url 'jurnal:automasi_list' %}">Automasi Jurnal</a></li>
-          </ul>
-        </li>
-      </ul>
-      <ul class="navbar-nav">
-        <li class="nav-item">
-          <span class="nav-link text-secondary">{{ user.email }}</span>
-        </li>
-        <li class="nav-item">
-          <a class="nav-link" href="{% url 'accounts:logout' %}">Logout</a>
-        </li>
-      </ul>
-    </div>
-  </div>
-</nav>
-{% endif %}
+<div class="ni-app">
+  <!-- Mobile hamburger -->
+  <button class="ni-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+    <i data-lucide="menu" style="width:24px;height:24px"></i>
+  </button>
 
-<div class="container mt-4">
-  {% if messages %}
-    {% for message in messages %}
-      <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
-        {{ message }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  <!-- Sidebar overlay (mobile) -->
+  <div class="ni-sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- Sidebar -->
+  <aside class="ni-sidebar" id="sidebar">
+    <div class="ni-sidebar-logo">
+      <div class="ni-sidebar-logo__icon">NI</div>
+      <span class="ni-sidebar-logo__text">Naveda Integra</span>
+    </div>
+    <button class="ni-sidebar-toggle" id="sidebarToggle" aria-label="Collapse sidebar">
+      <i data-lucide="chevrons-left" style="width:14px;height:14px"></i>
+    </button>
+
+    <nav class="ni-sidebar-nav">
+      <span class="ni-nav-label">Menu Utama</span>
+
+      <div class="ni-nav-item">
+        <a href="{% url 'home' %}" class="ni-nav-link {% if request.resolver_match.url_name == 'home' %}ni-nav-link--active{% endif %}">
+          <i data-lucide="layout-dashboard" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Dashboard</span>
+        </a>
       </div>
-    {% endfor %}
-  {% endif %}
-  {% block content %}{% endblock %}
+
+      <div class="ni-nav-item">
+        <a href="{% url 'accounts:register' %}" class="ni-nav-link {% if request.resolver_match.app_name == 'accounts' %}ni-nav-link--active{% endif %}">
+          <i data-lucide="user-plus" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Registrasi User</span>
+        </a>
+      </div>
+
+      <span class="ni-nav-label">Entitas Bisnis</span>
+
+      <div class="ni-nav-item {% if 'entitas_bisnis' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="building-2" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Entitas Bisnis</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'entitas_bisnis:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Entitas</span>
+          </a>
+          <a href="{% url 'entitas_bisnis:tipe_entitas_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tipe Entitas</span>
+          </a>
+        </div>
+      </div>
+
+      <span class="ni-nav-label">Master Data</span>
+
+      <div class="ni-nav-item {% if 'master-data' in request.path or 'aset' in request.path or 'kewajiban' in request.path or 'ekuitas' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="database" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Akun & Kategori</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'master_data:aset_lv1_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Aset</span>
+          </a>
+          <a href="{% url 'master_data:kewajiban_lv1_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Kewajiban</span>
+          </a>
+          <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Ekuitas</span>
+          </a>
+          <a href="{% url 'master_data:tipe_transaksi_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tipe Transaksi</span>
+          </a>
+        </div>
+      </div>
+
+      <span class="ni-nav-label">Jurnal</span>
+
+      <div class="ni-nav-item {% if 'jurnal' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="book-open" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Jurnal</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'jurnal:index' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Jurnal Umum</span>
+          </a>
+          <a href="{% url 'jurnal:header_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Jurnal Header</span>
+          </a>
+          <a href="{% url 'jurnal:item_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Item</span>
+          </a>
+          <a href="{% url 'jurnal:prefix_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Prefiks Transaksi</span>
+          </a>
+          <a href="{% url 'jurnal:automasi_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Automasi Jurnal</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="ni-sidebar-user">
+      <div class="ni-sidebar-user__avatar">{{ user.email|first|upper }}</div>
+      <div class="ni-sidebar-user__info">
+        <div class="ni-sidebar-user__name">{{ user.email }}</div>
+        <div class="ni-sidebar-user__role">
+          <a href="{% url 'accounts:logout' %}" style="color:inherit;text-decoration:none;">Logout</a>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="ni-main">
+    <div class="ni-content-wrapper">
+      {% if messages %}
+      <div class="ni-toast-container" id="toastContainer">
+        {% for message in messages %}
+        <div class="ni-toast ni-toast--{{ message.tags|default:'info' }} ni-animate-slide-down" role="alert">
+          <div class="ni-toast__content">{{ message }}</div>
+          <button class="ni-toast__close" data-dismiss="toast" aria-label="Close">&times;</button>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
 </div>
 
-<!-- Lucide icons (SVG icon library) -->
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script>lucide.createIcons();</script>
+{% else %}
+{# Unauthenticated layout - centered, no sidebar #}
+<div class="ni-auth-layout">
+  {% if messages %}
+  <div class="ni-toast-container" id="toastContainer">
+    {% for message in messages %}
+    <div class="ni-toast ni-toast--{{ message.tags|default:'info' }} ni-animate-slide-down" role="alert">
+      <div class="ni-toast__content">{{ message }}</div>
+      <button class="ni-toast__close" data-dismiss="toast" aria-label="Close">&times;</button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% block content_auth %}{% endblock %}
+</div>
+{% endif %}
+
+<script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+{% block extra_js %}{% endblock %}
+<script src="{% static 'js/sidebar.js' %}"></script>
+<script src="{% static 'js/toast.js' %}"></script>
 </body>
 </html>

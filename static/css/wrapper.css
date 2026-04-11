@@ -115,6 +115,85 @@
   justify-content: space-between;
 }
 
+/* ---------- Auth layout (unauthenticated pages: login, register) ---------- */
+.ni-auth-layout {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--ni-bg) 0%, var(--ni-primary-light) 100%);
+  padding: 24px;
+}
+
+.ni-auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  box-shadow: var(--ni-shadow-lg);
+  padding: 40px 32px;
+}
+
+.ni-auth-card__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 32px;
+}
+
+.ni-auth-card__logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--ni-radius);
+  background: var(--ni-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.ni-auth-card__logo-text {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ni-text);
+}
+
+.ni-auth-card__title {
+  text-align: center;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  margin: 0 0 8px;
+}
+
+.ni-auth-card__subtitle {
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin: 0 0 28px;
+}
+
+.ni-auth-card__footer {
+  text-align: center;
+  margin-top: 20px;
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+}
+
+.ni-auth-card__footer a {
+  color: var(--ni-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.ni-auth-card__footer a:hover {
+  text-decoration: underline;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 1024px) {
   .ni-two-col--sidebar,
