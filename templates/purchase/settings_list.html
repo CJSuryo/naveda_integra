@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Settings — Sub-Transaction Types{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Settings</h1>
+    <p class="ni-page-header__subtitle">Transaction type mapping — definisi offset account untuk jurnal otomatis</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'purchase:settings_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
+    </a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Sub-Transaction Type</th>
+          <th>Direction</th>
+          <th>Default Offset Account</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in object_list %}
+        <tr>
+          <td>{{ obj.nama }}</td>
+          <td><span class="ni-badge {% if obj.direction == 'inflow' %}ni-badge--success{% else %}ni-badge--secondary{% endif %}">{{ obj.get_direction_display }}</span></td>
+          <td>{{ obj.default_offset_account }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'purchase:settings_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'purchase:settings_delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada sub-transaction type.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

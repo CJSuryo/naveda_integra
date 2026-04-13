@@ -1,0 +1,416 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<style>
+  .ni-purchase-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
+  .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .ni-purchase-eb-card__header select { flex: 1; }
+  .ni-purchase-item-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  .ni-purchase-item-table th { background: var(--ni-bg); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; color: var(--ni-text-muted); }
+  .ni-purchase-item-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+  .ni-purchase-item-table tr:last-child td { border-bottom: none; }
+  .ni-purchase-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
+  .ni-purchase-input:focus { outline: none; border-color: var(--ni-primary); }
+  .ni-purchase-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
+  .ts-wrapper.single .ts-control { border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; }
+  .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .ni-journal-preview th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--ni-border); color: var(--ni-text-muted); font-size: 0.75rem; }
+  .ni-journal-preview td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); }
+  .ni-advanced-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">Catat pembelian inventori dengan entitas bisnis dan item detail</p>
+  </div>
+</div>
+
+{% if errors %}
+<div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+  <ul style="margin:0;padding-left:16px;">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form id="purchaseForm" method="post">
+      {% csrf_token %}
+      <!-- Header fields -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Transaction ID</label>
+          <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}TRX-INV-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" name="tanggal" id="purchaseTanggal" class="ni-input" value="{{ today }}" required>
+        </div>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:24px;">
+        <label class="ni-form-label">Deskripsi</label>
+        <textarea name="deskripsi" class="ni-input" rows="2" placeholder="Deskripsi transaksi pembelian (opsional)">{% if purchase %}{{ purchase.deskripsi }}{% endif %}</textarea>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--ni-border);margin-bottom:20px;">
+
+      <!-- Entitas Bisnis Groups -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:1rem;color:var(--ni-text);">
+          <i data-lucide="building-2" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
+          Entitas Bisnis &amp; Items
+        </h3>
+        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="addEBGroup()">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Pilih Entitas Bisnis
+        </button>
+      </div>
+
+      <div id="ebGroupsContainer">
+        <!-- EB groups inserted by JS -->
+      </div>
+
+      <input type="hidden" name="eb_groups_data" id="ebGroupsData">
+
+      <!-- Journal Preview -->
+      <div id="journalPreview" class="ni-journal-preview" style="display:none;">
+        <h4 style="margin:0 0 12px;font-size:0.9rem;color:var(--ni-text);">
+          <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+          Journal Preview
+        </h4>
+        <table>
+          <thead>
+            <tr><th>Entitas Bisnis</th><th>Item</th><th>Debit (Account)</th><th>Credit (Account)</th><th>Amount</th></tr>
+          </thead>
+          <tbody id="journalPreviewBody"></tbody>
+        </table>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="showJournalPreview()">
+          <i data-lucide="eye" style="width:16px;height:16px"></i> Journal Preview
+        </button>
+        <button type="submit" class="ni-btn ni-btn--primary" id="purchaseSubmit">
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan
+        </button>
+        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var sttOffsetUrl = '{% url "purchase:api_stt_offset" %}';
+  var journalPreviewUrl = '{% url "purchase:api_journal_preview" %}';
+  var csrfToken = '{{ csrf_token }}';
+
+  var ebGroupCount = 0;
+  var itemCounters = {};
+
+  // Data from server (for edit mode)
+  var existingGroups = {{ eb_groups_json|default:"[]" }};
+
+  // Entitas bisnis options from server
+  var ebOptions = [
+    {% for eb in entitas_list %}
+    { id: {{ eb.pk }}, nama: '{{ eb.nama|escapejs }}' },
+    {% endfor %}
+  ];
+
+  // Sub-transaction type options
+  var sttOptions = [
+    {% for stt in sub_transaction_types %}
+    { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
+    {% endfor %}
+  ];
+
+  function formatNum(n) {
+    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+  }
+
+  // ── Add EB Group ──────────────────────────────────────────────────────────
+  window.addEBGroup = function (prefill) {
+    ebGroupCount++;
+    var gid = 'eb_group_' + ebGroupCount;
+    itemCounters[gid] = 0;
+
+    var container = document.getElementById('ebGroupsContainer');
+    var card = document.createElement('div');
+    card.className = 'ni-purchase-eb-card';
+    card.id = gid;
+
+    var ebSelectOptions = '<option value="">— Pilih Entitas Bisnis —</option>';
+    ebOptions.forEach(function (eb) {
+      var sel = (prefill && prefill.entitas_bisnis_id == eb.id) ? ' selected' : '';
+      ebSelectOptions += '<option value="' + eb.id + '"' + sel + '>' + eb.nama + '</option>';
+    });
+
+    card.innerHTML =
+      '<div class="ni-purchase-eb-card__header">' +
+        '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);"></i>' +
+        '<select class="ni-input eb-select" data-gid="' + gid + '">' + ebSelectOptions + '</select>' +
+        '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
+          '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
+        '</button>' +
+      '</div>' +
+      '<div class="ni-table-wrapper">' +
+        '<table class="ni-purchase-item-table">' +
+          '<thead><tr>' +
+            '<th style="width:22%">Item</th>' +
+            '<th style="width:14%">Sub-Trx Type</th>' +
+            '<th style="width:14%">CoA Account</th>' +
+            '<th style="width:14%">Offset CoA</th>' +
+            '<th style="width:8%">Qty</th>' +
+            '<th style="width:10%">Harga Satuan</th>' +
+            '<th style="width:10%">Total</th>' +
+            '<th style="width:4%"></th>' +
+          '</tr></thead>' +
+          '<tbody id="' + gid + '_items"></tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
+        '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addItemRow(\'' + gid + '\')">' +
+          '<i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item' +
+        '</button>' +
+        '<span class="ni-advanced-toggle" onclick="toggleAdvanced(\'' + gid + '\')">' +
+          '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced Fields' +
+        '</span>' +
+      '</div>';
+
+    container.appendChild(card);
+    lucide.createIcons();
+
+    // Pre-fill items if editing
+    if (prefill && prefill.items) {
+      prefill.items.forEach(function (itemData) {
+        addItemRow(gid, itemData);
+      });
+    } else {
+      addItemRow(gid);
+    }
+  };
+
+  window.removeEBGroup = function (gid) {
+    var el = document.getElementById(gid);
+    if (el) el.remove();
+  };
+
+  // ── Add Item Row ──────────────────────────────────────────────────────────
+  window.addItemRow = function (gid, prefill) {
+    itemCounters[gid] = (itemCounters[gid] || 0) + 1;
+    var rid = gid + '_item_' + itemCounters[gid];
+    var tbody = document.getElementById(gid + '_items');
+
+    var sttSelectOptions = '<option value="">— Pilih —</option>';
+    sttOptions.forEach(function (stt) {
+      var sel = (prefill && prefill.sub_transaction_type_id == stt.id) ? ' selected' : '';
+      sttSelectOptions += '<option value="' + stt.id + '"' + sel + '>' + stt.nama + '</option>';
+    });
+
+    var tr = document.createElement('tr');
+    tr.id = rid;
+    tr.innerHTML =
+      '<td><select id="' + rid + '_item" class="ni-purchase-input item-select" data-rid="' + rid + '" placeholder="Pilih item..."></select></td>' +
+      '<td><select class="ni-purchase-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
+      '<td><input type="text" id="' + rid + '_coa" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.coa_account_id || '') : '') + '"></td>' +
+      '<td><input type="text" id="' + rid + '_offset" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.offset_coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.offset_coa_account_id || '') : '') + '"></td>' +
+      '<td><input type="number" id="' + rid + '_qty" class="ni-purchase-input" min="0.0001" step="0.0001" value="' + (prefill ? prefill.quantity : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="number" id="' + rid + '_price" class="ni-purchase-input" min="0.01" step="0.01" value="' + (prefill ? prefill.unit_price : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input" readonly value="0"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+
+    // Advanced fields (hidden row)
+    var trAdv = document.createElement('tr');
+    trAdv.id = rid + '_adv';
+    trAdv.className = 'advanced-row';
+    trAdv.style.display = 'none';
+    trAdv.innerHTML =
+      '<td colspan="8" style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-size:0.8rem;">' +
+          '<div><label style="color:var(--ni-text-muted);">Lead Time (Days)</label><input type="number" id="' + rid + '_lead" class="ni-purchase-input" value="' + (prefill ? (prefill.lead_time_days || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);">Ordering Cost</label><input type="number" id="' + rid + '_ordcost" class="ni-purchase-input" step="0.01" value="' + (prefill ? (prefill.ordering_cost || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);">Holding Cost %</label><input type="number" id="' + rid + '_holdcost" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.holding_cost_pct || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);">MOQ</label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);">Target Turnover</label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
+        '</div>' +
+      '</td>';
+
+    tbody.appendChild(tr);
+    tbody.appendChild(trAdv);
+
+    // Init TomSelect for item
+    var itemSelect = new TomSelect('#' + rid + '_item', {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      placeholder: 'Ketik nama/kode item...',
+      preload: 'focus',
+      load: function (query, callback) {
+        fetch(itemAutocompleteUrl + '?term=' + encodeURIComponent(query))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        if (!val) return;
+        var opt = this.options[val];
+        if (opt && opt.coa_account_id) {
+          document.getElementById(rid + '_coa').value = opt.coa_account_text;
+          document.getElementById(rid + '_coa').dataset.id = opt.coa_account_id;
+        }
+      },
+      create: false,
+    });
+
+    // Pre-select item if editing
+    if (prefill && prefill.item_id) {
+      itemSelect.addOption({ id: prefill.item_id, text: prefill.item_name || ('Item ' + prefill.item_id) });
+      itemSelect.setValue(prefill.item_id, true);
+    }
+
+    lucide.createIcons();
+    updateTotal(rid);
+  };
+
+  window.removeItemRow = function (rid) {
+    var tr = document.getElementById(rid);
+    var trAdv = document.getElementById(rid + '_adv');
+    if (tr) tr.remove();
+    if (trAdv) trAdv.remove();
+  };
+
+  window.toggleAdvanced = function (gid) {
+    var tbody = document.getElementById(gid + '_items');
+    if (!tbody) return;
+    var advRows = tbody.querySelectorAll('.advanced-row');
+    advRows.forEach(function (row) {
+      row.style.display = row.style.display === 'none' ? '' : 'none';
+    });
+  };
+
+  window.updateTotal = function (rid) {
+    var qty = parseFloat(document.getElementById(rid + '_qty').value) || 0;
+    var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
+    var total = qty * price;
+    document.getElementById(rid + '_total').value = formatNum(total);
+  };
+
+  window.onSTTChange = function (selectEl, rid) {
+    var sttId = selectEl.value;
+    if (!sttId) return;
+    fetch(sttOffsetUrl + '?stt_id=' + encodeURIComponent(sttId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var offsetEl = document.getElementById(rid + '_offset');
+        if (data.offset_account_id) {
+          offsetEl.value = data.offset_account_text;
+          offsetEl.dataset.id = data.offset_account_id;
+        }
+      });
+  };
+
+  // ── Journal Preview ───────────────────────────────────────────────────────
+  window.showJournalPreview = function () {
+    var payload = collectFormData();
+    fetch(journalPreviewUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      var tbody = document.getElementById('journalPreviewBody');
+      tbody.innerHTML = '';
+      if (!data.entries || data.entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
+      } else {
+        data.entries.forEach(function (e) {
+          tbody.innerHTML += '<tr><td>' + e.eb_name + '</td><td>' + e.item_name + '</td><td>' + e.debit_account + '</td><td>' + e.credit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td></tr>';
+        });
+      }
+      document.getElementById('journalPreview').style.display = '';
+    });
+  };
+
+  // ── Form Submission ───────────────────────────────────────────────────────
+  function collectFormData() {
+    var groups = [];
+    document.querySelectorAll('.ni-purchase-eb-card').forEach(function (card) {
+      var gid = card.id;
+      var ebSelect = card.querySelector('.eb-select');
+      var ebId = ebSelect ? ebSelect.value : '';
+      var ebName = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
+      if (!ebId) return;
+
+      var items = [];
+      var tbody = document.getElementById(gid + '_items');
+      var itemRows = tbody.querySelectorAll('tr:not(.advanced-row)');
+      itemRows.forEach(function (tr) {
+        var rid = tr.id;
+        var itemSel = tr.querySelector('.item-select');
+        var sttSel = tr.querySelector('.stt-select');
+        var itemVal = itemSel ? itemSel.value : '';
+        if (!itemVal) return;
+
+        var itemText = '';
+        if (itemSel && itemSel.tomselect) {
+          var opt = itemSel.tomselect.options[itemVal];
+          if (opt) itemText = opt.text || '';
+        }
+
+        items.push({
+          item_id: itemVal,
+          item_name: itemText,
+          sub_transaction_type_id: sttSel ? sttSel.value : '',
+          coa_account_id: document.getElementById(rid + '_coa').dataset.id || '',
+          coa_account_text: document.getElementById(rid + '_coa').value || '',
+          offset_coa_account_id: document.getElementById(rid + '_offset').dataset.id || '',
+          offset_coa_account_text: document.getElementById(rid + '_offset').value || '',
+          quantity: document.getElementById(rid + '_qty').value || '0',
+          unit_price: document.getElementById(rid + '_price').value || '0',
+          lead_time_days: document.getElementById(rid + '_lead').value || '',
+          ordering_cost: document.getElementById(rid + '_ordcost').value || '',
+          holding_cost_pct: document.getElementById(rid + '_holdcost').value || '',
+          moq: document.getElementById(rid + '_moq').value || '',
+          target_turnover: document.getElementById(rid + '_turnover').value || '',
+        });
+      });
+
+      groups.push({
+        entitas_bisnis_id: ebId,
+        entitas_bisnis_name: ebName,
+        items: items,
+      });
+    });
+    return { eb_groups: groups };
+  }
+
+  document.getElementById('purchaseForm').addEventListener('submit', function () {
+    var payload = collectFormData();
+    document.getElementById('ebGroupsData').value = JSON.stringify(payload.eb_groups);
+  });
+
+  // ── Init: load existing data or add one empty group ───────────────────────
+  if (existingGroups.length > 0) {
+    existingGroups.forEach(function (g) { addEBGroup(g); });
+  } else {
+    addEBGroup();
+  }
+})();
+</script>
+{% endblock %}

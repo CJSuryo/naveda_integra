@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block title %}Item Master{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Item Master</h1>
+    <p class="ni-page-header__subtitle">Daftar semua item (Raw Material, Finished Good, Lainnya)</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'purchase:item_master_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Item
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:12px 16px;">
+    <form method="get" style="display:flex;gap:12px;align-items:center;">
+      <input type="text" name="q" class="ni-input" value="{{ search }}" placeholder="Cari item..." style="flex:1;">
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Cari
+      </button>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Item ID</th>
+          <th>Nama</th>
+          <th>Tipe</th>
+          <th>Kategori</th>
+          <th>CoA Account</th>
+          <th>Harga Satuan</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in object_list %}
+        <tr>
+          <td>{{ obj.item_id }}</td>
+          <td>{{ obj.nama }}</td>
+          <td>{{ obj.get_tipe_item_display }}</td>
+          <td>{{ obj.kategori|default:'-' }}</td>
+          <td>{{ obj.coa_account|default:'-' }}</td>
+          <td class="ni-text-right">{{ obj.unit_price }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'purchase:item_master_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'purchase:item_master_delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada item.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

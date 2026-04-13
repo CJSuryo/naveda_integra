@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Purchase{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Purchase</h1>
+    <p class="ni-page-header__subtitle">Daftar semua transaksi pembelian inventori</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'purchase:create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Purchase
+    </a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Item</label>
+        <select name="item" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for item in items %}
+          <option value="{{ item.pk }}"{% if item_filter == item.pk|stringformat:'d' %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Sub-Transaction Type</label>
+        <select name="sub_transaction_type" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for stt in sub_transaction_types %}
+          <option value="{{ stt.pk }}"{% if stt_filter == stt.pk|stringformat:'d' %} selected{% endif %}>{{ stt.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in entitas_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
+          <th>Item</th>
+          <th>Sub-Transaction Type</th>
+          <th>Qty</th>
+          <th>Harga Satuan</th>
+          <th>Total</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><a href="{% url 'purchase:detail' row.purchase_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ row.purchase_header.transaction_id }}</a></td>
+          <td>{{ row.purchase_header.tanggal }}</td>
+          <td>{{ row.entitas_bisnis.nama }}</td>
+          <td>{{ row.item.item }}</td>
+          <td>{{ row.item.sub_transaction_type.nama }}</td>
+          <td class="ni-text-right">{{ row.item.quantity }}</td>
+          <td class="ni-text-right">{{ row.item.unit_price }}</td>
+          <td class="ni-text-right">{{ row.item.total_value }}</td>
+          <td>
+            <div class="ni-btn-row">
+              {% if not row.purchase_header.is_locked %}
+              <a href="{% url 'purchase:update' row.purchase_header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'purchase:delete' row.purchase_header.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+              {% else %}
+              <span class="ni-badge ni-badge--secondary">Locked</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada data purchase.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

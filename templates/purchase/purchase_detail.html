@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}Detail Purchase {{ purchase.transaction_id }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ purchase.transaction_id }}</h1>
+    <p class="ni-page-header__subtitle">Detail transaksi pembelian</p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if not purchase.is_locked %}
+    <a href="{% url 'purchase:update' purchase.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'purchase:delete' purchase.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </a>
+    {% else %}
+    <span class="ni-badge ni-badge--secondary" style="font-size:0.9rem;padding:8px 16px;">Locked</span>
+    {% endif %}
+    <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Transaction ID</dt><dd>{{ purchase.transaction_id }}</dd>
+      <dt>Tanggal</dt><dd>{{ purchase.tanggal }}</dd>
+      <dt>Deskripsi</dt><dd>{{ purchase.deskripsi|default:'-' }}</dd>
+      <dt>Status</dt><dd>
+        {% if purchase.is_locked %}
+        <span class="ni-badge ni-badge--secondary">Locked</span>
+        {% else %}
+        <span class="ni-badge ni-badge--success">Open</span>
+        {% endif %}
+      </dd>
+      <dt>Dibuat</dt><dd>{{ purchase.created_at }}</dd>
+      <dt>Diperbarui</dt><dd>{{ purchase.updated_at }}</dd>
+    </dl>
+  </div>
+</div>
+
+{% for eg in purchase.entitas_groups.all %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="building-2" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      {{ eg.entitas_bisnis.nama }}
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Sub-Trx Type</th>
+            <th>CoA Account</th>
+            <th>Offset CoA</th>
+            <th>Qty</th>
+            <th>Harga Satuan</th>
+            <th>Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pi in eg.items.all %}
+          <tr>
+            <td>{{ pi.item }}</td>
+            <td>{{ pi.sub_transaction_type.nama }}</td>
+            <td>{{ pi.coa_account }}</td>
+            <td>{{ pi.offset_coa_account }}</td>
+            <td class="ni-text-right">{{ pi.quantity }}</td>
+            <td class="ni-text-right">{{ pi.unit_price }}</td>
+            <td class="ni-text-right"><strong>{{ pi.total_value }}</strong></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

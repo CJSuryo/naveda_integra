@@ -10,6 +10,7 @@ urlpatterns = [
     path('entitas-bisnis/', include('apps.entitas_bisnis.urls')),
     path('master-data/', include('apps.master_data.urls')),
     path('jurnal/', include('apps.jurnal.urls')),
+    path('purchase/', include('apps.purchase.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 
