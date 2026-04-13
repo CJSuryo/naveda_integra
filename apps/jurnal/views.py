@@ -11,7 +11,7 @@ from django.urls import reverse
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
 
 from .forms import (
-    ItemForm, TransactionPrefixForm,
+    ItemForm,
     JurnalHeaderForm, JurnalDetailForm,
     JurnalAutomasiForm, JurnalAutomasiAkunForm,
     AutomasiEntryForm,
@@ -27,7 +27,9 @@ from .models import (
 
 @login_required
 def rekap_jurnal(request: HttpRequest) -> HttpResponse:
-    """Read-only journal recap with date range filtering."""
+    """Read-only journal recap with date range and entitas bisnis filtering."""
+    from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
+
     qs = (
         JurnalHeader.objects
         .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix', 'no_bukti')
@@ -37,18 +39,50 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
 
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_lv1_ids = request.GET.getlist('eb_lv1')
+    eb_lv2_ids = request.GET.getlist('eb_lv2')
+    eb_lv3_ids = request.GET.getlist('eb_lv3')
 
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
 
+    # Build entitas bisnis filter: collect Lv1 IDs from all levels
+    eb_filter_ids = set()
+    if eb_lv1_ids:
+        eb_filter_ids.update(int(x) for x in eb_lv1_ids if x.isdigit())
+    if eb_lv2_ids:
+        lv2_parent_ids = EntitasBisnisLv2.objects.filter(
+            pk__in=[int(x) for x in eb_lv2_ids if x.isdigit()]
+        ).values_list('entitas_bisnis_id', flat=True)
+        eb_filter_ids.update(lv2_parent_ids)
+    if eb_lv3_ids:
+        lv3_parent_ids = EntitasBisnisLv3.objects.filter(
+            pk__in=[int(x) for x in eb_lv3_ids if x.isdigit()]
+        ).select_related('parent_lv2').values_list('parent_lv2__entitas_bisnis_id', flat=True)
+        eb_filter_ids.update(lv3_parent_ids)
+
+    if eb_filter_ids:
+        qs = qs.filter(entitas_bisnis_id__in=eb_filter_ids)
+
     headers = list(qs)
+
+    # Prepare entitas bisnis hierarchy for filter modal
+    eb_lv1_all = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+    eb_lv2_all = EntitasBisnisLv2.objects.filter(status_aktif=True).select_related('entitas_bisnis').order_by('nama')
+    eb_lv3_all = EntitasBisnisLv3.objects.filter(status_aktif=True).select_related('parent_lv2__entitas_bisnis').order_by('nama')
 
     return render(request, 'jurnal/rekap_jurnal.html', {
         'headers': headers,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
+        'eb_lv1_all': eb_lv1_all,
+        'eb_lv2_all': eb_lv2_all,
+        'eb_lv3_all': eb_lv3_all,
+        'selected_lv1': eb_lv1_ids,
+        'selected_lv2': eb_lv2_ids,
+        'selected_lv3': eb_lv3_ids,
     })
 
 
@@ -97,43 +131,6 @@ def item_delete(request: HttpRequest, pk: int) -> HttpResponse:
         obj.delete()
         return redirect('jurnal:item_list')
     return render(request, 'jurnal/item_confirm_delete.html', {'object': obj})
-
-
-# ── TransactionPrefix CRUD ───────────────────────────────────────────────────
-
-@login_required
-def prefix_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'jurnal/prefix_list.html', {
-        'object_list': TransactionPrefix.objects.all().order_by('kode'),
-    })
-
-
-@login_required
-def prefix_create(request: HttpRequest) -> HttpResponse:
-    form = TransactionPrefixForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('jurnal:prefix_list')
-    return render(request, 'jurnal/prefix_form.html', {'form': form, 'title': 'Tambah Prefiks Transaksi'})
-
-
-@login_required
-def prefix_update(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(TransactionPrefix, pk=pk)
-    form = TransactionPrefixForm(request.POST or None, instance=obj)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('jurnal:prefix_list')
-    return render(request, 'jurnal/prefix_form.html', {'form': form, 'title': 'Edit Prefiks Transaksi', 'object': obj})
-
-
-@login_required
-def prefix_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(TransactionPrefix, pk=pk)
-    if request.method == 'POST':
-        obj.delete()
-        return redirect('jurnal:prefix_list')
-    return render(request, 'jurnal/prefix_confirm_delete.html', {'object': obj})
 
 
 # ── Automasi / Jurnal Manual CRUD ────────────────────────────────────────────
@@ -251,6 +248,7 @@ def automasi_entry(request: HttpRequest, pk: int) -> HttpResponse:
                 uraian_transaksi=uraian,
                 item=item,
                 transaction_prefix=prefix,
+                is_penyesuaian=True,
             )
 
             # Create detail lines: read amounts from POST for each mapped akun
@@ -280,60 +278,85 @@ def automasi_entry(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def neraca_saldo(request: HttpRequest) -> HttpResponse:
-    """Trial balance showing all accounts with debit/credit totals."""
+    """Trial balance with saldo awal, mutasi modul, sebelum & setelah penyesuaian."""
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
 
-    # Build filter for JurnalDetail based on date range
-    detail_filter = {}
-    if tanggal_dari:
-        detail_filter['jurnal_header__tanggal__gte'] = tanggal_dari
-    if tanggal_sampai:
-        detail_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-
-    # Aggregate debit/kredit per akun
-    akun_totals = (
-        JurnalDetail.objects
-        .filter(**detail_filter)
-        .values('akun_id')
-        .annotate(
-            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
-            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
-        )
-    )
-    totals_map = {row['akun_id']: row for row in akun_totals}
-
-    # Get all akun records ordered by kode_akun
     akun_list = Akun.objects.all().order_by('kode_akun')
 
+    # Helper: aggregate debit/kredit for a queryset of JurnalDetail
+    def _aggregate(qs):
+        result = (
+            qs.values('akun_id')
+            .annotate(
+                total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+                total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+            )
+        )
+        return {row['akun_id']: row for row in result}
+
+    # Saldo Awal: all entries BEFORE tanggal_dari
+    saldo_awal_map = {}
+    if tanggal_dari:
+        saldo_awal_map = _aggregate(
+            JurnalDetail.objects.filter(jurnal_header__tanggal__lt=tanggal_dari)
+        )
+
+    # Period filter
+    period_filter = {}
+    if tanggal_dari:
+        period_filter['jurnal_header__tanggal__gte'] = tanggal_dari
+    if tanggal_sampai:
+        period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+
+    # Mutasi Modul: automated entries within period (is_penyesuaian=False)
+    modul_map = _aggregate(
+        JurnalDetail.objects.filter(
+            jurnal_header__is_penyesuaian=False, **period_filter
+        )
+    )
+
+    # Penyesuaian: manual entries within period (is_penyesuaian=True)
+    penyesuaian_map = _aggregate(
+        JurnalDetail.objects.filter(
+            jurnal_header__is_penyesuaian=True, **period_filter
+        )
+    )
+
+    def _get(m, akun_id, field):
+        return m.get(akun_id, {}).get(field, Decimal('0'))
+
     rows = []
-    grand_debit = Decimal('0')
-    grand_kredit = Decimal('0')
     for akun in akun_list:
-        t = totals_map.get(akun.pk, {})
-        debit = t.get('total_debit', Decimal('0'))
-        kredit = t.get('total_kredit', Decimal('0'))
-        # Compute saldo (balance) - net debit or credit
-        saldo_debit = Decimal('0')
-        saldo_kredit = Decimal('0')
-        if debit > kredit:
-            saldo_debit = debit - kredit
-        elif kredit > debit:
-            saldo_kredit = kredit - debit
-        grand_debit += saldo_debit
-        grand_kredit += saldo_kredit
+        sa_d = _get(saldo_awal_map, akun.pk, 'total_debit')
+        sa_k = _get(saldo_awal_map, akun.pk, 'total_kredit')
+        modul_d = _get(modul_map, akun.pk, 'total_debit')
+        modul_k = _get(modul_map, akun.pk, 'total_kredit')
+        peny_d = _get(penyesuaian_map, akun.pk, 'total_debit')
+        peny_k = _get(penyesuaian_map, akun.pk, 'total_kredit')
+
+        # Sebelum penyesuaian = saldo awal + mutasi modul
+        sblm_d = sa_d + modul_d
+        sblm_k = sa_k + modul_k
+
+        # Setelah penyesuaian = sebelum + penyesuaian manual
+        stlh_d = sblm_d + peny_d
+        stlh_k = sblm_k + peny_k
+
+        # Only show rows with any activity
+        has_data = any([sa_d, sa_k, modul_d, modul_k, peny_d, peny_k])
         rows.append({
             'akun': akun,
-            'debit': debit,
-            'kredit': kredit,
-            'saldo_debit': saldo_debit,
-            'saldo_kredit': saldo_kredit,
+            'sa_d': sa_d, 'sa_k': sa_k,
+            'modul_d': modul_d, 'modul_k': modul_k,
+            'sblm_d': sblm_d, 'sblm_k': sblm_k,
+            'peny_d': peny_d, 'peny_k': peny_k,
+            'stlh_d': stlh_d, 'stlh_k': stlh_k,
+            'has_data': has_data,
         })
 
     return render(request, 'jurnal/neraca_saldo.html', {
         'rows': rows,
-        'grand_debit': grand_debit,
-        'grand_kredit': grand_kredit,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
     })

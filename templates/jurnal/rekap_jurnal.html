@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Rekap Jurnal{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -10,7 +11,7 @@
 
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body">
-    <form method="get" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+    <form id="rekapFilterForm" method="get" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
       <div class="ni-form-group" style="margin-bottom:0;">
         <label class="ni-form-label">Tanggal Dari</label>
         <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
@@ -19,13 +20,100 @@
         <label class="ni-form-label">Tanggal Sampai</label>
         <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
       </div>
+      <!-- Hidden inputs for selected entitas bisnis (populated by modal JS) -->
+      <div id="ebHiddenInputs">
+        {% for id in selected_lv1 %}<input type="hidden" name="eb_lv1" value="{{ id }}">{% endfor %}
+        {% for id in selected_lv2 %}<input type="hidden" name="eb_lv2" value="{{ id }}">{% endfor %}
+        {% for id in selected_lv3 %}<input type="hidden" name="eb_lv3" value="{{ id }}">{% endfor %}
+      </div>
+      <button type="button" id="btnOpenEbFilter" class="ni-btn ni-btn--secondary">
+        <i data-lucide="building-2" style="width:16px;height:16px"></i>
+        Filter Entitas Bisnis
+        {% if selected_lv1 or selected_lv2 or selected_lv3 %}
+        <span class="ni-badge ni-badge--primary" style="margin-left:4px;">Aktif</span>
+        {% endif %}
+      </button>
       <button type="submit" class="ni-btn ni-btn--primary">
         <i data-lucide="search" style="width:16px;height:16px"></i> Filter
       </button>
-      {% if tanggal_dari or tanggal_sampai %}
+      {% if tanggal_dari or tanggal_sampai or selected_lv1 or selected_lv2 or selected_lv3 %}
       <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary">Reset</a>
       {% endif %}
     </form>
+  </div>
+</div>
+
+<!-- Entitas Bisnis Filter Modal -->
+<div class="ni-modal-backdrop" id="ebFilterBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Filter Entitas Bisnis</h3>
+      <button class="ni-modal__close" id="ebFilterClose" type="button">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body">
+      <p style="margin-bottom:16px;">Pilih entitas bisnis untuk memfilter data jurnal. Centang pada level manapun.</p>
+
+      <!-- Search -->
+      <div class="ni-form-group" style="margin-bottom:16px;">
+        <input type="text" id="ebSearchInput" class="ni-input" placeholder="Cari entitas bisnis...">
+      </div>
+
+      <!-- Hierarchy tree -->
+      <div id="ebTree" style="max-height:400px;overflow-y:auto;">
+        {% for lv1 in eb_lv1_all %}
+        <div class="eb-node" data-name="{{ lv1.nama|lower }}">
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-weight:600;">
+            <input type="checkbox" class="ni-checkbox eb-cb-lv1" value="{{ lv1.pk }}" data-level="1"
+              {% if lv1.pk|stringformat:"d" in selected_lv1 %}checked{% endif %}>
+            <span style="cursor:pointer;" data-toggle-children="{{ lv1.pk }}">
+              <i data-lucide="chevron-right" style="width:14px;height:14px;transition:transform 200ms;" class="eb-arrow-{{ lv1.pk }}"></i>
+            </span>
+            <span>{{ lv1.nama }}</span>
+            <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">Level 1</span>
+          </div>
+          <div class="eb-children eb-children-{{ lv1.pk }}" style="display:none;margin-left:28px;">
+            {% for lv2 in eb_lv2_all %}
+            {% if lv2.entitas_bisnis_id == lv1.pk %}
+            <div class="eb-node" data-name="{{ lv2.nama|lower }}">
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+                <input type="checkbox" class="ni-checkbox eb-cb-lv2" value="{{ lv2.pk }}" data-level="2" data-parent="{{ lv1.pk }}"
+                  {% if lv2.pk|stringformat:"d" in selected_lv2 %}checked{% endif %}>
+                <span style="cursor:pointer;" data-toggle-children="lv2-{{ lv2.pk }}">
+                  <i data-lucide="chevron-right" style="width:12px;height:12px;transition:transform 200ms;" class="eb-arrow-lv2-{{ lv2.pk }}"></i>
+                </span>
+                <span>{{ lv2.nama }}</span>
+                <span class="ni-badge ni-badge--secondary" style="font-size:0.65rem;">Level 2</span>
+              </div>
+              <div class="eb-children eb-children-lv2-{{ lv2.pk }}" style="display:none;margin-left:28px;">
+                {% for lv3 in eb_lv3_all %}
+                {% if lv3.parent_lv2_id == lv2.pk %}
+                <div class="eb-node" data-name="{{ lv3.nama|lower }}">
+                  <div style="display:flex;align-items:center;gap:8px;padding:3px 0;">
+                    <input type="checkbox" class="ni-checkbox eb-cb-lv3" value="{{ lv3.pk }}" data-level="3" data-parent="{{ lv2.pk }}"
+                      {% if lv3.pk|stringformat:"d" in selected_lv3 %}checked{% endif %}>
+                    <span>{{ lv3.nama }}</span>
+                    <span class="ni-badge ni-badge--secondary" style="font-size:0.6rem;">Level 3</span>
+                  </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+        {% empty %}
+        <p class="ni-text-muted">Belum ada entitas bisnis.</p>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" id="ebClearAll" class="ni-btn ni-btn--secondary">Hapus Semua</button>
+      <button type="button" id="ebApplyFilter" class="ni-btn ni-btn--primary">Terapkan Filter</button>
+    </div>
   </div>
 </div>
 
@@ -69,4 +157,85 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/modal.js' %}"></script>
+<script>
+(function() {
+  'use strict';
+  var backdrop = document.getElementById('ebFilterBackdrop');
+
+  function openModal() {
+    backdrop.classList.add('ni-modal-backdrop--visible');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeModal() {
+    backdrop.classList.remove('ni-modal-backdrop--visible');
+    document.body.style.overflow = '';
+  }
+
+  document.getElementById('btnOpenEbFilter').addEventListener('click', openModal);
+  document.getElementById('ebFilterClose').addEventListener('click', closeModal);
+  backdrop.addEventListener('click', function(e) {
+    if (e.target === backdrop) closeModal();
+  });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && backdrop.classList.contains('ni-modal-backdrop--visible')) closeModal();
+  });
+
+  // Toggle children nodes
+  document.querySelectorAll('[data-toggle-children]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var id = this.getAttribute('data-toggle-children');
+      var children = document.querySelector('.eb-children-' + id);
+      var arrow = document.querySelector('.eb-arrow-' + id);
+      if (children) {
+        var open = children.style.display !== 'none';
+        children.style.display = open ? 'none' : 'block';
+        if (arrow) arrow.style.transform = open ? '' : 'rotate(90deg)';
+      }
+    });
+  });
+
+  // Search filter
+  document.getElementById('ebSearchInput').addEventListener('input', function() {
+    var term = this.value.toLowerCase();
+    document.querySelectorAll('.eb-node').forEach(function(node) {
+      var name = node.getAttribute('data-name') || '';
+      node.style.display = (!term || name.indexOf(term) !== -1) ? '' : 'none';
+    });
+  });
+
+  // Clear all checkboxes
+  document.getElementById('ebClearAll').addEventListener('click', function() {
+    document.querySelectorAll('#ebTree input[type="checkbox"]').forEach(function(cb) {
+      cb.checked = false;
+    });
+  });
+
+  // Apply filter: update hidden inputs and submit
+  document.getElementById('ebApplyFilter').addEventListener('click', function() {
+    var container = document.getElementById('ebHiddenInputs');
+    container.innerHTML = '';
+    document.querySelectorAll('.eb-cb-lv1:checked').forEach(function(cb) {
+      var input = document.createElement('input');
+      input.type = 'hidden'; input.name = 'eb_lv1'; input.value = cb.value;
+      container.appendChild(input);
+    });
+    document.querySelectorAll('.eb-cb-lv2:checked').forEach(function(cb) {
+      var input = document.createElement('input');
+      input.type = 'hidden'; input.name = 'eb_lv2'; input.value = cb.value;
+      container.appendChild(input);
+    });
+    document.querySelectorAll('.eb-cb-lv3:checked').forEach(function(cb) {
+      var input = document.createElement('input');
+      input.type = 'hidden'; input.name = 'eb_lv3'; input.value = cb.value;
+      container.appendChild(input);
+    });
+    closeModal();
+    document.getElementById('rekapFilterForm').submit();
+  });
+})();
+</script>
 {% endblock %}

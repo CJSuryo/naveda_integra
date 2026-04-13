@@ -489,6 +489,16 @@ def tipe_transaksi_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'master_data/tipe_transaksi/list.html', {'object_list': TipeTransaksi.objects.all().order_by('kode_transaksi')})
 
 
+# ── Prefiks Transaksi (read-only, model in jurnal app) ───────────────────────
+
+@login_required
+def prefix_list(request: HttpRequest) -> HttpResponse:
+    from apps.jurnal.models import TransactionPrefix
+    return render(request, 'master_data/prefix/list.html', {
+        'object_list': TransactionPrefix.objects.all().order_by('kode'),
+    })
+
+
 # ── Bukti ─────────────────────────────────────────────────────────────────────
 
 @login_required

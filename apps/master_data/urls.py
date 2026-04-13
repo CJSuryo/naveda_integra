@@ -49,6 +49,8 @@ urlpatterns = [
     path('chart-of-accounts/', views.chart_of_accounts, name='chart_of_accounts'),
     # Tipe Transaksi (read-only)
     path('tipe-transaksi/', views.tipe_transaksi_list, name='tipe_transaksi_list'),
+    # Prefiks Transaksi (read-only, data lives in jurnal.TransactionPrefix)
+    path('prefiks-transaksi/', views.prefix_list, name='prefix_list'),
     # Bukti
     path('bukti/<int:pk>/', views.bukti_detail, name='bukti_detail'),
 ]

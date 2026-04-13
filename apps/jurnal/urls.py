@@ -17,12 +17,6 @@ urlpatterns = [
     path('item/<int:pk>/edit/', views.item_update, name='item_update'),
     path('item/<int:pk>/delete/', views.item_delete, name='item_delete'),
 
-    # TransactionPrefix CRUD
-    path('prefix/', views.prefix_list, name='prefix_list'),
-    path('prefix/create/', views.prefix_create, name='prefix_create'),
-    path('prefix/<int:pk>/edit/', views.prefix_update, name='prefix_update'),
-    path('prefix/<int:pk>/delete/', views.prefix_delete, name='prefix_delete'),
-
     # Jurnal Manual (renamed from Automasi)
     path('manual/', views.automasi_list, name='automasi_list'),
     path('manual/create/', views.automasi_create, name='automasi_create'),

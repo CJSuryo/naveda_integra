@@ -1,6 +1,6 @@
 """EntitasBisnis forms."""
 from django import forms
-from .models import TipeEntitas, EntitasBisnis, CabangEntitasBisnis
+from .models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 
 class TipeEntitasForm(forms.ModelForm):
@@ -29,9 +29,23 @@ class EntitasBisnisForm(forms.ModelForm):
         }
 
 
-class CabangEntitasBisnisForm(forms.ModelForm):
+class EntitasBisnisLv2Form(forms.ModelForm):
     class Meta:
-        model = CabangEntitasBisnis
+        model = EntitasBisnisLv2
+        fields = ('nama', 'email', 'telepon', 'alamat_lengkap', 'tanggal_bergabung', 'status_aktif')
+        widgets = {
+            'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+            'email': forms.EmailInput(attrs={'class': 'ni-input'}),
+            'telepon': forms.TextInput(attrs={'class': 'ni-input'}),
+            'alamat_lengkap': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+            'tanggal_bergabung': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'status_aktif': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+        }
+
+
+class EntitasBisnisLv3Form(forms.ModelForm):
+    class Meta:
+        model = EntitasBisnisLv3
         fields = ('nama', 'email', 'telepon', 'alamat_lengkap', 'tanggal_bergabung', 'status_aktif')
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
