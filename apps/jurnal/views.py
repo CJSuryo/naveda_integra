@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Max, Sum, Value, DecimalField
+from django.db.models import Max, Q, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -375,8 +375,8 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     """Return Akun options matching a search term, for autocomplete widgets."""
     term = request.GET.get('term', '')
     akuns = Akun.objects.filter(
-        nama__icontains=term
-    ).order_by('kategori_id', 'kategori_akun')[:20]
+        Q(nama__icontains=term) | Q(kode_akun__icontains=term)
+    ).order_by('kategori_id', 'kategori_akun')[:200]
     results = [
         {
             'id': a.pk,
