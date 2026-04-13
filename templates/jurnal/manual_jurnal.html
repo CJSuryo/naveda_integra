@@ -143,8 +143,8 @@
       searchField: 'text',
       options: [],
       placeholder: 'Ketik kode/nama akun...',
+      preload: 'focus',
       load: function (query, callback) {
-        if (!query || query.length < 2) return callback();
         fetch(autocompleteUrl + '?term=' + encodeURIComponent(query))
           .then(function (r) { return r.json(); })
           .then(function (data) { callback(data); })

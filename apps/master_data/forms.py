@@ -23,7 +23,14 @@ def _kode_auto_widgets():
 
 
 class _KodeRenumberMixin:
-    """Exclude 'kode' from unique validation so the view's renumbering logic can handle conflicts."""
+    """Exclude 'kode' from unique validation so the view's renumbering logic can handle conflicts.
+
+    When a kode is moved to an already-occupied position (e.g. 1.10 → 1.4), the update
+    views call _renumber_lv1_kode / _renumber_lv2_kode (apps/master_data/views.py) which
+    shifts sibling kodes out of the way before saving the new value. Standard ModelForm
+    unique validation would reject the form before that logic runs, so we exclude 'kode'
+    from the unique check here and let the view handle ordering atomically.
+    """
 
     def validate_unique(self):
         exclude = self._get_validation_exclusions()
