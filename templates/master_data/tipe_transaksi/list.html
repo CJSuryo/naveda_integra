@@ -4,31 +4,20 @@
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Tipe Transaksi</h1>
-    <p class="ni-page-header__subtitle">Kelola tipe transaksi</p>
-  </div>
-  <div class="ni-page-header__actions">
-    <a href="{% url 'master_data:tipe_transaksi_create' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
-    </a>
+    <p class="ni-page-header__subtitle">Daftar tipe transaksi (read-only)</p>
   </div>
 </div>
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>Kode</th><th>Nama</th><th>Aksi</th></tr></thead>
+      <thead><tr><th>Kode</th><th>Nama</th></tr></thead>
       <tbody>
         {% for obj in object_list %}
         <tr>
           <td>{{ obj.kode_transaksi }}</td>
           <td>{{ obj.nama }}</td>
-          <td>
-            <div class="ni-btn-row">
-              <a href="{% url 'master_data:tipe_transaksi_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-              <a href="{% url 'master_data:tipe_transaksi_delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
-            </div>
-          </td>
         </tr>
-        {% empty %}<tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>{% endfor %}
+        {% empty %}<tr><td colspan="2" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

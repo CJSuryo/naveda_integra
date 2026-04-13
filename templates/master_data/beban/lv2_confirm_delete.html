@@ -13,7 +13,7 @@
     <form method="post">{% csrf_token %}
       <div class="ni-btn-row" style="justify-content:center;">
         <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
-        <a href="{% url 'master_data:beban_lv1_detail' parent.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <a href="{% url 'master_data:chart_of_accounts' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
