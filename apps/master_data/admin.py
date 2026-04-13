@@ -4,6 +4,8 @@ from .models import (
     AsetLv1, AsetLv2,
     KewajibanLv1, KewajibanLv2,
     EkuitasLv1, EkuitasLv2,
+    PendapatanLv1, PendapatanLv2,
+    BebanLv1, BebanLv2,
     Akun, TipeTransaksi, Bukti,
 )
 
@@ -22,6 +24,14 @@ class KewajibanLv2Inline(Lv2InlineBase):
 
 class EkuitasLv2Inline(Lv2InlineBase):
     model = EkuitasLv2
+
+
+class PendapatanLv2Inline(Lv2InlineBase):
+    model = PendapatanLv2
+
+
+class BebanLv2Inline(Lv2InlineBase):
+    model = BebanLv2
 
 
 @admin.register(AsetLv1)
@@ -64,6 +74,34 @@ class EkuitasLv2Admin(admin.ModelAdmin):
     list_display = ('kode', 'nama', 'ekuitas')
     search_fields = ('kode', 'nama')
     list_filter = ('ekuitas',)
+
+
+@admin.register(PendapatanLv1)
+class PendapatanLv1Admin(admin.ModelAdmin):
+    list_display = ('kode', 'nama')
+    search_fields = ('kode', 'nama')
+    inlines = (PendapatanLv2Inline,)
+
+
+@admin.register(PendapatanLv2)
+class PendapatanLv2Admin(admin.ModelAdmin):
+    list_display = ('kode', 'nama', 'pendapatan')
+    search_fields = ('kode', 'nama')
+    list_filter = ('pendapatan',)
+
+
+@admin.register(BebanLv1)
+class BebanLv1Admin(admin.ModelAdmin):
+    list_display = ('kode', 'nama')
+    search_fields = ('kode', 'nama')
+    inlines = (BebanLv2Inline,)
+
+
+@admin.register(BebanLv2)
+class BebanLv2Admin(admin.ModelAdmin):
+    list_display = ('kode', 'nama', 'beban')
+    search_fields = ('kode', 'nama')
+    list_filter = ('beban',)
 
 
 @admin.register(Akun)

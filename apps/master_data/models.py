@@ -1,4 +1,4 @@
-"""Master data models: Aset, Kewajiban, Ekuitas, TipeTransaksi, Akun, Bukti."""
+"""Master data models: Aset, Kewajiban, Ekuitas, Pendapatan, Beban, TipeTransaksi, Akun, Bukti."""
 from django.db import models
 
 
@@ -83,6 +83,60 @@ class EkuitasLv2(models.Model):
         return f'{self.kode} - {self.nama}'
 
 
+# ── Pendapatan ───────────────────────────────────────────────────────────────
+
+class PendapatanLv1(models.Model):
+    kode = models.CharField(max_length=50, unique=True)
+    nama = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = 'Pendapatan Level 1'
+        verbose_name_plural = 'Pendapatan Level 1'
+
+    def __str__(self) -> str:
+        return f'{self.kode} - {self.nama}'
+
+
+class PendapatanLv2(models.Model):
+    pendapatan = models.ForeignKey(PendapatanLv1, on_delete=models.CASCADE, related_name='children', null=True, blank=True)
+    kode = models.CharField(max_length=50, unique=True)
+    nama = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = 'Pendapatan Level 2'
+        verbose_name_plural = 'Pendapatan Level 2'
+
+    def __str__(self) -> str:
+        return f'{self.kode} - {self.nama}'
+
+
+# ── Beban ────────────────────────────────────────────────────────────────────
+
+class BebanLv1(models.Model):
+    kode = models.CharField(max_length=50, unique=True)
+    nama = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = 'Beban Level 1'
+        verbose_name_plural = 'Beban Level 1'
+
+    def __str__(self) -> str:
+        return f'{self.kode} - {self.nama}'
+
+
+class BebanLv2(models.Model):
+    beban = models.ForeignKey(BebanLv1, on_delete=models.CASCADE, related_name='children', null=True, blank=True)
+    kode = models.CharField(max_length=50, unique=True)
+    nama = models.CharField(max_length=255)
+
+    class Meta:
+        verbose_name = 'Beban Level 2'
+        verbose_name_plural = 'Beban Level 2'
+
+    def __str__(self) -> str:
+        return f'{self.kode} - {self.nama}'
+
+
 # ── Akun ──────────────────────────────────────────────────────────────────────
 
 # Prefix used to build the "Kode Akun" string (e.g. 1.1.8 for Aset)
@@ -118,6 +172,16 @@ def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
         if lv2:
             lv2_kode = lv2.kode
             lv1_kode = lv2.ekuitas.kode if lv2.ekuitas else '?'
+    elif kategori_id == 'pendapatan':
+        lv2 = PendapatanLv2.objects.filter(pk=kategori_akun).select_related('pendapatan').first()
+        if lv2:
+            lv2_kode = lv2.kode
+            lv1_kode = lv2.pendapatan.kode if lv2.pendapatan else '?'
+    elif kategori_id == 'beban':
+        lv2 = BebanLv2.objects.filter(pk=kategori_akun).select_related('beban').first()
+        if lv2:
+            lv2_kode = lv2.kode
+            lv1_kode = lv2.beban.kode if lv2.beban else '?'
 
     return f'{prefix}.{lv1_kode}.{lv2_kode}'
 
@@ -163,6 +227,14 @@ class Akun(models.Model):
             lv1_pk = EkuitasLv2.objects.filter(pk=self.kategori_akun).values_list('ekuitas_id', flat=True).first()
             if lv1_pk:
                 return reverse('master_data:ekuitas_lv1_detail', args=[lv1_pk])
+        elif self.kategori_id == 'pendapatan':
+            lv1_pk = PendapatanLv2.objects.filter(pk=self.kategori_akun).values_list('pendapatan_id', flat=True).first()
+            if lv1_pk:
+                return reverse('master_data:pendapatan_lv1_detail', args=[lv1_pk])
+        elif self.kategori_id == 'beban':
+            lv1_pk = BebanLv2.objects.filter(pk=self.kategori_akun).values_list('beban_id', flat=True).first()
+            if lv1_pk:
+                return reverse('master_data:beban_lv1_detail', args=[lv1_pk])
         return None
 
 
