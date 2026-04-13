@@ -23,6 +23,11 @@ from .models import (
 )
 
 
+def _parse_int_list(values: list[str]) -> list[int]:
+    """Parse a list of string values into integers, ignoring non-digit values."""
+    return [int(x) for x in values if x.isdigit()]
+
+
 # ── Rekap Jurnal (replaces old index / header_list) ─────────────────────────
 
 @login_required
@@ -51,15 +56,15 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
     # Build entitas bisnis filter: collect Lv1 IDs from all levels
     eb_filter_ids = set()
     if eb_lv1_ids:
-        eb_filter_ids.update(int(x) for x in eb_lv1_ids if x.isdigit())
+        eb_filter_ids.update(_parse_int_list(eb_lv1_ids))
     if eb_lv2_ids:
         lv2_parent_ids = EntitasBisnisLv2.objects.filter(
-            pk__in=[int(x) for x in eb_lv2_ids if x.isdigit()]
+            pk__in=_parse_int_list(eb_lv2_ids)
         ).values_list('entitas_bisnis_id', flat=True)
         eb_filter_ids.update(lv2_parent_ids)
     if eb_lv3_ids:
         lv3_parent_ids = EntitasBisnisLv3.objects.filter(
-            pk__in=[int(x) for x in eb_lv3_ids if x.isdigit()]
+            pk__in=_parse_int_list(eb_lv3_ids)
         ).select_related('parent_lv2').values_list('parent_lv2__entitas_bisnis_id', flat=True)
         eb_filter_ids.update(lv3_parent_ids)
 
@@ -343,8 +348,6 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         stlh_d = sblm_d + peny_d
         stlh_k = sblm_k + peny_k
 
-        # Only show rows with any activity
-        has_data = any([sa_d, sa_k, modul_d, modul_k, peny_d, peny_k])
         rows.append({
             'akun': akun,
             'sa_d': sa_d, 'sa_k': sa_k,
@@ -352,7 +355,6 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
             'sblm_d': sblm_d, 'sblm_k': sblm_k,
             'peny_d': peny_d, 'peny_k': peny_k,
             'stlh_d': stlh_d, 'stlh_k': stlh_k,
-            'has_data': has_data,
         })
 
     return render(request, 'jurnal/neraca_saldo.html', {
