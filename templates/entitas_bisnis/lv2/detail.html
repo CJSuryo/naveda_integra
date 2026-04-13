@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}{{ object.nama }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ object.nama }}</h1>
+    <p class="ni-page-header__subtitle">Detail Entitas Bisnis Level 2 — {{ parent.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'entitas_bisnis:lv2_update' parent.pk object.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'entitas_bisnis:lv2_delete' parent.pk object.pk %}" class="ni-btn ni-btn--outline-danger">Hapus</a>
+    <a href="{% url 'entitas_bisnis:detail' parent.pk %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:24px;">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Level 1</dt><dd>{{ parent.nama }}</dd>
+      <dt>Email</dt><dd>{{ object.email|default:'-' }}</dd>
+      <dt>Telepon</dt><dd>{{ object.telepon|default:'-' }}</dd>
+      <dt>Alamat</dt><dd>{{ object.alamat_lengkap|default:'-' }}</dd>
+      <dt>Tanggal Bergabung</dt><dd>{{ object.tanggal_bergabung|default:'-' }}</dd>
+      <dt>Status</dt><dd>{% if object.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-section-header" style="margin-bottom:16px;">
+  <h2 class="ni-section-header__title">Entitas Bisnis Level 3</h2>
+  <a href="{% url 'entitas_bisnis:lv3_create' parent.pk object.pk %}" class="ni-btn ni-btn--success ni-btn--sm">
+    <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Level 3
+  </a>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr><th>Nama</th><th>Email</th><th>Telepon</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for lv3 in lv3_list %}
+        <tr>
+          <td>{{ lv3.nama }}</td>
+          <td>{{ lv3.email|default:'-' }}</td>
+          <td>{{ lv3.telepon|default:'-' }}</td>
+          <td>{% if lv3.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'entitas_bisnis:lv3_update' parent.pk object.pk lv3.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit">
+                <i data-lucide="pencil" style="width:14px;height:14px"></i>
+              </a>
+              <a href="{% url 'entitas_bisnis:lv3_delete' parent.pk object.pk lv3.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus">
+                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada entitas level 3.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

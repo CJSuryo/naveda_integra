@@ -1,10 +1,15 @@
 """EntitasBisnis admin."""
 from django.contrib import admin
-from .models import TipeEntitas, EntitasBisnis, CabangEntitasBisnis
+from .models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 
-class CabangInline(admin.TabularInline):
-    model = CabangEntitasBisnis
+class EntitasBisnisLv2Inline(admin.TabularInline):
+    model = EntitasBisnisLv2
+    extra = 0
+
+
+class EntitasBisnisLv3Inline(admin.TabularInline):
+    model = EntitasBisnisLv3
     extra = 0
 
 
@@ -21,12 +26,21 @@ class EntitasBisnisAdmin(admin.ModelAdmin):
     search_fields = ('nama', 'email', 'tax_id')
     list_select_related = ('tipe_entitas',)
     filter_horizontal = ('users',)
-    inlines = (CabangInline,)
+    inlines = (EntitasBisnisLv2Inline,)
 
 
-@admin.register(CabangEntitasBisnis)
-class CabangEntitasBisnisAdmin(admin.ModelAdmin):
+@admin.register(EntitasBisnisLv2)
+class EntitasBisnisLv2Admin(admin.ModelAdmin):
     list_display = ('nama', 'entitas_bisnis', 'email', 'telepon', 'status_aktif')
     list_filter = ('status_aktif', 'entitas_bisnis')
     search_fields = ('nama', 'email')
     list_select_related = ('entitas_bisnis',)
+    inlines = (EntitasBisnisLv3Inline,)
+
+
+@admin.register(EntitasBisnisLv3)
+class EntitasBisnisLv3Admin(admin.ModelAdmin):
+    list_display = ('nama', 'parent_lv2', 'email', 'telepon', 'status_aktif')
+    list_filter = ('status_aktif',)
+    search_fields = ('nama', 'email')
+    list_select_related = ('parent_lv2',)

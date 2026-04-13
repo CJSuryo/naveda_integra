@@ -14,7 +14,12 @@
     <div class="ni-coa-category" data-toggle="coa-category" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 0;">
       <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:20px;height:20px;transition:transform 200ms;"></i>
       <strong style="font-size:1.1rem;">{{ category.prefix }}. {{ category.name }}</strong>
-      <span class="ni-badge ni-badge--secondary" style="margin-left:auto;">{{ category.items|length }} sub-kategori</span>
+      <span class="ni-badge ni-badge--secondary" style="margin-left:8px;">{{ category.items|length }} sub-kategori</span>
+      <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
+        <a href="{% url category.lv1_create %}" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah {{ category.name }} Level 1" style="padding:4px 8px;">
+          <i data-lucide="plus" style="width:14px;height:14px"></i>
+        </a>
+      </div>
     </div>
     <div class="ni-coa-children" style="display:none;margin-left:24px;margin-top:8px;">
       {% for lv1 in category.items %}
@@ -23,11 +28,30 @@
           <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:16px;height:16px;transition:transform 200ms;"></i>
           <span style="font-weight:600;">{{ lv1.kode }} - {{ lv1.nama }}</span>
           <span class="ni-badge ni-badge--secondary" style="font-size:0.75rem;">{{ lv1.children.count }} akun</span>
+          <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
+            <a href="{% url category.lv2_create lv1.pk %}" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Akun Level 2" style="padding:4px 8px;">
+              <i data-lucide="plus" style="width:14px;height:14px"></i>
+            </a>
+            <a href="{% url category.lv1_update lv1.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
+              <i data-lucide="pencil" style="width:14px;height:14px"></i>
+            </a>
+            <a href="{% url category.lv1_delete lv1.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:4px 8px;">
+              <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+            </a>
+          </div>
         </div>
         <div class="ni-coa-lv2-list" style="display:none;margin-left:24px;">
           {% for lv2 in lv1.children.all %}
-          <div style="padding:4px 0;color:var(--ni-text-muted);">
-            {{ lv2.kode }} - {{ lv2.nama }}
+          <div style="padding:4px 0;color:var(--ni-text-muted);display:flex;align-items:center;gap:8px;">
+            <span>{{ lv2.kode }} - {{ lv2.nama }}</span>
+            <div style="margin-left:auto;display:flex;gap:4px;">
+              <a href="{% url category.lv2_update lv1.pk lv2.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
+                <i data-lucide="pencil" style="width:14px;height:14px"></i>
+              </a>
+              <a href="{% url category.lv2_delete lv1.pk lv2.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:4px 8px;">
+                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+              </a>
+            </div>
           </div>
           {% empty %}
           <div style="padding:4px 0;color:var(--ni-text-muted);font-style:italic;">Belum ada akun.</div>

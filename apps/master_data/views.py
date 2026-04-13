@@ -11,7 +11,6 @@ from .forms import (
     EkuitasLv1Form, EkuitasLv2Form,
     PendapatanLv1Form, PendapatanLv2Form,
     BebanLv1Form, BebanLv2Form,
-    TipeTransaksiForm,
 )
 from .models import (
     AsetLv1, AsetLv2,
@@ -71,23 +70,11 @@ def _crud_views(model, form_class, list_template, form_template, delete_template
 # ── Aset Level 1 ──────────────────────────────────────────────────────────────
 
 @login_required
-def aset_lv1_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'master_data/aset/lv1_list.html', {'object_list': AsetLv1.objects.all().order_by('kode')})
-
-
-@login_required
-def aset_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(AsetLv1, pk=pk)
-    children = obj.children.all().order_by('kode')
-    return render(request, 'master_data/aset/lv1_detail.html', {'object': obj, 'children': children})
-
-
-@login_required
 def aset_lv1_create(request: HttpRequest) -> HttpResponse:
     form = AsetLv1Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:aset_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv1_form.html', {'form': form, 'title': 'Tambah Aset Level 1'})
 
 
@@ -97,7 +84,7 @@ def aset_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
     form = AsetLv1Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:aset_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv1_form.html', {'form': form, 'title': 'Edit Aset Level 1', 'object': obj})
 
 
@@ -109,8 +96,8 @@ def aset_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
-            return redirect('master_data:aset_lv1_list')
-        return redirect('master_data:aset_lv1_list')
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv1_confirm_delete.html', {'object': obj})
 
 
@@ -122,7 +109,7 @@ def aset_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         obj = form.save(commit=False)
         obj.aset = parent
         obj.save()
-        return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Aset Level 2'})
 
 
@@ -133,7 +120,7 @@ def aset_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
     form = AsetLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Aset Level 2'})
 
 
@@ -146,31 +133,19 @@ def aset_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
-            return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
-        return redirect('master_data:aset_lv1_detail', pk=lv1_pk)
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/aset/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
 
 # ── Kewajiban Level 1 ─────────────────────────────────────────────────────────
 
 @login_required
-def kewajiban_lv1_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'master_data/kewajiban/lv1_list.html', {'object_list': KewajibanLv1.objects.all().order_by('kode')})
-
-
-@login_required
-def kewajiban_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(KewajibanLv1, pk=pk)
-    children = obj.children.all().order_by('kode')
-    return render(request, 'master_data/kewajiban/lv1_detail.html', {'object': obj, 'children': children})
-
-
-@login_required
 def kewajiban_lv1_create(request: HttpRequest) -> HttpResponse:
     form = KewajibanLv1Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:kewajiban_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv1_form.html', {'form': form, 'title': 'Tambah Kewajiban Level 1'})
 
 
@@ -180,7 +155,7 @@ def kewajiban_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
     form = KewajibanLv1Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:kewajiban_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv1_form.html', {'form': form, 'title': 'Edit Kewajiban Level 1', 'object': obj})
 
 
@@ -192,8 +167,8 @@ def kewajiban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
-            return redirect('master_data:kewajiban_lv1_list')
-        return redirect('master_data:kewajiban_lv1_list')
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv1_confirm_delete.html', {'object': obj})
 
 
@@ -205,7 +180,7 @@ def kewajiban_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         obj = form.save(commit=False)
         obj.kewajiban = parent
         obj.save()
-        return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Kewajiban Level 2'})
 
 
@@ -216,7 +191,7 @@ def kewajiban_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResp
     form = KewajibanLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Kewajiban Level 2'})
 
 
@@ -229,31 +204,19 @@ def kewajiban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResp
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
-            return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
-        return redirect('master_data:kewajiban_lv1_detail', pk=lv1_pk)
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/kewajiban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
 
 # ── Ekuitas Level 1 ───────────────────────────────────────────────────────────
 
 @login_required
-def ekuitas_lv1_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'master_data/ekuitas/lv1_list.html', {'object_list': EkuitasLv1.objects.all().order_by('kode')})
-
-
-@login_required
-def ekuitas_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(EkuitasLv1, pk=pk)
-    children = obj.children.all().order_by('kode')
-    return render(request, 'master_data/ekuitas/lv1_detail.html', {'object': obj, 'children': children})
-
-
-@login_required
 def ekuitas_lv1_create(request: HttpRequest) -> HttpResponse:
     form = EkuitasLv1Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:ekuitas_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv1_form.html', {'form': form, 'title': 'Tambah Ekuitas Level 1'})
 
 
@@ -263,7 +226,7 @@ def ekuitas_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
     form = EkuitasLv1Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:ekuitas_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv1_form.html', {'form': form, 'title': 'Edit Ekuitas Level 1', 'object': obj})
 
 
@@ -275,8 +238,8 @@ def ekuitas_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
-            return redirect('master_data:ekuitas_lv1_list')
-        return redirect('master_data:ekuitas_lv1_list')
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv1_confirm_delete.html', {'object': obj})
 
 
@@ -288,7 +251,7 @@ def ekuitas_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         obj = form.save(commit=False)
         obj.ekuitas = parent
         obj.save()
-        return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Ekuitas Level 2'})
 
 
@@ -299,7 +262,7 @@ def ekuitas_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRespon
     form = EkuitasLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Ekuitas Level 2'})
 
 
@@ -312,31 +275,19 @@ def ekuitas_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRespon
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
-            return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
-        return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/ekuitas/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
 
 # ── Pendapatan Level 1 ────────────────────────────────────────────────────────
 
 @login_required
-def pendapatan_lv1_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'master_data/pendapatan/lv1_list.html', {'object_list': PendapatanLv1.objects.all().order_by('kode')})
-
-
-@login_required
-def pendapatan_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(PendapatanLv1, pk=pk)
-    children = obj.children.all().order_by('kode')
-    return render(request, 'master_data/pendapatan/lv1_detail.html', {'object': obj, 'children': children})
-
-
-@login_required
 def pendapatan_lv1_create(request: HttpRequest) -> HttpResponse:
     form = PendapatanLv1Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:pendapatan_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv1_form.html', {'form': form, 'title': 'Tambah Pendapatan Level 1'})
 
 
@@ -346,7 +297,7 @@ def pendapatan_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
     form = PendapatanLv1Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:pendapatan_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv1_form.html', {'form': form, 'title': 'Edit Pendapatan Level 1', 'object': obj})
 
 
@@ -358,8 +309,8 @@ def pendapatan_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
-            return redirect('master_data:pendapatan_lv1_list')
-        return redirect('master_data:pendapatan_lv1_list')
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv1_confirm_delete.html', {'object': obj})
 
 
@@ -371,7 +322,7 @@ def pendapatan_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         obj = form.save(commit=False)
         obj.pendapatan = parent
         obj.save()
-        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Pendapatan Level 2'})
 
 
@@ -382,7 +333,7 @@ def pendapatan_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRes
     form = PendapatanLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Pendapatan Level 2'})
 
 
@@ -395,31 +346,19 @@ def pendapatan_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRes
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
-            return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
-        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/pendapatan/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
 
 # ── Beban Level 1 ────────────────────────────────────────────────────────────
 
 @login_required
-def beban_lv1_list(request: HttpRequest) -> HttpResponse:
-    return render(request, 'master_data/beban/lv1_list.html', {'object_list': BebanLv1.objects.all().order_by('kode')})
-
-
-@login_required
-def beban_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(BebanLv1, pk=pk)
-    children = obj.children.all().order_by('kode')
-    return render(request, 'master_data/beban/lv1_detail.html', {'object': obj, 'children': children})
-
-
-@login_required
 def beban_lv1_create(request: HttpRequest) -> HttpResponse:
     form = BebanLv1Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:beban_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv1_form.html', {'form': form, 'title': 'Tambah Beban Level 1'})
 
 
@@ -429,7 +368,7 @@ def beban_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
     form = BebanLv1Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:beban_lv1_list')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv1_form.html', {'form': form, 'title': 'Edit Beban Level 1', 'object': obj})
 
 
@@ -441,8 +380,8 @@ def beban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
-            return redirect('master_data:beban_lv1_list')
-        return redirect('master_data:beban_lv1_list')
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv1_confirm_delete.html', {'object': obj})
 
 
@@ -454,7 +393,7 @@ def beban_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         obj = form.save(commit=False)
         obj.beban = parent
         obj.save()
-        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Beban Level 2'})
 
 
@@ -465,7 +404,7 @@ def beban_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse
     form = BebanLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
-        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Beban Level 2'})
 
 
@@ -478,8 +417,8 @@ def beban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse
             obj.delete()
         except ProtectedError:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
-            return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
-        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+            return redirect('master_data:chart_of_accounts')
+        return redirect('master_data:chart_of_accounts')
     return render(request, 'master_data/beban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
 
 
@@ -489,11 +428,56 @@ def beban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse
 def chart_of_accounts(request: HttpRequest) -> HttpResponse:
     """Chart of Accounts page - shows all account categories with nested hierarchy."""
     categories = [
-        {'name': 'Aset', 'prefix': '1', 'items': AsetLv1.objects.prefetch_related('children').order_by('kode')},
-        {'name': 'Kewajiban', 'prefix': '2', 'items': KewajibanLv1.objects.prefetch_related('children').order_by('kode')},
-        {'name': 'Ekuitas', 'prefix': '3', 'items': EkuitasLv1.objects.prefetch_related('children').order_by('kode')},
-        {'name': 'Pendapatan', 'prefix': '4', 'items': PendapatanLv1.objects.prefetch_related('children').order_by('kode')},
-        {'name': 'Beban', 'prefix': '5', 'items': BebanLv1.objects.prefetch_related('children').order_by('kode')},
+        {
+            'name': 'Aset', 'prefix': '1', 'slug': 'aset',
+            'items': AsetLv1.objects.prefetch_related('children').order_by('kode'),
+            'lv1_create': 'master_data:aset_lv1_create',
+            'lv1_update': 'master_data:aset_lv1_update',
+            'lv1_delete': 'master_data:aset_lv1_delete',
+            'lv2_create': 'master_data:aset_lv2_create',
+            'lv2_update': 'master_data:aset_lv2_update',
+            'lv2_delete': 'master_data:aset_lv2_delete',
+        },
+        {
+            'name': 'Kewajiban', 'prefix': '2', 'slug': 'kewajiban',
+            'items': KewajibanLv1.objects.prefetch_related('children').order_by('kode'),
+            'lv1_create': 'master_data:kewajiban_lv1_create',
+            'lv1_update': 'master_data:kewajiban_lv1_update',
+            'lv1_delete': 'master_data:kewajiban_lv1_delete',
+            'lv2_create': 'master_data:kewajiban_lv2_create',
+            'lv2_update': 'master_data:kewajiban_lv2_update',
+            'lv2_delete': 'master_data:kewajiban_lv2_delete',
+        },
+        {
+            'name': 'Ekuitas', 'prefix': '3', 'slug': 'ekuitas',
+            'items': EkuitasLv1.objects.prefetch_related('children').order_by('kode'),
+            'lv1_create': 'master_data:ekuitas_lv1_create',
+            'lv1_update': 'master_data:ekuitas_lv1_update',
+            'lv1_delete': 'master_data:ekuitas_lv1_delete',
+            'lv2_create': 'master_data:ekuitas_lv2_create',
+            'lv2_update': 'master_data:ekuitas_lv2_update',
+            'lv2_delete': 'master_data:ekuitas_lv2_delete',
+        },
+        {
+            'name': 'Pendapatan', 'prefix': '4', 'slug': 'pendapatan',
+            'items': PendapatanLv1.objects.prefetch_related('children').order_by('kode'),
+            'lv1_create': 'master_data:pendapatan_lv1_create',
+            'lv1_update': 'master_data:pendapatan_lv1_update',
+            'lv1_delete': 'master_data:pendapatan_lv1_delete',
+            'lv2_create': 'master_data:pendapatan_lv2_create',
+            'lv2_update': 'master_data:pendapatan_lv2_update',
+            'lv2_delete': 'master_data:pendapatan_lv2_delete',
+        },
+        {
+            'name': 'Beban', 'prefix': '5', 'slug': 'beban',
+            'items': BebanLv1.objects.prefetch_related('children').order_by('kode'),
+            'lv1_create': 'master_data:beban_lv1_create',
+            'lv1_update': 'master_data:beban_lv1_update',
+            'lv1_delete': 'master_data:beban_lv1_delete',
+            'lv2_create': 'master_data:beban_lv2_create',
+            'lv2_update': 'master_data:beban_lv2_update',
+            'lv2_delete': 'master_data:beban_lv2_delete',
+        },
     ]
     return render(request, 'master_data/chart_of_accounts.html', {'categories': categories})
 
@@ -505,36 +489,14 @@ def tipe_transaksi_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'master_data/tipe_transaksi/list.html', {'object_list': TipeTransaksi.objects.all().order_by('kode_transaksi')})
 
 
-@login_required
-def tipe_transaksi_create(request: HttpRequest) -> HttpResponse:
-    form = TipeTransaksiForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('master_data:tipe_transaksi_list')
-    return render(request, 'master_data/tipe_transaksi/form.html', {'form': form, 'title': 'Tambah Tipe Transaksi'})
-
+# ── Prefiks Transaksi (read-only, model in jurnal app) ───────────────────────
 
 @login_required
-def tipe_transaksi_update(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(TipeTransaksi, pk=pk)
-    form = TipeTransaksiForm(request.POST or None, instance=obj)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('master_data:tipe_transaksi_list')
-    return render(request, 'master_data/tipe_transaksi/form.html', {'form': form, 'title': 'Edit Tipe Transaksi', 'object': obj})
-
-
-@login_required
-def tipe_transaksi_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(TipeTransaksi, pk=pk)
-    if request.method == 'POST':
-        try:
-            obj.delete()
-        except ProtectedError:
-            messages.error(request, 'Tidak dapat dihapus karena tipe transaksi ini masih digunakan dalam jurnal.')
-            return redirect('master_data:tipe_transaksi_list')
-        return redirect('master_data:tipe_transaksi_list')
-    return render(request, 'master_data/tipe_transaksi/confirm_delete.html', {'object': obj})
+def prefix_list(request: HttpRequest) -> HttpResponse:
+    from apps.jurnal.models import TransactionPrefix
+    return render(request, 'master_data/prefix/list.html', {
+        'object_list': TransactionPrefix.objects.all().order_by('kode'),
+    })
 
 
 # ── Bukti ─────────────────────────────────────────────────────────────────────

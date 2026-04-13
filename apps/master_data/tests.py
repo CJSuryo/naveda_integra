@@ -157,56 +157,56 @@ class AsetViewTests(TestCase):
         self.lv2 = AsetLv2.objects.create(kode='1.1.1', nama='Kas Kecil', aset=self.lv1)
 
     def test_lv1_list(self):
-        response = self.client.get(reverse('master_data:aset_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kas')
 
     def test_lv1_detail(self):
-        response = self.client.get(reverse('master_data:aset_lv1_detail', args=[self.lv1.pk]))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Kas Kecil')
 
     def test_lv1_create(self):
         data = {'kode': '1.2', 'nama': 'Bank'}
         response = self.client.post(reverse('master_data:aset_lv1_create'), data)
-        self.assertRedirects(response, reverse('master_data:aset_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.assertTrue(AsetLv1.objects.filter(kode='1.2').exists())
 
     def test_lv1_update(self):
         data = {'kode': '1.1', 'nama': 'Kas Updated'}
         response = self.client.post(reverse('master_data:aset_lv1_update', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:aset_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.lv1.refresh_from_db()
         self.assertEqual(self.lv1.nama, 'Kas Updated')
 
     def test_lv1_delete(self):
         lv1_new = AsetLv1.objects.create(kode='9.9', nama='To Delete')
         response = self.client.post(reverse('master_data:aset_lv1_delete', args=[lv1_new.pk]))
-        self.assertRedirects(response, reverse('master_data:aset_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.assertFalse(AsetLv1.objects.filter(pk=lv1_new.pk).exists())
 
     def test_lv2_create(self):
         data = {'kode': '1.1.2', 'nama': 'Kas Besar'}
         response = self.client.post(reverse('master_data:aset_lv2_create', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:aset_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.assertTrue(AsetLv2.objects.filter(kode='1.1.2').exists())
 
     def test_lv2_update(self):
         data = {'kode': '1.1.1', 'nama': 'Kas Kecil Updated'}
         response = self.client.post(reverse('master_data:aset_lv2_update', args=[self.lv1.pk, self.lv2.pk]), data)
-        self.assertRedirects(response, reverse('master_data:aset_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.lv2.refresh_from_db()
         self.assertEqual(self.lv2.nama, 'Kas Kecil Updated')
 
     def test_lv2_delete(self):
         lv2_new = AsetLv2.objects.create(kode='1.1.9', nama='To Delete', aset=self.lv1)
         response = self.client.post(reverse('master_data:aset_lv2_delete', args=[self.lv1.pk, lv2_new.pk]))
-        self.assertRedirects(response, reverse('master_data:aset_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
         self.assertFalse(AsetLv2.objects.filter(pk=lv2_new.pk).exists())
 
     def test_requires_login(self):
         self.client.logout()
-        response = self.client.get(reverse('master_data:aset_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 302)
 
 
@@ -219,23 +219,23 @@ class KewajibanViewTests(TestCase):
         self.lv2 = KewajibanLv2.objects.create(kode='2.1.1', nama='Utang Supplier A', kewajiban=self.lv1)
 
     def test_lv1_list(self):
-        response = self.client.get(reverse('master_data:kewajiban_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
 
     def test_lv1_detail(self):
-        response = self.client.get(reverse('master_data:kewajiban_lv1_detail', args=[self.lv1.pk]))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Utang Supplier A')
 
     def test_lv1_create(self):
         data = {'kode': '2.2', 'nama': 'Utang Bank'}
         response = self.client.post(reverse('master_data:kewajiban_lv1_create'), data)
-        self.assertRedirects(response, reverse('master_data:kewajiban_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
     def test_lv2_create(self):
         data = {'kode': '2.1.2', 'nama': 'Utang Supplier B'}
         response = self.client.post(reverse('master_data:kewajiban_lv2_create', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:kewajiban_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
 
 class EkuitasViewTests(TestCase):
@@ -247,20 +247,21 @@ class EkuitasViewTests(TestCase):
         self.lv2 = EkuitasLv2.objects.create(kode='3.1.1', nama='Modal Disetor', ekuitas=self.lv1)
 
     def test_lv1_list(self):
-        response = self.client.get(reverse('master_data:ekuitas_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
 
     def test_lv1_detail(self):
-        response = self.client.get(reverse('master_data:ekuitas_lv1_detail', args=[self.lv1.pk]))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
 
     def test_lv2_create(self):
         data = {'kode': '3.1.2', 'nama': 'Laba Ditahan'}
         response = self.client.post(reverse('master_data:ekuitas_lv2_create', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:ekuitas_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
 
 class TipeTransaksiViewTests(TestCase):
+    """TipeTransaksi is now read-only."""
     def setUp(self):
         self.client = Client()
         self.user = create_user()
@@ -271,25 +272,6 @@ class TipeTransaksiViewTests(TestCase):
         response = self.client.get(reverse('master_data:tipe_transaksi_list'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pembelian')
-
-    def test_create(self):
-        data = {'kode_transaksi': 'TRX002', 'nama': 'Penjualan'}
-        response = self.client.post(reverse('master_data:tipe_transaksi_create'), data)
-        self.assertRedirects(response, reverse('master_data:tipe_transaksi_list'))
-        self.assertTrue(TipeTransaksi.objects.filter(kode_transaksi='TRX002').exists())
-
-    def test_update(self):
-        data = {'kode_transaksi': 'TRX001', 'nama': 'Pembelian Updated'}
-        response = self.client.post(reverse('master_data:tipe_transaksi_update', args=[self.tt.pk]), data)
-        self.assertRedirects(response, reverse('master_data:tipe_transaksi_list'))
-        self.tt.refresh_from_db()
-        self.assertEqual(self.tt.nama, 'Pembelian Updated')
-
-    def test_delete(self):
-        tt2 = TipeTransaksi.objects.create(kode_transaksi='DEL001', nama='To Delete')
-        response = self.client.post(reverse('master_data:tipe_transaksi_delete', args=[tt2.pk]))
-        self.assertRedirects(response, reverse('master_data:tipe_transaksi_list'))
-        self.assertFalse(TipeTransaksi.objects.filter(pk=tt2.pk).exists())
 
     def test_requires_login(self):
         self.client.logout()
@@ -368,24 +350,24 @@ class PendapatanViewTests(TestCase):
         self.lv2 = PendapatanLv2.objects.create(kode='4.1.1', nama='Penjualan', pendapatan=self.lv1)
 
     def test_lv1_list(self):
-        response = self.client.get(reverse('master_data:pendapatan_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Pendapatan Usaha')
 
     def test_lv1_detail(self):
-        response = self.client.get(reverse('master_data:pendapatan_lv1_detail', args=[self.lv1.pk]))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Penjualan')
 
     def test_lv1_create(self):
         data = {'kode': '4.2', 'nama': 'Pendapatan Lain'}
         response = self.client.post(reverse('master_data:pendapatan_lv1_create'), data)
-        self.assertRedirects(response, reverse('master_data:pendapatan_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
     def test_lv2_create(self):
         data = {'kode': '4.1.2', 'nama': 'Pendapatan Jasa'}
         response = self.client.post(reverse('master_data:pendapatan_lv2_create', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:pendapatan_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
 
 class BebanViewTests(TestCase):
@@ -397,24 +379,24 @@ class BebanViewTests(TestCase):
         self.lv2 = BebanLv2.objects.create(kode='5.1.1', nama='Beban Gaji', beban=self.lv1)
 
     def test_lv1_list(self):
-        response = self.client.get(reverse('master_data:beban_lv1_list'))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Beban Operasional')
 
     def test_lv1_detail(self):
-        response = self.client.get(reverse('master_data:beban_lv1_detail', args=[self.lv1.pk]))
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Beban Gaji')
 
     def test_lv1_create(self):
         data = {'kode': '5.2', 'nama': 'Beban Lain'}
         response = self.client.post(reverse('master_data:beban_lv1_create'), data)
-        self.assertRedirects(response, reverse('master_data:beban_lv1_list'))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
     def test_lv2_create(self):
         data = {'kode': '5.1.2', 'nama': 'Beban Listrik'}
         response = self.client.post(reverse('master_data:beban_lv2_create', args=[self.lv1.pk]), data)
-        self.assertRedirects(response, reverse('master_data:beban_lv1_detail', args=[self.lv1.pk]))
+        self.assertRedirects(response, reverse('master_data:chart_of_accounts'))
 
 
 # ── Chart of Accounts View Tests ─────────────────────────────────────────────

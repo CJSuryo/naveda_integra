@@ -72,6 +72,11 @@ class JurnalHeader(models.Model):
         blank=True,
         related_name='jurnal_headers',
     )
+    is_penyesuaian = models.BooleanField(
+        default=False,
+        verbose_name='Penyesuaian Manual',
+        help_text='True jika jurnal berasal dari penyesuaian manual, False jika dari modul otomatis.',
+    )
 
     class Meta:
         verbose_name = 'Jurnal Header'

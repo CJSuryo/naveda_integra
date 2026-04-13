@@ -3,8 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import TipeEntitasForm, EntitasBisnisForm, CabangEntitasBisnisForm
-from .models import TipeEntitas, EntitasBisnis, CabangEntitasBisnis
+from .forms import TipeEntitasForm, EntitasBisnisForm, EntitasBisnisLv2Form, EntitasBisnisLv3Form
+from .models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 
 # ── Tipe Entitas ──────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ def tipe_entitas_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, 'entitas_bisnis/tipe_entitas/confirm_delete.html', {'object': obj})
 
 
-# ── Entitas Bisnis ────────────────────────────────────────────────────────────
+# ── Entitas Bisnis (Level 1) ─────────────────────────────────────────────────
 
 @login_required
 def list_view(request: HttpRequest) -> HttpResponse:
@@ -54,8 +54,8 @@ def list_view(request: HttpRequest) -> HttpResponse:
 @login_required
 def detail_view(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(EntitasBisnis.objects.select_related('tipe_entitas'), pk=pk)
-    cabang_list = obj.cabang_set.all().order_by('nama')
-    return render(request, 'entitas_bisnis/detail.html', {'object': obj, 'cabang_list': cabang_list})
+    lv2_list = obj.children_lv2.all().order_by('nama')
+    return render(request, 'entitas_bisnis/detail.html', {'object': obj, 'lv2_list': lv2_list})
 
 
 @login_required
@@ -64,7 +64,7 @@ def create_view(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST' and form.is_valid():
         form.save()
         return redirect('entitas_bisnis:list')
-    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Tambah Entitas Bisnis'})
+    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Tambah Entitas Bisnis Level 1'})
 
 
 @login_required
@@ -74,7 +74,7 @@ def update_view(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST' and form.is_valid():
         form.save()
         return redirect('entitas_bisnis:list')
-    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Edit Entitas Bisnis'})
+    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Edit Entitas Bisnis Level 1'})
 
 
 @login_required
@@ -86,36 +86,82 @@ def delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, 'entitas_bisnis/confirm_delete.html', {'object': obj})
 
 
-# ── Cabang Entitas Bisnis ─────────────────────────────────────────────────────
+# ── Entitas Bisnis Level 2 ───────────────────────────────────────────────────
 
 @login_required
-def cabang_create(request: HttpRequest, eb_pk: int) -> HttpResponse:
+def lv2_create(request: HttpRequest, eb_pk: int) -> HttpResponse:
     parent = get_object_or_404(EntitasBisnis, pk=eb_pk)
-    form = CabangEntitasBisnisForm(request.POST or None)
+    form = EntitasBisnisLv2Form(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         obj = form.save(commit=False)
         obj.entitas_bisnis = parent
         obj.save()
         return redirect('entitas_bisnis:detail', pk=eb_pk)
-    return render(request, 'entitas_bisnis/cabang/form.html', {'form': form, 'parent': parent, 'title': 'Tambah Cabang'})
+    return render(request, 'entitas_bisnis/lv2/form.html', {'form': form, 'parent': parent, 'title': 'Tambah Entitas Bisnis Level 2'})
 
 
 @login_required
-def cabang_update(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
+def lv2_update(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
     parent = get_object_or_404(EntitasBisnis, pk=eb_pk)
-    obj = get_object_or_404(CabangEntitasBisnis, pk=pk, entitas_bisnis=parent)
-    form = CabangEntitasBisnisForm(request.POST or None, instance=obj)
+    obj = get_object_or_404(EntitasBisnisLv2, pk=pk, entitas_bisnis=parent)
+    form = EntitasBisnisLv2Form(request.POST or None, instance=obj)
     if request.method == 'POST' and form.is_valid():
         form.save()
         return redirect('entitas_bisnis:detail', pk=eb_pk)
-    return render(request, 'entitas_bisnis/cabang/form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Cabang'})
+    return render(request, 'entitas_bisnis/lv2/form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Entitas Bisnis Level 2'})
 
 
 @login_required
-def cabang_delete(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
+def lv2_delete(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
     parent = get_object_or_404(EntitasBisnis, pk=eb_pk)
-    obj = get_object_or_404(CabangEntitasBisnis, pk=pk, entitas_bisnis=parent)
+    obj = get_object_or_404(EntitasBisnisLv2, pk=pk, entitas_bisnis=parent)
     if request.method == 'POST':
         obj.delete()
         return redirect('entitas_bisnis:detail', pk=eb_pk)
-    return render(request, 'entitas_bisnis/cabang/confirm_delete.html', {'object': obj, 'parent': parent})
+    return render(request, 'entitas_bisnis/lv2/confirm_delete.html', {'object': obj, 'parent': parent})
+
+
+@login_required
+def lv2_detail(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
+    parent = get_object_or_404(EntitasBisnis, pk=eb_pk)
+    obj = get_object_or_404(EntitasBisnisLv2.objects.select_related('entitas_bisnis'), pk=pk, entitas_bisnis=parent)
+    lv3_list = obj.children_lv3.all().order_by('nama')
+    return render(request, 'entitas_bisnis/lv2/detail.html', {'object': obj, 'parent': parent, 'lv3_list': lv3_list})
+
+
+# ── Entitas Bisnis Level 3 ───────────────────────────────────────────────────
+
+@login_required
+def lv3_create(request: HttpRequest, eb_pk: int, lv2_pk: int) -> HttpResponse:
+    parent_lv1 = get_object_or_404(EntitasBisnis, pk=eb_pk)
+    parent_lv2 = get_object_or_404(EntitasBisnisLv2, pk=lv2_pk, entitas_bisnis=parent_lv1)
+    form = EntitasBisnisLv3Form(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        obj = form.save(commit=False)
+        obj.parent_lv2 = parent_lv2
+        obj.save()
+        return redirect('entitas_bisnis:lv2_detail', eb_pk=eb_pk, pk=lv2_pk)
+    return render(request, 'entitas_bisnis/lv3/form.html', {'form': form, 'parent_lv2': parent_lv2, 'parent_lv1': parent_lv1, 'title': 'Tambah Entitas Bisnis Level 3'})
+
+
+@login_required
+def lv3_update(request: HttpRequest, eb_pk: int, lv2_pk: int, pk: int) -> HttpResponse:
+    parent_lv1 = get_object_or_404(EntitasBisnis, pk=eb_pk)
+    parent_lv2 = get_object_or_404(EntitasBisnisLv2, pk=lv2_pk, entitas_bisnis=parent_lv1)
+    obj = get_object_or_404(EntitasBisnisLv3, pk=pk, parent_lv2=parent_lv2)
+    form = EntitasBisnisLv3Form(request.POST or None, instance=obj)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('entitas_bisnis:lv2_detail', eb_pk=eb_pk, pk=lv2_pk)
+    return render(request, 'entitas_bisnis/lv3/form.html', {'form': form, 'parent_lv2': parent_lv2, 'parent_lv1': parent_lv1, 'object': obj, 'title': 'Edit Entitas Bisnis Level 3'})
+
+
+@login_required
+def lv3_delete(request: HttpRequest, eb_pk: int, lv2_pk: int, pk: int) -> HttpResponse:
+    parent_lv1 = get_object_or_404(EntitasBisnis, pk=eb_pk)
+    parent_lv2 = get_object_or_404(EntitasBisnisLv2, pk=lv2_pk, entitas_bisnis=parent_lv1)
+    obj = get_object_or_404(EntitasBisnisLv3, pk=pk, parent_lv2=parent_lv2)
+    if request.method == 'POST':
+        obj.delete()
+        return redirect('entitas_bisnis:lv2_detail', eb_pk=eb_pk, pk=lv2_pk)
+    return render(request, 'entitas_bisnis/lv3/confirm_delete.html', {'object': obj, 'parent_lv2': parent_lv2, 'parent_lv1': parent_lv1})
