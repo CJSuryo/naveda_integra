@@ -47,31 +47,19 @@
 <script>
 (function() {
   'use strict';
-  document.querySelectorAll('[data-toggle="coa-category"]').forEach(function(el) {
-    el.addEventListener('click', function() {
-      var children = this.nextElementSibling;
-      var arrow = this.querySelector('.ni-coa-arrow');
-      if (children.style.display === 'none') {
-        children.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
-      } else {
-        children.style.display = 'none';
-        arrow.style.transform = '';
-      }
-    });
-  });
-  document.querySelectorAll('[data-toggle="coa-lv1"]').forEach(function(el) {
-    el.addEventListener('click', function() {
-      var children = this.nextElementSibling;
-      var arrow = this.querySelector('.ni-coa-arrow');
-      if (children.style.display === 'none') {
-        children.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
-      } else {
-        children.style.display = 'none';
-        arrow.style.transform = '';
-      }
-    });
+  function toggleCollapsible(el) {
+    var children = el.nextElementSibling;
+    var arrow = el.querySelector('.ni-coa-arrow');
+    if (children.style.display === 'none') {
+      children.style.display = 'block';
+      arrow.style.transform = 'rotate(90deg)';
+    } else {
+      children.style.display = 'none';
+      arrow.style.transform = '';
+    }
+  }
+  document.querySelectorAll('[data-toggle="coa-category"], [data-toggle="coa-lv1"]').forEach(function(el) {
+    el.addEventListener('click', function() { toggleCollapsible(this); });
   });
 })();
 </script>
