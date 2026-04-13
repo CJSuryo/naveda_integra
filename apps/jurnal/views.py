@@ -389,13 +389,66 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     return JsonResponse(results, safe=False)
 
 
+def _get_entitas_bisnis_dropdown_options() -> list[dict[str, str]]:
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    options: list[dict[str, str]] = []
+    for eb in EBModel.objects.filter(status_aktif=True).order_by('nama'):
+        options.append({'value': f'lv1:{eb.pk}', 'label': eb.nama})
+
+    for lv2 in EntitasBisnisLv2.objects.filter(status_aktif=True).select_related('entitas_bisnis').order_by(
+        'entitas_bisnis__nama', 'nama'
+    ):
+        options.append({
+            'value': f'lv2:{lv2.pk}',
+            'label': f'{lv2.nama} — {lv2.entitas_bisnis.nama}',
+        })
+
+    for lv3 in EntitasBisnisLv3.objects.filter(status_aktif=True).select_related('parent_lv2__entitas_bisnis').order_by(
+        'parent_lv2__entitas_bisnis__nama', 'parent_lv2__nama', 'nama'
+    ):
+        options.append({
+            'value': f'lv3:{lv3.pk}',
+            'label': f'{lv3.nama} — {lv3.parent_lv2.nama} / {lv3.parent_lv2.entitas_bisnis.nama}',
+        })
+
+    return options
+
+
+def _resolve_entitas_bisnis_id(selection: str | None) -> int | None:
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    if not selection:
+        return None
+
+    try:
+        level, raw_pk = selection.split(':', 1)
+        pk = int(raw_pk)
+    except (ValueError, TypeError):
+        return None
+
+    if level == 'lv1':
+        return pk
+
+    if level == 'lv2':
+        lv2 = EntitasBisnisLv2.objects.filter(pk=pk).select_related('entitas_bisnis').first()
+        return lv2.entitas_bisnis_id if lv2 else None
+
+    if level == 'lv3':
+        lv3 = EntitasBisnisLv3.objects.filter(pk=pk).select_related('parent_lv2__entitas_bisnis').first()
+        return lv3.parent_lv2.entitas_bisnis_id if lv3 else None
+
+    return None
+
+
 @login_required
 def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
     """Spreadsheet-like direct manual journal entry form."""
     if request.method == 'POST':
         tanggal = request.POST.get('tanggal')
         uraian = request.POST.get('uraian_transaksi', '').strip()
-        eb_id = request.POST.get('entitas_bisnis') or None
+        eb_selection = request.POST.get('entitas_bisnis') or ''
+        eb_id = _resolve_entitas_bisnis_id(eb_selection)
         rows_json = request.POST.get('rows_data', '[]')
 
         errors = {}
@@ -403,6 +456,8 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
             errors['tanggal'] = 'Tanggal wajib diisi.'
         if not uraian:
             errors['uraian_transaksi'] = 'Deskripsi wajib diisi.'
+        if eb_selection and eb_id is None:
+            errors['entitas_bisnis'] = 'Pilihan entitas bisnis tidak valid.'
 
         try:
             rows = json.loads(rows_json)
@@ -420,12 +475,13 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
             errors['balance'] = f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'
 
         if errors:
-            eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+            eb_list = _get_entitas_bisnis_dropdown_options()
             return render(request, 'jurnal/manual_jurnal.html', {
                 'today': tanggal or timezone.now().date(),
                 'eb_list': eb_list,
                 'errors': errors,
                 'posted': True,
+                'selected_entitas_bisnis': eb_selection,
             })
 
         nomor = _next_nomor_transaksi('TRX-MAN')
@@ -448,7 +504,7 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
         dj_messages.success(request, f'Jurnal manual {nomor} berhasil dibuat.')
         return redirect('jurnal:header_detail', pk=header.pk)
 
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+    eb_list = _get_entitas_bisnis_dropdown_options()
     return render(request, 'jurnal/manual_jurnal.html', {
         'today': timezone.now().date(),
         'eb_list': eb_list,

@@ -1,10 +1,11 @@
 """Unit tests for the jurnal app."""
+import json
 from decimal import Decimal
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
+from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 from apps.master_data.models import TipeTransaksi, Akun, AsetLv1, AsetLv2
 from .models import (
     Item, TransactionPrefix,
@@ -169,6 +170,45 @@ class RekapJurnalViewTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse('jurnal:rekap_jurnal'))
         self.assertEqual(response.status_code, 302)
+
+
+class ManualJurnalViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = _create_user()
+        self.client.force_login(self.user)
+        self.tipe_eb = TipeEntitas.objects.create(nama='FnB')
+        self.eb1 = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe_eb)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT Other', tipe_entitas=self.tipe_eb)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb1, nama='Divisi A')
+        self.lv3 = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Unit 1')
+        self.akun = Akun.objects.create(kategori_id='aset', kategori_akun=1, nama='Test Akun')
+
+    def test_manual_jurnal_page_shows_all_entitas_levels(self):
+        response = self.client.get(reverse('jurnal:manual_jurnal'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'PT Test')
+        self.assertContains(response, 'Divisi A')
+        self.assertContains(response, 'Unit 1')
+        self.assertContains(response, f'value="lv1:{self.eb1.pk}"')
+        self.assertContains(response, f'value="lv2:{self.lv2.pk}"')
+        self.assertContains(response, f'value="lv3:{self.lv3.pk}"')
+
+    def test_manual_jurnal_create_with_lv2_selection(self):
+        rows_json = json.dumps([
+            {'akun_id': self.akun.pk, 'debit': 100000, 'kredit': 0},
+            {'akun_id': self.akun.pk, 'debit': 0, 'kredit': 100000},
+        ])
+        response = self.client.post(reverse('jurnal:manual_jurnal'), {
+            'tanggal': '2024-04-01',
+            'uraian_transaksi': 'Pembayaran listrik',
+            'entitas_bisnis': f'lv2:{self.lv2.pk}',
+            'rows_data': rows_json,
+        })
+        self.assertEqual(response.status_code, 302)
+        header = JurnalHeader.objects.latest('pk')
+        self.assertEqual(header.entitas_bisnis, self.eb1)
+        self.assertEqual(header.details.count(), 2)
 
 
 class ItemViewTests(TestCase):
