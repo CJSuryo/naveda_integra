@@ -263,6 +263,32 @@
 (function () {
   'use strict';
 
+  // URL templates using Django's URL reversal (sentinel PK = 0 replaced at runtime)
+  var _URL_SENTINEL = '0';
+  var _urlLv1Update = '{% url "entitas_bisnis:update" 0 %}';
+  var _urlLv2Create = '{% url "entitas_bisnis:lv2_create" 0 %}';
+  var _urlLv2Update = '{% url "entitas_bisnis:lv2_update" 0 0 %}';
+  var _urlLv3Create = '{% url "entitas_bisnis:lv3_create" 0 0 %}';
+  var _urlLv3Update = '{% url "entitas_bisnis:lv3_update" 0 0 0 %}';
+
+  function buildUrl1(template, pk) {
+    return template.replace('/' + _URL_SENTINEL + '/', '/' + pk + '/');
+  }
+  function buildUrl2(template, pk1, pk2) {
+    var parts = template.split('/' + _URL_SENTINEL + '/');
+    return parts[0] + '/' + pk1 + '/' + parts[1].replace('/' + _URL_SENTINEL + '/', '/' + pk2 + '/');
+  }
+  function buildUrl3(template, pk1, pk2, pk3) {
+    var url = template;
+    var idx = url.indexOf('/' + _URL_SENTINEL + '/');
+    url = url.slice(0, idx) + '/' + pk1 + '/' + url.slice(idx + 3);
+    idx = url.indexOf('/' + _URL_SENTINEL + '/');
+    url = url.slice(0, idx) + '/' + pk2 + '/' + url.slice(idx + 3);
+    idx = url.indexOf('/' + _URL_SENTINEL + '/');
+    url = url.slice(0, idx) + '/' + pk3 + '/' + url.slice(idx + 3);
+    return url;
+  }
+
   var niEB = window.niEB = {
     close: function (id) {
       document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
@@ -290,7 +316,7 @@
     },
     openEditLv1: function (pk, nama, tipeId, relasi, email, telepon, tglBergabung, statusAktif) {
       var form = document.getElementById('formEditLv1');
-      form.action = '/entitas-bisnis/' + pk + '/edit/';
+      form.action = buildUrl1(_urlLv1Update, pk);
       this.clearErr('errEditLv1');
       var set = function (name, val) {
         var el = form.querySelector('[name=' + name + ']');
@@ -309,7 +335,7 @@
     },
     openAddLv2: function (lv1Pk) {
       var form = document.getElementById('formAddLv2');
-      form.action = '/entitas-bisnis/' + lv1Pk + '/lv2/create/';
+      form.action = buildUrl1(_urlLv2Create, lv1Pk);
       form.reset();
       this.clearErr('errAddLv2');
       document.querySelectorAll('#formAddLv2 input[type=date]').forEach(function (el) {
@@ -319,7 +345,7 @@
     },
     openEditLv2: function (lv1Pk, lv2Pk, nama, email, telepon, tglBergabung, statusAktif) {
       var form = document.getElementById('formEditLv2');
-      form.action = '/entitas-bisnis/' + lv1Pk + '/lv2/' + lv2Pk + '/edit/';
+      form.action = buildUrl2(_urlLv2Update, lv1Pk, lv2Pk);
       this.clearErr('errEditLv2');
       var set = function (name, val) {
         var el = form.querySelector('[name=' + name + ']');
@@ -336,7 +362,7 @@
     },
     openAddLv3: function (lv1Pk, lv2Pk) {
       var form = document.getElementById('formAddLv3');
-      form.action = '/entitas-bisnis/' + lv1Pk + '/lv2/' + lv2Pk + '/lv3/create/';
+      form.action = buildUrl2(_urlLv3Create, lv1Pk, lv2Pk);
       form.reset();
       this.clearErr('errAddLv3');
       document.querySelectorAll('#formAddLv3 input[type=date]').forEach(function (el) {
@@ -346,7 +372,7 @@
     },
     openEditLv3: function (lv1Pk, lv2Pk, lv3Pk, nama, email, telepon, tglBergabung, statusAktif) {
       var form = document.getElementById('formEditLv3');
-      form.action = '/entitas-bisnis/' + lv1Pk + '/lv2/' + lv2Pk + '/lv3/' + lv3Pk + '/edit/';
+      form.action = buildUrl3(_urlLv3Update, lv1Pk, lv2Pk, lv3Pk);
       this.clearErr('errEditLv3');
       var set = function (name, val) {
         var el = form.querySelector('[name=' + name + ']');

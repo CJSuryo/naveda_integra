@@ -1,13 +1,17 @@
 """Jurnal views."""
+import json
 from decimal import Decimal
 
+from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
+from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
 
 from .forms import (
@@ -388,10 +392,6 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
 @login_required
 def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
     """Spreadsheet-like direct manual journal entry form."""
-    from apps.entitas_bisnis.models import EntitasBisnis as EBModel
-    from django.utils import timezone
-    import json
-
     if request.method == 'POST':
         tanggal = request.POST.get('tanggal')
         uraian = request.POST.get('uraian_transaksi', '').strip()
@@ -413,9 +413,8 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
         if not rows:
             errors['rows'] = 'Minimal 1 baris akun wajib diisi.'
 
-        from decimal import Decimal as D
-        total_debit = sum(D(str(r.get('debit') or 0)) for r in rows)
-        total_kredit = sum(D(str(r.get('kredit') or 0)) for r in rows)
+        total_debit = sum(Decimal(str(r.get('debit') or 0)) for r in rows)
+        total_kredit = sum(Decimal(str(r.get('kredit') or 0)) for r in rows)
 
         if not errors and total_debit != total_kredit:
             errors['balance'] = f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'
@@ -446,12 +445,10 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
             )
             for row in rows
         ])
-        from django.contrib import messages as dj_messages
         dj_messages.success(request, f'Jurnal manual {nomor} berhasil dibuat.')
         return redirect('jurnal:header_detail', pk=header.pk)
 
     eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
-    from django.utils import timezone
     return render(request, 'jurnal/manual_jurnal.html', {
         'today': timezone.now().date(),
         'eb_list': eb_list,
