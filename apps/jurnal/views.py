@@ -1,13 +1,17 @@
 """Jurnal views."""
+import json
 from decimal import Decimal
 
+from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Max, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 
+from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
 
 from .forms import (
@@ -370,6 +374,83 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
 def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     """Return Akun options matching a search term, for autocomplete widgets."""
     term = request.GET.get('term', '')
-    akuns = Akun.objects.filter(nama__icontains=term).order_by('kategori_id', 'kategori_akun')[:20]
-    results = [{'id': a.pk, 'text': f'{a.kode_akun} - {a.nama}'} for a in akuns]
+    akuns = Akun.objects.filter(
+        nama__icontains=term
+    ).order_by('kategori_id', 'kategori_akun')[:20]
+    results = [
+        {
+            'id': a.pk,
+            'text': f'{a.kode_akun} - {a.nama}',
+            'kode': a.kode_akun,
+            'nama': a.nama,
+        }
+        for a in akuns
+    ]
     return JsonResponse(results, safe=False)
+
+
+@login_required
+def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
+    """Spreadsheet-like direct manual journal entry form."""
+    if request.method == 'POST':
+        tanggal = request.POST.get('tanggal')
+        uraian = request.POST.get('uraian_transaksi', '').strip()
+        eb_id = request.POST.get('entitas_bisnis') or None
+        rows_json = request.POST.get('rows_data', '[]')
+
+        errors = {}
+        if not tanggal:
+            errors['tanggal'] = 'Tanggal wajib diisi.'
+        if not uraian:
+            errors['uraian_transaksi'] = 'Deskripsi wajib diisi.'
+
+        try:
+            rows = json.loads(rows_json)
+        except (ValueError, TypeError):
+            rows = []
+
+        rows = [r for r in rows if r.get('akun_id')]
+        if not rows:
+            errors['rows'] = 'Minimal 1 baris akun wajib diisi.'
+
+        total_debit = sum(Decimal(str(r.get('debit') or 0)) for r in rows)
+        total_kredit = sum(Decimal(str(r.get('kredit') or 0)) for r in rows)
+
+        if not errors and total_debit != total_kredit:
+            errors['balance'] = f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'
+
+        if errors:
+            eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+            return render(request, 'jurnal/manual_jurnal.html', {
+                'today': tanggal or timezone.now().date(),
+                'eb_list': eb_list,
+                'errors': errors,
+                'posted': True,
+            })
+
+        nomor = _next_nomor_transaksi('TRX-MAN')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=uraian,
+            entitas_bisnis_id=eb_id,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun_id=row['akun_id'],
+                debit=Decimal(str(row.get('debit') or 0)),
+                kredit=Decimal(str(row.get('kredit') or 0)),
+            )
+            for row in rows
+        ])
+        dj_messages.success(request, f'Jurnal manual {nomor} berhasil dibuat.')
+        return redirect('jurnal:header_detail', pk=header.pk)
+
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+    return render(request, 'jurnal/manual_jurnal.html', {
+        'today': timezone.now().date(),
+        'eb_list': eb_list,
+        'errors': {},
+    })

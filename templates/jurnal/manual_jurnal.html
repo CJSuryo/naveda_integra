@@ -1,0 +1,225 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Jurnal Manual{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<style>
+  .ni-jm-table { width: 100%; border-collapse: collapse; }
+  .ni-jm-table th { background: var(--ni-bg); font-size: 0.8rem; color: var(--ni-text-muted); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); }
+  .ni-jm-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+  .ni-jm-table tr:last-child td { border-bottom: none; }
+  .ni-jm-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
+  .ni-jm-input:focus { outline: none; border-color: var(--ni-primary); }
+  .ts-wrapper.single .ts-control { border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ni-jm-balance { font-weight: 600; font-size: 0.9rem; }
+  .ni-jm-balanced { color: var(--ni-success); }
+  .ni-jm-unbalanced { color: var(--ni-danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Jurnal Manual</h1>
+    <p class="ni-page-header__subtitle">Buat entri jurnal secara langsung</p>
+  </div>
+</div>
+
+{% if errors %}
+<div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+  <ul style="margin:0;padding-left:16px;">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form id="jmForm" method="post">
+      {% csrf_token %}
+      <!-- Header fields -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" name="tanggal" id="jmTanggal" class="ni-input" value="{{ today }}" required>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">ID Transaksi</label>
+          <input type="text" class="ni-input" value="TRX-MAN-###" readonly style="opacity:0.6;cursor:default;">
+          <small style="color:var(--ni-text-muted);">Auto-generated saat disimpan</small>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select name="entitas_bisnis" class="ni-input">
+            <option value="">— Pilih Entitas —</option>
+            {% for eb in eb_list %}
+            <option value="{{ eb.pk }}">{{ eb.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:20px;">
+        <label class="ni-form-label">Deskripsi <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" name="uraian_transaksi" class="ni-input" placeholder="Contoh: Pembayaran tagihan listrik bulan Januari" required>
+      </div>
+
+      <!-- Rows table -->
+      <div class="ni-table-wrapper" style="margin-bottom:12px;">
+        <table class="ni-jm-table">
+          <thead>
+            <tr>
+              <th style="width:30%">Kode Akun</th>
+              <th style="width:25%">Nama Akun</th>
+              <th style="width:18%">Debit (Rp)</th>
+              <th style="width:18%">Kredit (Rp)</th>
+              <th style="width:9%"></th>
+            </tr>
+          </thead>
+          <tbody id="jmRows">
+            <!-- rows inserted by JS -->
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="jmAddRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+      </button>
+
+      <!-- Totals -->
+      <div style="margin-top:20px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;">
+        <span>Total Debit: <strong id="jmTotalDebit" class="ni-jm-balance">0</strong></span>
+        <span>Total Kredit: <strong id="jmTotalKredit" class="ni-jm-balance">0</strong></span>
+        <span id="jmBalanceStatus" class="ni-jm-balance ni-jm-unbalanced">Tidak Seimbang</span>
+      </div>
+
+      <input type="hidden" name="rows_data" id="jmRowsData">
+
+      <div class="ni-btn-row" style="margin-top:20px;">
+        <button type="submit" class="ni-btn ni-btn--primary" id="jmSubmit" disabled>
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Jurnal
+        </button>
+        <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var rowCount = 0;
+  var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+
+  function formatNum(n) {
+    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+  }
+
+  function parseNum(s) {
+    return parseFloat(String(s).replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
+  }
+
+  window.jmAddRow = function () {
+    rowCount++;
+    var id = 'row_' + rowCount;
+    var tbody = document.getElementById('jmRows');
+    var tr = document.createElement('tr');
+    tr.id = id;
+    tr.innerHTML =
+      '<td><select id="akun_sel_' + rowCount + '" name="akun_sel_' + rowCount + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select></td>' +
+      '<td><input type="text" id="akun_nama_' + rowCount + '" class="ni-jm-input" readonly placeholder="Nama akun" style="background:var(--ni-bg);"></td>' +
+      '<td><input type="number" id="debit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="jmUpdateTotals()"></td>' +
+      '<td><input type="number" id="kredit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="jmUpdateTotals()"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="jmRemoveRow(\'' + id + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    // Init TomSelect for the akun select
+    var ts = new TomSelect('#akun_sel_' + rowCount, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      placeholder: 'Ketik kode/nama akun...',
+      load: function (query, callback) {
+        if (!query || query.length < 2) return callback();
+        fetch(autocompleteUrl + '?term=' + encodeURIComponent(query))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        if (!val) {
+          document.getElementById('akun_nama_' + rowCount).value = '';
+          return;
+        }
+        var opt = this.options[val];
+        if (opt) {
+          document.getElementById('akun_nama_' + rowCount).value = opt.nama || opt.text;
+        }
+        jmUpdateTotals();
+      },
+      create: false,
+    });
+
+    lucide.createIcons();
+    jmUpdateTotals();
+  };
+
+  window.jmRemoveRow = function (id) {
+    var tr = document.getElementById(id);
+    if (tr) tr.remove();
+    jmUpdateTotals();
+  };
+
+  window.jmUpdateTotals = function () {
+    var rows = document.querySelectorAll('#jmRows tr');
+    var totalD = 0, totalK = 0;
+    rows.forEach(function (tr) {
+      var dInp = tr.querySelector('input[id^="debit_"]');
+      var kInp = tr.querySelector('input[id^="kredit_"]');
+      if (dInp) totalD += parseFloat(dInp.value || 0);
+      if (kInp) totalK += parseFloat(kInp.value || 0);
+    });
+    document.getElementById('jmTotalDebit').textContent = formatNum(totalD);
+    document.getElementById('jmTotalKredit').textContent = formatNum(totalK);
+    var balanced = Math.abs(totalD - totalK) < 0.01 && totalD > 0;
+    var statusEl = document.getElementById('jmBalanceStatus');
+    var submitBtn = document.getElementById('jmSubmit');
+    if (balanced) {
+      statusEl.textContent = 'Seimbang ✓';
+      statusEl.className = 'ni-jm-balance ni-jm-balanced';
+      submitBtn.disabled = false;
+    } else {
+      statusEl.textContent = 'Tidak Seimbang';
+      statusEl.className = 'ni-jm-balance ni-jm-unbalanced';
+      submitBtn.disabled = true;
+    }
+  };
+
+  // Serialize rows to JSON before submit
+  document.getElementById('jmForm').addEventListener('submit', function () {
+    var rows = document.querySelectorAll('#jmRows tr');
+    var data = [];
+    rows.forEach(function (tr) {
+      var selEl = tr.querySelector('select');
+      var dInp = tr.querySelector('input[id^="debit_"]');
+      var kInp = tr.querySelector('input[id^="kredit_"]');
+      if (!selEl || !selEl.value) return;
+      data.push({
+        akun_id: selEl.value,
+        debit: parseFloat(dInp ? dInp.value : 0) || 0,
+        kredit: parseFloat(kInp ? kInp.value : 0) || 0,
+      });
+    });
+    document.getElementById('jmRowsData').value = JSON.stringify(data);
+  });
+
+  // Add 2 default rows on load
+  jmAddRow();
+  jmAddRow();
+})();
+</script>
+{% endblock %}

@@ -16,9 +16,11 @@
       <strong style="font-size:1.1rem;">{{ category.prefix }}. {{ category.name }}</strong>
       <span class="ni-badge ni-badge--secondary" style="margin-left:8px;">{{ category.items|length }} sub-kategori</span>
       <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
-        <a href="{% url category.lv1_create %}" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah {{ category.name }} Level 1" style="padding:4px 8px;">
+        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah {{ category.name }} Level 1"
+          onclick="niCoa.openAddLv1('{% url category.lv1_create %}', '{{ category.name }}')"
+          style="padding:4px 8px;">
           <i data-lucide="plus" style="width:14px;height:14px"></i>
-        </a>
+        </button>
       </div>
     </div>
     <div class="ni-coa-children" style="display:none;margin-left:24px;margin-top:8px;">
@@ -29,15 +31,21 @@
           <span style="font-weight:600;">{{ lv1.kode }} - {{ lv1.nama }}</span>
           <span class="ni-badge ni-badge--secondary" style="font-size:0.75rem;">{{ lv1.children.count }} akun</span>
           <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
-            <a href="{% url category.lv2_create lv1.pk %}" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Akun Level 2" style="padding:4px 8px;">
+            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Akun Level 2"
+              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}')"
+              style="padding:4px 8px;">
               <i data-lucide="plus" style="width:14px;height:14px"></i>
-            </a>
-            <a href="{% url category.lv1_update lv1.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
+            </button>
+            <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
+              onclick="niCoa.openEditLv1('{% url category.lv1_update lv1.pk %}', '{{ lv1.kode }}', '{{ lv1.nama|escapejs }}')"
+              style="padding:4px 8px;">
               <i data-lucide="pencil" style="width:14px;height:14px"></i>
-            </a>
-            <a href="{% url category.lv1_delete lv1.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:4px 8px;">
+            </button>
+            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
+              onclick="niCoa.openDeleteLv1('{% url category.lv1_delete lv1.pk %}', '{{ lv1.kode }} - {{ lv1.nama|escapejs }}')"
+              style="padding:4px 8px;">
               <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-            </a>
+            </button>
           </div>
         </div>
         <div class="ni-coa-lv2-list" style="display:none;margin-left:24px;">
@@ -45,12 +53,16 @@
           <div style="padding:4px 0;color:var(--ni-text-muted);display:flex;align-items:center;gap:8px;">
             <span>{{ lv2.kode }} - {{ lv2.nama }}</span>
             <div style="margin-left:auto;display:flex;gap:4px;">
-              <a href="{% url category.lv2_update lv1.pk lv2.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
+              <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
+                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}')"
+                style="padding:4px 8px;">
                 <i data-lucide="pencil" style="width:14px;height:14px"></i>
-              </a>
-              <a href="{% url category.lv2_delete lv1.pk lv2.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:4px 8px;">
+              </button>
+              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
+                onclick="niCoa.openDeleteLv2('{% url category.lv2_delete lv1.pk lv2.pk %}', '{{ lv2.kode }} - {{ lv2.nama|escapejs }}')"
+                style="padding:4px 8px;">
                 <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-              </a>
+              </button>
             </div>
           </div>
           {% empty %}
@@ -65,12 +77,248 @@
   </div>
 </div>
 {% endfor %}
+
+<!-- ── Modal: Add Lv1 ──────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalAddLv1">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" id="coaAddLv1Title">Tambah Level 1</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalAddLv1')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaErrAddLv1" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <form id="coaFormAddLv1" method="post" action="">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kode <span style="color:var(--ni-text-muted);font-size:0.8rem;">(opsional, auto-generate jika kosong)</span></label>
+          <input type="text" name="kode" class="ni-input" placeholder="Contoh: 1.3">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
+          <input type="text" name="nama" class="ni-input" required>
+        </div>
+      </form>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalAddLv1')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="niCoa.submitAjax('coaFormAddLv1', 'coaErrAddLv1')">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Edit Lv1 ─────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalEditLv1">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Edit Level 1</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalEditLv1')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaErrEditLv1" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <form id="coaFormEditLv1" method="post" action="">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kode</label>
+          <input type="text" name="kode" class="ni-input" id="coaEditLv1Kode">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
+          <input type="text" name="nama" class="ni-input" id="coaEditLv1Nama" required>
+        </div>
+      </form>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalEditLv1')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="niCoa.submitAjax('coaFormEditLv1', 'coaErrEditLv1')">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Delete Lv1 ───────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalDeleteLv1">
+  <div class="ni-modal ni-modal--sm ni-modal--danger">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Hapus Sub-Kategori</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalDeleteLv1')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-modal__icon"><i data-lucide="trash-2"></i></div>
+      <p>Hapus <strong id="coaDeleteLv1Label"></strong>? Semua akun di bawahnya juga akan terhapus.</p>
+    </div>
+    <div class="ni-modal__footer">
+      <form id="coaFormDeleteLv1" method="post" action="">{% csrf_token %}
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalDeleteLv1')">Batal</button>
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Add Lv2 ──────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalAddLv2">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" id="coaAddLv2Title">Tambah Akun Level 2</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalAddLv2')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaErrAddLv2" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <form id="coaFormAddLv2" method="post" action="">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kode <span style="color:var(--ni-text-muted);font-size:0.8rem;">(opsional)</span></label>
+          <input type="text" name="kode" class="ni-input" placeholder="Auto-generate jika kosong">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
+          <input type="text" name="nama" class="ni-input" required>
+        </div>
+      </form>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalAddLv2')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="niCoa.submitAjax('coaFormAddLv2', 'coaErrAddLv2')">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Edit Lv2 ─────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalEditLv2">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Edit Akun Level 2</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalEditLv2')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaErrEditLv2" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <form id="coaFormEditLv2" method="post" action="">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kode</label>
+          <input type="text" name="kode" class="ni-input" id="coaEditLv2Kode">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
+          <input type="text" name="nama" class="ni-input" id="coaEditLv2Nama" required>
+        </div>
+      </form>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalEditLv2')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="niCoa.submitAjax('coaFormEditLv2', 'coaErrEditLv2')">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Delete Lv2 ───────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalDeleteLv2">
+  <div class="ni-modal ni-modal--sm ni-modal--danger">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Hapus Akun</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalDeleteLv2')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-modal__icon"><i data-lucide="trash-2"></i></div>
+      <p>Hapus akun <strong id="coaDeleteLv2Label"></strong>?</p>
+    </div>
+    <div class="ni-modal__footer">
+      <form id="coaFormDeleteLv2" method="post" action="">{% csrf_token %}
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalDeleteLv2')">Batal</button>
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-(function() {
+(function () {
   'use strict';
+
+  var niCoa = window.niCoa = {
+    close: function (id) {
+      document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
+    },
+    open: function (id) {
+      document.getElementById(id).classList.add('ni-modal-backdrop--visible');
+      lucide.createIcons();
+    },
+    clearErr: function (errId) {
+      var el = document.getElementById(errId);
+      if (el) { el.style.display = 'none'; el.textContent = ''; }
+    },
+    showErr: function (errId, msg) {
+      var el = document.getElementById(errId);
+      if (el) { el.style.display = 'block'; el.textContent = msg; }
+    },
+    openAddLv1: function (url, catName) {
+      var form = document.getElementById('coaFormAddLv1');
+      form.action = url;
+      form.reset();
+      document.getElementById('coaAddLv1Title').textContent = 'Tambah ' + catName + ' Level 1';
+      this.clearErr('coaErrAddLv1');
+      this.open('coaModalAddLv1');
+    },
+    openEditLv1: function (url, kode, nama) {
+      var form = document.getElementById('coaFormEditLv1');
+      form.action = url;
+      document.getElementById('coaEditLv1Kode').value = kode;
+      document.getElementById('coaEditLv1Nama').value = nama;
+      this.clearErr('coaErrEditLv1');
+      this.open('coaModalEditLv1');
+    },
+    openDeleteLv1: function (url, label) {
+      document.getElementById('coaFormDeleteLv1').action = url;
+      document.getElementById('coaDeleteLv1Label').textContent = label;
+      this.open('coaModalDeleteLv1');
+    },
+    openAddLv2: function (url, catName) {
+      var form = document.getElementById('coaFormAddLv2');
+      form.action = url;
+      form.reset();
+      document.getElementById('coaAddLv2Title').textContent = 'Tambah Akun ' + catName + ' Level 2';
+      this.clearErr('coaErrAddLv2');
+      this.open('coaModalAddLv2');
+    },
+    openEditLv2: function (url, kode, nama) {
+      var form = document.getElementById('coaFormEditLv2');
+      form.action = url;
+      document.getElementById('coaEditLv2Kode').value = kode;
+      document.getElementById('coaEditLv2Nama').value = nama;
+      this.clearErr('coaErrEditLv2');
+      this.open('coaModalEditLv2');
+    },
+    openDeleteLv2: function (url, label) {
+      document.getElementById('coaFormDeleteLv2').action = url;
+      document.getElementById('coaDeleteLv2Label').textContent = label;
+      this.open('coaModalDeleteLv2');
+    },
+    submitAjax: function (formId, errId) {
+      var form = document.getElementById(formId);
+      var data = new FormData(form);
+      this.clearErr(errId);
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: data,
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+          if (json.success) {
+            window.location.reload();
+          } else {
+            var msgs = [];
+            for (var k in json.errors) { msgs.push(k + ': ' + json.errors[k].join(' ')); }
+            niCoa.showErr(errId, msgs.join(' | '));
+          }
+        })
+        .catch(function () {
+          niCoa.showErr(errId, 'Terjadi kesalahan. Silakan coba lagi.');
+        });
+    },
+  };
+
   function toggleCollapsible(el) {
     var children = el.nextElementSibling;
     var arrow = el.querySelector('.ni-coa-arrow');
@@ -82,8 +330,17 @@
       arrow.style.transform = '';
     }
   }
-  document.querySelectorAll('[data-toggle="coa-category"], [data-toggle="coa-lv1"]').forEach(function(el) {
-    el.addEventListener('click', function() { toggleCollapsible(this); });
+  document.querySelectorAll('[data-toggle="coa-category"], [data-toggle="coa-lv1"]').forEach(function (el) {
+    el.addEventListener('click', function () { toggleCollapsible(this); });
+  });
+
+  // Close on backdrop click
+  document.querySelectorAll('.ni-modal-backdrop').forEach(function (backdrop) {
+    backdrop.addEventListener('click', function (e) {
+      if (e.target === backdrop) {
+        backdrop.classList.remove('ni-modal-backdrop--visible');
+      }
+    });
   });
 })();
 </script>

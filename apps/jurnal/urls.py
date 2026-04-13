@@ -30,6 +30,9 @@ urlpatterns = [
     # Neraca Saldo (Trial Balance)
     path('neraca-saldo/', views.neraca_saldo, name='neraca_saldo'),
 
+    # Manual Jurnal (direct spreadsheet-style entry)
+    path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
+
     # API
     path('api/akun-autocomplete/', views.akun_autocomplete, name='akun_autocomplete'),
 ]
