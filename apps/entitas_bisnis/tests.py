@@ -3,7 +3,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 
-from .models import TipeEntitas, EntitasBisnis, CabangEntitasBisnis
+from .models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 User = get_user_model()
 
@@ -52,24 +52,48 @@ class EntitasBisnisModelTests(TestCase):
             self.tipe.delete()
 
 
-class CabangEntitasBisnisModelTests(TestCase):
+class EntitasBisnisLv2ModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='Hotel')
         self.eb = EntitasBisnis.objects.create(nama='PT Hotel Mewah', tipe_entitas=self.tipe)
 
-    def test_create_cabang(self):
-        cab = CabangEntitasBisnis.objects.create(
-            entitas_bisnis=self.eb, nama='Cabang Jakarta',
+    def test_create_lv2(self):
+        lv2 = EntitasBisnisLv2.objects.create(
+            entitas_bisnis=self.eb, nama='Divisi Jakarta',
         )
-        self.assertIn('Cabang Jakarta', str(cab))
-        self.assertIn('PT Hotel Mewah', str(cab))
-        self.assertTrue(cab.status_aktif)
+        self.assertIn('Divisi Jakarta', str(lv2))
+        self.assertIn('PT Hotel Mewah', str(lv2))
+        self.assertTrue(lv2.status_aktif)
 
     def test_cascade_delete(self):
-        CabangEntitasBisnis.objects.create(entitas_bisnis=self.eb, nama='Cabang A')
-        CabangEntitasBisnis.objects.create(entitas_bisnis=self.eb, nama='Cabang B')
+        EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Lv2 A')
+        EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Lv2 B')
         self.eb.delete()
-        self.assertEqual(CabangEntitasBisnis.objects.count(), 0)
+        self.assertEqual(EntitasBisnisLv2.objects.count(), 0)
+
+
+class EntitasBisnisLv3ModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='Hotel')
+        self.eb = EntitasBisnis.objects.create(nama='PT Hotel', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Divisi A')
+
+    def test_create_lv3(self):
+        lv3 = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Unit 1')
+        self.assertIn('Unit 1', str(lv3))
+        self.assertIn('Divisi A', str(lv3))
+        self.assertTrue(lv3.status_aktif)
+
+    def test_cascade_delete_from_lv2(self):
+        EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Unit A')
+        EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Unit B')
+        self.lv2.delete()
+        self.assertEqual(EntitasBisnisLv3.objects.count(), 0)
+
+    def test_cascade_delete_from_lv1(self):
+        EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Unit X')
+        self.eb.delete()
+        self.assertEqual(EntitasBisnisLv3.objects.count(), 0)
 
 
 class TipeEntitasViewTests(TestCase):
@@ -161,36 +185,86 @@ class EntitasBisnisViewTests(TestCase):
         self.assertIn('/accounts/login/', response['Location'])
 
 
-class CabangEntitasBisnisViewTests(TestCase):
+class EntitasBisnisLv2ViewTests(TestCase):
     def setUp(self):
         self.client = Client()
-        self.user = User.objects.create_user(email='cab@test.com', password='pass', name='Cab User')
+        self.user = User.objects.create_user(email='lv2@test.com', password='pass', name='Lv2 User')
         self.client.force_login(self.user)
         self.tipe = TipeEntitas.objects.create(nama='FnB')
         self.eb = EntitasBisnis.objects.create(nama='PT Parent', tipe_entitas=self.tipe)
 
-    def test_create_cabang(self):
-        data = {'nama': 'Cabang A', 'status_aktif': True}
-        response = self.client.post(reverse('entitas_bisnis:cabang_create', args=[self.eb.pk]), data)
+    def test_create_lv2(self):
+        data = {'nama': 'Divisi A', 'status_aktif': True}
+        response = self.client.post(reverse('entitas_bisnis:lv2_create', args=[self.eb.pk]), data)
         self.assertRedirects(response, reverse('entitas_bisnis:detail', args=[self.eb.pk]))
-        self.assertTrue(CabangEntitasBisnis.objects.filter(nama='Cabang A').exists())
+        self.assertTrue(EntitasBisnisLv2.objects.filter(nama='Divisi A').exists())
 
-    def test_update_cabang(self):
-        cab = CabangEntitasBisnis.objects.create(entitas_bisnis=self.eb, nama='Old')
+    def test_update_lv2(self):
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Old')
         data = {'nama': 'Updated', 'status_aktif': True}
-        response = self.client.post(reverse('entitas_bisnis:cabang_update', args=[self.eb.pk, cab.pk]), data)
+        response = self.client.post(reverse('entitas_bisnis:lv2_update', args=[self.eb.pk, lv2.pk]), data)
         self.assertRedirects(response, reverse('entitas_bisnis:detail', args=[self.eb.pk]))
-        cab.refresh_from_db()
-        self.assertEqual(cab.nama, 'Updated')
+        lv2.refresh_from_db()
+        self.assertEqual(lv2.nama, 'Updated')
 
-    def test_delete_cabang(self):
-        cab = CabangEntitasBisnis.objects.create(entitas_bisnis=self.eb, nama='ToDelete')
-        response = self.client.post(reverse('entitas_bisnis:cabang_delete', args=[self.eb.pk, cab.pk]))
+    def test_delete_lv2(self):
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='ToDelete')
+        response = self.client.post(reverse('entitas_bisnis:lv2_delete', args=[self.eb.pk, lv2.pk]))
         self.assertRedirects(response, reverse('entitas_bisnis:detail', args=[self.eb.pk]))
-        self.assertFalse(CabangEntitasBisnis.objects.filter(pk=cab.pk).exists())
+        self.assertFalse(EntitasBisnisLv2.objects.filter(pk=lv2.pk).exists())
 
-    def test_cabang_requires_login(self):
+    def test_lv2_detail(self):
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Detail Test')
+        response = self.client.get(reverse('entitas_bisnis:lv2_detail', args=[self.eb.pk, lv2.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Detail Test')
+
+    def test_lv2_requires_login(self):
         self.client.logout()
-        response = self.client.get(reverse('entitas_bisnis:cabang_create', args=[self.eb.pk]))
+        response = self.client.get(reverse('entitas_bisnis:lv2_create', args=[self.eb.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/accounts/login/', response['Location'])
+
+
+class EntitasBisnisLv3ViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='lv3@test.com', password='pass', name='Lv3 User')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='PT Parent', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Divisi A')
+
+    def test_create_lv3(self):
+        data = {'nama': 'Unit 1', 'status_aktif': True}
+        response = self.client.post(
+            reverse('entitas_bisnis:lv3_create', args=[self.eb.pk, self.lv2.pk]), data
+        )
+        self.assertRedirects(response, reverse('entitas_bisnis:lv2_detail', args=[self.eb.pk, self.lv2.pk]))
+        self.assertTrue(EntitasBisnisLv3.objects.filter(nama='Unit 1').exists())
+
+    def test_update_lv3(self):
+        lv3 = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Old')
+        data = {'nama': 'Updated', 'status_aktif': True}
+        response = self.client.post(
+            reverse('entitas_bisnis:lv3_update', args=[self.eb.pk, self.lv2.pk, lv3.pk]), data
+        )
+        self.assertRedirects(response, reverse('entitas_bisnis:lv2_detail', args=[self.eb.pk, self.lv2.pk]))
+        lv3.refresh_from_db()
+        self.assertEqual(lv3.nama, 'Updated')
+
+    def test_delete_lv3(self):
+        lv3 = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='ToDelete')
+        response = self.client.post(
+            reverse('entitas_bisnis:lv3_delete', args=[self.eb.pk, self.lv2.pk, lv3.pk])
+        )
+        self.assertRedirects(response, reverse('entitas_bisnis:lv2_detail', args=[self.eb.pk, self.lv2.pk]))
+        self.assertFalse(EntitasBisnisLv3.objects.filter(pk=lv3.pk).exists())
+
+    def test_lv3_requires_login(self):
+        self.client.logout()
+        response = self.client.get(
+            reverse('entitas_bisnis:lv3_create', args=[self.eb.pk, self.lv2.pk])
+        )
         self.assertEqual(response.status_code, 302)
         self.assertIn('/accounts/login/', response['Location'])

@@ -199,6 +199,7 @@ class ItemViewTests(TestCase):
 
 
 class TransactionPrefixViewTests(TestCase):
+    """TransactionPrefix is now read-only in master_data app."""
     def setUp(self):
         self.client = Client()
         self.user = _create_user()
@@ -206,18 +207,9 @@ class TransactionPrefixViewTests(TestCase):
         self.prefix = TransactionPrefix.objects.create(kode='TRX-INV', nama='Inventory')
 
     def test_list(self):
-        response = self.client.get(reverse('jurnal:prefix_list'))
+        response = self.client.get(reverse('master_data:prefix_list'))
         self.assertEqual(response.status_code, 200)
-
-    def test_create(self):
-        data = {'kode': 'TRX-NEW', 'nama': 'New Prefix'}
-        response = self.client.post(reverse('jurnal:prefix_create'), data)
-        self.assertRedirects(response, reverse('jurnal:prefix_list'))
-
-    def test_update(self):
-        data = {'kode': 'TRX-INV', 'nama': 'Updated'}
-        response = self.client.post(reverse('jurnal:prefix_update', args=[self.prefix.pk]), data)
-        self.assertRedirects(response, reverse('jurnal:prefix_list'))
+        self.assertContains(response, 'TRX-INV')
 
 
 class AutomasiViewTests(TestCase):
