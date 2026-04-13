@@ -22,7 +22,19 @@ def _kode_auto_widgets():
     }
 
 
-class AsetLv1Form(forms.ModelForm):
+class _KodeRenumberMixin:
+    """Exclude 'kode' from unique validation so the view's renumbering logic can handle conflicts."""
+
+    def validate_unique(self):
+        exclude = self._get_validation_exclusions()
+        exclude.add('kode')
+        try:
+            self.instance.validate_unique(exclude=exclude)
+        except forms.ValidationError as e:
+            self._update_errors(e)
+
+
+class AsetLv1Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = AsetLv1
         fields = ('kode', 'nama')
@@ -33,7 +45,7 @@ class AsetLv1Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class AsetLv2Form(forms.ModelForm):
+class AsetLv2Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = AsetLv2
         fields = ('kode', 'nama')
@@ -44,7 +56,7 @@ class AsetLv2Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class KewajibanLv1Form(forms.ModelForm):
+class KewajibanLv1Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = KewajibanLv1
         fields = ('kode', 'nama')
@@ -55,7 +67,7 @@ class KewajibanLv1Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class KewajibanLv2Form(forms.ModelForm):
+class KewajibanLv2Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = KewajibanLv2
         fields = ('kode', 'nama')
@@ -66,7 +78,7 @@ class KewajibanLv2Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class EkuitasLv1Form(forms.ModelForm):
+class EkuitasLv1Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = EkuitasLv1
         fields = ('kode', 'nama')
@@ -77,7 +89,7 @@ class EkuitasLv1Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class EkuitasLv2Form(forms.ModelForm):
+class EkuitasLv2Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = EkuitasLv2
         fields = ('kode', 'nama')
@@ -88,7 +100,7 @@ class EkuitasLv2Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class PendapatanLv1Form(forms.ModelForm):
+class PendapatanLv1Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = PendapatanLv1
         fields = ('kode', 'nama')
@@ -99,7 +111,7 @@ class PendapatanLv1Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class PendapatanLv2Form(forms.ModelForm):
+class PendapatanLv2Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = PendapatanLv2
         fields = ('kode', 'nama')
@@ -110,7 +122,7 @@ class PendapatanLv2Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class BebanLv1Form(forms.ModelForm):
+class BebanLv1Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = BebanLv1
         fields = ('kode', 'nama')
@@ -121,7 +133,7 @@ class BebanLv1Form(forms.ModelForm):
         self.fields['kode'].required = False
 
 
-class BebanLv2Form(forms.ModelForm):
+class BebanLv2Form(_KodeRenumberMixin, forms.ModelForm):
     class Meta:
         model = BebanLv2
         fields = ('kode', 'nama')
