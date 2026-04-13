@@ -114,6 +114,7 @@
   'use strict';
 
   var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var itemCreateUrl = '{% url "purchase:api_item_create" %}';
   var sttOffsetUrl = '{% url "purchase:api_stt_offset" %}';
   var journalPreviewUrl = '{% url "purchase:api_journal_preview" %}';
   var csrfToken = '{{ csrf_token }}';
@@ -274,7 +275,31 @@
           document.getElementById(rid + '_coa').dataset.id = opt.coa_account_id;
         }
       },
-      create: false,
+      create: function (input, callback) {
+        fetch(itemCreateUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ nama: input }),
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.error) { callback(); return; }
+          callback({ id: data.id, text: data.text, coa_account_id: data.coa_account_id, coa_account_text: data.coa_account_text });
+        })
+        .catch(function () { callback(); });
+      },
+      createFilter: function (input) {
+        // Only show "Add" option when input is non-empty
+        return input.trim().length > 0;
+      },
+      shouldLoad: function (query) {
+        return query.length >= 1;
+      },
+      render: {
+        option_create: function (data, escape) {
+          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong> <small style="color:var(--ni-text-muted)">(tipe: RM — bisa diubah nanti)</small></div>';
+        },
+      },
     });
 
     // Pre-select item if editing

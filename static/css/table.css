@@ -10,6 +10,7 @@
   border-radius: var(--ni-radius);
   border: 1px solid var(--ni-border);
   background: var(--ni-bg-card);
+  min-height: 200px;
 }
 
 /* ---------- Base table ---------- */

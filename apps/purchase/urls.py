@@ -32,6 +32,7 @@ urlpatterns = [
 
     # API endpoints
     path('api/item-autocomplete/', views.api_item_autocomplete, name='api_item_autocomplete'),
+    path('api/item-create/', views.api_item_create, name='api_item_create'),
     path('api/stt-offset/', views.api_stt_offset, name='api_stt_offset'),
     path('api/journal-preview/', views.journal_preview, name='api_journal_preview'),
 ]

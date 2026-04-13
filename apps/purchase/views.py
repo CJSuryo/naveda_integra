@@ -398,6 +398,59 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+def api_item_create(request: HttpRequest) -> JsonResponse:
+    """Create a new ItemMasterPurchase inline from the purchase form autocomplete.
+
+    Accepts POST with JSON body: {"nama": "<item name>", "tipe_item": "<RM|FG|ITM>"}.
+    Creates the item with default tipe_item='RM' and returns the new item's data.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    nama = (data.get('nama') or '').strip()
+    if not nama:
+        return JsonResponse({'error': 'nama wajib diisi'}, status=400)
+
+    # Prevent duplicates — return existing item instead of error
+    existing = ItemMasterPurchase.objects.filter(nama__iexact=nama).select_related('coa_account').first()
+    if existing:
+        return JsonResponse({
+            'id': existing.pk,
+            'text': str(existing),
+            'item_id': existing.item_id,
+            'nama': existing.nama,
+            'tipe_item': existing.tipe_item,
+            'coa_account_id': existing.coa_account_id or '',
+            'coa_account_text': str(existing.coa_account) if existing.coa_account else '',
+            'created': False,
+        })
+
+    tipe_item = data.get('tipe_item', 'RM')
+    if tipe_item not in ('RM', 'FG', 'ITM'):
+        tipe_item = 'RM'
+
+    item = ItemMasterPurchase.objects.create(
+        nama=nama,
+        tipe_item=tipe_item,
+    )
+    return JsonResponse({
+        'id': item.pk,
+        'text': str(item),
+        'item_id': item.item_id,
+        'nama': item.nama,
+        'tipe_item': item.tipe_item,
+        'coa_account_id': '',
+        'coa_account_text': '',
+        'created': True,
+    }, status=201)
+
+
+@login_required
 def api_stt_offset(request: HttpRequest) -> JsonResponse:
     """Return default offset account for a sub-transaction type."""
     stt_id = request.GET.get('stt_id', '')

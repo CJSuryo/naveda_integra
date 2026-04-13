@@ -397,6 +397,38 @@ class PurchaseViewTests(TestCase):
         data = resp.json()
         self.assertGreaterEqual(len(data), 1)
 
+    def test_api_item_create_new(self):
+        resp = self.client.post(
+            reverse('purchase:api_item_create'),
+            json.dumps({'nama': 'Bahan Baru Sekali'}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 201)
+        data = resp.json()
+        self.assertTrue(data['created'])
+        self.assertEqual(data['nama'], 'Bahan Baru Sekali')
+        self.assertEqual(data['tipe_item'], 'RM')
+        self.assertTrue(ItemMasterPurchase.objects.filter(nama='Bahan Baru Sekali').exists())
+
+    def test_api_item_create_duplicate_returns_existing(self):
+        resp = self.client.post(
+            reverse('purchase:api_item_create'),
+            json.dumps({'nama': 'Kopi Arabica'}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertFalse(data['created'])
+        self.assertEqual(data['id'], self.item.pk)
+
+    def test_api_item_create_missing_nama(self):
+        resp = self.client.post(
+            reverse('purchase:api_item_create'),
+            json.dumps({'nama': ''}),
+            content_type='application/json',
+        )
+        self.assertEqual(resp.status_code, 400)
+
     def test_api_stt_offset(self):
         resp = self.client.get(reverse('purchase:api_stt_offset'), {'stt_id': self.stt.pk})
         self.assertEqual(resp.status_code, 200)
