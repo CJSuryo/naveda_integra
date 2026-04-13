@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Kategori Item{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Kategori Item</h1>
+    <p class="ni-page-header__subtitle">Manajemen kategori untuk item master</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'purchase:kategori_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
+    </a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama Kategori</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obj in object_list %}
+        <tr>
+          <td>{{ obj.nama }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'purchase:kategori_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'purchase:kategori_delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="2" class="ni-text-center ni-text-muted">Belum ada kategori.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -106,6 +106,28 @@
 
       <span class="ni-nav-label">Jurnal</span>
 
+      <div class="ni-nav-item {% if 'purchase' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Purchase</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'purchase:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Purchase</span>
+          </a>
+          <a href="{% url 'purchase:item_master_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Item Master</span>
+          </a>
+          <a href="{% url 'purchase:kategori_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Kategori Item</span>
+          </a>
+          <a href="{% url 'purchase:settings_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Settings</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'jurnal' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="book-open" class="ni-nav-link__icon"></i>

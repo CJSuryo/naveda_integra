@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     'apps.sales',
     'apps.piutang',
     'apps.inventory',
+    'apps.purchase',
 ]
 
 MIDDLEWARE = [
