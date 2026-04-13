@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Chart of Accounts{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Chart of Accounts</h1>
+    <p class="ni-page-header__subtitle">Daftar semua akun berdasarkan kategori</p>
+  </div>
+</div>
+
+{% for category in categories %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <div class="ni-coa-category" data-toggle="coa-category" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 0;">
+      <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:20px;height:20px;transition:transform 200ms;"></i>
+      <strong style="font-size:1.1rem;">{{ category.prefix }}. {{ category.name }}</strong>
+      <span class="ni-badge ni-badge--secondary" style="margin-left:auto;">{{ category.items|length }} sub-kategori</span>
+    </div>
+    <div class="ni-coa-children" style="display:none;margin-left:24px;margin-top:8px;">
+      {% for lv1 in category.items %}
+      <div style="margin-bottom:8px;">
+        <div class="ni-coa-lv1" data-toggle="coa-lv1" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:4px 0;">
+          <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:16px;height:16px;transition:transform 200ms;"></i>
+          <span style="font-weight:600;">{{ lv1.kode }} - {{ lv1.nama }}</span>
+          <span class="ni-badge ni-badge--secondary" style="font-size:0.75rem;">{{ lv1.children.count }} akun</span>
+        </div>
+        <div class="ni-coa-lv2-list" style="display:none;margin-left:24px;">
+          {% for lv2 in lv1.children.all %}
+          <div style="padding:4px 0;color:var(--ni-text-muted);">
+            {{ lv2.kode }} - {{ lv2.nama }}
+          </div>
+          {% empty %}
+          <div style="padding:4px 0;color:var(--ni-text-muted);font-style:italic;">Belum ada akun.</div>
+          {% endfor %}
+        </div>
+      </div>
+      {% empty %}
+      <div style="padding:8px 0;color:var(--ni-text-muted);font-style:italic;">Belum ada sub-kategori.</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+  document.querySelectorAll('[data-toggle="coa-category"]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var children = this.nextElementSibling;
+      var arrow = this.querySelector('.ni-coa-arrow');
+      if (children.style.display === 'none') {
+        children.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+      } else {
+        children.style.display = 'none';
+        arrow.style.transform = '';
+      }
+    });
+  });
+  document.querySelectorAll('[data-toggle="coa-lv1"]').forEach(function(el) {
+    el.addEventListener('click', function() {
+      var children = this.nextElementSibling;
+      var arrow = this.querySelector('.ni-coa-arrow');
+      if (children.style.display === 'none') {
+        children.style.display = 'block';
+        arrow.style.transform = 'rotate(90deg)';
+      } else {
+        children.style.display = 'none';
+        arrow.style.transform = '';
+      }
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -35,6 +35,28 @@ urlpatterns = [
     path('ekuitas/<int:lv1_pk>/lv2/create/', views.ekuitas_lv2_create, name='ekuitas_lv2_create'),
     path('ekuitas/<int:lv1_pk>/lv2/<int:pk>/edit/', views.ekuitas_lv2_update, name='ekuitas_lv2_update'),
     path('ekuitas/<int:lv1_pk>/lv2/<int:pk>/delete/', views.ekuitas_lv2_delete, name='ekuitas_lv2_delete'),
+    # Pendapatan Level 1
+    path('pendapatan/', views.pendapatan_lv1_list, name='pendapatan_lv1_list'),
+    path('pendapatan/create/', views.pendapatan_lv1_create, name='pendapatan_lv1_create'),
+    path('pendapatan/<int:pk>/', views.pendapatan_lv1_detail, name='pendapatan_lv1_detail'),
+    path('pendapatan/<int:pk>/edit/', views.pendapatan_lv1_update, name='pendapatan_lv1_update'),
+    path('pendapatan/<int:pk>/delete/', views.pendapatan_lv1_delete, name='pendapatan_lv1_delete'),
+    # Pendapatan Level 2
+    path('pendapatan/<int:lv1_pk>/lv2/create/', views.pendapatan_lv2_create, name='pendapatan_lv2_create'),
+    path('pendapatan/<int:lv1_pk>/lv2/<int:pk>/edit/', views.pendapatan_lv2_update, name='pendapatan_lv2_update'),
+    path('pendapatan/<int:lv1_pk>/lv2/<int:pk>/delete/', views.pendapatan_lv2_delete, name='pendapatan_lv2_delete'),
+    # Beban Level 1
+    path('beban/', views.beban_lv1_list, name='beban_lv1_list'),
+    path('beban/create/', views.beban_lv1_create, name='beban_lv1_create'),
+    path('beban/<int:pk>/', views.beban_lv1_detail, name='beban_lv1_detail'),
+    path('beban/<int:pk>/edit/', views.beban_lv1_update, name='beban_lv1_update'),
+    path('beban/<int:pk>/delete/', views.beban_lv1_delete, name='beban_lv1_delete'),
+    # Beban Level 2
+    path('beban/<int:lv1_pk>/lv2/create/', views.beban_lv2_create, name='beban_lv2_create'),
+    path('beban/<int:lv1_pk>/lv2/<int:pk>/edit/', views.beban_lv2_update, name='beban_lv2_update'),
+    path('beban/<int:lv1_pk>/lv2/<int:pk>/delete/', views.beban_lv2_delete, name='beban_lv2_delete'),
+    # Chart of Accounts
+    path('chart-of-accounts/', views.chart_of_accounts, name='chart_of_accounts'),
     # Tipe Transaksi
     path('tipe-transaksi/', views.tipe_transaksi_list, name='tipe_transaksi_list'),
     path('tipe-transaksi/create/', views.tipe_transaksi_create, name='tipe_transaksi_create'),
