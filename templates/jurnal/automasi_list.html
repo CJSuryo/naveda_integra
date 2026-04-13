@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Automasi Jurnal{% endblock %}
+{% block title %}Jurnal Manual{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Automasi Jurnal</h1>
+    <h1 class="ni-page-header__title">Jurnal Manual</h1>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'jurnal:automasi_create' %}" class="ni-btn ni-btn--success"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Automasi</a>
+    <a href="{% url 'jurnal:automasi_create' %}" class="ni-btn ni-btn--success"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Jurnal Manual</a>
   </div>
 </div>
 <div class="ni-card ni-animate-fade-in">
@@ -29,7 +29,7 @@
               </div>
             </td>
           </tr>
-          {% empty %}<tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada automasi.</td></tr>{% endfor %}
+          {% empty %}<tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada jurnal manual.</td></tr>{% endfor %}
         </tbody>
       </table>
     </div>

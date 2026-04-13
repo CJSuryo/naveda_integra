@@ -1,4 +1,5 @@
 """Unit tests for the jurnal app."""
+from decimal import Decimal
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -123,7 +124,7 @@ class AkunSignalTests(TestCase):
 
 # ── View Tests ────────────────────────────────────────────────────────────────
 
-class JurnalHeaderViewTests(TestCase):
+class RekapJurnalViewTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.user = _create_user()
@@ -139,48 +140,26 @@ class JurnalHeaderViewTests(TestCase):
             transaction_prefix=self.prefix,
         )
 
-    def test_index(self):
-        response = self.client.get(reverse('jurnal:index'))
-        self.assertEqual(response.status_code, 200)
-
-    def test_header_list(self):
-        response = self.client.get(reverse('jurnal:header_list'))
+    def test_rekap_jurnal(self):
+        response = self.client.get(reverse('jurnal:rekap_jurnal'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'TRX-INV-001')
 
-    def test_header_create_get(self):
-        response = self.client.get(reverse('jurnal:header_create'))
+    def test_rekap_jurnal_filter_date(self):
+        response = self.client.get(reverse('jurnal:rekap_jurnal'), {
+            'tanggal_dari': '2024-01-01',
+            'tanggal_sampai': '2024-01-31',
+        })
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'TRX-INV-001')
 
-    def test_header_create_post(self):
-        data = {
-            'tanggal': '2024-02-01',
-            'nomor_transaksi': 'TRX-INV-099',
-            'uraian_transaksi': 'New Header',
-            'item': self.item.pk,
-            'transaction_prefix': self.prefix.pk,
-        }
-        response = self.client.post(reverse('jurnal:header_create'), data)
-        self.assertRedirects(response, reverse('jurnal:header_list'))
-        self.assertTrue(JurnalHeader.objects.filter(nomor_transaksi='TRX-INV-099').exists())
-
-    def test_header_update(self):
-        data = {
-            'tanggal': '2024-01-01',
-            'nomor_transaksi': 'TRX-INV-001',
-            'uraian_transaksi': 'Updated Header',
-            'item': self.item.pk,
-            'transaction_prefix': self.prefix.pk,
-        }
-        response = self.client.post(reverse('jurnal:header_update', args=[self.header.pk]), data)
-        self.assertRedirects(response, reverse('jurnal:header_list'))
-        self.header.refresh_from_db()
-        self.assertEqual(self.header.uraian_transaksi, 'Updated Header')
-
-    def test_header_delete(self):
-        response = self.client.post(reverse('jurnal:header_delete', args=[self.header.pk]))
-        self.assertRedirects(response, reverse('jurnal:header_list'))
-        self.assertFalse(JurnalHeader.objects.filter(pk=self.header.pk).exists())
+    def test_rekap_jurnal_filter_excludes(self):
+        response = self.client.get(reverse('jurnal:rekap_jurnal'), {
+            'tanggal_dari': '2025-01-01',
+            'tanggal_sampai': '2025-12-31',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, 'TRX-INV-001')
 
     def test_header_detail(self):
         response = self.client.get(reverse('jurnal:header_detail', args=[self.header.pk]))
@@ -188,52 +167,8 @@ class JurnalHeaderViewTests(TestCase):
 
     def test_requires_login(self):
         self.client.logout()
-        response = self.client.get(reverse('jurnal:header_list'))
+        response = self.client.get(reverse('jurnal:rekap_jurnal'))
         self.assertEqual(response.status_code, 302)
-
-
-class JurnalDetailViewTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.user = _create_user()
-        self.client.force_login(self.user)
-        self.item = Item.objects.create(kode='A', nama='Persediaan')
-        self.prefix = TransactionPrefix.objects.create(kode='TRX-INV', nama='Inventory')
-        self.header = JurnalHeader.objects.create(
-            tanggal='2024-01-01',
-            nomor_transaksi='TRX-INV-001',
-            uraian_transaksi='Test',
-            item=self.item,
-        )
-        self.akun = Akun.objects.create(kategori_id='aset', kategori_akun=1, nama='Test Akun')
-        self.detail = JurnalDetail.objects.create(
-            jurnal_header=self.header, akun=self.akun, debit=10000, kredit=0
-        )
-
-    def test_detail_create_get(self):
-        response = self.client.get(reverse('jurnal:detail_create', args=[self.header.pk]))
-        self.assertEqual(response.status_code, 200)
-
-    def test_detail_create_post(self):
-        data = {'akun': self.akun.pk, 'debit': '50000', 'kredit': '0'}
-        response = self.client.post(reverse('jurnal:detail_create', args=[self.header.pk]), data)
-        self.assertRedirects(response, reverse('jurnal:header_detail', args=[self.header.pk]))
-
-    def test_detail_update(self):
-        data = {'akun': self.akun.pk, 'debit': '20000', 'kredit': '0'}
-        response = self.client.post(
-            reverse('jurnal:detail_update', args=[self.header.pk, self.detail.pk]), data
-        )
-        self.assertRedirects(response, reverse('jurnal:header_detail', args=[self.header.pk]))
-        self.detail.refresh_from_db()
-        self.assertEqual(self.detail.debit, 20000)
-
-    def test_detail_delete(self):
-        response = self.client.post(
-            reverse('jurnal:detail_delete', args=[self.header.pk, self.detail.pk])
-        )
-        self.assertRedirects(response, reverse('jurnal:header_detail', args=[self.header.pk]))
-        self.assertFalse(JurnalDetail.objects.filter(pk=self.detail.pk).exists())
 
 
 class ItemViewTests(TestCase):
@@ -323,3 +258,46 @@ class AutomasiViewTests(TestCase):
         prefix = TransactionPrefix.objects.create(kode='TRX-INV', nama='Inventory')
         response = self.client.get(reverse('jurnal:automasi_entry', args=[self.automasi.pk]))
         self.assertEqual(response.status_code, 200)
+
+
+class NeracaSaldoViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = _create_user()
+        self.client.force_login(self.user)
+        self.lv1 = AsetLv1.objects.create(kode='1.1', nama='Kas')
+        self.lv2 = AsetLv2.objects.create(kode='1.1.1', nama='Kas Kecil', aset=self.lv1)
+        self.akun = Akun.objects.get(kategori_id='aset', kategori_akun=self.lv2.pk)
+        self.header = JurnalHeader.objects.create(
+            tanggal='2024-06-15',
+            nomor_transaksi='NS-001',
+            uraian_transaksi='Test Neraca',
+        )
+        JurnalDetail.objects.create(
+            jurnal_header=self.header, akun=self.akun, debit=500000, kredit=0
+        )
+
+    def test_neraca_saldo_page(self):
+        response = self.client.get(reverse('jurnal:neraca_saldo'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Kas Kecil')
+
+    def test_neraca_saldo_with_filter(self):
+        response = self.client.get(reverse('jurnal:neraca_saldo'), {
+            'tanggal_dari': '2024-01-01',
+            'tanggal_sampai': '2024-12-31',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '500000')
+
+    def test_neraca_saldo_filter_excludes(self):
+        response = self.client.get(reverse('jurnal:neraca_saldo'), {
+            'tanggal_dari': '2025-01-01',
+            'tanggal_sampai': '2025-12-31',
+        })
+        self.assertEqual(response.status_code, 200)
+
+    def test_requires_login(self):
+        self.client.logout()
+        response = self.client.get(reverse('jurnal:neraca_saldo'))
+        self.assertEqual(response.status_code, 302)

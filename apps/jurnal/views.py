@@ -2,7 +2,8 @@
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Max
+from django.db.models import Max, Sum, Value, DecimalField
+from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -22,117 +23,36 @@ from .models import (
 )
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _annotate_akun_lv2_urls(headers) -> None:
-    """Batch-compute Lv2 detail URLs for all akuns in the given headers.
-
-    Sets ``akun._lv2_url`` on each Akun instance found in the prefetched
-    details, using at most three database queries (one per account category).
-    """
-    aset_lv2_pks: set[int] = set()
-    kewajiban_lv2_pks: set[int] = set()
-    ekuitas_lv2_pks: set[int] = set()
-
-    for header in headers:
-        for detail in header.details.all():
-            akun = detail.akun
-            if not akun.kategori_akun:
-                continue
-            if akun.kategori_id == 'aset':
-                aset_lv2_pks.add(akun.kategori_akun)
-            elif akun.kategori_id == 'kewajiban':
-                kewajiban_lv2_pks.add(akun.kategori_akun)
-            elif akun.kategori_id == 'ekuitas':
-                ekuitas_lv2_pks.add(akun.kategori_akun)
-
-    aset_map: dict[int, int] = (
-        dict(AsetLv2.objects.filter(pk__in=aset_lv2_pks).values_list('pk', 'aset_id'))
-        if aset_lv2_pks else {}
-    )
-    kewajiban_map: dict[int, int] = (
-        dict(KewajibanLv2.objects.filter(pk__in=kewajiban_lv2_pks).values_list('pk', 'kewajiban_id'))
-        if kewajiban_lv2_pks else {}
-    )
-    ekuitas_map: dict[int, int] = (
-        dict(EkuitasLv2.objects.filter(pk__in=ekuitas_lv2_pks).values_list('pk', 'ekuitas_id'))
-        if ekuitas_lv2_pks else {}
-    )
-
-    for header in headers:
-        for detail in header.details.all():
-            akun = detail.akun
-            url = None
-            if akun.kategori_akun:
-                if akun.kategori_id == 'aset':
-                    lv1_pk = aset_map.get(akun.kategori_akun)
-                    if lv1_pk:
-                        url = reverse('master_data:aset_lv1_detail', args=[lv1_pk])
-                elif akun.kategori_id == 'kewajiban':
-                    lv1_pk = kewajiban_map.get(akun.kategori_akun)
-                    if lv1_pk:
-                        url = reverse('master_data:kewajiban_lv1_detail', args=[lv1_pk])
-                elif akun.kategori_id == 'ekuitas':
-                    lv1_pk = ekuitas_map.get(akun.kategori_akun)
-                    if lv1_pk:
-                        url = reverse('master_data:ekuitas_lv1_detail', args=[lv1_pk])
-            akun.lv2_url = url
-
-
-# ── Index ─────────────────────────────────────────────────────────────────────
+# ── Rekap Jurnal (replaces old index / header_list) ─────────────────────────
 
 @login_required
-def index(request: HttpRequest) -> HttpResponse:
-    """Combined jurnal index showing headers with their details."""
-    headers = list(
+def rekap_jurnal(request: HttpRequest) -> HttpResponse:
+    """Read-only journal recap with date range filtering."""
+    qs = (
         JurnalHeader.objects
         .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix', 'no_bukti')
         .prefetch_related('details__akun')
         .order_by('-tanggal', 'nomor_transaksi')
     )
-    _annotate_akun_lv2_urls(headers)
-    return render(request, 'jurnal/index.html', {'headers': headers})
+
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+
+    headers = list(qs)
+
+    return render(request, 'jurnal/rekap_jurnal.html', {
+        'headers': headers,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+    })
 
 
-# ── JurnalHeader CRUD ─────────────────────────────────────────────────────────
-
-@login_required
-def header_list(request: HttpRequest) -> HttpResponse:
-    headers = (
-        JurnalHeader.objects
-        .select_related('tipe_transaksi', 'entitas_bisnis', 'item', 'transaction_prefix')
-        .order_by('-tanggal', 'nomor_transaksi')
-    )
-    return render(request, 'jurnal/header_list.html', {'object_list': headers})
-
-
-@login_required
-def header_create(request: HttpRequest) -> HttpResponse:
-    form = JurnalHeaderForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('jurnal:header_list')
-    return render(request, 'jurnal/header_form.html', {'form': form, 'title': 'Tambah Jurnal Header'})
-
-
-@login_required
-def header_update(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(JurnalHeader, pk=pk)
-    form = JurnalHeaderForm(request.POST or None, instance=obj)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('jurnal:header_list')
-    return render(request, 'jurnal/header_form.html', {'form': form, 'title': 'Edit Jurnal Header', 'object': obj})
-
-
-@login_required
-def header_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    obj = get_object_or_404(JurnalHeader, pk=pk)
-    if request.method == 'POST':
-        obj.delete()
-        return redirect('jurnal:header_list')
-    return render(request, 'jurnal/header_confirm_delete.html', {'object': obj})
-
+# ── JurnalHeader detail (read-only) ─────────────────────────────────────────
 
 @login_required
 def header_detail(request: HttpRequest, pk: int) -> HttpResponse:
@@ -142,45 +62,6 @@ def header_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
     details = obj.details.select_related('akun').order_by('pk')
     return render(request, 'jurnal/header_detail.html', {'object': obj, 'details': details})
-
-
-# ── JurnalDetail CRUD ─────────────────────────────────────────────────────────
-
-@login_required
-def detail_create(request: HttpRequest, header_pk: int) -> HttpResponse:
-    header = get_object_or_404(JurnalHeader, pk=header_pk)
-    form = JurnalDetailForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        obj = form.save(commit=False)
-        obj.jurnal_header = header
-        obj.save()
-        return redirect('jurnal:header_detail', pk=header_pk)
-    return render(request, 'jurnal/detail_form.html', {
-        'form': form, 'header': header, 'title': 'Tambah Jurnal Detail',
-    })
-
-
-@login_required
-def detail_update(request: HttpRequest, header_pk: int, pk: int) -> HttpResponse:
-    header = get_object_or_404(JurnalHeader, pk=header_pk)
-    obj = get_object_or_404(JurnalDetail, pk=pk, jurnal_header=header)
-    form = JurnalDetailForm(request.POST or None, instance=obj)
-    if request.method == 'POST' and form.is_valid():
-        form.save()
-        return redirect('jurnal:header_detail', pk=header_pk)
-    return render(request, 'jurnal/detail_form.html', {
-        'form': form, 'header': header, 'object': obj, 'title': 'Edit Jurnal Detail',
-    })
-
-
-@login_required
-def detail_delete(request: HttpRequest, header_pk: int, pk: int) -> HttpResponse:
-    header = get_object_or_404(JurnalHeader, pk=header_pk)
-    obj = get_object_or_404(JurnalDetail, pk=pk, jurnal_header=header)
-    if request.method == 'POST':
-        obj.delete()
-        return redirect('jurnal:header_detail', pk=header_pk)
-    return render(request, 'jurnal/detail_confirm_delete.html', {'object': obj, 'header': header})
 
 
 # ── Item CRUD ─────────────────────────────────────────────────────────────────
@@ -255,7 +136,7 @@ def prefix_delete(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, 'jurnal/prefix_confirm_delete.html', {'object': obj})
 
 
-# ── Automasi CRUD ────────────────────────────────────────────────────────────
+# ── Automasi / Jurnal Manual CRUD ────────────────────────────────────────────
 
 @login_required
 def automasi_list(request: HttpRequest) -> HttpResponse:
@@ -270,7 +151,7 @@ def automasi_create(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST' and form.is_valid():
         form.save()
         return redirect('jurnal:automasi_list')
-    return render(request, 'jurnal/automasi_form.html', {'form': form, 'title': 'Tambah Automasi Jurnal'})
+    return render(request, 'jurnal/automasi_form.html', {'form': form, 'title': 'Tambah Jurnal Manual'})
 
 
 @login_required
@@ -280,7 +161,7 @@ def automasi_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST' and form.is_valid():
         form.save()
         return redirect('jurnal:automasi_list')
-    return render(request, 'jurnal/automasi_form.html', {'form': form, 'title': 'Edit Automasi Jurnal', 'object': obj})
+    return render(request, 'jurnal/automasi_form.html', {'form': form, 'title': 'Edit Jurnal Manual', 'object': obj})
 
 
 @login_required
@@ -392,6 +273,69 @@ def automasi_entry(request: HttpRequest, pk: int) -> HttpResponse:
 
     return render(request, 'jurnal/automasi_entry.html', {
         'automasi': automasi, 'mappings': mappings, 'form': form,
+    })
+
+
+# ── Neraca Saldo (Trial Balance) ────────────────────────────────────────────
+
+@login_required
+def neraca_saldo(request: HttpRequest) -> HttpResponse:
+    """Trial balance showing all accounts with debit/credit totals."""
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+
+    # Build filter for JurnalDetail based on date range
+    detail_filter = {}
+    if tanggal_dari:
+        detail_filter['jurnal_header__tanggal__gte'] = tanggal_dari
+    if tanggal_sampai:
+        detail_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+
+    # Aggregate debit/kredit per akun
+    akun_totals = (
+        JurnalDetail.objects
+        .filter(**detail_filter)
+        .values('akun_id')
+        .annotate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    totals_map = {row['akun_id']: row for row in akun_totals}
+
+    # Get all akun records ordered by kode_akun
+    akun_list = Akun.objects.all().order_by('kode_akun')
+
+    rows = []
+    grand_debit = Decimal('0')
+    grand_kredit = Decimal('0')
+    for akun in akun_list:
+        t = totals_map.get(akun.pk, {})
+        debit = t.get('total_debit', Decimal('0'))
+        kredit = t.get('total_kredit', Decimal('0'))
+        # Compute saldo (balance) - net debit or credit
+        saldo_debit = Decimal('0')
+        saldo_kredit = Decimal('0')
+        if debit > kredit:
+            saldo_debit = debit - kredit
+        elif kredit > debit:
+            saldo_kredit = kredit - debit
+        grand_debit += saldo_debit
+        grand_kredit += saldo_kredit
+        rows.append({
+            'akun': akun,
+            'debit': debit,
+            'kredit': kredit,
+            'saldo_debit': saldo_debit,
+            'saldo_kredit': saldo_kredit,
+        })
+
+    return render(request, 'jurnal/neraca_saldo.html', {
+        'rows': rows,
+        'grand_debit': grand_debit,
+        'grand_kredit': grand_kredit,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
     })
 
 
