@@ -1,6 +1,10 @@
 """Master data forms."""
 from django import forms
-from .models import AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2, TipeTransaksi
+from .models import (
+    AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2,
+    EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2,
+    BebanLv1, BebanLv2, TipeTransaksi,
+)
 
 
 def _kode_nama_widgets():
@@ -48,6 +52,34 @@ class EkuitasLv1Form(forms.ModelForm):
 class EkuitasLv2Form(forms.ModelForm):
     class Meta:
         model = EkuitasLv2
+        fields = ('kode', 'nama')
+        widgets = _kode_nama_widgets()
+
+
+class PendapatanLv1Form(forms.ModelForm):
+    class Meta:
+        model = PendapatanLv1
+        fields = ('kode', 'nama')
+        widgets = _kode_nama_widgets()
+
+
+class PendapatanLv2Form(forms.ModelForm):
+    class Meta:
+        model = PendapatanLv2
+        fields = ('kode', 'nama')
+        widgets = _kode_nama_widgets()
+
+
+class BebanLv1Form(forms.ModelForm):
+    class Meta:
+        model = BebanLv1
+        fields = ('kode', 'nama')
+        widgets = _kode_nama_widgets()
+
+
+class BebanLv2Form(forms.ModelForm):
+    class Meta:
+        model = BebanLv2
         fields = ('kode', 'nama')
         widgets = _kode_nama_widgets()
 

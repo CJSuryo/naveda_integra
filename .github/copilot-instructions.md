@@ -5,6 +5,18 @@
 
 ---
 
+## Approach
+- Think before acting. Read existing files before writing code.
+- Be concise in output but thorough in reasoning.
+- Prefer editing over rewriting whole files.
+- Do not re-read files you have already read unless the file may have changed.
+- Test your code before declaring done.
+- No sycophantic openers or closing fluff.
+- Keep solutions simple and direct.
+- User instructions always override this file.
+
+---
+
 ## Project Overview
 
 Naveda Integra is a **Django 6.x** financial admin panel / ERP-lite for Indonesian businesses. It uses
@@ -23,10 +35,10 @@ naveda_integra/                 # Django project root (settings, urls, wsgi)
     development.py              # SQLite override, DEBUG=True
     production.py               # reads env vars, DEBUG=False
 apps/
-  accounts/                     # Custom User model (email-based auth)
+  accounts/                     # Custom User model (email-based auth), Role, UserEntitasBisnis (RBAC)
   entitas_bisnis/               # Business entities, branches, business types
-  master_data/                  # Chart of accounts hierarchy (Aset/Kewajiban/Ekuitas Lv1→Lv2)
-  jurnal/                       # Journal entries (header + detail)
+  master_data/                  # Chart of accounts hierarchy (Aset/Kewajiban/Ekuitas/Pendapatan/Beban Lv1→Lv2)
+  jurnal/                       # Journal entries (header + detail), Manual Journal, Rekap Jurnal, Neraca Saldo
   sales/                        # Sales invoices (header + detail)
   piutang/                      # Receivables (header + detail)
   inventory/                    # Inventory mutations (header + detail)
@@ -36,6 +48,28 @@ static/
   js/                           # Modular JS modules (sidebar.js, toast.js, etc.)
 docs/                           # Markdown documentation
 ```
+
+---
+
+## Role-Based Access Control (RBAC) — MUST FOLLOW
+
+The project implements RBAC via the `accounts.Role` model and `accounts.UserEntitasBisnis` junction table.
+
+### Roles
+| Role Code          | Label            | Access Scope |
+|--------------------|------------------|-------------|
+| `admin`            | Admin            | Full access to all features and all business entities. |
+| `operator`         | Operator         | Same as Admin but some admin-only menus are hidden. |
+| `business_owner`   | Pemilik Bisnis   | Can only see/manage data for EntitasBisnis linked via UserEntitasBisnis. |
+| `business_employee`| Karyawan Bisnis  | Same as Business Owner but with restricted write access. |
+
+### Implementation Rules
+- **Always** check the user's role before granting access to data or features.
+- Use `user.is_admin`, `user.is_operator`, `user.is_internal`, `user.is_business_owner`, `user.is_business_employee`, `user.is_business_user` properties on the User model.
+- Business users (`business_owner` / `business_employee`) must only see EntitasBisnis records linked via `UserEntitasBisnis`.
+- Internal users (`admin` / `operator`) see all EntitasBisnis records.
+- Admin-only sidebar items are guarded by `{% if user.is_superuser or user.is_admin %}` in templates.
+- When creating new views that show business-specific data, always filter by the user's linked entities for business users.
 
 ---
 

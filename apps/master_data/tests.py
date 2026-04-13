@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 
 from .models import (
     AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2,
+    PendapatanLv1, PendapatanLv2, BebanLv1, BebanLv2,
     TipeTransaksi, Bukti, Akun, _compute_kode_akun, KATEGORI_PREFIX,
 )
 
@@ -293,4 +294,153 @@ class TipeTransaksiViewTests(TestCase):
     def test_requires_login(self):
         self.client.logout()
         response = self.client.get(reverse('master_data:tipe_transaksi_list'))
+        self.assertEqual(response.status_code, 302)
+
+
+# ── Pendapatan Model Tests ───────────────────────────────────────────────────
+
+class PendapatanModelTests(TestCase):
+    def test_pendapatan_lv1_str(self):
+        p = PendapatanLv1.objects.create(kode='4.1', nama='Pendapatan Usaha')
+        self.assertIn('4.1', str(p))
+
+    def test_pendapatan_lv2_fk(self):
+        parent = PendapatanLv1.objects.create(kode='4.1', nama='Pendapatan Usaha')
+        child = PendapatanLv2.objects.create(kode='4.1.1', nama='Penjualan', pendapatan=parent)
+        self.assertEqual(child.pendapatan, parent)
+        self.assertIn(child, parent.children.all())
+
+
+class BebanModelTests(TestCase):
+    def test_beban_lv1_str(self):
+        b = BebanLv1.objects.create(kode='5.1', nama='Beban Operasional')
+        self.assertIn('5.1', str(b))
+
+    def test_beban_lv2_fk(self):
+        parent = BebanLv1.objects.create(kode='5.1', nama='Beban Operasional')
+        child = BebanLv2.objects.create(kode='5.1.1', nama='Beban Gaji', beban=parent)
+        self.assertEqual(child.beban, parent)
+        self.assertIn(child, parent.children.all())
+
+
+# ── Pendapatan/Beban Signal Tests ────────────────────────────────────────────
+
+class PendapatanBebanSignalTests(TestCase):
+    def test_pendapatan_lv2_creates_akun(self):
+        lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        lv2 = PendapatanLv2.objects.create(kode='401', nama='Penjualan', pendapatan=lv1)
+        akun = Akun.objects.filter(kategori_id='pendapatan', kategori_akun=lv2.pk).first()
+        self.assertIsNotNone(akun)
+        self.assertEqual(akun.nama, 'Penjualan')
+        self.assertEqual(akun.kode_akun, f'{KATEGORI_PREFIX["pendapatan"]}.{lv1.kode}.{lv2.kode}')
+
+    def test_beban_lv2_creates_akun(self):
+        lv1 = BebanLv1.objects.create(kode='5', nama='Beban')
+        lv2 = BebanLv2.objects.create(kode='501', nama='Beban Gaji', beban=lv1)
+        akun = Akun.objects.filter(kategori_id='beban', kategori_akun=lv2.pk).first()
+        self.assertIsNotNone(akun)
+        self.assertEqual(akun.nama, 'Beban Gaji')
+        self.assertEqual(akun.kode_akun, f'{KATEGORI_PREFIX["beban"]}.{lv1.kode}.{lv2.kode}')
+
+    def test_pendapatan_lv2_delete_removes_akun(self):
+        lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        lv2 = PendapatanLv2.objects.create(kode='401', nama='Penjualan', pendapatan=lv1)
+        lv2_pk = lv2.pk
+        lv2.delete()
+        self.assertFalse(Akun.objects.filter(kategori_id='pendapatan', kategori_akun=lv2_pk).exists())
+
+    def test_beban_lv2_delete_removes_akun(self):
+        lv1 = BebanLv1.objects.create(kode='5', nama='Beban')
+        lv2 = BebanLv2.objects.create(kode='501', nama='Beban Gaji', beban=lv1)
+        lv2_pk = lv2.pk
+        lv2.delete()
+        self.assertFalse(Akun.objects.filter(kategori_id='beban', kategori_akun=lv2_pk).exists())
+
+
+# ── Pendapatan/Beban View Tests ──────────────────────────────────────────────
+
+class PendapatanViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = create_user()
+        self.client.force_login(self.user)
+        self.lv1 = PendapatanLv1.objects.create(kode='4.1', nama='Pendapatan Usaha')
+        self.lv2 = PendapatanLv2.objects.create(kode='4.1.1', nama='Penjualan', pendapatan=self.lv1)
+
+    def test_lv1_list(self):
+        response = self.client.get(reverse('master_data:pendapatan_lv1_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Pendapatan Usaha')
+
+    def test_lv1_detail(self):
+        response = self.client.get(reverse('master_data:pendapatan_lv1_detail', args=[self.lv1.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Penjualan')
+
+    def test_lv1_create(self):
+        data = {'kode': '4.2', 'nama': 'Pendapatan Lain'}
+        response = self.client.post(reverse('master_data:pendapatan_lv1_create'), data)
+        self.assertRedirects(response, reverse('master_data:pendapatan_lv1_list'))
+
+    def test_lv2_create(self):
+        data = {'kode': '4.1.2', 'nama': 'Pendapatan Jasa'}
+        response = self.client.post(reverse('master_data:pendapatan_lv2_create', args=[self.lv1.pk]), data)
+        self.assertRedirects(response, reverse('master_data:pendapatan_lv1_detail', args=[self.lv1.pk]))
+
+
+class BebanViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = create_user()
+        self.client.force_login(self.user)
+        self.lv1 = BebanLv1.objects.create(kode='5.1', nama='Beban Operasional')
+        self.lv2 = BebanLv2.objects.create(kode='5.1.1', nama='Beban Gaji', beban=self.lv1)
+
+    def test_lv1_list(self):
+        response = self.client.get(reverse('master_data:beban_lv1_list'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Beban Operasional')
+
+    def test_lv1_detail(self):
+        response = self.client.get(reverse('master_data:beban_lv1_detail', args=[self.lv1.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Beban Gaji')
+
+    def test_lv1_create(self):
+        data = {'kode': '5.2', 'nama': 'Beban Lain'}
+        response = self.client.post(reverse('master_data:beban_lv1_create'), data)
+        self.assertRedirects(response, reverse('master_data:beban_lv1_list'))
+
+    def test_lv2_create(self):
+        data = {'kode': '5.1.2', 'nama': 'Beban Listrik'}
+        response = self.client.post(reverse('master_data:beban_lv2_create', args=[self.lv1.pk]), data)
+        self.assertRedirects(response, reverse('master_data:beban_lv1_detail', args=[self.lv1.pk]))
+
+
+# ── Chart of Accounts View Tests ─────────────────────────────────────────────
+
+class ChartOfAccountsViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = create_user()
+        self.client.force_login(self.user)
+        AsetLv1.objects.create(kode='1.1', nama='Kas')
+        KewajibanLv1.objects.create(kode='2.1', nama='Utang Usaha')
+        EkuitasLv1.objects.create(kode='3.1', nama='Modal')
+        PendapatanLv1.objects.create(kode='4.1', nama='Pendapatan Usaha')
+        BebanLv1.objects.create(kode='5.1', nama='Beban Operasional')
+
+    def test_coa_page(self):
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Chart of Accounts')
+        self.assertContains(response, 'Aset')
+        self.assertContains(response, 'Kewajiban')
+        self.assertContains(response, 'Ekuitas')
+        self.assertContains(response, 'Pendapatan')
+        self.assertContains(response, 'Beban')
+
+    def test_coa_requires_login(self):
+        self.client.logout()
+        response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 302)

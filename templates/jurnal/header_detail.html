@@ -6,9 +6,7 @@
     <h1 class="ni-page-header__title">{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}</h1>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'jurnal:detail_create' object.pk %}" class="ni-btn ni-btn--success"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Detail</a>
-    <a href="{% url 'jurnal:header_update' object.pk %}" class="ni-btn ni-btn--warning"><i data-lucide="pencil" style="width:16px;height:16px"></i> Edit Header</a>
-    <a href="{% url 'jurnal:header_list' %}" class="ni-btn ni-btn--secondary"><i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali</a>
+    <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary"><i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali ke Rekap</a>
   </div>
 </div>
 
@@ -46,7 +44,6 @@
             <th>Nama Akun</th>
             <th class="ni-text-right">Debit</th>
             <th class="ni-text-right">Kredit</th>
-            <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -56,15 +53,9 @@
             <td>{{ d.akun.nama }}</td>
             <td class="ni-text-right">Rp{{ d.debit|floatformat:0 }}</td>
             <td class="ni-text-right">Rp{{ d.kredit|floatformat:0 }}</td>
-            <td>
-              <div class="ni-btn-row">
-                <a href="{% url 'jurnal:detail_update' object.pk d.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-                <a href="{% url 'jurnal:detail_delete' object.pk d.pk %}" class="ni-btn ni-btn--danger ni-btn--sm">Hapus</a>
-              </div>
-            </td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
+          <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
           {% endfor %}
         </tbody>
       </table>

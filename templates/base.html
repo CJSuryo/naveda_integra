@@ -56,16 +56,18 @@
         </a>
       </div>
 
+      {% if user.is_superuser or user.is_admin %}
       <div class="ni-nav-item">
         <a href="{% url 'accounts:register' %}" class="ni-nav-link {% if request.resolver_match.app_name == 'accounts' %}ni-nav-link--active{% endif %}">
           <i data-lucide="user-plus" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Registrasi User</span>
         </a>
       </div>
+      {% endif %}
 
       <span class="ni-nav-label">Entitas Bisnis</span>
 
-      <div class="ni-nav-item {% if 'entitas_bisnis' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'entitas-bisnis' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="building-2" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Entitas Bisnis</span>
@@ -83,13 +85,16 @@
 
       <span class="ni-nav-label">Master Data</span>
 
-      <div class="ni-nav-item {% if 'master-data' in request.path or 'aset' in request.path or 'kewajiban' in request.path or 'ekuitas' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'master-data' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="database" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Akun & Kategori</span>
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
+          <a href="{% url 'master_data:chart_of_accounts' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Chart of Accounts</span>
+          </a>
           <a href="{% url 'master_data:aset_lv1_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Aset</span>
           </a>
@@ -98,6 +103,12 @@
           </a>
           <a href="{% url 'master_data:ekuitas_lv1_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Ekuitas</span>
+          </a>
+          <a href="{% url 'master_data:pendapatan_lv1_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Pendapatan</span>
+          </a>
+          <a href="{% url 'master_data:beban_lv1_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Beban</span>
           </a>
           <a href="{% url 'master_data:tipe_transaksi_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Tipe Transaksi</span>
@@ -114,20 +125,20 @@
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
-          <a href="{% url 'jurnal:index' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Jurnal Umum</span>
+          <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Rekap Jurnal</span>
           </a>
-          <a href="{% url 'jurnal:header_list' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Jurnal Header</span>
+          <a href="{% url 'jurnal:automasi_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Jurnal Manual</span>
+          </a>
+          <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Neraca Saldo</span>
           </a>
           <a href="{% url 'jurnal:item_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Item</span>
           </a>
           <a href="{% url 'jurnal:prefix_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Prefiks Transaksi</span>
-          </a>
-          <a href="{% url 'jurnal:automasi_list' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Automasi Jurnal</span>
           </a>
         </div>
       </div>
@@ -138,6 +149,7 @@
       <div class="ni-sidebar-user__info">
         <div class="ni-sidebar-user__name">{{ user.email }}</div>
         <div class="ni-sidebar-user__role">
+          {% if user.role %}{{ user.role.nama }}{% else %}Tanpa Role{% endif %} &middot;
           <a href="{% url 'accounts:logout' %}" style="color:inherit;text-decoration:none;">Logout</a>
         </div>
       </div>

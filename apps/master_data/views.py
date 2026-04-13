@@ -9,12 +9,16 @@ from .forms import (
     AsetLv1Form, AsetLv2Form,
     KewajibanLv1Form, KewajibanLv2Form,
     EkuitasLv1Form, EkuitasLv2Form,
+    PendapatanLv1Form, PendapatanLv2Form,
+    BebanLv1Form, BebanLv2Form,
     TipeTransaksiForm,
 )
 from .models import (
     AsetLv1, AsetLv2,
     KewajibanLv1, KewajibanLv2,
     EkuitasLv1, EkuitasLv2,
+    PendapatanLv1, PendapatanLv2,
+    BebanLv1, BebanLv2,
     TipeTransaksi,
     Bukti,
 )
@@ -311,6 +315,187 @@ def ekuitas_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRespon
             return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
         return redirect('master_data:ekuitas_lv1_detail', pk=lv1_pk)
     return render(request, 'master_data/ekuitas/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+
+
+# ── Pendapatan Level 1 ────────────────────────────────────────────────────────
+
+@login_required
+def pendapatan_lv1_list(request: HttpRequest) -> HttpResponse:
+    return render(request, 'master_data/pendapatan/lv1_list.html', {'object_list': PendapatanLv1.objects.all().order_by('kode')})
+
+
+@login_required
+def pendapatan_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(PendapatanLv1, pk=pk)
+    children = obj.children.all().order_by('kode')
+    return render(request, 'master_data/pendapatan/lv1_detail.html', {'object': obj, 'children': children})
+
+
+@login_required
+def pendapatan_lv1_create(request: HttpRequest) -> HttpResponse:
+    form = PendapatanLv1Form(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:pendapatan_lv1_list')
+    return render(request, 'master_data/pendapatan/lv1_form.html', {'form': form, 'title': 'Tambah Pendapatan Level 1'})
+
+
+@login_required
+def pendapatan_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(PendapatanLv1, pk=pk)
+    form = PendapatanLv1Form(request.POST or None, instance=obj)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:pendapatan_lv1_list')
+    return render(request, 'master_data/pendapatan/lv1_form.html', {'form': form, 'title': 'Edit Pendapatan Level 1', 'object': obj})
+
+
+@login_required
+def pendapatan_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(PendapatanLv1, pk=pk)
+    if request.method == 'POST':
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
+            return redirect('master_data:pendapatan_lv1_list')
+        return redirect('master_data:pendapatan_lv1_list')
+    return render(request, 'master_data/pendapatan/lv1_confirm_delete.html', {'object': obj})
+
+
+@login_required
+def pendapatan_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
+    parent = get_object_or_404(PendapatanLv1, pk=lv1_pk)
+    form = PendapatanLv2Form(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        obj = form.save(commit=False)
+        obj.pendapatan = parent
+        obj.save()
+        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/pendapatan/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Pendapatan Level 2'})
+
+
+@login_required
+def pendapatan_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
+    parent = get_object_or_404(PendapatanLv1, pk=lv1_pk)
+    obj = get_object_or_404(PendapatanLv2, pk=pk, pendapatan=parent)
+    form = PendapatanLv2Form(request.POST or None, instance=obj)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/pendapatan/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Pendapatan Level 2'})
+
+
+@login_required
+def pendapatan_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
+    parent = get_object_or_404(PendapatanLv1, pk=lv1_pk)
+    obj = get_object_or_404(PendapatanLv2, pk=pk, pendapatan=parent)
+    if request.method == 'POST':
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
+            return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:pendapatan_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/pendapatan/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+
+
+# ── Beban Level 1 ────────────────────────────────────────────────────────────
+
+@login_required
+def beban_lv1_list(request: HttpRequest) -> HttpResponse:
+    return render(request, 'master_data/beban/lv1_list.html', {'object_list': BebanLv1.objects.all().order_by('kode')})
+
+
+@login_required
+def beban_lv1_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(BebanLv1, pk=pk)
+    children = obj.children.all().order_by('kode')
+    return render(request, 'master_data/beban/lv1_detail.html', {'object': obj, 'children': children})
+
+
+@login_required
+def beban_lv1_create(request: HttpRequest) -> HttpResponse:
+    form = BebanLv1Form(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:beban_lv1_list')
+    return render(request, 'master_data/beban/lv1_form.html', {'form': form, 'title': 'Tambah Beban Level 1'})
+
+
+@login_required
+def beban_lv1_update(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(BebanLv1, pk=pk)
+    form = BebanLv1Form(request.POST or None, instance=obj)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:beban_lv1_list')
+    return render(request, 'master_data/beban/lv1_form.html', {'form': form, 'title': 'Edit Beban Level 1', 'object': obj})
+
+
+@login_required
+def beban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    obj = get_object_or_404(BebanLv1, pk=pk)
+    if request.method == 'POST':
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
+            return redirect('master_data:beban_lv1_list')
+        return redirect('master_data:beban_lv1_list')
+    return render(request, 'master_data/beban/lv1_confirm_delete.html', {'object': obj})
+
+
+@login_required
+def beban_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
+    parent = get_object_or_404(BebanLv1, pk=lv1_pk)
+    form = BebanLv2Form(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        obj = form.save(commit=False)
+        obj.beban = parent
+        obj.save()
+        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/beban/lv2_form.html', {'form': form, 'parent': parent, 'title': 'Tambah Beban Level 2'})
+
+
+@login_required
+def beban_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
+    parent = get_object_or_404(BebanLv1, pk=lv1_pk)
+    obj = get_object_or_404(BebanLv2, pk=pk, beban=parent)
+    form = BebanLv2Form(request.POST or None, instance=obj)
+    if request.method == 'POST' and form.is_valid():
+        form.save()
+        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/beban/lv2_form.html', {'form': form, 'parent': parent, 'object': obj, 'title': 'Edit Beban Level 2'})
+
+
+@login_required
+def beban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
+    parent = get_object_or_404(BebanLv1, pk=lv1_pk)
+    obj = get_object_or_404(BebanLv2, pk=pk, beban=parent)
+    if request.method == 'POST':
+        try:
+            obj.delete()
+        except ProtectedError:
+            messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
+            return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+        return redirect('master_data:beban_lv1_detail', pk=lv1_pk)
+    return render(request, 'master_data/beban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+
+
+# ── Chart of Accounts ─────────────────────────────────────────────────────────
+
+@login_required
+def chart_of_accounts(request: HttpRequest) -> HttpResponse:
+    """Chart of Accounts page - shows all account categories with nested hierarchy."""
+    categories = [
+        {'name': 'Aset', 'prefix': '1', 'items': AsetLv1.objects.prefetch_related('children').order_by('kode')},
+        {'name': 'Kewajiban', 'prefix': '2', 'items': KewajibanLv1.objects.prefetch_related('children').order_by('kode')},
+        {'name': 'Ekuitas', 'prefix': '3', 'items': EkuitasLv1.objects.prefetch_related('children').order_by('kode')},
+        {'name': 'Pendapatan', 'prefix': '4', 'items': PendapatanLv1.objects.prefetch_related('children').order_by('kode')},
+        {'name': 'Beban', 'prefix': '5', 'items': BebanLv1.objects.prefetch_related('children').order_by('kode')},
+    ]
+    return render(request, 'master_data/chart_of_accounts.html', {'categories': categories})
 
 
 # ── TipeTransaksi ─────────────────────────────────────────────────────────────

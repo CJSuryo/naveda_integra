@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Rekap Jurnal{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Rekap Jurnal</h1>
+    <p class="ni-page-header__subtitle">Daftar semua jurnal yang tercatat</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <form method="get" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+      <div class="ni-form-group" style="margin-bottom:0;">
+        <label class="ni-form-label">Tanggal Dari</label>
+        <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;">
+        <label class="ni-form-label">Tanggal Sampai</label>
+        <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary">
+        <i data-lucide="search" style="width:16px;height:16px"></i> Filter
+      </button>
+      {% if tanggal_dari or tanggal_sampai %}
+      <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>No. Transaksi</th>
+            <th>Uraian</th>
+            <th>Entitas Bisnis</th>
+            <th>Item</th>
+            <th>Detail Akun</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for header in headers %}
+          <tr>
+            <td>{{ header.tanggal|date:"Y-m-d" }}</td>
+            <td><a href="{% url 'jurnal:header_detail' header.pk %}">{% if header.transaction_prefix %}{{ header.transaction_prefix.kode }}-{% endif %}{{ header.nomor_transaksi }}</a></td>
+            <td>{{ header.uraian_transaksi }}</td>
+            <td>{{ header.entitas_bisnis|default:"-" }}</td>
+            <td>{{ header.item|default:"-" }}</td>
+            <td>
+              {% for detail in header.details.all %}
+              <div style="font-size:0.85rem;">
+                {{ detail.akun.kode_akun }} - D:{{ detail.debit|floatformat:0 }} K:{{ detail.kredit|floatformat:0 }}
+              </div>
+              {% empty %}
+              <span class="ni-text-muted">-</span>
+              {% endfor %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada data jurnal.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

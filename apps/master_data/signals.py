@@ -2,7 +2,10 @@
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
-from .models import AsetLv2, KewajibanLv2, EkuitasLv2, Akun, _compute_kode_akun
+from .models import (
+    AsetLv2, KewajibanLv2, EkuitasLv2, PendapatanLv2, BebanLv2,
+    Akun, _compute_kode_akun,
+)
 
 
 def _sync_akun(kategori: str, lv2_instance) -> None:
@@ -54,3 +57,27 @@ def sync_akun_on_ekuitas_lv2_save(sender, instance, **kwargs):
 @receiver(post_delete, sender=EkuitasLv2)
 def delete_akun_on_ekuitas_lv2_delete(sender, instance, **kwargs):
     _delete_akun('ekuitas', instance.pk)
+
+
+# ── Pendapatan Lv2 ───────────────────────────────────────────────────────────
+
+@receiver(post_save, sender=PendapatanLv2)
+def sync_akun_on_pendapatan_lv2_save(sender, instance, **kwargs):
+    _sync_akun('pendapatan', instance)
+
+
+@receiver(post_delete, sender=PendapatanLv2)
+def delete_akun_on_pendapatan_lv2_delete(sender, instance, **kwargs):
+    _delete_akun('pendapatan', instance.pk)
+
+
+# ── Beban Lv2 ────────────────────────────────────────────────────────────────
+
+@receiver(post_save, sender=BebanLv2)
+def sync_akun_on_beban_lv2_save(sender, instance, **kwargs):
+    _sync_akun('beban', instance)
+
+
+@receiver(post_delete, sender=BebanLv2)
+def delete_akun_on_beban_lv2_delete(sender, instance, **kwargs):
+    _delete_akun('beban', instance.pk)
