@@ -14,74 +14,122 @@ def _kode_nama_widgets():
     }
 
 
+def _kode_auto_widgets():
+    """Kode is auto-generated on create (readonly hint), editable on edit."""
+    return {
+        'kode': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Auto-generate jika kosong'}),
+        'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+    }
+
+
 class AsetLv1Form(forms.ModelForm):
     class Meta:
         model = AsetLv1
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class AsetLv2Form(forms.ModelForm):
     class Meta:
         model = AsetLv2
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class KewajibanLv1Form(forms.ModelForm):
     class Meta:
         model = KewajibanLv1
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class KewajibanLv2Form(forms.ModelForm):
     class Meta:
         model = KewajibanLv2
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class EkuitasLv1Form(forms.ModelForm):
     class Meta:
         model = EkuitasLv1
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class EkuitasLv2Form(forms.ModelForm):
     class Meta:
         model = EkuitasLv2
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class PendapatanLv1Form(forms.ModelForm):
     class Meta:
         model = PendapatanLv1
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class PendapatanLv2Form(forms.ModelForm):
     class Meta:
         model = PendapatanLv2
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class BebanLv1Form(forms.ModelForm):
     class Meta:
         model = BebanLv1
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class BebanLv2Form(forms.ModelForm):
     class Meta:
         model = BebanLv2
         fields = ('kode', 'nama')
-        widgets = _kode_nama_widgets()
+        widgets = _kode_auto_widgets()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kode'].required = False
 
 
 class TipeTransaksiForm(forms.ModelForm):
