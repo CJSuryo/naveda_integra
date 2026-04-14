@@ -15,6 +15,9 @@
   .ni-jm-balance { font-weight: 600; font-size: 0.9rem; }
   .ni-jm-balanced { color: var(--ni-success); }
   .ni-jm-unbalanced { color: var(--ni-danger); }
+  @media (max-width: 768px) {
+    .ni-jm-table { min-width: 600px; }
+  }
 </style>
 {% endblock %}
 
@@ -39,7 +42,7 @@
     <form id="jmForm" method="post">
       {% csrf_token %}
       <!-- Header fields -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:16px;margin-bottom:20px;">
+      <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
           <input type="date" name="tanggal" id="jmTanggal" class="ni-input" value="{{ today }}" required>

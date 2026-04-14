@@ -313,7 +313,11 @@
   transform: rotate(180deg);
 }
 
-/* ---------- Mobile hamburger ---------- */
+/* ---------- Mobile top bar ---------- */
+.ni-mobile-topbar {
+  display: none;
+}
+
 .ni-mobile-toggle {
   display: none;
   align-items: center;
@@ -324,9 +328,32 @@
   border: none;
   color: var(--ni-text);
   padding: 0;
+  flex-shrink: 0;
 }
 
 @media (max-width: 768px) {
+  .ni-mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    padding: 0 16px;
+    background: var(--ni-bg-card);
+    border-bottom: 1px solid var(--ni-border);
+    z-index: 998;
+    box-shadow: var(--ni-shadow-sm);
+  }
+
+  .ni-mobile-topbar__title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--ni-text);
+  }
+
   .ni-mobile-toggle {
     display: flex;
   }

@@ -369,9 +369,69 @@ Browse all icons: https://lucide.dev/icons/
 
 - **Desktop (>1024px):** Full sidebar (260px) + content area.
 - **Tablet (768–1024px):** Collapsed sidebar (72px icons-only) + content area.
-- **Mobile (<768px):** Sidebar hidden, hamburger menu to open as overlay.
+- **Mobile (<768px):** Sidebar hidden; fixed top bar with hamburger menu to open sidebar as overlay.
 - Use CSS Grid / Flexbox for layouts. No fixed pixel widths for content.
 - Tables wrapped in `.ni-table-wrapper` for horizontal scroll on mobile.
+
+### Mobile Experience — MUST FOLLOW
+
+**Every page and component must be tested for mobile usability.** Follow these rules:
+
+#### Navigation
+- The mobile top bar (`.ni-mobile-topbar`) is `position: fixed` at the top of the viewport on screens < 768px. It contains the hamburger toggle and app title.
+- `.ni-main` has `padding-top: 56px` on mobile to account for the fixed top bar.
+- The sidebar slides in from the left as an overlay when the hamburger is tapped, with a backdrop overlay (`.ni-sidebar-overlay`).
+- Sidebar closes when tapping the backdrop overlay or navigating to a new page.
+
+#### Layout Rules for Mobile
+- **Never use fixed-width columns** (`grid-template-columns: 200px 1fr`) in inline styles. Use the responsive `ni-form-row` class or CSS Grid with `minmax()` / `auto-fit`.
+- **Multi-column grids** (2-col, 3-col) must collapse to single-column on mobile. Use `ni-form-row`, `ni-two-col`, or `ni-three-col` utility classes which already have mobile breakpoints.
+- **Inline `style` grids** like `style="display:grid;grid-template-columns:1fr 1fr"` should use `ni-form-row` class instead, which collapses to `1fr` on mobile.
+- **Flex containers** with multiple items should use `flex-wrap: wrap` so items stack on narrow screens.
+
+#### Tables
+- **Always** wrap `<table>` in `.ni-table-wrapper` (or a `div` with `overflow-x: auto`) so tables scroll horizontally on mobile.
+- For data-entry tables in forms (purchase items, journal details), set `min-width` on the table (e.g., `min-width: 600px`) inside a scrollable wrapper so columns remain usable.
+- Prefer fewer columns on mobile-visible tables. Use `ni-hide-mobile` utility class on non-essential columns.
+
+#### Forms
+- Form fields should be full-width on mobile. The `ni-input` class already handles this.
+- `ni-form-row` collapses to single-column on mobile (<768px). Always prefer this over inline grid styles.
+- Button rows (`ni-btn-row`) should wrap and buttons should be full-width or at least tappable size (min 44px height).
+- Date inputs, selects, and text inputs must have sufficient touch target size (the default `ni-input` padding handles this).
+
+#### Modals
+- On mobile, modals slide up from the bottom (bottom sheet pattern). This is already handled by `modal.css`.
+- Modal size variants (`--sm`, `--lg`, `--xl`) all become full-width on mobile.
+
+#### Cards and Stat Cards
+- Card grids (`ni-card-grid--2`, `--3`, `--4`) collapse to single-column on mobile via existing breakpoints in `card.css`.
+- Stat card text should remain readable. The responsive rules are in `card.css`.
+
+#### Touch Targets
+- All interactive elements (buttons, links, toggles) must have a minimum touch target of **44×44px** on mobile. The `ni-btn` base class meets this requirement.
+- Avoid placing small interactive elements too close together. Use adequate `gap` spacing.
+
+#### Responsive Utility Classes
+Available responsive visibility classes in `utilities.css`:
+```css
+.ni-hide-mobile       /* Hidden on < 768px */
+.ni-hide-tablet       /* Hidden on 768–1023px */
+.ni-hide-desktop      /* Hidden on ≥ 1024px */
+.ni-show-mobile-only  /* Visible only on < 768px */
+.ni-show-desktop-only /* Visible only on ≥ 1024px */
+```
+
+#### Testing Checklist for New Pages
+When creating or modifying any page, verify:
+1. ✅ Hamburger menu is visible and functional on mobile viewport.
+2. ✅ Page content is not hidden behind the fixed top bar (56px padding).
+3. ✅ All tables scroll horizontally without breaking the page layout.
+4. ✅ Form fields stack vertically and are full-width on mobile.
+5. ✅ Buttons are tappable and not clipped or overflowing.
+6. ✅ Modals are usable (bottom sheet on mobile).
+7. ✅ No horizontal page scroll (only table wrappers should scroll).
+8. ✅ Text is readable without zooming (minimum 13px / 0.8125rem).
 
 ---
 
