@@ -57,11 +57,14 @@ def _get_eb_dropdown_options() -> list[dict[str, str]]:
     return options
 
 
-def _resolve_eb_to_lv1_id(selection: str | int | None) -> int | None:
-    """Resolve a lv1:/lv2:/lv3: prefixed selection to an EntitasBisnis (lv1) pk.
+def _resolve_eb_selection(selection: str | int | None) -> dict | None:
+    """Resolve a lv1:/lv2:/lv3: prefixed selection to a dict of all EB level ids.
 
-    Also accepts a bare integer (or integer-like string) as a direct lv1 pk for
-    backward compatibility.
+    Returns ``{'lv1_id': X, 'lv2_id': Y_or_None, 'lv3_id': Z_or_None}`` or
+    ``None`` if the selection is empty or invalid.
+
+    Also accepts a bare integer (or integer-like string) as a direct lv1 pk
+    for backward compatibility.
     """
     from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
 
@@ -69,11 +72,11 @@ def _resolve_eb_to_lv1_id(selection: str | int | None) -> int | None:
         return None
     # Bare integer → treat as lv1 pk
     if isinstance(selection, int):
-        return selection
+        return {'lv1_id': selection, 'lv2_id': None, 'lv3_id': None}
     selection = str(selection)
     if ':' not in selection:
         try:
-            return int(selection)
+            return {'lv1_id': int(selection), 'lv2_id': None, 'lv3_id': None}
         except (ValueError, TypeError):
             return None
     try:
@@ -83,13 +86,21 @@ def _resolve_eb_to_lv1_id(selection: str | int | None) -> int | None:
         return None
 
     if level == 'lv1':
-        return pk
+        return {'lv1_id': pk, 'lv2_id': None, 'lv3_id': None}
     if level == 'lv2':
         lv2 = EntitasBisnisLv2.objects.filter(pk=pk).select_related('entitas_bisnis').first()
-        return lv2.entitas_bisnis_id if lv2 else None
+        if not lv2:
+            return None
+        return {'lv1_id': lv2.entitas_bisnis_id, 'lv2_id': lv2.pk, 'lv3_id': None}
     if level == 'lv3':
         lv3 = EntitasBisnisLv3.objects.filter(pk=pk).select_related('parent_lv2__entitas_bisnis').first()
-        return lv3.parent_lv2.entitas_bisnis_id if lv3 else None
+        if not lv3:
+            return None
+        return {
+            'lv1_id': lv3.parent_lv2.entitas_bisnis_id,
+            'lv2_id': lv3.parent_lv2_id,
+            'lv3_id': lv3.pk,
+        }
     return None
 
 
@@ -102,6 +113,8 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
         PurchaseHeader.objects
         .prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
         )
@@ -132,10 +145,21 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
     rows = []
     for ph in purchases:
         for eg in ph.entitas_groups.all():
+            # Build display name at the most specific level
+            if eg.entitas_bisnis_lv3_id:
+                eb_display = (
+                    f'{eg.entitas_bisnis.nama} / '
+                    f'{eg.entitas_bisnis_lv2.nama} / '
+                    f'{eg.entitas_bisnis_lv3.nama}'
+                )
+            elif eg.entitas_bisnis_lv2_id:
+                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+            else:
+                eb_display = eg.entitas_bisnis.nama
             for pi in eg.items.all():
                 rows.append({
                     'purchase_header': ph,
-                    'entitas_bisnis': eg.entitas_bisnis,
+                    'eb_display': eb_display,
                     'item': pi,
                 })
 
@@ -178,6 +202,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
             'entitas_groups__items__coa_account',
@@ -192,9 +218,18 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         return _handle_purchase_save(request, purchase)
 
-    # Serialize existing data for the form
+    # Serialize existing data for the form — use the most specific level for the selector
     eb_groups_data = []
     for eg in purchase.entitas_groups.all():
+        if eg.entitas_bisnis_lv3_id:
+            eb_selection = f'lv3:{eg.entitas_bisnis_lv3_id}'
+            eb_name = eg.entitas_bisnis_lv3.nama
+        elif eg.entitas_bisnis_lv2_id:
+            eb_selection = f'lv2:{eg.entitas_bisnis_lv2_id}'
+            eb_name = eg.entitas_bisnis_lv2.nama
+        else:
+            eb_selection = f'lv1:{eg.entitas_bisnis_id}'
+            eb_name = eg.entitas_bisnis.nama
         items_data = []
         for pi in eg.items.all():
             items_data.append({
@@ -214,8 +249,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'target_turnover': str(pi.target_turnover) if pi.target_turnover else '',
             })
         eb_groups_data.append({
-            'entitas_bisnis_id': f'lv1:{eg.entitas_bisnis_id}',
-            'entitas_bisnis_name': eg.entitas_bisnis.nama,
+            'entitas_bisnis_id': eb_selection,
+            'entitas_bisnis_name': eb_name,
             'items': items_data,
         })
 
@@ -238,6 +273,8 @@ def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
             'entitas_groups__items__coa_account',
@@ -566,7 +603,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         eb_raw = group.get('entitas_bisnis_id')
         if not eb_raw:
             errors[f'group_{i}'] = f'Entitas bisnis wajib dipilih untuk group {i + 1}.'
-        elif _resolve_eb_to_lv1_id(eb_raw) is None:
+        elif _resolve_eb_selection(eb_raw) is None:
             errors[f'group_{i}'] = f'Entitas bisnis tidak valid untuk group {i + 1}.'
         if not group.get('items'):
             errors[f'group_{i}_items'] = f'Minimal 1 item wajib diisi untuk group {i + 1}.'
@@ -620,10 +657,12 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             )
 
         for group_data in groups:
-            eb_lv1_id = _resolve_eb_to_lv1_id(group_data['entitas_bisnis_id'])
+            eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
             eb_group = PurchaseEntitasBisnis.objects.create(
                 purchase_header=purchase,
-                entitas_bisnis_id=eb_lv1_id,
+                entitas_bisnis_id=eb_resolved['lv1_id'],
+                entitas_bisnis_lv2_id=eb_resolved['lv2_id'],
+                entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
             )
             for item_data in group_data.get('items', []):
                 PurchaseItem.objects.create(

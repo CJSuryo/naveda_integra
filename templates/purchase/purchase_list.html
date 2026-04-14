@@ -81,7 +81,7 @@
         <tr>
           <td><a href="{% url 'purchase:detail' row.purchase_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ row.purchase_header.transaction_id }}</a></td>
           <td>{{ row.purchase_header.tanggal }}</td>
-          <td>{{ row.entitas_bisnis.nama }}</td>
+          <td>{{ row.eb_display }}</td>
           <td>{{ row.item.item }}</td>
           <td>{{ row.item.sub_transaction_type.nama }}</td>
           <td class="ni-text-right">{{ row.item.quantity }}</td>

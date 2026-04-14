@@ -47,7 +47,7 @@
   <div class="ni-card__body">
     <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
       <i data-lucide="building-2" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
-      {{ eg.entitas_bisnis.nama }}
+      {{ eg.entitas_bisnis.nama }}{% if eg.entitas_bisnis_lv2 %} / {{ eg.entitas_bisnis_lv2.nama }}{% endif %}{% if eg.entitas_bisnis_lv3 %} / {{ eg.entitas_bisnis_lv3.nama }}{% endif %}
     </h3>
     <div class="ni-table-wrapper">
       <table class="ni-table">
