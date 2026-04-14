@@ -6,6 +6,14 @@
     <h1 class="ni-page-header__title">Chart of Accounts</h1>
     <p class="ni-page-header__subtitle">Daftar semua akun berdasarkan kategori</p>
   </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'master_data:coa_export' %}" class="ni-btn ni-btn--outline ni-btn--sm">
+      <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
+    </a>
+    <button type="button" class="ni-btn ni-btn--primary ni-btn--sm" onclick="niCoa.openImport()">
+      <i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV
+    </button>
+  </div>
 </div>
 
 {% for category in categories %}
@@ -229,6 +237,39 @@
     </div>
   </div>
 </div>
+
+<!-- ── Modal: Import CSV ────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalImport">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Import Chart of Accounts</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalImport')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <p style="color:var(--ni-text-muted);font-size:0.875rem;margin-bottom:16px;">
+        Upload file CSV dengan kolom:
+        <em>Kode Akun Lvl 1, Nama Akun Lvl 1, Kode Akun Lvl 2, Nama Akun Lvl 2, Kode Akun Lvl 3, Nama Akun</em>.
+        Akun yang sudah ada akan diperbarui, akun baru akan ditambahkan.
+      </p>
+      <form id="coaFormImport" method="post" action="{% url 'master_data:coa_import' %}" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">File CSV <span style="color:var(--ni-danger)">*</span></label>
+          <input type="file" name="csv_file" accept=".csv" class="ni-input" required>
+        </div>
+      </form>
+      <p style="margin-top:8px;font-size:0.8125rem;color:var(--ni-text-muted);">
+        <a href="{% url 'master_data:coa_export' %}" style="color:var(--ni-primary);">
+          <i data-lucide="download" style="width:12px;height:12px;vertical-align:middle;"></i> Download template CSV
+        </a>
+      </p>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalImport')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="document.getElementById('coaFormImport').submit()">Import</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -305,6 +346,10 @@
       this._activeCategory = catIdx;
       this._activeLv1 = lv1Idx;
       this.open('coaModalDeleteLv2');
+    },
+    openImport: function () {
+      document.getElementById('coaFormImport').reset();
+      this.open('coaModalImport');
     },
     _activeCategory: null,
     _activeLv1: null,

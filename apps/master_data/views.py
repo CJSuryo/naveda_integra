@@ -1,4 +1,7 @@
 """Master data views."""
+import csv
+import io
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -791,3 +794,185 @@ def prefix_list(request: HttpRequest) -> HttpResponse:
 def bukti_detail(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(Bukti, pk=pk)
     return render(request, 'master_data/bukti/detail.html', {'object': obj})
+
+
+# ── Chart of Accounts: Export ─────────────────────────────────────────────────
+
+# Category metadata used by both export and import views
+_COA_CATEGORIES: list[dict] = [
+    {
+        'prefix': '1', 'name': 'ASET', 'slug': 'aset',
+        'lv1_model': AsetLv1, 'lv2_model': AsetLv2,
+        'lv1_fk': 'aset',
+    },
+    {
+        'prefix': '2', 'name': 'KEWAJIBAN', 'slug': 'kewajiban',
+        'lv1_model': KewajibanLv1, 'lv2_model': KewajibanLv2,
+        'lv1_fk': 'kewajiban',
+    },
+    {
+        'prefix': '3', 'name': 'EKUITAS', 'slug': 'ekuitas',
+        'lv1_model': EkuitasLv1, 'lv2_model': EkuitasLv2,
+        'lv1_fk': 'ekuitas',
+    },
+    {
+        'prefix': '4', 'name': 'PENDAPATAN', 'slug': 'pendapatan',
+        'lv1_model': PendapatanLv1, 'lv2_model': PendapatanLv2,
+        'lv1_fk': 'pendapatan',
+    },
+    {
+        'prefix': '5', 'name': 'BEBAN', 'slug': 'beban',
+        'lv1_model': BebanLv1, 'lv2_model': BebanLv2,
+        'lv1_fk': 'beban',
+    },
+]
+
+_COA_HEADERS = [
+    'Kode Akun Lvl 1', 'Nama Akun Lvl 1',
+    'Kode Akun Lvl 2', 'Nama Akun Lvl 2',
+    'Kode Akun Lvl 3', 'Nama Akun',
+]
+
+
+@login_required
+def coa_export(request: HttpRequest) -> HttpResponse:
+    """Export Chart of Accounts as a CSV file."""
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="chart_of_accounts.csv"'
+    response.write('\ufeff')  # UTF-8 BOM for Excel compatibility
+
+    writer = csv.writer(response)
+    writer.writerow(_COA_HEADERS)
+
+    for cat in _COA_CATEGORIES:
+        lv1_qs = cat['lv1_model'].objects.prefetch_related('children').order_by('kode')
+        for lv1 in lv1_qs:
+            lv2_qs = lv1.children.order_by('kode')
+            if lv2_qs.exists():
+                for lv2 in lv2_qs:
+                    writer.writerow([
+                        cat['prefix'], cat['name'],
+                        lv1.kode, lv1.nama,
+                        lv2.kode, lv2.nama,
+                    ])
+            else:
+                writer.writerow([
+                    cat['prefix'], cat['name'],
+                    lv1.kode, lv1.nama,
+                    '', '',
+                ])
+
+    return response
+
+
+# ── Chart of Accounts: Import ─────────────────────────────────────────────────
+
+def _get_category_by_prefix(prefix: str) -> dict | None:
+    for cat in _COA_CATEGORIES:
+        if cat['prefix'] == prefix:
+            return cat
+    return None
+
+
+@login_required
+def coa_import(request: HttpRequest) -> HttpResponse:
+    """Import Chart of Accounts from a CSV file."""
+    if request.method != 'POST':
+        return redirect('master_data:chart_of_accounts')
+
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        messages.error(request, 'Pilih file CSV terlebih dahulu.')
+        return redirect('master_data:chart_of_accounts')
+
+    if not csv_file.name.endswith('.csv'):
+        messages.error(request, 'File harus berformat CSV.')
+        return redirect('master_data:chart_of_accounts')
+
+    try:
+        raw = csv_file.read()
+        # Strip UTF-8 BOM if present
+        decoded = raw.decode('utf-8-sig').strip()
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        # Validate headers
+        required_headers = set(_COA_HEADERS)
+        actual_headers = set(reader.fieldnames or [])
+        missing = required_headers - actual_headers
+        if missing:
+            messages.error(request, f'Kolom tidak ditemukan: {", ".join(sorted(missing))}')
+            return redirect('master_data:chart_of_accounts')
+
+        created_lv1 = updated_lv1 = created_lv2 = updated_lv2 = 0
+        errors: list[str] = []
+
+        with transaction.atomic():
+            for line_num, row in enumerate(reader, start=2):
+                prefix = (row.get('Kode Akun Lvl 1') or '').strip()
+                lv1_kode = (row.get('Kode Akun Lvl 2') or '').strip()
+                lv1_nama = (row.get('Nama Akun Lvl 2') or '').strip()
+                lv2_kode = (row.get('Kode Akun Lvl 3') or '').strip()
+                lv2_nama = (row.get('Nama Akun') or '').strip()
+
+                if not prefix or not lv1_kode or not lv1_nama:
+                    errors.append(f'Baris {line_num}: kolom wajib kosong, dilewati.')
+                    continue
+
+                cat = _get_category_by_prefix(prefix)
+                if not cat:
+                    errors.append(f'Baris {line_num}: prefix "{prefix}" tidak dikenal.')
+                    continue
+
+                # Upsert Lv1 (e.g. AsetLv1)
+                lv1_obj, lv1_created = cat['lv1_model'].objects.get_or_create(
+                    kode=lv1_kode,
+                    defaults={'nama': lv1_nama},
+                )
+                if not lv1_created and lv1_obj.nama != lv1_nama:
+                    lv1_obj.nama = lv1_nama
+                    lv1_obj.save()
+                    updated_lv1 += 1
+                elif lv1_created:
+                    created_lv1 += 1
+
+                # Upsert Lv2 (e.g. AsetLv2) only when kode provided
+                if lv2_kode:
+                    lv2_defaults = {cat['lv1_fk']: lv1_obj, 'nama': lv2_nama}
+                    lv2_obj, lv2_created = cat['lv2_model'].objects.get_or_create(
+                        kode=lv2_kode,
+                        defaults=lv2_defaults,
+                    )
+                    if not lv2_created:
+                        changed = False
+                        if getattr(lv2_obj, cat['lv1_fk'] + '_id') != lv1_obj.pk:
+                            setattr(lv2_obj, cat['lv1_fk'], lv1_obj)
+                            changed = True
+                        if lv2_obj.nama != lv2_nama and lv2_nama:
+                            lv2_obj.nama = lv2_nama
+                            changed = True
+                        if changed:
+                            lv2_obj.save()
+                            updated_lv2 += 1
+                    else:
+                        created_lv2 += 1
+
+        parts = []
+        if created_lv1:
+            parts.append(f'{created_lv1} sub-kategori baru')
+        if updated_lv1:
+            parts.append(f'{updated_lv1} sub-kategori diperbarui')
+        if created_lv2:
+            parts.append(f'{created_lv2} akun baru')
+        if updated_lv2:
+            parts.append(f'{updated_lv2} akun diperbarui')
+
+        if errors:
+            messages.warning(request, f'Import selesai dengan peringatan: {"; ".join(errors[:5])}')
+
+        summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
+        messages.success(request, f'Import berhasil: {summary}')
+
+    except Exception as exc:
+        messages.error(request, f'Gagal memproses file: {exc}')
+
+    return redirect('master_data:chart_of_accounts')
