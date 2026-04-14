@@ -6,8 +6,8 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
 <style>
   .ni-purchase-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
-  .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-  .ni-purchase-eb-card__header select { flex: 1; }
+  .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ni-purchase-eb-card__header select { flex: 1; min-width: 0; }
   .ni-purchase-item-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
   .ni-purchase-item-table th { background: var(--ni-bg); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; color: var(--ni-text-muted); }
   .ni-purchase-item-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
@@ -16,11 +16,16 @@
   .ni-purchase-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-purchase-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
   .ts-wrapper.single .ts-control { border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
-  .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; }
-  .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; overflow-x: auto; }
+  .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
   .ni-journal-preview th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--ni-border); color: var(--ni-text-muted); font-size: 0.75rem; }
   .ni-journal-preview td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); }
   .ni-advanced-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
+  .ni-purchase-item-table-wrapper { overflow-x: auto; }
+  @media (max-width: 768px) {
+    .ni-purchase-eb-card { padding: 12px; }
+    .ni-purchase-item-table { min-width: 600px; }
+  }
 </style>
 {% endblock %}
 
@@ -45,7 +50,7 @@
     <form id="purchaseForm" method="post">
       {% csrf_token %}
       <!-- Header fields -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Transaction ID</label>
           <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}TRX-INV-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
@@ -81,13 +86,18 @@
 
       <!-- Journal Preview -->
       <div id="journalPreview" class="ni-journal-preview" style="display:none;">
-        <h4 style="margin:0 0 12px;font-size:0.9rem;color:var(--ni-text);">
-          <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
-          Journal Preview
-        </h4>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h4 style="margin:0;font-size:0.9rem;color:var(--ni-text);">
+            <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+            Journal Preview
+          </h4>
+          <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="closeJournalPreview()" style="padding:4px 8px;">
+            <i data-lucide="x" style="width:14px;height:14px"></i> Tutup
+          </button>
+        </div>
         <table>
           <thead>
-            <tr><th>Entitas Bisnis</th><th>Item</th><th>Debit (Account)</th><th>Credit (Account)</th><th>Amount</th></tr>
+            <tr><th>Entitas Bisnis</th><th>Item</th><th>Akun Debit</th><th class="ni-text-right">Debit (Rp)</th><th>Akun Kredit</th><th class="ni-text-right">Kredit (Rp)</th></tr>
           </thead>
           <tbody id="journalPreviewBody"></tbody>
         </table>
@@ -362,14 +372,20 @@
       var tbody = document.getElementById('journalPreviewBody');
       tbody.innerHTML = '';
       if (!data.entries || data.entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
       } else {
         data.entries.forEach(function (e) {
-          tbody.innerHTML += '<tr><td>' + e.eb_name + '</td><td>' + e.item_name + '</td><td>' + e.debit_account + '</td><td>' + e.credit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td></tr>';
+          tbody.innerHTML += '<tr><td>' + e.eb_name + '</td><td>' + e.item_name + '</td><td>' + e.debit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td><td>' + e.credit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td></tr>';
         });
       }
-      document.getElementById('journalPreview').style.display = '';
+      var preview = document.getElementById('journalPreview');
+      preview.style.display = '';
+      lucide.createIcons();
     });
+  };
+
+  window.closeJournalPreview = function () {
+    document.getElementById('journalPreview').style.display = 'none';
   };
 
   // ── Form Submission ───────────────────────────────────────────────────────

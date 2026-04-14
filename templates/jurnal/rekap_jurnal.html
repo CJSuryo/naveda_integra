@@ -127,30 +127,38 @@
             <th>No. Transaksi</th>
             <th>Uraian</th>
             <th>Entitas Bisnis</th>
-            <th>Item</th>
-            <th>Detail Akun</th>
+            <th>Akun</th>
+            <th class="ni-text-right">Debit</th>
+            <th class="ni-text-right">Kredit</th>
           </tr>
         </thead>
         <tbody>
           {% for header in headers %}
+          {% with details=header.details.all %}
+          {% for detail in details %}
+          <tr>
+            {% if forloop.first %}
+            <td rowspan="{{ details|length|default:1 }}">{{ header.tanggal|date:"Y-m-d" }}</td>
+            <td rowspan="{{ details|length|default:1 }}"><a href="{% url 'jurnal:header_detail' header.pk %}">{% if header.transaction_prefix %}{{ header.transaction_prefix.kode }}-{% endif %}{{ header.nomor_transaksi }}</a></td>
+            <td rowspan="{{ details|length|default:1 }}">{{ header.uraian_transaksi }}</td>
+            <td rowspan="{{ details|length|default:1 }}">{{ header.entitas_bisnis|default:"-" }}</td>
+            {% endif %}
+            <td>{{ detail.akun.kode_akun }} - {{ detail.akun.nama }}</td>
+            <td class="ni-text-right">{% if detail.debit %}{{ detail.debit|floatformat:0 }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if detail.kredit %}{{ detail.kredit|floatformat:0 }}{% else %}-{% endif %}</td>
+          </tr>
+          {% empty %}
           <tr>
             <td>{{ header.tanggal|date:"Y-m-d" }}</td>
             <td><a href="{% url 'jurnal:header_detail' header.pk %}">{% if header.transaction_prefix %}{{ header.transaction_prefix.kode }}-{% endif %}{{ header.nomor_transaksi }}</a></td>
             <td>{{ header.uraian_transaksi }}</td>
             <td>{{ header.entitas_bisnis|default:"-" }}</td>
-            <td>{{ header.item|default:"-" }}</td>
-            <td>
-              {% for detail in header.details.all %}
-              <div style="font-size:0.85rem;">
-                {{ detail.akun.kode_akun }} - D:{{ detail.debit|floatformat:0 }} K:{{ detail.kredit|floatformat:0 }}
-              </div>
-              {% empty %}
-              <span class="ni-text-muted">-</span>
-              {% endfor %}
-            </td>
+            <td colspan="3" class="ni-text-muted">-</td>
           </tr>
+          {% endfor %}
+          {% endwith %}
           {% empty %}
-          <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada data jurnal.</td></tr>
+          <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada data jurnal.</td></tr>
           {% endfor %}
         </tbody>
       </table>

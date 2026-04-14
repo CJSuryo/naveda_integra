@@ -390,27 +390,43 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
 
 
 def _get_entitas_bisnis_dropdown_options() -> list[dict[str, str]]:
+    """Return EB options grouped hierarchically: Lv1, then its Lv2, then Lv3 under each Lv2."""
     from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
 
+    # Pre-fetch all levels
+    lv1_list = list(EBModel.objects.filter(status_aktif=True).order_by('nama'))
+    lv2_list = list(
+        EntitasBisnisLv2.objects.filter(status_aktif=True)
+        .select_related('entitas_bisnis')
+        .order_by('nama')
+    )
+    lv3_list = list(
+        EntitasBisnisLv3.objects.filter(status_aktif=True)
+        .select_related('parent_lv2__entitas_bisnis')
+        .order_by('nama')
+    )
+
+    # Group lv2 by lv1, lv3 by lv2
+    lv2_by_lv1: dict[int, list[EntitasBisnisLv2]] = {}
+    for lv2 in lv2_list:
+        lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
+    lv3_by_lv2: dict[int, list[EntitasBisnisLv3]] = {}
+    for lv3 in lv3_list:
+        lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
+
     options: list[dict[str, str]] = []
-    for eb in EBModel.objects.filter(status_aktif=True).order_by('nama'):
+    for eb in lv1_list:
         options.append({'value': f'lv1:{eb.pk}', 'label': eb.nama})
-
-    for lv2 in EntitasBisnisLv2.objects.filter(status_aktif=True).select_related('entitas_bisnis').order_by(
-        'entitas_bisnis__nama', 'nama'
-    ):
-        options.append({
-            'value': f'lv2:{lv2.pk}',
-            'label': f'{lv2.nama} — {lv2.entitas_bisnis.nama}',
-        })
-
-    for lv3 in EntitasBisnisLv3.objects.filter(status_aktif=True).select_related('parent_lv2__entitas_bisnis').order_by(
-        'parent_lv2__entitas_bisnis__nama', 'parent_lv2__nama', 'nama'
-    ):
-        options.append({
-            'value': f'lv3:{lv3.pk}',
-            'label': f'{lv3.nama} — {lv3.parent_lv2.nama} / {lv3.parent_lv2.entitas_bisnis.nama}',
-        })
+        for lv2 in lv2_by_lv1.get(eb.pk, []):
+            options.append({
+                'value': f'lv2:{lv2.pk}',
+                'label': f'\u00a0\u00a0\u00a0\u00a0↳ {lv2.nama}',
+            })
+            for lv3 in lv3_by_lv2.get(lv2.pk, []):
+                options.append({
+                    'value': f'lv3:{lv3.pk}',
+                    'label': f'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0↳ {lv3.nama}',
+                })
 
     return options
 

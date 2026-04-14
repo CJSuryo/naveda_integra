@@ -11,12 +11,6 @@ urlpatterns = [
     # JurnalHeader detail (read-only)
     path('header/<int:pk>/', views.header_detail, name='header_detail'),
 
-    # Item CRUD
-    path('item/', views.item_list, name='item_list'),
-    path('item/create/', views.item_create, name='item_create'),
-    path('item/<int:pk>/edit/', views.item_update, name='item_update'),
-    path('item/<int:pk>/delete/', views.item_delete, name='item_delete'),
-
     # Jurnal Manual (renamed from Automasi)
     path('manual/', views.automasi_list, name='automasi_list'),
     path('manual/create/', views.automasi_create, name='automasi_create'),

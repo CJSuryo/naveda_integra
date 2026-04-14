@@ -150,40 +150,31 @@ KATEGORI_PREFIX = {
 
 
 def _compute_kode_akun(kategori_id: str, kategori_akun: int | None) -> str:
-    """Compute the Kode Akun string from the Lv2 record."""
+    """Compute the Kode Akun string from the Lv2 record.
+
+    The Lv2 ``kode`` field already contains the full hierarchical path
+    (e.g. ``1.1.1`` for Aset Lv1=1 → Lv2=1).  We simply return that value
+    so the Akun ``kode_akun`` matches the displayed code in the CoA tree.
+    """
     prefix = KATEGORI_PREFIX.get(kategori_id, '?')
     if not kategori_akun:
         return f'{prefix}.?.?'
 
-    lv1_kode: str = '?'
-    lv2_kode: str = '?'
-    if kategori_id == 'aset':
-        lv2 = AsetLv2.objects.filter(pk=kategori_akun).select_related('aset').first()
-        if lv2:
-            lv2_kode = lv2.kode
-            lv1_kode = lv2.aset.kode if lv2.aset else '?'
-    elif kategori_id == 'kewajiban':
-        lv2 = KewajibanLv2.objects.filter(pk=kategori_akun).select_related('kewajiban').first()
-        if lv2:
-            lv2_kode = lv2.kode
-            lv1_kode = lv2.kewajiban.kode if lv2.kewajiban else '?'
-    elif kategori_id == 'ekuitas':
-        lv2 = EkuitasLv2.objects.filter(pk=kategori_akun).select_related('ekuitas').first()
-        if lv2:
-            lv2_kode = lv2.kode
-            lv1_kode = lv2.ekuitas.kode if lv2.ekuitas else '?'
-    elif kategori_id == 'pendapatan':
-        lv2 = PendapatanLv2.objects.filter(pk=kategori_akun).select_related('pendapatan').first()
-        if lv2:
-            lv2_kode = lv2.kode
-            lv1_kode = lv2.pendapatan.kode if lv2.pendapatan else '?'
-    elif kategori_id == 'beban':
-        lv2 = BebanLv2.objects.filter(pk=kategori_akun).select_related('beban').first()
-        if lv2:
-            lv2_kode = lv2.kode
-            lv1_kode = lv2.beban.kode if lv2.beban else '?'
+    MODEL_MAP: dict[str, type[models.Model]] = {
+        'aset': AsetLv2,
+        'kewajiban': KewajibanLv2,
+        'ekuitas': EkuitasLv2,
+        'pendapatan': PendapatanLv2,
+        'beban': BebanLv2,
+    }
 
-    return f'{prefix}.{lv1_kode}.{lv2_kode}'
+    lv2_model = MODEL_MAP.get(kategori_id)
+    if lv2_model:
+        kode = lv2_model.objects.filter(pk=kategori_akun).values_list('kode', flat=True).first()
+        if kode:
+            return kode
+
+    return f'{prefix}.?.?'
 
 
 class Akun(models.Model):

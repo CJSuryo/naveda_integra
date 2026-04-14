@@ -157,6 +157,7 @@ input, select, textarea { font: inherit; }
 
   .ni-main {
     margin-left: 0;
+    padding-top: 56px; /* space for fixed mobile topbar */
   }
 }
 

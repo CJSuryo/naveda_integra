@@ -28,10 +28,13 @@
 <body>
 {% if user.is_authenticated %}
 <div class="ni-app">
-  <!-- Mobile hamburger -->
-  <button class="ni-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
-    <i data-lucide="menu" style="width:24px;height:24px"></i>
-  </button>
+  <!-- Mobile top bar (fixed, visible on mobile only) -->
+  <div class="ni-mobile-topbar" id="mobileTopbar">
+    <button class="ni-mobile-toggle" id="mobileToggle" aria-label="Toggle menu">
+      <i data-lucide="menu" style="width:24px;height:24px"></i>
+    </button>
+    <span class="ni-mobile-topbar__title">Naveda Integra</span>
+  </div>
 
   <!-- Sidebar overlay (mobile) -->
   <div class="ni-sidebar-overlay" id="sidebarOverlay"></div>
@@ -143,9 +146,6 @@
           </a>
           <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Neraca Saldo</span>
-          </a>
-          <a href="{% url 'jurnal:item_list' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Item</span>
           </a>
         </div>
       </div>

@@ -89,6 +89,7 @@
           <td class="ni-text-right">{{ row.item.total_value }}</td>
           <td>
             <div class="ni-btn-row">
+              <a href="{% url 'purchase:detail' row.purchase_header.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
               {% if not row.purchase_header.is_locked %}
               <a href="{% url 'purchase:update' row.purchase_header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
               <a href="{% url 'purchase:delete' row.purchase_header.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>

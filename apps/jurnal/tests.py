@@ -211,33 +211,6 @@ class ManualJurnalViewTests(TestCase):
         self.assertEqual(header.details.count(), 2)
 
 
-class ItemViewTests(TestCase):
-    def setUp(self):
-        self.client = Client()
-        self.user = _create_user()
-        self.client.force_login(self.user)
-        self.item = Item.objects.create(kode='A', nama='Persediaan')
-
-    def test_list(self):
-        response = self.client.get(reverse('jurnal:item_list'))
-        self.assertEqual(response.status_code, 200)
-
-    def test_create(self):
-        data = {'kode': 'B', 'nama': 'Barang Baru'}
-        response = self.client.post(reverse('jurnal:item_create'), data)
-        self.assertRedirects(response, reverse('jurnal:item_list'))
-
-    def test_update(self):
-        data = {'kode': 'A', 'nama': 'Updated'}
-        response = self.client.post(reverse('jurnal:item_update', args=[self.item.pk]), data)
-        self.assertRedirects(response, reverse('jurnal:item_list'))
-
-    def test_delete(self):
-        i = Item.objects.create(kode='DEL', nama='To Delete')
-        response = self.client.post(reverse('jurnal:item_delete', args=[i.pk]))
-        self.assertRedirects(response, reverse('jurnal:item_list'))
-
-
 class TransactionPrefixViewTests(TestCase):
     """TransactionPrefix is now read-only in master_data app."""
     def setUp(self):
