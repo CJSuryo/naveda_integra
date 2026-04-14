@@ -441,8 +441,24 @@
     return { eb_groups: groups };
   }
 
-  document.getElementById('purchaseForm').addEventListener('submit', function () {
+  document.getElementById('purchaseForm').addEventListener('submit', function (e) {
     var payload = collectFormData();
+    var errorMsgs = [];
+    payload.eb_groups.forEach(function (g, gi) {
+      g.items.forEach(function (item, ji) {
+        if (!item.coa_account_id) {
+          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Akun CoA wajib diisi. Pilih item yang sudah memiliki akun CoA atau atur akun pada master item.');
+        }
+        if (!item.offset_coa_account_id) {
+          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Akun Offset CoA wajib diisi. Pilih sub-transaction type yang memiliki offset account default.');
+        }
+      });
+    });
+    if (errorMsgs.length > 0) {
+      alert('Terdapat kesalahan:\n\n' + errorMsgs.join('\n'));
+      e.preventDefault();
+      return;
+    }
     document.getElementById('ebGroupsData').value = JSON.stringify(payload.eb_groups);
   });
 

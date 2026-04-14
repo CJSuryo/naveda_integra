@@ -493,6 +493,14 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         if not group.get('items'):
             errors[f'group_{i}_items'] = f'Minimal 1 item wajib diisi untuk group {i + 1}.'
         for j, item_data in enumerate(group.get('items', [])):
+            if not item_data.get('item_id'):
+                errors[f'item_{i}_{j}_item'] = f'Item wajib dipilih untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('sub_transaction_type_id'):
+                errors[f'item_{i}_{j}_stt'] = f'Sub-transaction type wajib dipilih untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('coa_account_id'):
+                errors[f'item_{i}_{j}_coa'] = f'Akun CoA wajib diisi untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('offset_coa_account_id'):
+                errors[f'item_{i}_{j}_offset'] = f'Akun Offset CoA wajib diisi untuk baris {j + 1} group {i + 1}.'
             try:
                 qty = Decimal(str(item_data.get('quantity', 0)))
                 price = Decimal(str(item_data.get('unit_price', 0)))
