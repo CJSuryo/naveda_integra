@@ -801,27 +801,27 @@ def bukti_detail(request: HttpRequest, pk: int) -> HttpResponse:
 # Category metadata used by both export and import views
 _COA_CATEGORIES: list[dict] = [
     {
-        'prefix': '1', 'name': 'ASET', 'slug': 'aset',
+        'prefix': '1', 'name': 'ASET',
         'lv1_model': AsetLv1, 'lv2_model': AsetLv2,
         'lv1_fk': 'aset',
     },
     {
-        'prefix': '2', 'name': 'KEWAJIBAN', 'slug': 'kewajiban',
+        'prefix': '2', 'name': 'KEWAJIBAN',
         'lv1_model': KewajibanLv1, 'lv2_model': KewajibanLv2,
         'lv1_fk': 'kewajiban',
     },
     {
-        'prefix': '3', 'name': 'EKUITAS', 'slug': 'ekuitas',
+        'prefix': '3', 'name': 'EKUITAS',
         'lv1_model': EkuitasLv1, 'lv2_model': EkuitasLv2,
         'lv1_fk': 'ekuitas',
     },
     {
-        'prefix': '4', 'name': 'PENDAPATAN', 'slug': 'pendapatan',
+        'prefix': '4', 'name': 'PENDAPATAN',
         'lv1_model': PendapatanLv1, 'lv2_model': PendapatanLv2,
         'lv1_fk': 'pendapatan',
     },
     {
-        'prefix': '5', 'name': 'BEBAN', 'slug': 'beban',
+        'prefix': '5', 'name': 'BEBAN',
         'lv1_model': BebanLv1, 'lv2_model': BebanLv2,
         'lv1_fk': 'beban',
     },
@@ -944,7 +944,7 @@ def coa_import(request: HttpRequest) -> HttpResponse:
                     )
                     if not lv2_created:
                         changed = False
-                        if getattr(lv2_obj, cat['lv1_fk'] + '_id') != lv1_obj.pk:
+                        if getattr(lv2_obj, cat['lv1_fk']).pk != lv1_obj.pk:
                             setattr(lv2_obj, cat['lv1_fk'], lv1_obj)
                             changed = True
                         if lv2_obj.nama != lv2_nama and lv2_nama:
@@ -967,7 +967,10 @@ def coa_import(request: HttpRequest) -> HttpResponse:
             parts.append(f'{updated_lv2} akun diperbarui')
 
         if errors:
-            messages.warning(request, f'Import selesai dengan peringatan: {"; ".join(errors[:5])}')
+            extra = len(errors) - 5
+            shown = '; '.join(errors[:5])
+            suffix = f' (dan {extra} lainnya)' if extra > 0 else ''
+            messages.warning(request, f'Import selesai dengan peringatan: {shown}{suffix}')
 
         summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
         messages.success(request, f'Import berhasil: {summary}')
