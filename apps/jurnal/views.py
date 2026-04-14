@@ -407,10 +407,10 @@ def _get_entitas_bisnis_dropdown_options() -> list[dict[str, str]]:
     )
 
     # Group lv2 by lv1, lv3 by lv2
-    lv2_by_lv1: dict[int, list] = {}
+    lv2_by_lv1: dict[int, list[EntitasBisnisLv2]] = {}
     for lv2 in lv2_list:
         lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
-    lv3_by_lv2: dict[int, list] = {}
+    lv3_by_lv2: dict[int, list[EntitasBisnisLv3]] = {}
     for lv3 in lv3_list:
         lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
 
