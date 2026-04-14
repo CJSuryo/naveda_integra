@@ -217,7 +217,7 @@
   var itemCounters = {};
 
   // Data from server (for edit mode)
-  var existingGroups = {{ eb_groups_json|default:"[]" }};
+  var existingGroups = {{ eb_groups_json|default:"[]"|safe }};
 
   // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
   var ebOptions = {{ eb_options_json|default:"[]"|safe }};

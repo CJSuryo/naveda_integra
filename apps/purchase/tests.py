@@ -276,6 +276,31 @@ class PurchaseViewTests(TestCase):
         resp = self.client.get(reverse('purchase:detail', args=[ph.pk]))
         self.assertEqual(resp.status_code, 200)
 
+    def test_purchase_update_get(self):
+        """Edit page should load with existing purchase data."""
+        groups = [{
+            'entitas_bisnis_id': self.eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'coa_account_id': self.akun_persediaan.pk,
+                'offset_coa_account_id': self.akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '5000',
+            }],
+        }]
+        self.client.post(reverse('purchase:create'), {
+            'tanggal': '2026-03-01',
+            'deskripsi': 'Edit Test',
+            'eb_groups_data': json.dumps(groups),
+        })
+        ph = PurchaseHeader.objects.first()
+        resp = self.client.get(reverse('purchase:update', args=[ph.pk]))
+        self.assertEqual(resp.status_code, 200)
+        # Should contain the existing group data as JSON for pre-filling
+        self.assertContains(resp, 'Edit Purchase')
+        self.assertContains(resp, str(self.item))
+
     def test_purchase_delete_locked(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01', is_locked=True)
         resp = self.client.post(reverse('purchase:delete', args=[ph.pk]))
