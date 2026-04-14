@@ -294,7 +294,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show purchase detail with all EB groups and items."""
+    """Show purchase detail with all EB groups, items, and journal preview."""
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
@@ -307,7 +307,40 @@ def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
         ),
         pk=pk,
     )
-    return render(request, 'purchase/purchase_detail.html', {'purchase': purchase})
+
+    # Build journal preview entries
+    journal_entries = []
+    entry_no = 0
+    for eg in purchase.entitas_groups.all():
+        eb_name = eg.entitas_bisnis.nama
+        if eg.entitas_bisnis_lv2:
+            eb_name += f' / {eg.entitas_bisnis_lv2.nama}'
+        if eg.entitas_bisnis_lv3:
+            eb_name += f' / {eg.entitas_bisnis_lv3.nama}'
+        for pi in eg.items.all():
+            total = pi.total_value
+            if total <= 0:
+                continue
+            entry_no += 1
+            journal_entries.append({
+                'no': entry_no,
+                'entitas_bisnis': eb_name,
+                'akun': str(pi.coa_account),
+                'debit': total,
+                'kredit': None,
+            })
+            journal_entries.append({
+                'no': '',
+                'entitas_bisnis': '',
+                'akun': str(pi.offset_coa_account),
+                'debit': None,
+                'kredit': total,
+            })
+
+    return render(request, 'purchase/purchase_detail.html', {
+        'purchase': purchase,
+        'journal_entries': journal_entries,
+    })
 
 
 # ── Purchase Delete ──────────────────────────────────────────────────────────
@@ -659,21 +692,31 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         tipe_item = 'RM'
 
     kategori_id = data.get('kategori_id') or None
-    velocity_category = data.get('velocity_category', '')
     coa_account_id = data.get('coa_account_id') or None
-    expiry_date = data.get('expiry_date') or None
-    threshold_days = data.get('threshold_days_outstanding') or None
     eb_ids = data.get('entitas_bisnis_ids', [])
 
-    item = ItemMasterPurchase.objects.create(
-        nama=nama,
-        tipe_item=tipe_item,
-        kategori_id=kategori_id,
-        velocity_category=velocity_category,
-        coa_account_id=coa_account_id,
-        expiry_date=expiry_date,
-        threshold_days_outstanding=threshold_days,
-    )
+    create_kwargs: dict = {
+        'nama': nama,
+        'tipe_item': tipe_item,
+        'kategori_id': kategori_id,
+        'coa_account_id': coa_account_id,
+    }
+
+    # Fields for inventory items (RM/FG/ITM)
+    if tipe_item in ('RM', 'FG', 'ITM'):
+        create_kwargs['velocity_category'] = data.get('velocity_category', '')
+        create_kwargs['expiry_date'] = data.get('expiry_date') or None
+        create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None
+    # Fields for Aset Tetap (ATP)
+    elif tipe_item == 'ATP':
+        create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
+        create_kwargs['metode_penyusutan'] = data.get('metode_penyusutan', '')
+    # Fields for Aset Lainnya (ALL)
+    elif tipe_item == 'ALL':
+        create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
+        create_kwargs['metode_amortisasi'] = data.get('metode_amortisasi', '')
+
+    item = ItemMasterPurchase.objects.create(**create_kwargs)
     if eb_ids:
         item.entitas_bisnis.set(eb_ids)
 
@@ -703,6 +746,22 @@ def api_stt_offset(request: HttpRequest) -> JsonResponse:
         })
     except SubTransactionType.DoesNotExist:
         return JsonResponse({'offset_account_id': '', 'offset_account_text': ''})
+
+
+@login_required
+def api_kategori_filter(request: HttpRequest) -> JsonResponse:
+    """Return KategoriItem options filtered by tipe_item and optionally entitas bisnis."""
+    tipe_item = request.GET.get('tipe_item', '')
+    eb_lv1_id = request.GET.get('eb_lv1_id', '')
+
+    qs = KategoriItem.objects.all().order_by('nama')
+    if tipe_item:
+        qs = qs.filter(tipe_item=tipe_item)
+    if eb_lv1_id:
+        qs = qs.filter(entitas_bisnis__pk=eb_lv1_id)
+
+    results = [{'id': k.pk, 'nama': k.nama} for k in qs]
+    return JsonResponse(results, safe=False)
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────

@@ -7,6 +7,12 @@
     <p class="ni-page-header__subtitle">Daftar semua akun berdasarkan kategori</p>
   </div>
   <div class="ni-page-header__actions">
+    <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="niCoa.toggleAllLevel(1)" title="Expand/Collapse semua Level 1">
+      <i data-lucide="list" style="width:14px;height:14px"></i> Level 1
+    </button>
+    <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="niCoa.toggleAllLevel(2)" title="Expand/Collapse semua Level 2">
+      <i data-lucide="list-tree" style="width:14px;height:14px"></i> Level 2
+    </button>
     <a href="{% url 'master_data:coa_export' %}" class="ni-btn ni-btn--outline ni-btn--sm">
       <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
     </a>
@@ -403,6 +409,54 @@
       btn.innerHTML = '<i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview';
       lucide.createIcons();
       this.open('coaModalImport');
+    },
+
+    // ── Bulk Expand/Collapse ────────────────────────────────────────────────
+    _level1Expanded: false,
+    _level2Expanded: false,
+
+    toggleAllLevel: function (level) {
+      if (level === 1) {
+        this._level1Expanded = !this._level1Expanded;
+        var show = this._level1Expanded;
+        // Level 1 = category children containers
+        document.querySelectorAll('.ni-coa-children').forEach(function (el) {
+          el.style.display = show ? '' : 'none';
+        });
+        // Rotate category arrows
+        document.querySelectorAll('[data-toggle="coa-category"] .ni-coa-arrow').forEach(function (arrow) {
+          arrow.style.transform = show ? 'rotate(90deg)' : '';
+        });
+        // If collapsing level 1, also collapse level 2
+        if (!show) {
+          this._level2Expanded = false;
+          document.querySelectorAll('.ni-coa-lv2-list').forEach(function (el) {
+            el.style.display = 'none';
+          });
+          document.querySelectorAll('[data-toggle="coa-lv1"] .ni-coa-arrow').forEach(function (arrow) {
+            arrow.style.transform = '';
+          });
+        }
+      } else if (level === 2) {
+        // First expand level 1 if not already
+        if (!this._level1Expanded) {
+          this._level1Expanded = true;
+          document.querySelectorAll('.ni-coa-children').forEach(function (el) {
+            el.style.display = '';
+          });
+          document.querySelectorAll('[data-toggle="coa-category"] .ni-coa-arrow').forEach(function (arrow) {
+            arrow.style.transform = 'rotate(90deg)';
+          });
+        }
+        this._level2Expanded = !this._level2Expanded;
+        var showLv2 = this._level2Expanded;
+        document.querySelectorAll('.ni-coa-lv2-list').forEach(function (el) {
+          el.style.display = showLv2 ? '' : 'none';
+        });
+        document.querySelectorAll('[data-toggle="coa-lv1"] .ni-coa-arrow').forEach(function (arrow) {
+          arrow.style.transform = showLv2 ? 'rotate(90deg)' : '';
+        });
+      }
     },
 
     _clearErr: function (id) {
