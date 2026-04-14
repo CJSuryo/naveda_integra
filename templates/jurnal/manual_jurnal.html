@@ -137,6 +137,7 @@
     tbody.appendChild(tr);
 
     // Init TomSelect for the akun select
+    var currentRowNum = rowCount;  // capture in local variable for closure
     var ts = new TomSelect('#akun_sel_' + rowCount, {
       valueField: 'id',
       labelField: 'text',
@@ -152,12 +153,12 @@
       },
       onChange: function (val) {
         if (!val) {
-          document.getElementById('akun_nama_' + rowCount).value = '';
+          document.getElementById('akun_nama_' + currentRowNum).value = '';
           return;
         }
         var opt = this.options[val];
         if (opt) {
-          document.getElementById('akun_nama_' + rowCount).value = opt.nama || opt.text;
+          document.getElementById('akun_nama_' + currentRowNum).value = opt.nama || opt.text;
         }
         jmUpdateTotals();
       },
