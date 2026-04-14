@@ -197,3 +197,112 @@ class UserEntitasBisnisTests(TestCase):
         UserEntitasBisnis.objects.create(user=user, entitas_bisnis=entitas)
         with self.assertRaises(IntegrityError):
             UserEntitasBisnis.objects.create(user=user, entitas_bisnis=entitas)
+
+
+# ── NiPermission Tests ───────────────────────────────────────────────────────
+
+class NiPermissionTests(TestCase):
+    def test_permission_str(self):
+        from .models import NiPermission
+        p = NiPermission.objects.create(code='test_view', name='Lihat Test', module='Test')
+        self.assertIn('test_view', str(p))
+
+    def test_has_ni_perm_admin(self):
+        from .models import Role, NiPermission
+        role = Role.objects.create(kode='admin', nama='Admin')
+        user = User.objects.create_user(email='admin_perm@test.com', password='pass', name='Admin', role=role)
+        NiPermission.objects.create(code='some_perm', name='Some', module='Test')
+        self.assertTrue(user.has_ni_perm('some_perm'))
+
+    def test_has_ni_perm_explicit(self):
+        from .models import Role, NiPermission
+        role = Role.objects.create(kode='operator', nama='Operator')
+        user = User.objects.create_user(email='op_perm@test.com', password='pass', name='Op', role=role)
+        perm = NiPermission.objects.create(code='test_perm', name='Test Perm', module='Test')
+        self.assertFalse(user.has_ni_perm('test_perm'))
+        user.ni_permissions.add(perm)
+        self.assertTrue(user.has_ni_perm('test_perm'))
+
+    def test_get_ni_permission_codes(self):
+        from .models import Role, NiPermission
+        role = Role.objects.create(kode='operator', nama='Operator')
+        user = User.objects.create_user(email='codes@test.com', password='pass', name='Codes', role=role)
+        p1 = NiPermission.objects.create(code='a_perm', name='A', module='Test')
+        p2 = NiPermission.objects.create(code='b_perm', name='B', module='Test')
+        user.ni_permissions.add(p1, p2)
+        codes = user.get_ni_permission_codes()
+        self.assertIn('a_perm', codes)
+        self.assertIn('b_perm', codes)
+
+
+# ── User CRUD View Tests ─────────────────────────────────────────────────────
+
+class UserCRUDViewTests(TestCase):
+    def setUp(self):
+        from .models import Role
+        self.admin_role = Role.objects.create(kode='admin', nama='Admin')
+        self.admin_user = User.objects.create_user(
+            email='adminview@test.com', password='pass', name='Admin', role=self.admin_role,
+        )
+        self.client = Client()
+        self.client.force_login(self.admin_user)
+
+    def test_user_list(self):
+        resp = self.client.get(reverse('accounts:user_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.admin_user.email)
+
+    def test_user_create(self):
+        resp = self.client.get(reverse('accounts:user_create'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_user_create_post(self):
+        resp = self.client.post(reverse('accounts:user_create'), {
+            'email': 'newuser@test.com',
+            'name': 'New User',
+            'password': 'pass123',
+            'role': self.admin_role.pk,
+            'is_active': True,
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(User.objects.filter(email='newuser@test.com').exists())
+
+    def test_user_detail(self):
+        resp = self.client.get(reverse('accounts:user_detail', args=[self.admin_user.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.admin_user.email)
+
+    def test_user_update(self):
+        resp = self.client.post(reverse('accounts:user_update', args=[self.admin_user.pk]), {
+            'email': self.admin_user.email,
+            'name': 'Updated Name',
+            'role': self.admin_role.pk,
+            'is_active': True,
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.admin_user.refresh_from_db()
+        self.assertEqual(self.admin_user.name, 'Updated Name')
+
+    def test_user_delete(self):
+        target = User.objects.create_user(email='del@test.com', password='pass', name='Del')
+        resp = self.client.post(reverse('accounts:user_delete', args=[target.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(User.objects.filter(pk=target.pk).exists())
+
+    def test_user_permissions_page(self):
+        resp = self.client.get(reverse('accounts:user_permissions', args=[self.admin_user.pk]))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_user_permissions_post(self):
+        from .models import NiPermission
+        p = NiPermission.objects.create(code='test_perm', name='Test', module='Test')
+        resp = self.client.post(reverse('accounts:user_permissions', args=[self.admin_user.pk]), {
+            'permissions': [p.pk],
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(self.admin_user.ni_permissions.filter(code='test_perm').exists())
+
+    def test_login_required(self):
+        self.client.logout()
+        resp = self.client.get(reverse('accounts:user_list'))
+        self.assertEqual(resp.status_code, 302)

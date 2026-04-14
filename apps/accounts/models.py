@@ -21,6 +21,7 @@ class Role(models.Model):
 
     kode = models.CharField(max_length=50, unique=True, choices=ROLE_CHOICES)
     nama = models.CharField(max_length=255)
+    deskripsi = models.TextField(blank=True, default='')
 
     class Meta:
         verbose_name = 'Role'
@@ -28,6 +29,23 @@ class Role(models.Model):
 
     def __str__(self) -> str:
         return self.nama
+
+
+# ── NiPermission ─────────────────────────────────────────────────────────────
+
+class NiPermission(models.Model):
+    """Application-level permission defined in config/roles_permissions.toml."""
+    code = models.CharField(max_length=100, unique=True, verbose_name='Kode Permission')
+    name = models.CharField(max_length=255, verbose_name='Nama Permission')
+    module = models.CharField(max_length=100, blank=True, default='', verbose_name='Modul')
+
+    class Meta:
+        verbose_name = 'Permission'
+        verbose_name_plural = 'Permissions'
+        ordering = ['module', 'code']
+
+    def __str__(self) -> str:
+        return f'{self.name} ({self.code})'
 
 
 # ── User ─────────────────────────────────────────────────────────────────────
@@ -61,6 +79,12 @@ class User(AbstractBaseUser, PermissionsMixin):
         blank=True,
         related_name='users',
         verbose_name='Role',
+    )
+    ni_permissions = models.ManyToManyField(
+        NiPermission,
+        blank=True,
+        related_name='users',
+        verbose_name='Permissions',
     )
 
     objects = UserManager()
@@ -100,6 +124,22 @@ class User(AbstractBaseUser, PermissionsMixin):
     def is_business_user(self) -> bool:
         """True for Business Owner and Business Employee roles."""
         return self.is_business_owner or self.is_business_employee
+
+    def has_ni_perm(self, perm_code: str) -> bool:
+        """Check if user has a specific application permission.
+
+        Superusers and admins always have all permissions.
+        Other users are checked against their ni_permissions M2M.
+        """
+        if self.is_superuser or self.is_admin:
+            return True
+        return self.ni_permissions.filter(code=perm_code).exists()
+
+    def get_ni_permission_codes(self) -> set[str]:
+        """Return set of all permission codes this user has."""
+        if self.is_superuser or self.is_admin:
+            return set(NiPermission.objects.values_list('code', flat=True))
+        return set(self.ni_permissions.values_list('code', flat=True))
 
 
 # ── UserEntitasBisnis (Junction) ─────────────────────────────────────────────

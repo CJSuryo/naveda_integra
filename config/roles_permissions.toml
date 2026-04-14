@@ -1,0 +1,262 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Naveda Integra — Roles & Permissions Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# This TOML file is the single source of truth for all available roles and
+# permissions in the project.  The management command `sync_roles_permissions`
+# reads this file and upserts the database accordingly.
+#
+# Roles and permissions defined here are referenced in views and templates.
+# Authorization checks should use `user.has_ni_perm('permission_code')` rather
+# than role-based checks for granular control.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Roles ────────────────────────────────────────────────────────────────────
+# Each role has a code, display name, and description.
+# The `default_permissions` list assigns permissions automatically when a
+# user is given this role (can be overridden per-user).
+
+[[roles]]
+code = "admin"
+name = "Admin"
+description = "Full access to all features and all business entities."
+default_permissions = [
+    "user_view", "user_create", "user_update", "user_delete",
+    "user_manage_permissions",
+    "entitas_bisnis_view", "entitas_bisnis_create", "entitas_bisnis_update", "entitas_bisnis_delete",
+    "master_data_view", "master_data_create", "master_data_update", "master_data_delete",
+    "purchase_view", "purchase_create", "purchase_update", "purchase_delete",
+    "inventory_view",
+    "jurnal_view", "jurnal_create", "jurnal_update", "jurnal_delete",
+    "sales_view", "sales_create", "sales_update", "sales_delete",
+    "piutang_view", "piutang_create", "piutang_update", "piutang_delete",
+    "report_view",
+    "settings_view", "settings_update",
+]
+
+[[roles]]
+code = "operator"
+name = "Operator"
+description = "Same as Admin but some admin-only menus are hidden."
+default_permissions = [
+    "entitas_bisnis_view", "entitas_bisnis_create", "entitas_bisnis_update",
+    "master_data_view", "master_data_create", "master_data_update",
+    "purchase_view", "purchase_create", "purchase_update", "purchase_delete",
+    "inventory_view",
+    "jurnal_view", "jurnal_create", "jurnal_update",
+    "sales_view", "sales_create", "sales_update",
+    "piutang_view", "piutang_create", "piutang_update",
+    "report_view",
+    "settings_view",
+]
+
+[[roles]]
+code = "business_owner"
+name = "Pemilik Bisnis"
+description = "Can only see/manage data for linked EntitasBisnis."
+default_permissions = [
+    "entitas_bisnis_view",
+    "master_data_view",
+    "purchase_view", "purchase_create", "purchase_update",
+    "inventory_view",
+    "jurnal_view",
+    "sales_view", "sales_create", "sales_update",
+    "piutang_view", "piutang_create", "piutang_update",
+    "report_view",
+]
+
+[[roles]]
+code = "business_employee"
+name = "Karyawan Bisnis"
+description = "Same as Business Owner but with restricted write access."
+default_permissions = [
+    "entitas_bisnis_view",
+    "master_data_view",
+    "purchase_view",
+    "inventory_view",
+    "jurnal_view",
+    "sales_view",
+    "piutang_view",
+    "report_view",
+]
+
+
+# ── Permissions ──────────────────────────────────────────────────────────────
+# Permissions are grouped by module for clarity.
+# Each permission has a code, display name, and module grouping.
+
+# User Management
+[[permissions]]
+code = "user_view"
+name = "Lihat Daftar User"
+module = "User Management"
+
+[[permissions]]
+code = "user_create"
+name = "Tambah User"
+module = "User Management"
+
+[[permissions]]
+code = "user_update"
+name = "Edit User"
+module = "User Management"
+
+[[permissions]]
+code = "user_delete"
+name = "Hapus User"
+module = "User Management"
+
+[[permissions]]
+code = "user_manage_permissions"
+name = "Kelola Permissions User"
+module = "User Management"
+
+# Entitas Bisnis
+[[permissions]]
+code = "entitas_bisnis_view"
+name = "Lihat Entitas Bisnis"
+module = "Entitas Bisnis"
+
+[[permissions]]
+code = "entitas_bisnis_create"
+name = "Tambah Entitas Bisnis"
+module = "Entitas Bisnis"
+
+[[permissions]]
+code = "entitas_bisnis_update"
+name = "Edit Entitas Bisnis"
+module = "Entitas Bisnis"
+
+[[permissions]]
+code = "entitas_bisnis_delete"
+name = "Hapus Entitas Bisnis"
+module = "Entitas Bisnis"
+
+# Master Data
+[[permissions]]
+code = "master_data_view"
+name = "Lihat Master Data"
+module = "Master Data"
+
+[[permissions]]
+code = "master_data_create"
+name = "Tambah Master Data"
+module = "Master Data"
+
+[[permissions]]
+code = "master_data_update"
+name = "Edit Master Data"
+module = "Master Data"
+
+[[permissions]]
+code = "master_data_delete"
+name = "Hapus Master Data"
+module = "Master Data"
+
+# Purchase
+[[permissions]]
+code = "purchase_view"
+name = "Lihat Purchase"
+module = "Purchase"
+
+[[permissions]]
+code = "purchase_create"
+name = "Tambah Purchase"
+module = "Purchase"
+
+[[permissions]]
+code = "purchase_update"
+name = "Edit Purchase"
+module = "Purchase"
+
+[[permissions]]
+code = "purchase_delete"
+name = "Hapus Purchase"
+module = "Purchase"
+
+# Inventory
+[[permissions]]
+code = "inventory_view"
+name = "Lihat Inventory"
+module = "Inventory"
+
+# Jurnal
+[[permissions]]
+code = "jurnal_view"
+name = "Lihat Jurnal"
+module = "Jurnal"
+
+[[permissions]]
+code = "jurnal_create"
+name = "Tambah Jurnal"
+module = "Jurnal"
+
+[[permissions]]
+code = "jurnal_update"
+name = "Edit Jurnal"
+module = "Jurnal"
+
+[[permissions]]
+code = "jurnal_delete"
+name = "Hapus Jurnal"
+module = "Jurnal"
+
+# Sales
+[[permissions]]
+code = "sales_view"
+name = "Lihat Sales"
+module = "Sales"
+
+[[permissions]]
+code = "sales_create"
+name = "Tambah Sales"
+module = "Sales"
+
+[[permissions]]
+code = "sales_update"
+name = "Edit Sales"
+module = "Sales"
+
+[[permissions]]
+code = "sales_delete"
+name = "Hapus Sales"
+module = "Sales"
+
+# Piutang
+[[permissions]]
+code = "piutang_view"
+name = "Lihat Piutang"
+module = "Piutang"
+
+[[permissions]]
+code = "piutang_create"
+name = "Tambah Piutang"
+module = "Piutang"
+
+[[permissions]]
+code = "piutang_update"
+name = "Edit Piutang"
+module = "Piutang"
+
+[[permissions]]
+code = "piutang_delete"
+name = "Hapus Piutang"
+module = "Piutang"
+
+# Reports
+[[permissions]]
+code = "report_view"
+name = "Lihat Laporan"
+module = "Reports"
+
+# Settings
+[[permissions]]
+code = "settings_view"
+name = "Lihat Settings"
+module = "Settings"
+
+[[permissions]]
+code = "settings_update"
+name = "Edit Settings"
+module = "Settings"

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">{% if user_obj %}Edit data user{% else %}Buat user baru{% endif %}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<p style="font-size:0.8rem;color:var(--ni-text-muted);margin:4px 0 0;">{{ field.help_text }}</p>{% endif %}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'accounts:user_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
