@@ -9,7 +9,7 @@
 </div>
 
 {% for category in categories %}
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;" data-cat-idx="{{ forloop.counter0 }}">
   <div class="ni-card__body">
     <div class="ni-coa-category" data-toggle="coa-category" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 0;">
       <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:20px;height:20px;transition:transform 200ms;"></i>
@@ -17,7 +17,7 @@
       <span class="ni-badge ni-badge--secondary" style="margin-left:8px;">{{ category.items|length }} sub-kategori</span>
       <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
         <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah {{ category.name }} Level 1"
-          onclick="niCoa.openAddLv1('{% url category.lv1_create %}', '{{ category.name }}')"
+          onclick="niCoa.openAddLv1('{% url category.lv1_create %}', '{{ category.name }}', {{ forloop.counter0 }})"
           style="padding:4px 8px;">
           <i data-lucide="plus" style="width:14px;height:14px"></i>
         </button>
@@ -32,17 +32,17 @@
           <span class="ni-badge ni-badge--secondary" style="font-size:0.75rem;">{{ lv1.children.count }} akun</span>
           <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
             <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Akun Level 2"
-              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}')"
+              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})"
               style="padding:4px 8px;">
               <i data-lucide="plus" style="width:14px;height:14px"></i>
             </button>
             <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-              onclick="niCoa.openEditLv1('{% url category.lv1_update lv1.pk %}', '{{ lv1.kode }}', '{{ lv1.nama|escapejs }}')"
+              onclick="niCoa.openEditLv1('{% url category.lv1_update lv1.pk %}', '{{ lv1.kode }}', '{{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})"
               style="padding:4px 8px;">
               <i data-lucide="pencil" style="width:14px;height:14px"></i>
             </button>
             <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-              onclick="niCoa.openDeleteLv1('{% url category.lv1_delete lv1.pk %}', '{{ lv1.kode }} - {{ lv1.nama|escapejs }}')"
+              onclick="niCoa.openDeleteLv1('{% url category.lv1_delete lv1.pk %}', '{{ lv1.kode }} - {{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }})"
               style="padding:4px 8px;">
               <i data-lucide="trash-2" style="width:14px;height:14px"></i>
             </button>
@@ -54,12 +54,12 @@
             <span>{{ lv2.kode }} - {{ lv2.nama }}</span>
             <div style="margin-left:auto;display:flex;gap:4px;">
               <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}')"
+                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})"
                 style="padding:4px 8px;">
                 <i data-lucide="pencil" style="width:14px;height:14px"></i>
               </button>
               <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-                onclick="niCoa.openDeleteLv2('{% url category.lv2_delete lv1.pk lv2.pk %}', '{{ lv2.kode }} - {{ lv2.nama|escapejs }}')"
+                onclick="niCoa.openDeleteLv2('{% url category.lv2_delete lv1.pk lv2.pk %}', '{{ lv2.kode }} - {{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})"
                 style="padding:4px 8px;">
                 <i data-lucide="trash-2" style="width:14px;height:14px"></i>
               </button>
@@ -252,48 +252,74 @@
       var el = document.getElementById(errId);
       if (el) { el.style.display = 'block'; el.textContent = msg; }
     },
-    openAddLv1: function (url, catName) {
+    openAddLv1: function (url, catName, catIdx) {
       var form = document.getElementById('coaFormAddLv1');
       form.action = url;
       form.reset();
       document.getElementById('coaAddLv1Title').textContent = 'Tambah ' + catName + ' Level 1';
       this.clearErr('coaErrAddLv1');
+      this._activeCategory = catIdx;
+      this._activeLv1 = null;
       this.open('coaModalAddLv1');
     },
-    openEditLv1: function (url, kode, nama) {
+    openEditLv1: function (url, kode, nama, catIdx, lv1Idx) {
       var form = document.getElementById('coaFormEditLv1');
       form.action = url;
       document.getElementById('coaEditLv1Kode').value = kode;
       document.getElementById('coaEditLv1Nama').value = nama;
       this.clearErr('coaErrEditLv1');
+      this._activeCategory = catIdx;
+      this._activeLv1 = lv1Idx;
       this.open('coaModalEditLv1');
     },
-    openDeleteLv1: function (url, label) {
+    openDeleteLv1: function (url, label, catIdx) {
       document.getElementById('coaFormDeleteLv1').action = url;
       document.getElementById('coaDeleteLv1Label').textContent = label;
+      this._activeCategory = catIdx;
+      this._activeLv1 = null;
       this.open('coaModalDeleteLv1');
     },
-    openAddLv2: function (url, catName) {
+    openAddLv2: function (url, catName, catIdx, lv1Idx) {
       var form = document.getElementById('coaFormAddLv2');
       form.action = url;
       form.reset();
       document.getElementById('coaAddLv2Title').textContent = 'Tambah Akun ' + catName + ' Level 2';
       this.clearErr('coaErrAddLv2');
+      this._activeCategory = catIdx;
+      this._activeLv1 = lv1Idx;
       this.open('coaModalAddLv2');
     },
-    openEditLv2: function (url, kode, nama) {
+    openEditLv2: function (url, kode, nama, catIdx, lv1Idx) {
       var form = document.getElementById('coaFormEditLv2');
       form.action = url;
       document.getElementById('coaEditLv2Kode').value = kode;
       document.getElementById('coaEditLv2Nama').value = nama;
       this.clearErr('coaErrEditLv2');
+      this._activeCategory = catIdx;
+      this._activeLv1 = lv1Idx;
       this.open('coaModalEditLv2');
     },
-    openDeleteLv2: function (url, label) {
+    openDeleteLv2: function (url, label, catIdx, lv1Idx) {
       document.getElementById('coaFormDeleteLv2').action = url;
       document.getElementById('coaDeleteLv2Label').textContent = label;
+      this._activeCategory = catIdx;
+      this._activeLv1 = lv1Idx;
       this.open('coaModalDeleteLv2');
     },
+    _activeCategory: null,
+    _activeLv1: null,
+
+    _setHash: function () {
+      var hash = '';
+      if (this._activeCategory !== null) {
+        hash = 'cat-' + this._activeCategory;
+        if (this._activeLv1 !== null) {
+          hash += '-lv1-' + this._activeLv1;
+        }
+      }
+      window.location.hash = hash;
+    },
+
     submitAjax: function (formId, errId) {
       var form = document.getElementById(formId);
       var data = new FormData(form);
@@ -306,6 +332,7 @@
         .then(function (r) { return r.json(); })
         .then(function (json) {
           if (json.success) {
+            niCoa._setHash();
             window.location.reload();
           } else {
             var msgs = [];
@@ -319,6 +346,14 @@
     },
   };
 
+  // Set hash before delete form POSTs so redirect preserves expanded state
+  ['coaFormDeleteLv1', 'coaFormDeleteLv2'].forEach(function (fid) {
+    var form = document.getElementById(fid);
+    if (form) {
+      form.addEventListener('submit', function () { niCoa._setHash(); });
+    }
+  });
+
   function toggleCollapsible(el) {
     var children = el.nextElementSibling;
     var arrow = el.querySelector('.ni-coa-arrow');
@@ -330,9 +365,35 @@
       arrow.style.transform = '';
     }
   }
-  document.querySelectorAll('[data-toggle="coa-category"], [data-toggle="coa-lv1"]').forEach(function (el) {
+
+  var categoryToggles = document.querySelectorAll('[data-toggle="coa-category"]');
+  var lv1Toggles = document.querySelectorAll('[data-toggle="coa-lv1"]');
+
+  categoryToggles.forEach(function (el) {
     el.addEventListener('click', function () { toggleCollapsible(this); });
   });
+  lv1Toggles.forEach(function (el) {
+    el.addEventListener('click', function () { toggleCollapsible(this); });
+  });
+
+  // Restore expanded state from URL hash on page load
+  (function restoreState() {
+    var hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    var match = hash.match(/^cat-(\d+)(?:-lv1-(\d+))?$/);
+    if (!match) return;
+    var catIdx = parseInt(match[1], 10);
+    var lv1Idx = match[2] !== undefined ? parseInt(match[2], 10) : null;
+    if (catIdx < categoryToggles.length) {
+      toggleCollapsible(categoryToggles[catIdx]);
+    }
+    if (lv1Idx !== null && lv1Idx < lv1Toggles.length) {
+      toggleCollapsible(lv1Toggles[lv1Idx]);
+    }
+    if (history.replaceState) {
+      history.replaceState(null, null, window.location.pathname + window.location.search);
+    }
+  })();
 
   // Close on backdrop click
   document.querySelectorAll('.ni-modal-backdrop').forEach(function (backdrop) {

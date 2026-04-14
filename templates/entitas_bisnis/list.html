@@ -295,6 +295,9 @@
   }
 
   var niEB = window.niEB = {
+    _activeLv1Pk: null,
+    _activeLv2Pk: null,
+
     close: function (id) {
       document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
     },
@@ -310,13 +313,24 @@
       var el = document.getElementById(errId);
       if (el) { el.style.display = 'block'; el.textContent = msg; }
     },
+    _setHash: function () {
+      var hash = '';
+      if (this._activeLv1Pk !== null) {
+        hash = 'lv1-' + this._activeLv1Pk;
+        if (this._activeLv2Pk !== null) {
+          hash += '-lv2-' + this._activeLv2Pk;
+        }
+      }
+      window.location.hash = hash;
+    },
     openAddLv1: function () {
       document.getElementById('formAddLv1').reset();
       this.clearErr('errAddLv1');
-      // Set today for date fields
       document.querySelectorAll('#formAddLv1 input[type=date]').forEach(function (el) {
         el.value = new Date().toISOString().split('T')[0];
       });
+      this._activeLv1Pk = null;
+      this._activeLv2Pk = null;
       this.open('modalAddLv1');
     },
     openEditLv1: function (pk, nama, tipeId, relasi, email, telepon, tglBergabung, statusAktif) {
@@ -336,6 +350,8 @@
       set('telepon', telepon);
       set('tanggal_bergabung', tglBergabung);
       set('status_aktif', statusAktif);
+      this._activeLv1Pk = pk;
+      this._activeLv2Pk = null;
       this.open('modalEditLv1');
     },
     openAddLv2: function (lv1Pk) {
@@ -346,6 +362,8 @@
       document.querySelectorAll('#formAddLv2 input[type=date]').forEach(function (el) {
         el.value = new Date().toISOString().split('T')[0];
       });
+      this._activeLv1Pk = lv1Pk;
+      this._activeLv2Pk = null;
       this.open('modalAddLv2');
     },
     openEditLv2: function (lv1Pk, lv2Pk, nama, email, telepon, tglBergabung, statusAktif) {
@@ -363,6 +381,8 @@
       set('telepon', telepon);
       set('tanggal_bergabung', tglBergabung);
       set('status_aktif', statusAktif);
+      this._activeLv1Pk = lv1Pk;
+      this._activeLv2Pk = lv2Pk;
       this.open('modalEditLv2');
     },
     openAddLv3: function (lv1Pk, lv2Pk) {
@@ -373,6 +393,8 @@
       document.querySelectorAll('#formAddLv3 input[type=date]').forEach(function (el) {
         el.value = new Date().toISOString().split('T')[0];
       });
+      this._activeLv1Pk = lv1Pk;
+      this._activeLv2Pk = lv2Pk;
       this.open('modalAddLv3');
     },
     openEditLv3: function (lv1Pk, lv2Pk, lv3Pk, nama, email, telepon, tglBergabung, statusAktif) {
@@ -390,6 +412,8 @@
       set('telepon', telepon);
       set('tanggal_bergabung', tglBergabung);
       set('status_aktif', statusAktif);
+      this._activeLv1Pk = lv1Pk;
+      this._activeLv2Pk = lv2Pk;
       this.open('modalEditLv3');
     },
     submitAjax: function (formId, errId) {
@@ -404,6 +428,7 @@
         .then(function (r) { return r.json(); })
         .then(function (json) {
           if (json.success) {
+            niEB._setHash();
             window.location.reload();
           } else {
             var msgs = [];
@@ -445,6 +470,61 @@
       }
     });
   });
+
+  // Restore expanded state from URL hash on page load
+  (function restoreState() {
+    var hash = window.location.hash.replace('#', '');
+    if (!hash) return;
+    var match = hash.match(/^lv1-(\d+)(?:-lv2-(\d+))?$/);
+    if (!match) return;
+    var lv1Pk = match[1];
+    var lv2Pk = match[2] || null;
+    // Find the card for this lv1 pk and expand it
+    document.querySelectorAll('[data-toggle="eb-lv1"]').forEach(function (el) {
+      var card = el.closest('.ni-card');
+      // Check if any button in this card references this lv1Pk
+      var btns = card ? card.querySelectorAll('button[onclick]') : [];
+      var isMatch = false;
+      btns.forEach(function (btn) {
+        var oc = btn.getAttribute('onclick') || '';
+        if (oc.indexOf('(' + lv1Pk + ',') !== -1 || oc.indexOf('(' + lv1Pk + ')') !== -1) {
+          isMatch = true;
+        }
+      });
+      if (isMatch) {
+        var children = el.closest('.ni-card__body').querySelector('.ni-eb-lv2-list');
+        var arrow = el.querySelector('.ni-coa-arrow');
+        if (children && children.style.display === 'none') {
+          children.style.display = 'block';
+          arrow.style.transform = 'rotate(90deg)';
+        }
+        // Also expand lv2 if specified
+        if (lv2Pk && children) {
+          children.querySelectorAll('[data-toggle="eb-lv2"]').forEach(function (lv2El) {
+            var lv2Btns = lv2El.parentElement.querySelectorAll('button[onclick]');
+            var lv2Match = false;
+            lv2Btns.forEach(function (btn) {
+              var oc = btn.getAttribute('onclick') || '';
+              if (oc.indexOf(lv1Pk + ', ' + lv2Pk) !== -1 || oc.indexOf(lv1Pk + ',' + lv2Pk) !== -1) {
+                lv2Match = true;
+              }
+            });
+            if (lv2Match) {
+              var lv3Children = lv2El.parentElement.querySelector('.ni-eb-lv3-list');
+              var lv2Arrow = lv2El.querySelector('.ni-coa-arrow');
+              if (lv3Children && lv3Children.style.display === 'none') {
+                lv3Children.style.display = 'block';
+                lv2Arrow.style.transform = 'rotate(90deg)';
+              }
+            }
+          });
+        }
+      }
+    });
+    if (history.replaceState) {
+      history.replaceState(null, null, window.location.pathname + window.location.search);
+    }
+  })();
 
   // Close modal on backdrop click
   document.querySelectorAll('.ni-modal-backdrop').forEach(function (backdrop) {
