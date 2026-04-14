@@ -1,6 +1,6 @@
 """Inventory admin."""
 from django.contrib import admin
-from .models import MutasiInventoryHeader, MutasiInventoryDetail
+from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecord
 
 
 class MutasiInventoryDetailInline(admin.TabularInline):
@@ -20,3 +20,12 @@ class MutasiInventoryHeaderAdmin(admin.ModelAdmin):
 class MutasiInventoryDetailAdmin(admin.ModelAdmin):
     list_display = ('id', 'mutasi_inventory_header', 'dll')
     list_select_related = ('mutasi_inventory_header',)
+
+
+@admin.register(InventoryRecord)
+class InventoryRecordAdmin(admin.ModelAdmin):
+    list_display = ('inventory_number', 'item', 'entitas_bisnis', 'quantity', 'unit_price', 'total_value', 'tanggal')
+    list_select_related = ('item', 'entitas_bisnis')
+    list_filter = ('tanggal', 'metode_alokasi')
+    search_fields = ('inventory_number', 'item__nama', 'item__item_id')
+    raw_id_fields = ('item', 'purchase_item', 'entitas_bisnis')

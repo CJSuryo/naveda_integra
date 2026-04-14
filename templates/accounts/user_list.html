@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Daftar User{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">User</h1>
+    <p class="ni-page-header__subtitle">Kelola semua user sistem</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'accounts:user_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah User
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Nama</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><a href="{% url 'accounts:user_detail' u.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ u.email }}</a></td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.role|default:'-' }}</td>
+          <td>
+            {% if u.is_active %}
+            <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+            <span class="ni-badge ni-badge--secondary">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'accounts:user_update' u.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'accounts:user_permissions' u.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Permissions</a>
+              <a href="{% url 'accounts:user_delete' u.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada user.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

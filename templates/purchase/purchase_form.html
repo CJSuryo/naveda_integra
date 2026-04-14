@@ -120,7 +120,7 @@
 <div class="ni-modal-backdrop" id="itemMasterModalBackdrop">
   <div class="ni-modal ni-modal--lg">
     <div class="ni-modal__header">
-      <h3 class="ni-modal__title">Tambah Item Baru</h3>
+      <h3 class="ni-modal__title" id="itemModalTitle">Tambah Item Baru</h3>
       <button class="ni-modal__close" onclick="closeItemModal()" aria-label="Close">
         <i data-lucide="x" style="width:20px;height:20px"></i>
       </button>
@@ -133,7 +133,7 @@
       <div class="ni-form-row">
         <div class="ni-form-group">
           <label class="ni-form-label">Tipe Item</label>
-          <select id="modal_tipe_item" class="ni-input">
+          <select id="modal_tipe_item" class="ni-input" onchange="onModalTipeItemChange()">
             <option value="RM">Raw Material</option>
             <option value="FG">Finished Good</option>
             <option value="ITM">Item Lainnya</option>
@@ -143,43 +143,85 @@
         </div>
         <div class="ni-form-group">
           <label class="ni-form-label">Kategori</label>
-          <select id="modal_kategori" class="ni-input">
-            <option value="">— Pilih —</option>
-            {% for k in kategori_items %}
-            <option value="{{ k.pk }}">{{ k.nama }}</option>
-            {% endfor %}
+          <select id="modal_kategori" class="ni-input" disabled>
+            <option value="">— Pilih tipe item dahulu —</option>
           </select>
         </div>
       </div>
-      <div class="ni-form-row">
-        <div class="ni-form-group">
-          <label class="ni-form-label">Velocity Category</label>
-          <select id="modal_velocity" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="fast">Fast Moving</option>
-            <option value="medium">Medium (B)</option>
-            <option value="slow">Slow (C)</option>
-            <option value="dead">Dead Stock</option>
-          </select>
+      <!-- Inventory fields (RM/FG/ITM) -->
+      <div id="modal_inventory_fields">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Velocity Category</label>
+            <select id="modal_velocity" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="fast">Fast Moving</option>
+              <option value="medium">Medium (B)</option>
+              <option value="slow">Slow (C)</option>
+              <option value="dead">Dead Stock</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+        </div>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Tanggal Kadaluarsa</label>
+            <input type="date" id="modal_expiry_date" class="ni-input">
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Threshold Days Outstanding</label>
+            <input type="number" id="modal_threshold" class="ni-input" min="0">
+          </div>
+        </div>
+      </div>
+      <!-- Aset Tetap fields (ATP) -->
+      <div id="modal_atp_fields" style="display:none;">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account_atp" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+            <input type="number" id="modal_masa_manfaat_atp" class="ni-input" min="1">
+          </div>
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">CoA Account</label>
-          <select id="modal_coa_account" class="ni-input">
+          <label class="ni-form-label">Metode Penyusutan</label>
+          <select id="modal_metode_penyusutan" class="ni-input">
             <option value="">— Pilih —</option>
-            {% for akun in akun_list %}
-            <option value="{{ akun.pk }}">{{ akun }}</option>
-            {% endfor %}
+            <option value="straight_line">Garis Lurus (Straight Line)</option>
+            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+            <option value="double_declining">Saldo Menurun Ganda (Double Declining Balance)</option>
+            <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years Digits)</option>
+            <option value="units_of_production">Unit Produksi (Units of Production)</option>
           </select>
         </div>
       </div>
-      <div class="ni-form-row">
-        <div class="ni-form-group">
-          <label class="ni-form-label">Tanggal Kadaluarsa</label>
-          <input type="date" id="modal_expiry_date" class="ni-input">
+      <!-- Aset Lainnya fields (ALL) -->
+      <div id="modal_all_fields" style="display:none;">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account_all" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+            <input type="number" id="modal_masa_manfaat_all" class="ni-input" min="1">
+          </div>
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">Threshold Days Outstanding</label>
-          <input type="number" id="modal_threshold" class="ni-input" min="0">
+          <label class="ni-form-label">Metode Amortisasi</label>
+          <select id="modal_metode_amortisasi" class="ni-input">
+            <option value="">— Pilih —</option>
+            <option value="straight_line">Garis Lurus (Straight Line)</option>
+            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+            <option value="units_of_production">Unit Produksi (Units of Production)</option>
+            <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
+          </select>
         </div>
       </div>
       <div class="ni-form-group">
@@ -211,6 +253,8 @@
   var itemCreateUrl = '{% url "purchase:api_item_create" %}';
   var sttOffsetUrl = '{% url "purchase:api_stt_offset" %}';
   var journalPreviewUrl = '{% url "purchase:api_journal_preview" %}';
+  var kategoriFilterUrl = '{% url "purchase:api_kategori_filter" %}';
+  var akunAutocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
   var csrfToken = '{{ csrf_token }}';
 
   var ebGroupCount = 0;
@@ -481,20 +525,109 @@
   };
 
   // ── Item Master Modal ────────────────────────────────────────────────────
+
+  // TomSelect instances for modal CoA autocomplete
+  var _modalCoaTomSelect = null;
+  var _modalCoaAtpTomSelect = null;
+  var _modalCoaAllTomSelect = null;
+
+  function initModalCoaTomSelects() {
+    var tsConfig = {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      placeholder: 'Ketik kode/nama akun...',
+      preload: 'focus',
+      load: function (query, callback) {
+        fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+    };
+    if (!_modalCoaTomSelect) {
+      _modalCoaTomSelect = new TomSelect('#modal_coa_account', Object.assign({}, tsConfig));
+    }
+    if (!_modalCoaAtpTomSelect) {
+      _modalCoaAtpTomSelect = new TomSelect('#modal_coa_account_atp', Object.assign({}, tsConfig));
+    }
+    if (!_modalCoaAllTomSelect) {
+      _modalCoaAllTomSelect = new TomSelect('#modal_coa_account_all', Object.assign({}, tsConfig));
+    }
+  }
+
+  function loadModalKategori(tipeItem, ebLv1Id) {
+    var kategoriSel = document.getElementById('modal_kategori');
+    kategoriSel.innerHTML = '<option value="">Memuat...</option>';
+    kategoriSel.disabled = true;
+
+    var url = kategoriFilterUrl + '?tipe_item=' + encodeURIComponent(tipeItem);
+    if (ebLv1Id) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1Id);
+
+    fetch(url)
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        kategoriSel.innerHTML = '<option value="">— Pilih —</option>';
+        data.forEach(function (k) {
+          var opt = document.createElement('option');
+          opt.value = k.id;
+          opt.textContent = k.nama;
+          kategoriSel.appendChild(opt);
+        });
+        kategoriSel.disabled = false;
+      })
+      .catch(function () {
+        kategoriSel.innerHTML = '<option value="">— Gagal memuat —</option>';
+        kategoriSel.disabled = false;
+      });
+  }
+
+  window.onModalTipeItemChange = function () {
+    var tipe = document.getElementById('modal_tipe_item').value;
+    // Show/hide fields based on tipe
+    document.getElementById('modal_inventory_fields').style.display = (tipe === 'RM' || tipe === 'FG' || tipe === 'ITM') ? '' : 'none';
+    document.getElementById('modal_atp_fields').style.display = tipe === 'ATP' ? '' : 'none';
+    document.getElementById('modal_all_fields').style.display = tipe === 'ALL' ? '' : 'none';
+
+    // Update modal title
+    var titles = { RM: 'Tambah Raw Material', FG: 'Tambah Finished Good', ITM: 'Tambah Item Lainnya', ATP: 'Tambah Aset Tetap', ALL: 'Tambah Aset Lainnya' };
+    document.getElementById('itemModalTitle').textContent = titles[tipe] || 'Tambah Item Baru';
+
+    // Reload kategori for the new tipe
+    var gid = _modalCallbackGid;
+    var card = gid ? document.getElementById(gid) : null;
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+    loadModalKategori(tipe, ebLv1Id);
+  };
+
   window.openItemModal = function (prefillNama, gid) {
     document.getElementById('modal_nama').value = prefillNama || '';
     document.getElementById('modal_tipe_item').value = 'RM';
-    document.getElementById('modal_kategori').value = '';
-    document.getElementById('modal_velocity').value = '';
-    document.getElementById('modal_coa_account').value = '';
-    document.getElementById('modal_expiry_date').value = '';
-    document.getElementById('modal_threshold').value = '';
     document.getElementById('modal_error').style.display = 'none';
 
-    // Show EB name from the group (use textContent to avoid XSS)
+    // Init TomSelect for CoA autocomplete
+    initModalCoaTomSelects();
+    _modalCoaTomSelect.clear();
+    _modalCoaAtpTomSelect.clear();
+    _modalCoaAllTomSelect.clear();
+
+    // Reset inventory fields
+    document.getElementById('modal_velocity').value = '';
+    document.getElementById('modal_expiry_date').value = '';
+    document.getElementById('modal_threshold').value = '';
+    // Reset ATP fields
+    document.getElementById('modal_masa_manfaat_atp').value = '';
+    document.getElementById('modal_metode_penyusutan').value = '';
+    // Reset ALL fields
+    document.getElementById('modal_masa_manfaat_all').value = '';
+    document.getElementById('modal_metode_amortisasi').value = '';
+
+    // Show EB name from the group
     var card = document.getElementById(gid);
     var ebSelect = card ? card.querySelector('.eb-select') : null;
     var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
+    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
     var ebDisplay = document.getElementById('modal_eb_display');
     if (ebText) {
       ebDisplay.textContent = '';
@@ -508,6 +641,9 @@
       em.textContent = 'Entitas bisnis belum dipilih';
       ebDisplay.appendChild(em);
     }
+
+    // Show/hide fields and load kategori
+    onModalTipeItemChange();
 
     var backdrop = document.getElementById('itemMasterModalBackdrop');
     backdrop.classList.add('ni-modal-backdrop--visible');
@@ -531,6 +667,7 @@
 
     var gid = _modalCallbackGid;
     var rid = _modalCallbackRid;
+    var tipeItem = document.getElementById('modal_tipe_item').value;
 
     // Get EB lv1 ID to auto-assign
     var card = document.getElementById(gid);
@@ -539,14 +676,26 @@
 
     var payload = {
       nama: nama,
-      tipe_item: document.getElementById('modal_tipe_item').value,
+      tipe_item: tipeItem,
       kategori_id: document.getElementById('modal_kategori').value || null,
-      velocity_category: document.getElementById('modal_velocity').value,
-      coa_account_id: document.getElementById('modal_coa_account').value || null,
-      expiry_date: document.getElementById('modal_expiry_date').value || null,
-      threshold_days_outstanding: document.getElementById('modal_threshold').value || null,
       entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
     };
+
+    // Gather fields based on tipe_item
+    if (tipeItem === 'RM' || tipeItem === 'FG' || tipeItem === 'ITM') {
+      payload.velocity_category = document.getElementById('modal_velocity').value;
+      payload.coa_account_id = _modalCoaTomSelect ? _modalCoaTomSelect.getValue() : null;
+      payload.expiry_date = document.getElementById('modal_expiry_date').value || null;
+      payload.threshold_days_outstanding = document.getElementById('modal_threshold').value || null;
+    } else if (tipeItem === 'ATP') {
+      payload.coa_account_id = _modalCoaAtpTomSelect ? _modalCoaAtpTomSelect.getValue() : null;
+      payload.masa_manfaat = document.getElementById('modal_masa_manfaat_atp').value || null;
+      payload.metode_penyusutan = document.getElementById('modal_metode_penyusutan').value || '';
+    } else if (tipeItem === 'ALL') {
+      payload.coa_account_id = _modalCoaAllTomSelect ? _modalCoaAllTomSelect.getValue() : null;
+      payload.masa_manfaat = document.getElementById('modal_masa_manfaat_all').value || null;
+      payload.metode_amortisasi = document.getElementById('modal_metode_amortisasi').value || '';
+    }
 
     fetch(itemCreateUrl, {
       method: 'POST',

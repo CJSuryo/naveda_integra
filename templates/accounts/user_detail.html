@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}Detail User — {{ user_obj.email }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ user_obj.name }}</h1>
+    <p class="ni-page-header__subtitle">{{ user_obj.email }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'accounts:user_update' user_obj.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'accounts:user_permissions' user_obj.pk %}" class="ni-btn ni-btn--primary">
+      <i data-lucide="shield" style="width:16px;height:16px"></i> Kelola Permissions
+    </a>
+    <a href="{% url 'accounts:user_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Email</dt><dd>{{ user_obj.email }}</dd>
+      <dt>Nama</dt><dd>{{ user_obj.name }}</dd>
+      <dt>Role</dt><dd>{{ user_obj.role|default:'-' }}</dd>
+      <dt>Status</dt><dd>
+        {% if user_obj.is_active %}
+        <span class="ni-badge ni-badge--success">Aktif</span>
+        {% else %}
+        <span class="ni-badge ni-badge--secondary">Nonaktif</span>
+        {% endif %}
+      </dd>
+      <dt>Bergabung</dt><dd>{{ user_obj.date_joined }}</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- Permissions -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-text);">
+      <i data-lucide="shield" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Permissions
+    </h3>
+    {% for module, perms in perm_groups.items %}
+    <div style="margin-bottom:12px;">
+      <h4 style="font-size:0.875rem;color:var(--ni-text-muted);margin:0 0 6px;">{{ module }}</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        {% for p in perms %}
+        <span class="ni-badge {% if p.has %}ni-badge--success{% else %}ni-badge--secondary{% endif %}" style="font-size:0.75rem;">
+          {{ p.perm.name }}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Entitas Bisnis Access -->
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-text);">
+      <i data-lucide="building-2" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Akses Entitas Bisnis
+    </h3>
+    {% if user_ebs %}
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      {% for ueb in user_ebs %}
+      <span class="ni-badge ni-badge--primary" style="font-size:0.8rem;">{{ ueb.entitas_bisnis.nama }}</span>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="ni-text-muted" style="margin:0;">Belum ada akses entitas bisnis.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

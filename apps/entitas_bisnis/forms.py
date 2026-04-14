@@ -1,5 +1,7 @@
 """EntitasBisnis forms."""
 from django import forms
+from django.utils import timezone
+
 from .models import TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 
@@ -28,6 +30,11 @@ class EntitasBisnisForm(forms.ModelForm):
             'status_aktif': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk and not self.initial.get('tanggal_bergabung'):
+            self.initial['tanggal_bergabung'] = timezone.now().date()
+
 
 class EntitasBisnisLv2Form(forms.ModelForm):
     class Meta:
@@ -42,6 +49,11 @@ class EntitasBisnisLv2Form(forms.ModelForm):
             'status_aktif': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk and not self.initial.get('tanggal_bergabung'):
+            self.initial['tanggal_bergabung'] = timezone.now().date()
+
 
 class EntitasBisnisLv3Form(forms.ModelForm):
     class Meta:
@@ -55,3 +67,8 @@ class EntitasBisnisLv3Form(forms.ModelForm):
             'tanggal_bergabung': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'status_aktif': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk and not self.initial.get('tanggal_bergabung'):
+            self.initial['tanggal_bergabung'] = timezone.now().date()

@@ -3,6 +3,8 @@ from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
 
+from .models import NiPermission, Role
+
 User = get_user_model()
 
 
@@ -37,3 +39,43 @@ class RegisterForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class UserForm(forms.ModelForm):
+    """Form for creating/editing users (admin use)."""
+    password = forms.CharField(
+        label='Password',
+        required=False,
+        widget=forms.PasswordInput(attrs={'class': 'ni-input', 'placeholder': 'Kosongkan jika tidak diubah'}),
+        help_text='Kosongkan untuk tidak mengubah password.',
+    )
+
+    class Meta:
+        model = User
+        fields = ('email', 'name', 'role', 'is_active')
+        widgets = {
+            'email': forms.EmailInput(attrs={'class': 'ni-input'}),
+            'name': forms.TextInput(attrs={'class': 'ni-input'}),
+            'role': forms.Select(attrs={'class': 'ni-input'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+        }
+
+    def save(self, commit: bool = True) -> User:
+        user = super().save(commit=False)
+        pw = self.cleaned_data.get('password')
+        if pw:
+            user.set_password(pw)
+        if commit:
+            user.save()
+            self.save_m2m()
+        return user
+
+
+class UserPermissionForm(forms.Form):
+    """Form for managing a user's permissions."""
+    permissions = forms.ModelMultipleChoiceField(
+        queryset=NiPermission.objects.all(),
+        widget=forms.CheckboxSelectMultiple(),
+        required=False,
+        label='Permissions',
+    )

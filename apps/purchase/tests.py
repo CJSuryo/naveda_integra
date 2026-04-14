@@ -19,13 +19,13 @@ from .services import create_automated_journals, create_fifo_batches
 
 class KategoriItemModelTests(TestCase):
     def test_str(self):
-        k = KategoriItem.objects.create(nama='Coffee')
-        self.assertEqual(str(k), 'Coffee')
+        k = KategoriItem.objects.create(nama='Coffee', tipe_item='RM')
+        self.assertEqual(str(k), 'Coffee (Raw Material)')
 
-    def test_unique_nama(self):
-        KategoriItem.objects.create(nama='Coffee')
+    def test_unique_nama_tipe(self):
+        KategoriItem.objects.create(nama='Coffee', tipe_item='RM')
         with self.assertRaises(Exception):
-            KategoriItem.objects.create(nama='Coffee')
+            KategoriItem.objects.create(nama='Coffee', tipe_item='RM')
 
 
 class ItemMasterPurchaseModelTests(TestCase):
@@ -410,10 +410,10 @@ class PurchaseViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_kategori_crud(self):
-        resp = self.client.post(reverse('purchase:kategori_create'), {'nama': 'Coffee'})
+        resp = self.client.post(reverse('purchase:kategori_create'), {'nama': 'Coffee', 'tipe_item': 'RM'})
         self.assertEqual(resp.status_code, 302)
         k = KategoriItem.objects.get(nama='Coffee')
-        resp = self.client.post(reverse('purchase:kategori_update', args=[k.pk]), {'nama': 'Coffee Updated'})
+        resp = self.client.post(reverse('purchase:kategori_update', args=[k.pk]), {'nama': 'Coffee Updated', 'tipe_item': 'RM'})
         self.assertEqual(resp.status_code, 302)
         resp = self.client.post(reverse('purchase:kategori_delete', args=[k.pk]))
         self.assertEqual(resp.status_code, 302)

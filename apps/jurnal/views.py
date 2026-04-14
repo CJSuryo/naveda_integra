@@ -361,8 +361,21 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
             'stlh_d': stlh_d, 'stlh_k': stlh_k,
         })
 
+    # Compute totals
+    totals = {
+        'sa_d': Decimal('0'), 'sa_k': Decimal('0'),
+        'modul_d': Decimal('0'), 'modul_k': Decimal('0'),
+        'sblm_d': Decimal('0'), 'sblm_k': Decimal('0'),
+        'peny_d': Decimal('0'), 'peny_k': Decimal('0'),
+        'stlh_d': Decimal('0'), 'stlh_k': Decimal('0'),
+    }
+    for row in rows:
+        for key in totals:
+            totals[key] += row[key]
+
     return render(request, 'jurnal/neraca_saldo.html', {
         'rows': rows,
+        'totals': totals,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
     })

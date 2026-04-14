@@ -13,7 +13,20 @@ from django.utils import timezone
 
 class KategoriItem(models.Model):
     """Free-form item category (Coffee, Tea, Snacks, Bahan Masak, etc.)."""
-    nama = models.CharField(max_length=255, unique=True)
+    TIPE_ITEM_CHOICES = [
+        ('RM', 'Raw Material'),
+        ('FG', 'Finished Good'),
+        ('ITM', 'Item Lainnya'),
+        ('ATP', 'Aset Tetap'),
+        ('ALL', 'Aset Lainnya'),
+    ]
+    nama = models.CharField(max_length=255)
+    tipe_item = models.CharField(
+        max_length=10,
+        choices=TIPE_ITEM_CHOICES,
+        default='RM',
+        verbose_name='Tipe Item',
+    )
     entitas_bisnis = models.ManyToManyField(
         'entitas_bisnis.EntitasBisnis',
         blank=True,
@@ -24,9 +37,10 @@ class KategoriItem(models.Model):
     class Meta:
         verbose_name = 'Kategori Item'
         verbose_name_plural = 'Kategori Item'
+        unique_together = [('nama', 'tipe_item')]
 
     def __str__(self) -> str:
-        return self.nama
+        return f'{self.nama} ({self.get_tipe_item_display()})'
 
 
 class ItemMasterPurchase(models.Model):
@@ -46,6 +60,25 @@ class ItemMasterPurchase(models.Model):
         ('medium', 'Medium (B)'),
         ('slow', 'Slow (C)'),
         ('dead', 'Dead Stock'),
+    ]
+    METODE_PENYUSUTAN_CHOICES = [
+        ('straight_line', 'Garis Lurus (Straight Line Method)'),
+        ('double_declining', 'Saldo Menurun (Double Declining Balance Method)'),
+        ('sum_of_years', 'Jumlah Angka Tahun (Sum of The Year Digit Method)'),
+        ('service_hours', 'Satuan Jam Kerja (Service Hours Method)'),
+        ('units_of_production', 'Satuan Hasil Produksi (Productive Output Method)'),
+    ]
+    METODE_BIAYA_PERSEDIAAN_CHOICES = [
+        ('fifo', 'FIFO (First In First Out)'),
+        ('lifo', 'LIFO (Last In First Out)'),
+        ('average', 'Average (Rata-rata Tertimbang)'),
+        ('weighted_moving_average', 'Weighted Moving Average'),
+    ]
+    METODE_AMORTISASI_CHOICES = [
+        ('straight_line', 'Garis Lurus (Straight Line)'),
+        ('declining_balance', 'Saldo Menurun (Declining Balance)'),
+        ('units_of_production', 'Unit Produksi (Units of Production)'),
+        ('revenue_based', 'Berbasis Pendapatan (Revenue Based)'),
     ]
     item_id = models.CharField(max_length=50, unique=True, editable=False)
     nama = models.CharField(max_length=255, unique=True)
@@ -78,6 +111,36 @@ class ItemMasterPurchase(models.Model):
         blank=True,
         verbose_name='Threshold Days Inv Outstanding',
         help_text='Batas hari sebelum item dianggap stok mati.',
+    )
+    masa_manfaat = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Masa Manfaat (Tahun)',
+        help_text='Masa manfaat aset dalam tahun.',
+    )
+    metode_penyusutan = models.CharField(
+        max_length=30,
+        choices=METODE_PENYUSUTAN_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='Metode Penyusutan',
+        help_text='Metode penyusutan untuk Aset Tetap.',
+    )
+    metode_amortisasi = models.CharField(
+        max_length=30,
+        choices=METODE_AMORTISASI_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='Metode Amortisasi',
+        help_text='Metode amortisasi untuk Aset Lainnya.',
+    )
+    metode_biaya_persediaan = models.CharField(
+        max_length=30,
+        choices=METODE_BIAYA_PERSEDIAAN_CHOICES,
+        blank=True,
+        default='',
+        verbose_name='Metode Biaya Persediaan',
+        help_text='Metode penentuan biaya persediaan untuk item inventori.',
     )
     unit_price = models.DecimalField(
         max_digits=19,

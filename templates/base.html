@@ -61,9 +61,9 @@
 
       {% if user.is_superuser or user.is_admin %}
       <div class="ni-nav-item">
-        <a href="{% url 'accounts:register' %}" class="ni-nav-link {% if request.resolver_match.app_name == 'accounts' %}ni-nav-link--active{% endif %}">
-          <i data-lucide="user-plus" class="ni-nav-link__icon"></i>
-          <span class="ni-nav-link__text">Registrasi User</span>
+        <a href="{% url 'accounts:user_list' %}" class="ni-nav-link {% if 'accounts/users' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="users" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">User</span>
         </a>
       </div>
       {% endif %}
@@ -91,7 +91,7 @@
       <div class="ni-nav-item {% if 'master-data' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="database" class="ni-nav-link__icon"></i>
-          <span class="ni-nav-link__text">Akun & Kategori</span>
+          <span class="ni-nav-link__text">Akun</span>
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
@@ -107,18 +107,13 @@
         </div>
       </div>
 
-      <span class="ni-nav-label">Jurnal</span>
-
-      <div class="ni-nav-item {% if 'purchase' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if request.path == '/purchase/persediaan/' or request.path == '/purchase/aset-tetap/' or request.path == '/purchase/aset-lainnya/' or '/purchase/item-master/' in request.path or '/purchase/kategori/' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
-          <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
-          <span class="ni-nav-link__text">Purchase</span>
+          <i data-lucide="package" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Item</span>
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
-          <a href="{% url 'purchase:list' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Daftar Purchase</span>
-          </a>
           <a href="{% url 'purchase:persediaan_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Persediaan (Inventory)</span>
           </a>
@@ -131,8 +126,46 @@
           <a href="{% url 'purchase:kategori_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Kategori Item</span>
           </a>
+        </div>
+      </div>
+
+      <div class="ni-nav-item {% if '/purchase/settings/' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="git-merge" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Mapping</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
           <a href="{% url 'purchase:settings_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Settings</span>
+          </a>
+        </div>
+      </div>
+
+      <span class="ni-nav-label">Jurnal</span>
+
+      <div class="ni-nav-item {% if 'purchase' in request.path and '/purchase/persediaan/' not in request.path and '/purchase/aset-tetap/' not in request.path and '/purchase/aset-lainnya/' not in request.path and '/purchase/item-master/' not in request.path and '/purchase/kategori/' not in request.path and '/purchase/settings/' not in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Purchase</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'purchase:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Purchase</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="ni-nav-item {% if 'inventory' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="warehouse" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Inventory</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'inventory:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Inventory</span>
           </a>
         </div>
       </div>

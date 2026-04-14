@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Kelola Permissions — {{ user_obj.email }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Kelola Permissions</h1>
+    <p class="ni-page-header__subtitle">{{ user_obj.name }} ({{ user_obj.email }})</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'accounts:user_detail' user_obj.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% for module, perms in perm_groups.items %}
+      <div style="margin-bottom:20px;">
+        <h3 style="font-size:0.95rem;color:var(--ni-primary);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--ni-border);">{{ module }}</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px;">
+          {% for p in perms %}
+          <label style="display:flex;align-items:center;gap:8px;font-size:0.875rem;cursor:pointer;">
+            <input type="checkbox" name="permissions" value="{{ p.perm.pk }}" class="ni-checkbox" {% if p.checked %}checked{% endif %}>
+            <span>{{ p.perm.name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Permissions
+        </button>
+        <a href="{% url 'accounts:user_detail' user_obj.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -2,13 +2,20 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 
-from .models import User, Role, UserEntitasBisnis
+from .models import User, Role, NiPermission, UserEntitasBisnis
 
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ('kode', 'nama')
+    list_display = ('kode', 'nama', 'deskripsi')
     search_fields = ('kode', 'nama')
+
+
+@admin.register(NiPermission)
+class NiPermissionAdmin(admin.ModelAdmin):
+    list_display = ('code', 'name', 'module')
+    list_filter = ('module',)
+    search_fields = ('code', 'name')
 
 
 class UserEntitasBisnisInline(admin.TabularInline):
@@ -22,7 +29,8 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal Info', {'fields': ('name', 'role')}),
-        ('Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('App Permissions', {'fields': ('ni_permissions',)}),
+        ('Django Permissions', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Important Dates', {'fields': ('last_login', 'date_joined')}),
     )
     add_fieldsets = (
@@ -33,6 +41,7 @@ class UserAdmin(DjangoUserAdmin):
     search_fields = ('email', 'name')
     ordering = ('email',)
     list_select_related = ('role',)
+    filter_horizontal = ('ni_permissions',)
     inlines = (UserEntitasBisnisInline,)
 
 

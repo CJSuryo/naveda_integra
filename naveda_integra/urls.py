@@ -11,6 +11,7 @@ urlpatterns = [
     path('master-data/', include('apps.master_data.urls')),
     path('jurnal/', include('apps.jurnal.urls')),
     path('purchase/', include('apps.purchase.urls')),
+    path('inventory/', include('apps.inventory.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 

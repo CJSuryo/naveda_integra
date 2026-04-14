@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Detail Inventory {{ record.inventory_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ record.inventory_number }}</h1>
+    <p class="ni-page-header__subtitle">Detail record inventory</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Inventory Number</dt><dd>{{ record.inventory_number }}</dd>
+      <dt>Item</dt><dd>{{ record.item.item_id }} - {{ record.item.nama }}</dd>
+      <dt>Tipe Item</dt><dd>{{ record.item.get_tipe_item_display }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
+      <dt>Tanggal</dt><dd>{{ record.tanggal }}</dd>
+      <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}</dd>
+      <dt>Unit Price</dt><dd>{{ record.unit_price|floatformat:0|intcomma }}</dd>
+      <dt>Total Value</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
+      <dt>Lead Time (Days)</dt><dd>{{ record.lead_time_days|default:'-' }}</dd>
+      <dt>Ordering Cost</dt><dd>{% if record.ordering_cost %}{{ record.ordering_cost|floatformat:0|intcomma }}{% else %}-{% endif %}</dd>
+      <dt>Holding Cost %</dt><dd>{% if record.holding_cost_pct %}{{ record.holding_cost_pct|floatformat:4 }}{% else %}-{% endif %}</dd>
+      <dt>MOQ</dt><dd>{% if record.moq %}{{ record.moq|floatformat:4|intcomma }}{% else %}-{% endif %}</dd>
+      <dt>Metode Alokasi Biaya</dt><dd>{{ record.get_metode_alokasi_display|default:'-' }}</dd>
+      {% if record.purchase_item %}
+      <dt>Purchase</dt><dd><a href="{% url 'purchase:detail' record.purchase_item.purchase_eb.purchase_header_id %}" style="color:var(--ni-primary);">{{ record.purchase_item.purchase_eb.purchase_header.transaction_id }}</a></dd>
+      {% endif %}
+      <dt>Dibuat</dt><dd>{{ record.created_at }}</dd>
+      <dt>Diperbarui</dt><dd>{{ record.updated_at }}</dd>
+    </dl>
+  </div>
+</div>
+{% endblock %}

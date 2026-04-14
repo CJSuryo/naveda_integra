@@ -68,6 +68,21 @@
           </tr>
         </thead>
         <tbody>
+          {% if totals %}
+          <tr style="font-weight:700;background:var(--ni-primary-light);">
+            <td colspan="2" style="font-weight:700;">TOTAL</td>
+            <td class="ni-text-right ns-col-group">{% if totals.sa_d %}{{ totals.sa_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if totals.sa_k %}{{ totals.sa_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if totals.modul_d %}{{ totals.modul_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if totals.modul_k %}{{ totals.modul_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if totals.sblm_d %}{{ totals.sblm_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if totals.sblm_k %}{{ totals.sblm_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if totals.peny_d %}{{ totals.peny_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if totals.peny_k %}{{ totals.peny_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if totals.stlh_d %}{{ totals.stlh_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if totals.stlh_k %}{{ totals.stlh_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+          </tr>
+          {% endif %}
           {% for row in rows %}
           <tr>
             <td>{{ row.akun.kode_akun }}</td>

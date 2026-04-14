@@ -83,4 +83,39 @@
   </div>
 </div>
 {% endfor %}
+
+{% if journal_entries %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-text);">
+      <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Journal Preview
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="font-size:0.85rem;">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Entitas Bisnis</th>
+            <th>Akun</th>
+            <th class="ni-text-right">Debit (Rp)</th>
+            <th class="ni-text-right">Kredit (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for entry in journal_entries %}
+          <tr>
+            <td>{{ entry.no }}</td>
+            <td>{{ entry.entitas_bisnis }}</td>
+            <td>{{ entry.akun }}</td>
+            <td class="ni-text-right">{% if entry.debit %}{{ entry.debit|floatformat:0|intcomma }}{% endif %}</td>
+            <td class="ni-text-right">{% if entry.kredit %}{{ entry.kredit|floatformat:0|intcomma }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
