@@ -1,9 +1,10 @@
-"""Purchase services — automated journal generation and FIFO engine updates."""
+"""Purchase services — automated journal generation, FIFO engine, and inventory record updates."""
 from decimal import Decimal
 
 from django.db import transaction
 
 from apps.jurnal.models import JurnalHeader, JurnalDetail
+from apps.inventory.models import InventoryRecord
 
 from .models import PurchaseHeader, PurchaseItem, FIFOBatch
 
@@ -98,6 +99,48 @@ def reverse_automated_journals(purchase_header: PurchaseHeader) -> None:
 def reverse_fifo_batches(purchase_header: PurchaseHeader) -> None:
     """Delete FIFO batches created by this purchase."""
     FIFOBatch.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase_header,
+    ).delete()
+
+
+def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryRecord]:
+    """Create InventoryRecord entries for each purchase item (inventory types only).
+
+    Numbering format: PREFIX-XXXX-YYY where PREFIX=RM/FG/ITM,
+    XXXX = item_id suffix, YYY = sequential number per item.
+    """
+    records: list[InventoryRecord] = []
+
+    for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
+        items = eb_group.items.select_related('item', 'sub_transaction_type').all()
+        for pi in items:
+            # Only create inventory records for inflow inventory items (RM/FG/ITM)
+            if pi.item.tipe_item not in ('RM', 'FG', 'ITM'):
+                continue
+            if pi.sub_transaction_type.direction != 'inflow':
+                continue
+
+            record = InventoryRecord(
+                item=pi.item,
+                purchase_item=pi,
+                entitas_bisnis=eb_group.entitas_bisnis,
+                quantity=pi.quantity,
+                unit_price=pi.unit_price,
+                tanggal=purchase_header.tanggal,
+                lead_time_days=pi.lead_time_days,
+                ordering_cost=pi.ordering_cost,
+                holding_cost_pct=pi.holding_cost_pct,
+                moq=pi.moq,
+            )
+            record.save()
+            records.append(record)
+
+    return records
+
+
+def reverse_inventory_records(purchase_header: PurchaseHeader) -> None:
+    """Delete inventory records created by this purchase."""
+    InventoryRecord.objects.filter(
         purchase_item__purchase_eb__purchase_header=purchase_header,
     ).delete()
 

@@ -85,7 +85,7 @@
           {% endif %}
           <td>{{ row.purchase_header.tanggal }}</td>
           <td>{{ row.eb_display }}</td>
-          <td>{{ row.item.item }}</td>
+          <td>{% with inv_rec=row.item.inventory_records.all.0 %}{% if inv_rec %}<a href="{% url 'inventory:detail' inv_rec.pk %}" style="color:var(--ni-primary);text-decoration:none;">{{ row.item.item }}</a>{% else %}{{ row.item.item }}{% endif %}{% endwith %}</td>
           <td>{{ row.item.sub_transaction_type.nama }}</td>
           <td class="ni-text-right">{{ row.item.quantity|floatformat:0|intcomma }}</td>
           <td class="ni-text-right">{{ row.item.unit_price|floatformat:0|intcomma }}</td>

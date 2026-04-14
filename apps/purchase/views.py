@@ -23,6 +23,7 @@ from .models import (
 from .services import (
     create_automated_journals, create_fifo_batches,
     reverse_automated_journals, reverse_fifo_batches,
+    create_inventory_records, reverse_inventory_records,
 )
 
 
@@ -117,6 +118,7 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
             'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
+            'entitas_groups__items__inventory_records',
         )
         .order_by('-tanggal', '-created_at')
     )
@@ -355,6 +357,7 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
     if request.method == 'POST':
         with transaction.atomic():
+            reverse_inventory_records(purchase)
             reverse_fifo_batches(purchase)
             reverse_automated_journals(purchase)
             purchase.delete()
@@ -863,7 +866,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
 
     with transaction.atomic():
         if existing:
-            # Reverse old journals and FIFO before updating
+            # Reverse old journals, FIFO, and inventory records before updating
+            reverse_inventory_records(existing)
             reverse_fifo_batches(existing)
             reverse_automated_journals(existing)
             existing.entitas_groups.all().delete()
@@ -914,6 +918,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                     )
             create_automated_journals(purchase)
             create_fifo_batches(purchase)
+            create_inventory_records(purchase)
             created_purchases.append(purchase)
         else:
             # Delete existing if it exists (we're splitting into multiple)
@@ -950,6 +955,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         )
                 create_automated_journals(purchase)
                 create_fifo_batches(purchase)
+                create_inventory_records(purchase)
                 created_purchases.append(purchase)
 
     if len(created_purchases) == 1:
