@@ -24,6 +24,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'nama', 'tipe_item', 'kategori', 'velocity_category',
             'coa_account', 'expiry_date', 'threshold_days_outstanding',
             'masa_manfaat', 'metode_penyusutan', 'metode_amortisasi',
+            'metode_biaya_persediaan',
             'entitas_bisnis',
         )
         widgets = {
@@ -37,6 +38,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
             'metode_penyusutan': forms.Select(attrs={'class': 'ni-input'}),
             'metode_amortisasi': forms.Select(attrs={'class': 'ni-input'}),
+            'metode_biaya_persediaan': forms.Select(attrs={'class': 'ni-input'}),
             'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
@@ -56,10 +58,12 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             tipe_item_choices[0] if tipe_item_choices and len(tipe_item_choices) == 1 else None
         )
         if tipe_val == 'ATP' or (tipe_item_choices and tipe_item_choices == ['ATP']):
-            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding', 'metode_amortisasi'):
+            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding',
+                      'metode_amortisasi', 'metode_biaya_persediaan'):
                 self.fields.pop(f, None)
         elif tipe_val == 'ALL' or (tipe_item_choices and tipe_item_choices == ['ALL']):
-            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding', 'metode_penyusutan'):
+            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding',
+                      'metode_penyusutan', 'metode_biaya_persediaan'):
                 self.fields.pop(f, None)
         else:
             # Inventory items: hide asset-specific fields
