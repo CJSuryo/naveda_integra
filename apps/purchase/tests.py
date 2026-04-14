@@ -73,16 +73,16 @@ class SubTransactionTypeModelTests(TestCase):
 class PurchaseHeaderModelTests(TestCase):
     def test_auto_generate_transaction_id(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01')
-        self.assertEqual(ph.transaction_id, 'TRX-INV-001')
+        self.assertEqual(ph.transaction_id, 'PUR-INV-001')
 
     def test_sequential_transaction_ids(self):
         PurchaseHeader.objects.create(tanggal='2026-01-01')
         ph2 = PurchaseHeader.objects.create(tanggal='2026-01-02')
-        self.assertEqual(ph2.transaction_id, 'TRX-INV-002')
+        self.assertEqual(ph2.transaction_id, 'PUR-INV-002')
 
     def test_str(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01')
-        self.assertEqual(str(ph), 'TRX-INV-001')
+        self.assertEqual(str(ph), 'PUR-INV-001')
 
 
 class PurchaseItemModelTests(TestCase):
@@ -313,6 +313,11 @@ class PurchaseViewTests(TestCase):
 
     def test_item_master_list(self):
         resp = self.client.get(reverse('purchase:item_master_list'))
+        # Now redirects to persediaan_list
+        self.assertEqual(resp.status_code, 302)
+
+    def test_persediaan_list(self):
+        resp = self.client.get(reverse('purchase:persediaan_list'))
         self.assertEqual(resp.status_code, 200)
 
     def test_item_master_create_post(self):

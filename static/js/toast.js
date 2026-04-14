@@ -23,7 +23,7 @@
 
   function dismissToast(el) {
     el.style.opacity = '0';
-    el.style.transform = 'translateY(-8px)';
+    el.style.transform = 'translateX(100%) scale(0.95)';
     setTimeout(function () { el.remove(); }, 250);
   }
 })();

@@ -16,7 +16,7 @@
       {% csrf_token %}
       <div class="ni-btn-row" style="justify-content:center;">
         <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
-        <a href="{% url 'purchase:item_master_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <a href="{% url list_url|default:'purchase:persediaan_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>

@@ -20,7 +20,7 @@
       {% endfor %}
       <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
-        <a href="{% url 'purchase:item_master_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <a href="{% url list_url|default:'purchase:persediaan_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>

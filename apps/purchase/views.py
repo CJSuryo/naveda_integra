@@ -356,49 +356,129 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
 
 # ── Item Master CRUD ─────────────────────────────────────────────────────────
 
+# Mapping of page slug → (title, subtitle, tipe_item filter values)
+_ITEM_PAGE_MAP = {
+    'persediaan': ('Persediaan (Inventory)', 'Raw Material, Finished Good, Item Lainnya', ['RM', 'FG', 'ITM']),
+    'aset-tetap': ('Aset Tetap', 'Daftar aset tetap', ['ATP']),
+    'aset-lainnya': ('Aset Lainnya', 'Daftar aset lainnya', ['ALL']),
+}
+
+_ITEM_PAGE_LIST_URL = {
+    'persediaan': 'purchase:persediaan_list',
+    'aset-tetap': 'purchase:aset_tetap_list',
+    'aset-lainnya': 'purchase:aset_lainnya_list',
+}
+
+
+def _get_item_page(tipe_item: str) -> str:
+    """Return the page slug for an item based on its tipe_item."""
+    if tipe_item in ('RM', 'FG', 'ITM'):
+        return 'persediaan'
+    if tipe_item == 'ATP':
+        return 'aset-tetap'
+    if tipe_item == 'ALL':
+        return 'aset-lainnya'
+    return 'persediaan'
+
+
 @login_required
-def item_master_list(request: HttpRequest) -> HttpResponse:
-    qs = ItemMasterPurchase.objects.select_related('kategori', 'coa_account').prefetch_related('entitas_bisnis').order_by('item_id')
+def persediaan_list(request: HttpRequest) -> HttpResponse:
+    return _item_master_list_page(request, 'persediaan')
+
+
+@login_required
+def aset_tetap_list(request: HttpRequest) -> HttpResponse:
+    return _item_master_list_page(request, 'aset-tetap')
+
+
+@login_required
+def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
+    return _item_master_list_page(request, 'aset-lainnya')
+
+
+def _item_master_list_page(request: HttpRequest, page: str) -> HttpResponse:
+    title, subtitle, tipe_items = _ITEM_PAGE_MAP[page]
+    qs = (
+        ItemMasterPurchase.objects
+        .filter(tipe_item__in=tipe_items)
+        .select_related('kategori', 'coa_account')
+        .prefetch_related('entitas_bisnis')
+        .order_by('item_id')
+    )
     search = request.GET.get('q', '')
     if search:
         qs = qs.filter(Q(nama__icontains=search) | Q(item_id__icontains=search))
-    return render(request, 'purchase/item_master_list.html', {'object_list': qs, 'search': search})
+    return render(request, 'purchase/item_master_list.html', {
+        'object_list': qs,
+        'search': search,
+        'page_title': title,
+        'page_subtitle': subtitle,
+        'item_page': page,
+        'list_url': _ITEM_PAGE_LIST_URL[page],
+        'create_url': f'purchase:item_master_create',
+    })
+
+
+@login_required
+def item_master_list(request: HttpRequest) -> HttpResponse:
+    """Kept for backward compat — redirects to persediaan."""
+    return redirect('purchase:persediaan_list')
 
 
 @login_required
 def item_master_create(request: HttpRequest) -> HttpResponse:
-    form = ItemMasterPurchaseForm(request.POST or None)
+    page = request.GET.get('page', 'persediaan')
+    _, _, valid_types = _ITEM_PAGE_MAP.get(page, _ITEM_PAGE_MAP['persediaan'])
+    list_url = _ITEM_PAGE_LIST_URL.get(page, 'purchase:persediaan_list')
+
+    form = ItemMasterPurchaseForm(request.POST or None, tipe_item_choices=valid_types)
     if request.method == 'POST' and form.is_valid():
         form.save()
         dj_messages.success(request, 'Item berhasil ditambahkan.')
-        return redirect('purchase:item_master_list')
-    return render(request, 'purchase/item_master_form.html', {'form': form, 'title': 'Tambah Item'})
+        return redirect(list_url)
+    return render(request, 'purchase/item_master_form.html', {
+        'form': form,
+        'title': 'Tambah Item',
+        'list_url': list_url,
+        'item_page': page,
+    })
 
 
 @login_required
 def item_master_update(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(ItemMasterPurchase, pk=pk)
-    form = ItemMasterPurchaseForm(request.POST or None, instance=obj)
+    page = _get_item_page(obj.tipe_item)
+    _, _, valid_types = _ITEM_PAGE_MAP[page]
+    list_url = _ITEM_PAGE_LIST_URL[page]
+
+    form = ItemMasterPurchaseForm(request.POST or None, instance=obj, tipe_item_choices=valid_types)
     if request.method == 'POST' and form.is_valid():
         form.save()
         dj_messages.success(request, 'Item berhasil diperbarui.')
-        return redirect('purchase:item_master_list')
+        return redirect(list_url)
     return render(request, 'purchase/item_master_form.html', {
         'form': form, 'title': 'Edit Item', 'object': obj,
+        'list_url': list_url, 'item_page': page,
     })
 
 
 @login_required
 def item_master_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(ItemMasterPurchase, pk=pk)
+    page = _get_item_page(obj.tipe_item)
+    list_url = _ITEM_PAGE_LIST_URL[page]
+
     if request.method == 'POST':
         if obj.purchase_items.exists():
             dj_messages.error(request, 'Item tidak bisa dihapus karena sudah ada transaksi.')
-            return redirect('purchase:item_master_list')
+            return redirect(list_url)
         obj.delete()
         dj_messages.success(request, 'Item berhasil dihapus.')
-        return redirect('purchase:item_master_list')
-    return render(request, 'purchase/item_master_confirm_delete.html', {'object': obj})
+        return redirect(list_url)
+    return render(request, 'purchase/item_master_confirm_delete.html', {
+        'object': obj,
+        'list_url': list_url,
+    })
 
 
 # ── Sub-Transaction Type (Settings) CRUD ─────────────────────────────────────
@@ -543,21 +623,36 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         })
 
     tipe_item = data.get('tipe_item', 'RM')
-    if tipe_item not in ('RM', 'FG', 'ITM'):
+    if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
         tipe_item = 'RM'
+
+    kategori_id = data.get('kategori_id') or None
+    velocity_category = data.get('velocity_category', '')
+    coa_account_id = data.get('coa_account_id') or None
+    expiry_date = data.get('expiry_date') or None
+    threshold_days = data.get('threshold_days_outstanding') or None
+    eb_ids = data.get('entitas_bisnis_ids', [])
 
     item = ItemMasterPurchase.objects.create(
         nama=nama,
         tipe_item=tipe_item,
+        kategori_id=kategori_id,
+        velocity_category=velocity_category,
+        coa_account_id=coa_account_id,
+        expiry_date=expiry_date,
+        threshold_days_outstanding=threshold_days,
     )
+    if eb_ids:
+        item.entitas_bisnis.set(eb_ids)
+
     return JsonResponse({
         'id': item.pk,
         'text': str(item),
         'item_id': item.item_id,
         'nama': item.nama,
         'tipe_item': item.tipe_item,
-        'coa_account_id': '',
-        'coa_account_text': '',
+        'coa_account_id': item.coa_account_id or '',
+        'coa_account_text': str(item.coa_account) if item.coa_account else '',
         'created': True,
     }, status=201)
 

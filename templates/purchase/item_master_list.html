@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
-{% block title %}Item Master{% endblock %}
+{% block title %}{{ page_title|default:"Item Master" }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Item Master</h1>
-    <p class="ni-page-header__subtitle">Daftar semua item (Raw Material, Finished Good, Lainnya)</p>
+    <h1 class="ni-page-header__title">{{ page_title|default:"Item Master" }}</h1>
+    <p class="ni-page-header__subtitle">{{ page_subtitle|default:"Daftar semua item" }}</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'purchase:item_master_create' %}" class="ni-btn ni-btn--success">
+    <a href="{% url 'purchase:item_master_create' %}?page={{ item_page|default:'persediaan' }}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Item
     </a>
   </div>

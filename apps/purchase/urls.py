@@ -12,8 +12,13 @@ urlpatterns = [
     path('<int:pk>/edit/', views.purchase_update, name='update'),
     path('<int:pk>/delete/', views.purchase_delete, name='delete'),
 
-    # Item Master
+    # Item Master — 3 separate pages
+    path('persediaan/', views.persediaan_list, name='persediaan_list'),
+    path('aset-tetap/', views.aset_tetap_list, name='aset_tetap_list'),
+    path('aset-lainnya/', views.aset_lainnya_list, name='aset_lainnya_list'),
+    # Backward compat redirect
     path('item-master/', views.item_master_list, name='item_master_list'),
+    # Shared create/update/delete (page param determines context)
     path('item-master/create/', views.item_master_create, name='item_master_create'),
     path('item-master/<int:pk>/edit/', views.item_master_update, name='item_master_update'),
     path('item-master/<int:pk>/delete/', views.item_master_delete, name='item_master_delete'),
