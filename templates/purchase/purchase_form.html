@@ -97,7 +97,7 @@
         </div>
         <table>
           <thead>
-            <tr><th>Entitas Bisnis</th><th>Item</th><th>Akun Debit</th><th class="ni-text-right">Debit (Rp)</th><th>Akun Kredit</th><th class="ni-text-right">Kredit (Rp)</th></tr>
+            <tr><th>No</th><th>Akun</th><th>Uraian</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
           </thead>
           <tbody id="journalPreviewBody"></tbody>
         </table>
@@ -135,12 +135,8 @@
   // Data from server (for edit mode)
   var existingGroups = {{ eb_groups_json|default:"[]" }};
 
-  // Entitas bisnis options from server
-  var ebOptions = [
-    {% for eb in entitas_list %}
-    { id: {{ eb.pk }}, nama: '{{ eb.nama|escapejs }}' },
-    {% endfor %}
-  ];
+  // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
+  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
 
   // Sub-transaction type options
   var sttOptions = [
@@ -166,8 +162,8 @@
 
     var ebSelectOptions = '<option value="">— Pilih Entitas Bisnis —</option>';
     ebOptions.forEach(function (eb) {
-      var sel = (prefill && prefill.entitas_bisnis_id == eb.id) ? ' selected' : '';
-      ebSelectOptions += '<option value="' + eb.id + '"' + sel + '>' + eb.nama + '</option>';
+      var sel = (prefill && prefill.entitas_bisnis_id === eb.value) ? ' selected' : '';
+      ebSelectOptions += '<option value="' + eb.value + '"' + sel + '>' + eb.label + '</option>';
     });
 
     card.innerHTML =
@@ -372,10 +368,10 @@
       var tbody = document.getElementById('journalPreviewBody');
       tbody.innerHTML = '';
       if (!data.entries || data.entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
       } else {
         data.entries.forEach(function (e) {
-          tbody.innerHTML += '<tr><td>' + e.eb_name + '</td><td>' + e.item_name + '</td><td>' + e.debit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td><td>' + e.credit_account + '</td><td style="text-align:right;">' + formatNum(e.amount) + '</td></tr>';
+          tbody.innerHTML += '<tr><td>' + (e.no !== '' ? e.no : '') + '</td><td>' + e.akun + '</td><td>' + e.uraian + '</td><td style="text-align:right;">' + (e.debit ? formatNum(e.debit) : '') + '</td><td style="text-align:right;">' + (e.kredit ? formatNum(e.kredit) : '') + '</td></tr>';
         });
       }
       var preview = document.getElementById('journalPreview');

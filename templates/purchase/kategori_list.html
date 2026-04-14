@@ -18,6 +18,7 @@
       <thead>
         <tr>
           <th>Nama Kategori</th>
+          <th>Entitas Bisnis</th>
           <th>Aksi</th>
         </tr>
       </thead>
@@ -26,6 +27,11 @@
         <tr>
           <td>{{ obj.nama }}</td>
           <td>
+            {% for eb in obj.entitas_bisnis.all %}
+              <span class="ni-badge ni-badge--secondary">{{ eb.nama }}</span>
+            {% empty %}-{% endfor %}
+          </td>
+          <td>
             <div class="ni-btn-row">
               <a href="{% url 'purchase:kategori_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
               <a href="{% url 'purchase:kategori_delete' obj.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
@@ -33,7 +39,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="2" class="ni-text-center ni-text-muted">Belum ada kategori.</td></tr>
+        <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada kategori.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -34,7 +34,7 @@
           <th>Tipe</th>
           <th>Kategori</th>
           <th>CoA Account</th>
-          <th>Harga Satuan</th>
+          <th>Entitas Bisnis</th>
           <th>Aksi</th>
         </tr>
       </thead>
@@ -46,7 +46,11 @@
           <td>{{ obj.get_tipe_item_display }}</td>
           <td>{{ obj.kategori|default:'-' }}</td>
           <td>{{ obj.coa_account|default:'-' }}</td>
-          <td class="ni-text-right">{{ obj.unit_price }}</td>
+          <td>
+            {% for eb in obj.entitas_bisnis.all %}
+              <span class="ni-badge ni-badge--secondary">{{ eb.nama }}</span>
+            {% empty %}-{% endfor %}
+          </td>
           <td>
             <div class="ni-btn-row">
               <a href="{% url 'purchase:item_master_update' obj.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>

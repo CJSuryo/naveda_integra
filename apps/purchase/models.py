@@ -14,6 +14,12 @@ from django.utils import timezone
 class KategoriItem(models.Model):
     """Free-form item category (Coffee, Tea, Snacks, Bahan Masak, etc.)."""
     nama = models.CharField(max_length=255, unique=True)
+    entitas_bisnis = models.ManyToManyField(
+        'entitas_bisnis.EntitasBisnis',
+        blank=True,
+        related_name='kategori_items',
+        verbose_name='Entitas Bisnis',
+    )
 
     class Meta:
         verbose_name = 'Kategori Item'
@@ -76,6 +82,12 @@ class ItemMasterPurchase(models.Model):
         decimal_places=4,
         default=0,
         verbose_name='Harga Satuan Default',
+    )
+    entitas_bisnis = models.ManyToManyField(
+        'entitas_bisnis.EntitasBisnis',
+        blank=True,
+        related_name='item_masters',
+        verbose_name='Entitas Bisnis',
     )
 
     class Meta:
