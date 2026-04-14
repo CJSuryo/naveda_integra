@@ -298,9 +298,9 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
             coa_text = item_data.get('coa_account_text', '')
             offset_text = item_data.get('offset_coa_account_text', '')
             item_name = item_data.get('item_name', '')
-            pair_no = len(entries) // 2 + 1
+            entry_no = len(entries) // 2 + 1
             entries.append({
-                'no': pair_no,
+                'no': entry_no,
                 'akun': coa_text,
                 'uraian': f'{item_name} ({eb_name})',
                 'debit': str(total),
