@@ -521,9 +521,7 @@
         }
       }
     });
-    if (history.replaceState) {
-      history.replaceState(null, null, window.location.pathname + window.location.search);
-    }
+    history.replaceState(null, null, window.location.pathname + window.location.search);
   })();
 
   // Close modal on backdrop click

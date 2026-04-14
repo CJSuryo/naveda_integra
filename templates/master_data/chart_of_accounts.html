@@ -390,9 +390,7 @@
     if (lv1Idx !== null && lv1Idx < lv1Toggles.length) {
       toggleCollapsible(lv1Toggles[lv1Idx]);
     }
-    if (history.replaceState) {
-      history.replaceState(null, null, window.location.pathname + window.location.search);
-    }
+    history.replaceState(null, null, window.location.pathname + window.location.search);
   })();
 
   // Close on backdrop click
