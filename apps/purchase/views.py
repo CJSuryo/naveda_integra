@@ -141,7 +141,7 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
 
     purchases = list(qs)
 
-    # Build flat rows for the table
+    # Build flat rows for the table — apply item-level filters
     rows = []
     for ph in purchases:
         for eg in ph.entitas_groups.all():
@@ -157,11 +157,32 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
             else:
                 eb_display = eg.entitas_bisnis.nama
             for pi in eg.items.all():
+                # Item-level row filtering
+                if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
+                    continue
+                if item_filter and str(pi.item_id) != str(item_filter):
+                    continue
                 rows.append({
                     'purchase_header': ph,
                     'eb_display': eb_display,
                     'item': pi,
                 })
+
+    # Compute rowspan for merging Transaction ID cells
+    trx_rowspan: dict[str, int] = {}
+    trx_seen: dict[str, bool] = {}
+    for row in rows:
+        tid = row['purchase_header'].transaction_id
+        trx_rowspan[tid] = trx_rowspan.get(tid, 0) + 1
+    for row in rows:
+        tid = row['purchase_header'].transaction_id
+        if tid not in trx_seen:
+            trx_seen[tid] = True
+            row['show_trx_cell'] = True
+            row['trx_rowspan'] = trx_rowspan[tid]
+        else:
+            row['show_trx_cell'] = False
+            row['trx_rowspan'] = 0
 
     return render(request, 'purchase/purchase_list.html', {
         'rows': rows,
@@ -191,6 +212,8 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
+        'kategori_items': KategoriItem.objects.all().order_by('nama'),
+        'akun_list': Akun.objects.all().order_by('kode_akun'),
     })
 
 
@@ -262,6 +285,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
         'eb_groups_json': json.dumps(eb_groups_data),
+        'kategori_items': KategoriItem.objects.all().order_by('nama'),
+        'akun_list': Akun.objects.all().order_by('kode_akun'),
     })
 
 
@@ -334,19 +359,18 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
                 continue
             coa_text = item_data.get('coa_account_text', '')
             offset_text = item_data.get('offset_coa_account_text', '')
-            item_name = item_data.get('item_name', '')
             entry_no = len(entries) // 2 + 1
             entries.append({
                 'no': entry_no,
+                'entitas_bisnis': eb_name,
                 'akun': coa_text,
-                'uraian': f'{item_name} ({eb_name})',
                 'debit': str(total),
                 'kredit': '',
             })
             entries.append({
                 'no': '',
+                'entitas_bisnis': '',
                 'akun': offset_text,
-                'uraian': '',
                 'debit': '',
                 'kredit': str(total),
             })
@@ -569,17 +593,25 @@ def kategori_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
-    """Return item master options matching a search term."""
+    """Return item master options matching a search term, optionally filtered by EB."""
     term = request.GET.get('term', '')
-    items = ItemMasterPurchase.objects.filter(
+    eb_lv1_id = request.GET.get('eb_lv1_id', '')
+    qs = ItemMasterPurchase.objects.filter(
         Q(nama__icontains=term) | Q(item_id__icontains=term)
-    ).select_related('kategori', 'coa_account').order_by('nama')[:50]
+    ).select_related('kategori', 'coa_account').order_by('nama')
+
+    if eb_lv1_id:
+        # Filter to items linked to this entitas bisnis (lv1)
+        qs = qs.filter(entitas_bisnis__pk=eb_lv1_id)
+
+    items = qs[:50]
     results = [
         {
             'id': item.pk,
             'text': str(item),
             'item_id': item.item_id,
             'nama': item.nama,
+            'tipe_item': item.tipe_item,
             'kategori': item.kategori.nama if item.kategori else '',
             'coa_account_id': item.coa_account_id or '',
             'coa_account_text': str(item.coa_account) if item.coa_account else '',
@@ -733,7 +765,32 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
             'errors': errors,
             'eb_groups_json': json.dumps(groups),
+            'kategori_items': KategoriItem.objects.all().order_by('nama'),
+            'akun_list': Akun.objects.all().order_by('kode_akun'),
         })
+
+    # Determine the dominant tipe_item prefix for all items to decide the transaction ID prefix.
+    # If items span multiple type-groups, we create separate PurchaseHeaders per group.
+    # Group mapping: RM/FG/ITM → PUR-INV, ATP → PUR-ATP, ALL → PUR-ALL
+
+    def _item_prefix_group(item_pk: int | str) -> str:
+        """Return the transaction prefix group for an item."""
+        try:
+            tipe = ItemMasterPurchase.objects.filter(pk=item_pk).values_list('tipe_item', flat=True).first()
+        except (ValueError, TypeError):
+            tipe = 'RM'
+        return PurchaseHeader.ITEM_TYPE_PREFIX_MAP.get(tipe or 'RM', 'PUR-INV')
+
+    # Collect all items across groups and determine which prefix groups are present
+    prefix_groups: dict[str, list[tuple]] = {}  # prefix → [(group_data, [item_data, ...])]
+    for group_data in groups:
+        # Separate items per prefix within each EB group
+        items_by_prefix: dict[str, list] = {}
+        for item_data in group_data.get('items', []):
+            pfx = _item_prefix_group(item_data.get('item_id', ''))
+            items_by_prefix.setdefault(pfx, []).append(item_data)
+        for pfx, items_list in items_by_prefix.items():
+            prefix_groups.setdefault(pfx, []).append((group_data, items_list))
 
     with transaction.atomic():
         if existing:
@@ -741,44 +798,88 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             reverse_fifo_batches(existing)
             reverse_automated_journals(existing)
             existing.entitas_groups.all().delete()
+
+        created_purchases = []
+
+        # If editing an existing purchase AND all items belong to the same prefix group
+        # as the original, update in place. Otherwise create new headers.
+        prefixes = list(prefix_groups.keys())
+
+        if existing and len(prefixes) == 1:
+            # Single group — update existing header
             existing.tanggal = tanggal
             existing.deskripsi = deskripsi
             existing.save()
             purchase = existing
-        else:
-            purchase = PurchaseHeader.objects.create(
-                tanggal=tanggal,
-                deskripsi=deskripsi,
-            )
-
-        for group_data in groups:
-            eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
-            eb_group = PurchaseEntitasBisnis.objects.create(
-                purchase_header=purchase,
-                entitas_bisnis_id=eb_resolved['lv1_id'],
-                entitas_bisnis_lv2_id=eb_resolved['lv2_id'],
-                entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
-            )
-            for item_data in group_data.get('items', []):
-                PurchaseItem.objects.create(
-                    purchase_eb=eb_group,
-                    item_id=item_data['item_id'],
-                    sub_transaction_type_id=item_data['sub_transaction_type_id'],
-                    coa_account_id=item_data['coa_account_id'],
-                    offset_coa_account_id=item_data['offset_coa_account_id'],
-                    quantity=Decimal(str(item_data['quantity'])),
-                    unit_price=Decimal(str(item_data['unit_price'])),
-                    lead_time_days=item_data.get('lead_time_days') or None,
-                    ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
-                    holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
-                    moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
-                    target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
+            for group_data, items_list in prefix_groups[prefixes[0]]:
+                eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
+                eb_group = PurchaseEntitasBisnis.objects.create(
+                    purchase_header=purchase,
+                    entitas_bisnis_id=eb_resolved['lv1_id'],
+                    entitas_bisnis_lv2_id=eb_resolved['lv2_id'],
+                    entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
                 )
+                for item_data in items_list:
+                    PurchaseItem.objects.create(
+                        purchase_eb=eb_group,
+                        item_id=item_data['item_id'],
+                        sub_transaction_type_id=item_data['sub_transaction_type_id'],
+                        coa_account_id=item_data['coa_account_id'],
+                        offset_coa_account_id=item_data['offset_coa_account_id'],
+                        quantity=Decimal(str(item_data['quantity'])),
+                        unit_price=Decimal(str(item_data['unit_price'])),
+                        lead_time_days=item_data.get('lead_time_days') or None,
+                        ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
+                        holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
+                        moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
+                        target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
+                    )
+            create_automated_journals(purchase)
+            create_fifo_batches(purchase)
+            created_purchases.append(purchase)
+        else:
+            # Delete existing if it exists (we're splitting into multiple)
+            if existing:
+                existing.delete()
 
-        # Auto-generate journals and FIFO batches
-        create_automated_journals(purchase)
-        create_fifo_batches(purchase)
+            # Create one PurchaseHeader per prefix group
+            for pfx, group_items_list in prefix_groups.items():
+                purchase = PurchaseHeader(tanggal=tanggal, deskripsi=deskripsi)
+                purchase.save(_trx_prefix=pfx)
 
-    action = 'diperbarui' if existing else 'dibuat'
-    dj_messages.success(request, f'Purchase {purchase.transaction_id} berhasil {action}.')
-    return redirect('purchase:detail', pk=purchase.pk)
+                for group_data, items_list in group_items_list:
+                    eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
+                    eb_group = PurchaseEntitasBisnis.objects.create(
+                        purchase_header=purchase,
+                        entitas_bisnis_id=eb_resolved['lv1_id'],
+                        entitas_bisnis_lv2_id=eb_resolved['lv2_id'],
+                        entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
+                    )
+                    for item_data in items_list:
+                        PurchaseItem.objects.create(
+                            purchase_eb=eb_group,
+                            item_id=item_data['item_id'],
+                            sub_transaction_type_id=item_data['sub_transaction_type_id'],
+                            coa_account_id=item_data['coa_account_id'],
+                            offset_coa_account_id=item_data['offset_coa_account_id'],
+                            quantity=Decimal(str(item_data['quantity'])),
+                            unit_price=Decimal(str(item_data['unit_price'])),
+                            lead_time_days=item_data.get('lead_time_days') or None,
+                            ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
+                            holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
+                            moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
+                            target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
+                        )
+                create_automated_journals(purchase)
+                create_fifo_batches(purchase)
+                created_purchases.append(purchase)
+
+    if len(created_purchases) == 1:
+        purchase = created_purchases[0]
+        action = 'diperbarui' if existing else 'dibuat'
+        dj_messages.success(request, f'Purchase {purchase.transaction_id} berhasil {action}.')
+        return redirect('purchase:detail', pk=purchase.pk)
+    else:
+        trx_ids = ', '.join(p.transaction_id for p in created_purchases)
+        dj_messages.success(request, f'Purchase berhasil dibuat: {trx_ids}')
+        return redirect('purchase:list')

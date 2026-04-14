@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Jurnal{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -63,8 +64,8 @@
                 {% endif %}
               </td>
               <td>{{ detail.akun.nama }}</td>
-              <td class="ni-text-right">Rp{{ detail.debit|floatformat:0 }}</td>
-              <td class="ni-text-right">Rp{{ detail.kredit|floatformat:0 }}</td>
+              <td class="ni-text-right">{{ detail.debit|floatformat:0|intcomma }}</td>
+              <td class="ni-text-right">{{ detail.kredit|floatformat:0|intcomma }}</td>
             </tr>
             {% endfor %}
             {% endwith %}

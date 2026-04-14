@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -51,8 +52,8 @@
           <tr>
             <td>{{ d.akun.kode_akun }}</td>
             <td>{{ d.akun.nama }}</td>
-            <td class="ni-text-right">Rp{{ d.debit|floatformat:0 }}</td>
-            <td class="ni-text-right">Rp{{ d.kredit|floatformat:0 }}</td>
+            <td class="ni-text-right">{{ d.debit|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ d.kredit|floatformat:0|intcomma }}</td>
           </tr>
           {% empty %}
           <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
