@@ -49,6 +49,8 @@ urlpatterns = [
     path('chart-of-accounts/', views.chart_of_accounts, name='chart_of_accounts'),
     path('chart-of-accounts/export/', views.coa_export, name='coa_export'),
     path('chart-of-accounts/import/', views.coa_import, name='coa_import'),
+    path('chart-of-accounts/preview/', views.coa_preview, name='coa_preview'),
+    path('chart-of-accounts/import-json/', views.coa_import_json, name='coa_import_json'),
     # Tipe Transaksi (read-only)
     path('tipe-transaksi/', views.tipe_transaksi_list, name='tipe_transaksi_list'),
     # Prefiks Transaksi (read-only, data lives in jurnal.TransactionPrefix)

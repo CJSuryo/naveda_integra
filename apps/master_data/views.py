@@ -979,3 +979,205 @@ def coa_import(request: HttpRequest) -> HttpResponse:
         messages.error(request, f'Gagal memproses file: {exc}')
 
     return redirect('master_data:chart_of_accounts')
+
+
+# ── Chart of Accounts: Preview (AJAX) ────────────────────────────────────────
+
+@login_required
+def coa_preview(request: HttpRequest) -> JsonResponse:
+    """Parse an uploaded CSV and return rows with validation status (AJAX only).
+
+    Each row in the response has:
+      prefix, lv1_kode, lv1_nama, lv2_kode, lv2_nama,
+      lv1_status ('new'|'update'|'error'), lv2_status ('new'|'update'|'skip'|'error'),
+      error (human-readable message, empty when valid)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        return JsonResponse({'success': False, 'error': 'Pilih file CSV terlebih dahulu.'})
+
+    try:
+        raw = csv_file.read()
+        decoded = raw.decode('utf-8-sig').strip()
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        required_headers = set(_COA_HEADERS)
+        actual_headers = set(reader.fieldnames or [])
+        missing = required_headers - actual_headers
+        if missing:
+            return JsonResponse({
+                'success': False,
+                'error': f'Kolom tidak ditemukan: {", ".join(sorted(missing))}',
+            })
+
+        # Pre-load all existing lv1 and lv2 kodes per category for O(1) lookup
+        db_lv1: dict[str, set[str]] = {}
+        db_lv2: dict[str, set[str]] = {}
+        for cat in _COA_CATEGORIES:
+            slug = cat['lv1_fk']
+            db_lv1[slug] = set(cat['lv1_model'].objects.values_list('kode', flat=True))
+            db_lv2[slug] = set(cat['lv2_model'].objects.values_list('kode', flat=True))
+
+        rows_out = []
+        seen_lv1_in_csv: dict[str, str] = {}  # kode → first-seen category slug
+        seen_lv2_in_csv: set[str] = set()
+
+        for row in reader:
+            prefix = (row.get('Kode Akun Lvl 1') or '').strip()
+            lv1_kode = (row.get('Kode Akun Lvl 2') or '').strip()
+            lv1_nama = (row.get('Nama Akun Lvl 2') or '').strip()
+            lv2_kode = (row.get('Kode Akun Lvl 3') or '').strip()
+            lv2_nama = (row.get('Nama Akun') or '').strip()
+            cat_early = _get_category_by_prefix(prefix)
+
+            entry: dict = {
+                'prefix': prefix,
+                'category_name': cat_early['name'] if cat_early else '',
+                'lv1_kode': lv1_kode,
+                'lv1_nama': lv1_nama,
+                'lv2_kode': lv2_kode,
+                'lv2_nama': lv2_nama,
+                'lv1_status': 'new',
+                'lv2_status': 'skip',
+                'error': '',
+            }
+
+            # ── Required fields ──────────────────────────────────────────────
+            if not prefix or not lv1_kode or not lv1_nama:
+                entry['lv1_status'] = 'error'
+                entry['error'] = 'Kolom wajib (prefix / kode lvl2 / nama lvl2) kosong.'
+                rows_out.append(entry)
+                continue
+
+            cat = _get_category_by_prefix(prefix)
+            if not cat:
+                entry['lv1_status'] = 'error'
+                entry['error'] = f'Prefix "{prefix}" tidak dikenal (harus 1–5).'
+                rows_out.append(entry)
+                continue
+
+            entry['category_name'] = cat['name']
+            slug = cat['lv1_fk']
+
+            # ── Lv1 validation ───────────────────────────────────────────────
+            if lv1_kode in seen_lv1_in_csv and seen_lv1_in_csv[lv1_kode] == slug:
+                entry['lv1_status'] = 'update'  # repeated in CSV → treated as update
+            elif lv1_kode in seen_lv1_in_csv:
+                entry['lv1_status'] = 'error'
+                entry['error'] = f'Kode Lvl 2 "{lv1_kode}" muncul di kategori berbeda dalam file.'
+                rows_out.append(entry)
+                continue
+            elif lv1_kode in db_lv1[slug]:
+                entry['lv1_status'] = 'update'
+                seen_lv1_in_csv[lv1_kode] = slug
+            else:
+                entry['lv1_status'] = 'new'
+                seen_lv1_in_csv[lv1_kode] = slug
+
+            # ── Lv2 validation ───────────────────────────────────────────────
+            if lv2_kode:
+                if lv2_kode in seen_lv2_in_csv:
+                    entry['lv2_status'] = 'error'
+                    entry['error'] = f'Kode Lvl 3 "{lv2_kode}" duplikat dalam file.'
+                elif lv2_kode in db_lv2[slug]:
+                    entry['lv2_status'] = 'update'
+                    seen_lv2_in_csv.add(lv2_kode)
+                else:
+                    entry['lv2_status'] = 'new'
+                    seen_lv2_in_csv.add(lv2_kode)
+            else:
+                entry['lv2_status'] = 'skip'
+
+            rows_out.append(entry)
+
+        return JsonResponse({'success': True, 'rows': rows_out})
+
+    except Exception as exc:
+        return JsonResponse({'success': False, 'error': f'Gagal memproses file: {exc}'})
+
+
+# ── Chart of Accounts: Import from JSON (AJAX) ────────────────────────────────
+
+@login_required
+def coa_import_json(request: HttpRequest) -> JsonResponse:
+    """Import rows submitted as JSON (from the preview modal)."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+    import json as _json
+    try:
+        body = _json.loads(request.body)
+        rows = body.get('rows', [])
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Payload JSON tidak valid.'})
+
+    if not rows:
+        return JsonResponse({'success': False, 'error': 'Tidak ada baris untuk disimpan.'})
+
+    created_lv1 = updated_lv1 = created_lv2 = updated_lv2 = 0
+
+    try:
+        with transaction.atomic():
+            for row in rows:
+                prefix = str(row.get('prefix', '')).strip()
+                lv1_kode = str(row.get('lv1_kode', '')).strip()
+                lv1_nama = str(row.get('lv1_nama', '')).strip()
+                lv2_kode = str(row.get('lv2_kode', '')).strip()
+                lv2_nama = str(row.get('lv2_nama', '')).strip()
+
+                if not prefix or not lv1_kode or not lv1_nama:
+                    continue
+
+                cat = _get_category_by_prefix(prefix)
+                if not cat:
+                    continue
+
+                lv1_obj, lv1_created = cat['lv1_model'].objects.get_or_create(
+                    kode=lv1_kode,
+                    defaults={'nama': lv1_nama},
+                )
+                if not lv1_created and lv1_obj.nama != lv1_nama:
+                    lv1_obj.nama = lv1_nama
+                    lv1_obj.save()
+                    updated_lv1 += 1
+                elif lv1_created:
+                    created_lv1 += 1
+
+                if lv2_kode:
+                    lv2_defaults = {cat['lv1_fk']: lv1_obj, 'nama': lv2_nama}
+                    lv2_obj, lv2_created = cat['lv2_model'].objects.get_or_create(
+                        kode=lv2_kode,
+                        defaults=lv2_defaults,
+                    )
+                    if not lv2_created:
+                        changed = False
+                        if getattr(lv2_obj, cat['lv1_fk']).pk != lv1_obj.pk:
+                            setattr(lv2_obj, cat['lv1_fk'], lv1_obj)
+                            changed = True
+                        if lv2_obj.nama != lv2_nama and lv2_nama:
+                            lv2_obj.nama = lv2_nama
+                            changed = True
+                        if changed:
+                            lv2_obj.save()
+                            updated_lv2 += 1
+                    else:
+                        created_lv2 += 1
+
+        parts = []
+        if created_lv1:
+            parts.append(f'{created_lv1} sub-kategori baru')
+        if updated_lv1:
+            parts.append(f'{updated_lv1} sub-kategori diperbarui')
+        if created_lv2:
+            parts.append(f'{created_lv2} akun baru')
+        if updated_lv2:
+            parts.append(f'{updated_lv2} akun diperbarui')
+
+        summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
+        return JsonResponse({'success': True, 'summary': summary})
+
+    except Exception as exc:
+        return JsonResponse({'success': False, 'error': f'Gagal menyimpan: {exc}'})
