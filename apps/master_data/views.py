@@ -1,6 +1,8 @@
 """Master data views."""
 import csv
 import io
+import json
+import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -8,6 +10,8 @@ from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+
+logger = logging.getLogger(__name__)
 
 from .forms import (
     AsetLv1Form, AsetLv2Form,
@@ -1095,8 +1099,9 @@ def coa_preview(request: HttpRequest) -> JsonResponse:
 
         return JsonResponse({'success': True, 'rows': rows_out})
 
-    except Exception as exc:
-        return JsonResponse({'success': False, 'error': f'Gagal memproses file: {exc}'})
+    except Exception:
+        logger.exception('coa_preview: error processing CSV')
+        return JsonResponse({'success': False, 'error': 'Gagal memproses file. Periksa format CSV dan coba lagi.'})
 
 
 # ── Chart of Accounts: Import from JSON (AJAX) ────────────────────────────────
@@ -1107,9 +1112,8 @@ def coa_import_json(request: HttpRequest) -> JsonResponse:
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
 
-    import json as _json
     try:
-        body = _json.loads(request.body)
+        body = json.loads(request.body)
         rows = body.get('rows', [])
     except Exception:
         return JsonResponse({'success': False, 'error': 'Payload JSON tidak valid.'})
@@ -1179,5 +1183,6 @@ def coa_import_json(request: HttpRequest) -> JsonResponse:
         summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
         return JsonResponse({'success': True, 'summary': summary})
 
-    except Exception as exc:
-        return JsonResponse({'success': False, 'error': f'Gagal menyimpan: {exc}'})
+    except Exception:
+        logger.exception('coa_import_json: error saving rows')
+        return JsonResponse({'success': False, 'error': 'Gagal menyimpan data. Silakan coba lagi.'})

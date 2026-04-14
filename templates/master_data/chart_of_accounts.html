@@ -284,7 +284,7 @@
     <div class="ni-modal__body">
       <div id="coaPreviewSummary" style="margin-bottom:12px;font-size:0.875rem;"></div>
       <div id="coaErrPreview" style="display:none;" class="ni-alert ni-alert--danger"></div>
-      <div style="overflow-x:auto;max-height:55vh;overflow-y:auto;">
+      <div class="ni-table-wrapper" style="max-height:55vh;overflow-y:auto;">
         <table class="ni-table" id="coaPreviewTable" style="min-width:780px;font-size:0.8125rem;">
           <thead>
             <tr>
@@ -301,13 +301,13 @@
           <tbody id="coaPreviewBody"></tbody>
         </table>
       </div>
-      <p style="margin-top:10px;font-size:0.8125rem;color:var(--ni-text-muted);">
+      <p class="ni-text-muted" style="margin-top:10px;font-size:0.8125rem;">
         Baris <span style="color:var(--ni-danger);font-weight:600;">merah</span> gagal validasi — edit sel yang bermasalah lalu simpan.
         Baris <span style="color:var(--ni-warning);font-weight:600;">kuning</span> akan memperbarui data yang sudah ada.
       </p>
     </div>
-    <div class="ni-modal__footer" style="justify-content:space-between;">
-      <span id="coaPreviewCount" style="font-size:0.875rem;color:var(--ni-text-muted);"></span>
+    <div class="ni-modal__footer ni-modal__footer--between">
+      <span id="coaPreviewCount" class="ni-text-muted" style="font-size:0.875rem;"></span>
       <div style="display:flex;gap:8px;">
         <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalPreview')">Batal</button>
         <button type="button" class="ni-btn ni-btn--primary" id="coaBtnSavePreview" onclick="niCoa.savePreview()">
@@ -494,15 +494,16 @@
 
         var tr = document.createElement('tr');
         tr.dataset.idx = idx;
+        if (isError) tr.dataset.error = '1';
         tr.style.cssText = rowBg;
         tr.innerHTML =
           '<td style="color:var(--ni-text-muted);">' + (idx + 1) + '</td>' +
-          '<td><input type="text" class="ni-input coa-cell" style="min-width:44px;padding:3px 6px;font-size:0.8125rem;" data-field="prefix" value="' + niCoa._esc(row.prefix) + '" maxlength="2"></td>' +
-          '<td><span class="coa-cat-label" style="font-size:0.8125rem;color:var(--ni-text-muted);">' + niCoa._esc(row.category_name || '') + '</span></td>' +
-          '<td><input type="text" class="ni-input coa-cell" style="min-width:80px;padding:3px 6px;font-size:0.8125rem;" data-field="lv1_kode" value="' + niCoa._esc(row.lv1_kode) + '" maxlength="50"></td>' +
-          '<td><input type="text" class="ni-input coa-cell" style="min-width:120px;padding:3px 6px;font-size:0.8125rem;" data-field="lv1_nama" value="' + niCoa._esc(row.lv1_nama) + '"></td>' +
-          '<td><input type="text" class="ni-input coa-cell" style="min-width:80px;padding:3px 6px;font-size:0.8125rem;" data-field="lv2_kode" value="' + niCoa._esc(row.lv2_kode) + '" maxlength="50"></td>' +
-          '<td><input type="text" class="ni-input coa-cell" style="min-width:120px;padding:3px 6px;font-size:0.8125rem;" data-field="lv2_nama" value="' + niCoa._esc(row.lv2_nama) + '"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:44px;" data-field="prefix" value="' + niCoa._esc(row.prefix) + '" maxlength="2"></td>' +
+          '<td><span class="coa-cat-label ni-text-muted" style="font-size:0.8125rem;">' + niCoa._esc(row.category_name || '') + '</span></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:80px;" data-field="lv1_kode" value="' + niCoa._esc(row.lv1_kode) + '" maxlength="50"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:120px;" data-field="lv1_nama" value="' + niCoa._esc(row.lv1_nama) + '"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:80px;" data-field="lv2_kode" value="' + niCoa._esc(row.lv2_kode) + '" maxlength="50"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:120px;" data-field="lv2_nama" value="' + niCoa._esc(row.lv2_nama) + '"></td>' +
           '<td class="coa-status-cell">' + statusBadge + errorTip + '</td>';
         tbody.appendChild(tr);
       });
@@ -573,9 +574,11 @@
 
         if (err) {
           errorCount++;
+          tr.dataset.error = '1';
           tr.style.background = '#fff1f2';
           statusCell.innerHTML = errBadge + '<div style="color:var(--ni-danger);font-size:0.75rem;margin-top:2px;">' + err + '</div>';
         } else {
+          delete tr.dataset.error;
           tr.style.background = '';
           statusCell.innerHTML = newBadge;
         }
@@ -600,8 +603,8 @@
       var tbody = document.getElementById('coaPreviewBody');
       var rows = [];
       tbody.querySelectorAll('tr').forEach(function (tr) {
-        // Skip error rows (red background)
-        if (tr.style.background === '#fff1f2' || tr.style.backgroundColor === 'rgb(255, 241, 242)') return;
+        // Skip error rows (identified by data-error attribute)
+        if (tr.dataset.error) return;
         rows.push({
           prefix: tr.querySelector('[data-field="prefix"]').value.trim(),
           lv1_kode: tr.querySelector('[data-field="lv1_kode"]').value.trim(),
