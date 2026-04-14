@@ -491,11 +491,23 @@
     document.getElementById('modal_threshold').value = '';
     document.getElementById('modal_error').style.display = 'none';
 
-    // Show EB name from the group
+    // Show EB name from the group (use textContent to avoid XSS)
     var card = document.getElementById(gid);
     var ebSelect = card ? card.querySelector('.eb-select') : null;
     var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
-    document.getElementById('modal_eb_display').innerHTML = ebText ? '<strong>' + ebText.replace(/^\s+↳\s*/, '') + '</strong> (otomatis dari form)' : '<em>Entitas bisnis belum dipilih</em>';
+    var ebDisplay = document.getElementById('modal_eb_display');
+    if (ebText) {
+      ebDisplay.textContent = '';
+      var strong = document.createElement('strong');
+      strong.textContent = ebText.replace(/^\s+↳\s*/, '');
+      ebDisplay.appendChild(strong);
+      ebDisplay.appendChild(document.createTextNode(' (otomatis dari form)'));
+    } else {
+      ebDisplay.textContent = '';
+      var em = document.createElement('em');
+      em.textContent = 'Entitas bisnis belum dipilih';
+      ebDisplay.appendChild(em);
+    }
 
     var backdrop = document.getElementById('itemMasterModalBackdrop');
     backdrop.classList.add('ni-modal-backdrop--visible');

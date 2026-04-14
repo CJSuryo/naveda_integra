@@ -773,12 +773,22 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
     # If items span multiple type-groups, we create separate PurchaseHeaders per group.
     # Group mapping: RM/FG/ITM → PUR-INV, ATP → PUR-ATP, ALL → PUR-ALL
 
+    # Pre-fetch all item tipe_item values in one query to avoid N+1
+    all_item_ids = []
+    for group_data in groups:
+        for item_data in group_data.get('items', []):
+            iid = item_data.get('item_id', '')
+            if iid:
+                all_item_ids.append(iid)
+    item_type_map = dict(
+        ItemMasterPurchase.objects
+        .filter(pk__in=all_item_ids)
+        .values_list('pk', 'tipe_item')
+    )
+
     def _item_prefix_group(item_pk: int | str) -> str:
         """Return the transaction prefix group for an item."""
-        try:
-            tipe = ItemMasterPurchase.objects.filter(pk=item_pk).values_list('tipe_item', flat=True).first()
-        except (ValueError, TypeError):
-            tipe = 'RM'
+        tipe = item_type_map.get(int(item_pk), 'RM') if item_pk else 'RM'
         return PurchaseHeader.ITEM_TYPE_PREFIX_MAP.get(tipe or 'RM', 'PUR-INV')
 
     # Collect all items across groups and determine which prefix groups are present
@@ -806,12 +816,21 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         prefixes = list(prefix_groups.keys())
 
         if existing and len(prefixes) == 1:
-            # Single group — update existing header
-            existing.tanggal = tanggal
-            existing.deskripsi = deskripsi
-            existing.save()
-            purchase = existing
-            for group_data, items_list in prefix_groups[prefixes[0]]:
+            new_prefix = prefixes[0]
+            existing_prefix = existing.transaction_id.rsplit('-', 1)[0]  # e.g. 'PUR-INV'
+            if existing_prefix == new_prefix:
+                # Same prefix — update existing header in place
+                existing.tanggal = tanggal
+                existing.deskripsi = deskripsi
+                existing.save()
+                purchase = existing
+            else:
+                # Prefix changed — delete old and create new
+                existing.delete()
+                purchase = PurchaseHeader(tanggal=tanggal, deskripsi=deskripsi)
+                purchase.save(_trx_prefix=new_prefix)
+
+            for group_data, items_list in prefix_groups[new_prefix]:
                 eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
                 eb_group = PurchaseEntitasBisnis.objects.create(
                     purchase_header=purchase,
