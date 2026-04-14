@@ -53,7 +53,7 @@
       <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Transaction ID</label>
-          <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}TRX-INV-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
+          <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}PUR-XXX-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
         </div>
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
@@ -97,7 +97,7 @@
         </div>
         <table>
           <thead>
-            <tr><th>No</th><th>Akun</th><th>Uraian</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
+            <tr><th>No</th><th>Entitas Bisnis</th><th>Akun</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
           </thead>
           <tbody id="journalPreviewBody"></tbody>
         </table>
@@ -115,6 +115,90 @@
     </form>
   </div>
 </div>
+
+<!-- Item Master Create Modal -->
+<div class="ni-modal-backdrop" id="itemMasterModalBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tambah Item Baru</h3>
+      <button class="ni-modal__close" onclick="closeItemModal()" aria-label="Close">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Item <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="modal_nama" class="ni-input" placeholder="Nama item">
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tipe Item</label>
+          <select id="modal_tipe_item" class="ni-input">
+            <option value="RM">Raw Material</option>
+            <option value="FG">Finished Good</option>
+            <option value="ITM">Item Lainnya</option>
+            <option value="ATP">Aset Tetap</option>
+            <option value="ALL">Aset Lainnya</option>
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kategori</label>
+          <select id="modal_kategori" class="ni-input">
+            <option value="">— Pilih —</option>
+            {% for k in kategori_items %}
+            <option value="{{ k.pk }}">{{ k.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Velocity Category</label>
+          <select id="modal_velocity" class="ni-input">
+            <option value="">— Pilih —</option>
+            <option value="fast">Fast Moving</option>
+            <option value="medium">Medium (B)</option>
+            <option value="slow">Slow (C)</option>
+            <option value="dead">Dead Stock</option>
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">CoA Account</label>
+          <select id="modal_coa_account" class="ni-input">
+            <option value="">— Pilih —</option>
+            {% for akun in akun_list %}
+            <option value="{{ akun.pk }}">{{ akun }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tanggal Kadaluarsa</label>
+          <input type="date" id="modal_expiry_date" class="ni-input">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Threshold Days Outstanding</label>
+          <input type="number" id="modal_threshold" class="ni-input" min="0">
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <div id="modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
+          <em>Akan otomatis di-set dari form purchase</em>
+        </div>
+      </div>
+      <div id="modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="closeItemModal()">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="submitItemModal()">
+        <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Item
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -133,7 +217,7 @@
   var itemCounters = {};
 
   // Data from server (for edit mode)
-  var existingGroups = {{ eb_groups_json|default:"[]" }};
+  var existingGroups = {{ eb_groups_json|default:"[]"|safe }};
 
   // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
   var ebOptions = {{ eb_options_json|default:"[]"|safe }};
@@ -145,8 +229,31 @@
     {% endfor %}
   ];
 
+  // Item modal state
+  var _modalCallbackRid = null;
+  var _modalCallbackGid = null;
+
   function formatNum(n) {
-    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+    var num = parseFloat(n || 0);
+    return num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+  }
+
+  /**
+   * Resolve the lv1 ID from an EB selection string like "lv1:5", "lv2:3", etc.
+   * Returns the lv1 value portion by looking up ebOptions.
+   */
+  function getEBLv1Id(ebValue) {
+    if (!ebValue) return '';
+    // For lv1:X, the lv1 id is X directly
+    if (ebValue.indexOf('lv1:') === 0) return ebValue.split(':')[1];
+    // For lv2/lv3, we need to find the parent lv1 — traverse ebOptions
+    // ebOptions is ordered hierarchically: each lv2/lv3 follows its parent lv1
+    var lastLv1 = '';
+    for (var i = 0; i < ebOptions.length; i++) {
+      if (ebOptions[i].value.indexOf('lv1:') === 0) lastLv1 = ebOptions[i].value.split(':')[1];
+      if (ebOptions[i].value === ebValue) return lastLv1;
+    }
+    return '';
   }
 
   // ── Add EB Group ──────────────────────────────────────────────────────────
@@ -169,7 +276,7 @@
     card.innerHTML =
       '<div class="ni-purchase-eb-card__header">' +
         '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);"></i>' +
-        '<select class="ni-input eb-select" data-gid="' + gid + '">' + ebSelectOptions + '</select>' +
+        '<select class="ni-input eb-select" data-gid="' + gid + '" onchange="onEBChange(\'' + gid + '\')">' + ebSelectOptions + '</select>' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
           '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
         '</button>' +
@@ -216,6 +323,22 @@
     if (el) el.remove();
   };
 
+  /**
+   * When EB selection changes, clear and reload all TomSelect item dropdowns
+   * in this group so they filter by the new EB.
+   */
+  window.onEBChange = function (gid) {
+    var card = document.getElementById(gid);
+    if (!card) return;
+    var selects = card.querySelectorAll('.item-select');
+    selects.forEach(function (sel) {
+      if (sel.tomselect) {
+        sel.tomselect.clearOptions();
+        sel.tomselect.clear();
+      }
+    });
+  };
+
   // ── Add Item Row ──────────────────────────────────────────────────────────
   window.addItemRow = function (gid, prefill) {
     itemCounters[gid] = (itemCounters[gid] || 0) + 1;
@@ -231,13 +354,13 @@
     var tr = document.createElement('tr');
     tr.id = rid;
     tr.innerHTML =
-      '<td><select id="' + rid + '_item" class="ni-purchase-input item-select" data-rid="' + rid + '" placeholder="Pilih item..."></select></td>' +
+      '<td><select id="' + rid + '_item" class="ni-purchase-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select></td>' +
       '<td><select class="ni-purchase-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
       '<td><input type="text" id="' + rid + '_coa" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.coa_account_id || '') : '') + '"></td>' +
       '<td><input type="text" id="' + rid + '_offset" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.offset_coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.offset_coa_account_id || '') : '') + '"></td>' +
       '<td><input type="number" id="' + rid + '_qty" class="ni-purchase-input" min="0.0001" step="0.0001" value="' + (prefill ? prefill.quantity : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
       '<td><input type="number" id="' + rid + '_price" class="ni-purchase-input" min="0.01" step="0.01" value="' + (prefill ? prefill.unit_price : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
-      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input" readonly value="0"></td>' +
+      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input" readonly value="' + (prefill ? formatNum(parseFloat(prefill.quantity || 0) * parseFloat(prefill.unit_price || 0)) : '0') + '"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
 
     // Advanced fields (hidden row)
@@ -259,7 +382,12 @@
     tbody.appendChild(tr);
     tbody.appendChild(trAdv);
 
-    // Init TomSelect for item
+    // Get the EB lv1 ID for filtering
+    var card = document.getElementById(gid);
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+
+    // Init TomSelect for item with EB-filtered autocomplete
     var itemSelect = new TomSelect('#' + rid + '_item', {
       valueField: 'id',
       labelField: 'text',
@@ -268,7 +396,10 @@
       placeholder: 'Ketik nama/kode item...',
       preload: 'focus',
       load: function (query, callback) {
-        fetch(itemAutocompleteUrl + '?term=' + encodeURIComponent(query))
+        var currentEbLv1 = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+        var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
+        if (currentEbLv1) url += '&eb_lv1_id=' + encodeURIComponent(currentEbLv1);
+        fetch(url)
           .then(function (r) { return r.json(); })
           .then(function (data) { callback(data); })
           .catch(function () { callback(); });
@@ -282,20 +413,14 @@
         }
       },
       create: function (input, callback) {
-        fetch(itemCreateUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-          body: JSON.stringify({ nama: input }),
-        })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.error) { callback(); return; }
-          callback({ id: data.id, text: data.text, coa_account_id: data.coa_account_id, coa_account_text: data.coa_account_text });
-        })
-        .catch(function () { callback(); });
+        // Open the full item master modal instead of inline create
+        _modalCallbackRid = rid;
+        _modalCallbackGid = gid;
+        openItemModal(input, gid);
+        // Return false — callback will be called from the modal submit
+        callback();
       },
       createFilter: function (input) {
-        // Only show "Add" option when input is non-empty
         return input.trim().length > 0;
       },
       shouldLoad: function (query) {
@@ -303,7 +428,7 @@
       },
       render: {
         option_create: function (data, escape) {
-          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong> <small style="color:var(--ni-text-muted)">(tipe: RM — bisa diubah nanti)</small></div>';
+          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong></div>';
         },
       },
     });
@@ -315,7 +440,7 @@
     }
 
     lucide.createIcons();
-    updateTotal(rid);
+    if (prefill) updateTotal(rid);
   };
 
   window.removeItemRow = function (rid) {
@@ -355,6 +480,117 @@
       });
   };
 
+  // ── Item Master Modal ────────────────────────────────────────────────────
+  window.openItemModal = function (prefillNama, gid) {
+    document.getElementById('modal_nama').value = prefillNama || '';
+    document.getElementById('modal_tipe_item').value = 'RM';
+    document.getElementById('modal_kategori').value = '';
+    document.getElementById('modal_velocity').value = '';
+    document.getElementById('modal_coa_account').value = '';
+    document.getElementById('modal_expiry_date').value = '';
+    document.getElementById('modal_threshold').value = '';
+    document.getElementById('modal_error').style.display = 'none';
+
+    // Show EB name from the group (use textContent to avoid XSS)
+    var card = document.getElementById(gid);
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
+    var ebDisplay = document.getElementById('modal_eb_display');
+    if (ebText) {
+      ebDisplay.textContent = '';
+      var strong = document.createElement('strong');
+      strong.textContent = ebText.replace(/^\s+↳\s*/, '');
+      ebDisplay.appendChild(strong);
+      ebDisplay.appendChild(document.createTextNode(' (otomatis dari form)'));
+    } else {
+      ebDisplay.textContent = '';
+      var em = document.createElement('em');
+      em.textContent = 'Entitas bisnis belum dipilih';
+      ebDisplay.appendChild(em);
+    }
+
+    var backdrop = document.getElementById('itemMasterModalBackdrop');
+    backdrop.classList.add('ni-modal-backdrop--visible');
+    lucide.createIcons();
+  };
+
+  window.closeItemModal = function () {
+    document.getElementById('itemMasterModalBackdrop').classList.remove('ni-modal-backdrop--visible');
+    _modalCallbackRid = null;
+    _modalCallbackGid = null;
+  };
+
+  window.submitItemModal = function () {
+    var nama = document.getElementById('modal_nama').value.trim();
+    if (!nama) {
+      var errEl = document.getElementById('modal_error');
+      errEl.textContent = 'Nama item wajib diisi.';
+      errEl.style.display = '';
+      return;
+    }
+
+    var gid = _modalCallbackGid;
+    var rid = _modalCallbackRid;
+
+    // Get EB lv1 ID to auto-assign
+    var card = document.getElementById(gid);
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+
+    var payload = {
+      nama: nama,
+      tipe_item: document.getElementById('modal_tipe_item').value,
+      kategori_id: document.getElementById('modal_kategori').value || null,
+      velocity_category: document.getElementById('modal_velocity').value,
+      coa_account_id: document.getElementById('modal_coa_account').value || null,
+      expiry_date: document.getElementById('modal_expiry_date').value || null,
+      threshold_days_outstanding: document.getElementById('modal_threshold').value || null,
+      entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
+    };
+
+    fetch(itemCreateUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) {
+        var errEl = document.getElementById('modal_error');
+        errEl.textContent = data.error;
+        errEl.style.display = '';
+        return;
+      }
+
+      // Add the new item to the TomSelect in the item row
+      if (rid) {
+        var selEl = document.getElementById(rid + '_item');
+        if (selEl && selEl.tomselect) {
+          selEl.tomselect.addOption({
+            id: data.id,
+            text: data.text,
+            coa_account_id: data.coa_account_id,
+            coa_account_text: data.coa_account_text,
+            tipe_item: data.tipe_item,
+          });
+          selEl.tomselect.setValue(data.id, true);
+        }
+        // Set CoA if available
+        if (data.coa_account_id) {
+          document.getElementById(rid + '_coa').value = data.coa_account_text;
+          document.getElementById(rid + '_coa').dataset.id = data.coa_account_id;
+        }
+      }
+
+      closeItemModal();
+    })
+    .catch(function () {
+      var errEl = document.getElementById('modal_error');
+      errEl.textContent = 'Gagal menyimpan item. Silakan coba lagi.';
+      errEl.style.display = '';
+    });
+  };
+
   // ── Journal Preview ───────────────────────────────────────────────────────
   window.showJournalPreview = function () {
     var payload = collectFormData();
@@ -371,7 +607,7 @@
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
       } else {
         data.entries.forEach(function (e) {
-          tbody.innerHTML += '<tr><td>' + (e.no !== '' ? e.no : '') + '</td><td>' + e.akun + '</td><td>' + e.uraian + '</td><td style="text-align:right;">' + (e.debit ? formatNum(e.debit) : '') + '</td><td style="text-align:right;">' + (e.kredit ? formatNum(e.kredit) : '') + '</td></tr>';
+          tbody.innerHTML += '<tr><td>' + (e.no !== '' ? e.no : '') + '</td><td>' + (e.entitas_bisnis || '') + '</td><td>' + e.akun + '</td><td style="text-align:right;">' + (e.debit ? formatNum(e.debit) : '') + '</td><td style="text-align:right;">' + (e.kredit ? formatNum(e.kredit) : '') + '</td></tr>';
         });
       }
       var preview = document.getElementById('journalPreview');

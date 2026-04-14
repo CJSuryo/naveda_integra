@@ -73,16 +73,16 @@ class SubTransactionTypeModelTests(TestCase):
 class PurchaseHeaderModelTests(TestCase):
     def test_auto_generate_transaction_id(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01')
-        self.assertEqual(ph.transaction_id, 'TRX-INV-001')
+        self.assertEqual(ph.transaction_id, 'PUR-INV-001')
 
     def test_sequential_transaction_ids(self):
         PurchaseHeader.objects.create(tanggal='2026-01-01')
         ph2 = PurchaseHeader.objects.create(tanggal='2026-01-02')
-        self.assertEqual(ph2.transaction_id, 'TRX-INV-002')
+        self.assertEqual(ph2.transaction_id, 'PUR-INV-002')
 
     def test_str(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01')
-        self.assertEqual(str(ph), 'TRX-INV-001')
+        self.assertEqual(str(ph), 'PUR-INV-001')
 
 
 class PurchaseItemModelTests(TestCase):
@@ -276,6 +276,31 @@ class PurchaseViewTests(TestCase):
         resp = self.client.get(reverse('purchase:detail', args=[ph.pk]))
         self.assertEqual(resp.status_code, 200)
 
+    def test_purchase_update_get(self):
+        """Edit page should load with existing purchase data."""
+        groups = [{
+            'entitas_bisnis_id': self.eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'coa_account_id': self.akun_persediaan.pk,
+                'offset_coa_account_id': self.akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '5000',
+            }],
+        }]
+        self.client.post(reverse('purchase:create'), {
+            'tanggal': '2026-03-01',
+            'deskripsi': 'Edit Test',
+            'eb_groups_data': json.dumps(groups),
+        })
+        ph = PurchaseHeader.objects.first()
+        resp = self.client.get(reverse('purchase:update', args=[ph.pk]))
+        self.assertEqual(resp.status_code, 200)
+        # Should contain the existing group data as JSON for pre-filling
+        self.assertContains(resp, 'Edit Purchase')
+        self.assertContains(resp, str(self.item))
+
     def test_purchase_delete_locked(self):
         ph = PurchaseHeader.objects.create(tanggal='2026-01-01', is_locked=True)
         resp = self.client.post(reverse('purchase:delete', args=[ph.pk]))
@@ -313,6 +338,11 @@ class PurchaseViewTests(TestCase):
 
     def test_item_master_list(self):
         resp = self.client.get(reverse('purchase:item_master_list'))
+        # Now redirects to persediaan_list
+        self.assertEqual(resp.status_code, 302)
+
+    def test_persediaan_list(self):
+        resp = self.client.get(reverse('purchase:persediaan_list'))
         self.assertEqual(resp.status_code, 200)
 
     def test_item_master_create_post(self):

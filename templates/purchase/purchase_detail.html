@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Detail Purchase {{ purchase.transaction_id }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -57,9 +58,9 @@
             <th>Sub-Trx Type</th>
             <th>CoA Account</th>
             <th>Offset CoA</th>
-            <th>Qty</th>
-            <th>Harga Satuan</th>
-            <th>Total</th>
+            <th class="ni-text-right">Qty</th>
+            <th class="ni-text-right">Harga Satuan</th>
+            <th class="ni-text-right">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -69,9 +70,9 @@
             <td>{{ pi.sub_transaction_type.nama }}</td>
             <td>{{ pi.coa_account }}</td>
             <td>{{ pi.offset_coa_account }}</td>
-            <td class="ni-text-right">{{ pi.quantity }}</td>
-            <td class="ni-text-right">{{ pi.unit_price }}</td>
-            <td class="ni-text-right"><strong>{{ pi.total_value }}</strong></td>
+            <td class="ni-text-right">{{ pi.quantity|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ pi.unit_price|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right"><strong>{{ pi.total_value|floatformat:0|intcomma }}</strong></td>
           </tr>
           {% empty %}
           <tr><td colspan="7" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>

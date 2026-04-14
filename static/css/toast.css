@@ -3,14 +3,14 @@
    Toast/alert notifications with slide-in, colored left border
    ========================================================================== */
 
-/* ---------- Container (top-right stack) ---------- */
+/* ---------- Container (bottom-right stack) ---------- */
 .ni-toast-container {
   position: fixed;
-  top: 20px;
+  bottom: 20px;
   right: 20px;
   z-index: 3000;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 8px;
   max-width: 420px;
   width: 100%;
@@ -203,6 +203,7 @@
   .ni-toast-container {
     left: 12px;
     right: 12px;
+    bottom: 12px;
     max-width: none;
   }
 }

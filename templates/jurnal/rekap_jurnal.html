@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize %}
 {% block title %}Rekap Jurnal{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -144,8 +144,8 @@
             <td rowspan="{{ details|length|default:1 }}">{{ header.entitas_bisnis|default:"-" }}</td>
             {% endif %}
             <td>{{ detail.akun.kode_akun }} - {{ detail.akun.nama }}</td>
-            <td class="ni-text-right">{% if detail.debit %}{{ detail.debit|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if detail.kredit %}{{ detail.kredit|floatformat:0 }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if detail.debit %}{{ detail.debit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if detail.kredit %}{{ detail.kredit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
           </tr>
           {% empty %}
           <tr>

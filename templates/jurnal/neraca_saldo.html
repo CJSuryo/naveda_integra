@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static %}
+{% load static humanize %}
 {% block title %}Neraca Saldo{% endblock %}
 
 {% block extra_css %}
@@ -72,16 +72,16 @@
           <tr>
             <td>{{ row.akun.kode_akun }}</td>
             <td>{{ row.akun.nama }}</td>
-            <td class="ni-text-right ns-col-group">{% if row.sa_d %}{{ row.sa_d|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if row.sa_k %}{{ row.sa_k|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right ns-col-group">{% if row.modul_d %}{{ row.modul_d|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if row.modul_k %}{{ row.modul_k|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right ns-col-group">{% if row.sblm_d %}{{ row.sblm_d|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if row.sblm_k %}{{ row.sblm_k|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right ns-col-group">{% if row.peny_d %}{{ row.peny_d|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if row.peny_k %}{{ row.peny_k|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right ns-col-group">{% if row.stlh_d %}{{ row.stlh_d|floatformat:0 }}{% else %}-{% endif %}</td>
-            <td class="ni-text-right">{% if row.stlh_k %}{{ row.stlh_k|floatformat:0 }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if row.sa_d %}{{ row.sa_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if row.sa_k %}{{ row.sa_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if row.modul_d %}{{ row.modul_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if row.modul_k %}{{ row.modul_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if row.sblm_d %}{{ row.sblm_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if row.sblm_k %}{{ row.sblm_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if row.peny_d %}{{ row.peny_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if row.peny_k %}{{ row.peny_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right ns-col-group">{% if row.stlh_d %}{{ row.stlh_d|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td class="ni-text-right">{% if row.stlh_k %}{{ row.stlh_k|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
           </tr>
           {% empty %}
           <tr><td colspan="12" class="ni-text-center ni-text-muted">Belum ada akun.</td></tr>

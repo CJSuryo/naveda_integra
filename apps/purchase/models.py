@@ -38,6 +38,8 @@ class ItemMasterPurchase(models.Model):
         ('RM', 'Raw Material'),
         ('FG', 'Finished Good'),
         ('ITM', 'Item Lainnya'),
+        ('ATP', 'Aset Tetap'),
+        ('ALL', 'Aset Lainnya'),
     ]
     VELOCITY_CHOICES = [
         ('fast', 'Fast Moving'),
@@ -163,8 +165,18 @@ class SubTransactionType(models.Model):
 class PurchaseHeader(models.Model):
     """Top-level purchase transaction.
 
-    Transaction ID format: TRX-INV-XXX (auto-generated).
+    Transaction ID format depends on item type group:
+      PUR-INV-XXX (Raw Material / Finished Good / Item Lainnya)
+      PUR-ATP-XXX (Aset Tetap)
+      PUR-ALL-XXX (Aset Lainnya)
     """
+    ITEM_TYPE_PREFIX_MAP = {
+        'RM': 'PUR-INV',
+        'FG': 'PUR-INV',
+        'ITM': 'PUR-INV',
+        'ATP': 'PUR-ATP',
+        'ALL': 'PUR-ALL',
+    }
     transaction_id = models.CharField(max_length=100, unique=True, editable=False)
     tanggal = models.DateField(db_index=True, default=timezone.now, verbose_name='Tanggal')
     deskripsi = models.TextField(blank=True, default='', verbose_name='Deskripsi')
@@ -189,17 +201,20 @@ class PurchaseHeader(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.transaction_id:
-            self.transaction_id = self._generate_transaction_id()
+            prefix = kwargs.pop('_trx_prefix', 'PUR-INV')
+            self.transaction_id = self._generate_transaction_id(prefix)
+        else:
+            kwargs.pop('_trx_prefix', None)
         super().save(*args, **kwargs)
 
     @staticmethod
-    def _generate_transaction_id() -> str:
+    def _generate_transaction_id(prefix: str = 'PUR-INV') -> str:
         from django.db import transaction as db_transaction
         with db_transaction.atomic():
             last = (
                 PurchaseHeader.objects
                 .select_for_update()
-                .filter(transaction_id__startswith='TRX-INV-')
+                .filter(transaction_id__startswith=f'{prefix}-')
                 .order_by('-transaction_id')
                 .values_list('transaction_id', flat=True)
                 .first()
@@ -211,7 +226,7 @@ class PurchaseHeader(models.Model):
                     seq = 1
             else:
                 seq = 1
-            return f'TRX-INV-{seq:03d}'
+            return f'{prefix}-{seq:03d}'
 
 
 # ── Purchase Entitas Bisnis (per-EB grouping inside a purchase) ──────────────

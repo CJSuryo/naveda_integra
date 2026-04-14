@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Daftar Purchase{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -70,23 +71,25 @@
           <th>Entitas Bisnis</th>
           <th>Item</th>
           <th>Sub-Transaction Type</th>
-          <th>Qty</th>
-          <th>Harga Satuan</th>
-          <th>Total</th>
+          <th class="ni-text-right">Qty</th>
+          <th class="ni-text-right">Harga Satuan</th>
+          <th class="ni-text-right">Total</th>
           <th>Aksi</th>
         </tr>
       </thead>
       <tbody>
         {% for row in rows %}
         <tr>
-          <td><a href="{% url 'purchase:detail' row.purchase_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ row.purchase_header.transaction_id }}</a></td>
+          {% if row.show_trx_cell %}
+          <td rowspan="{{ row.trx_rowspan }}" style="vertical-align:top;"><a href="{% url 'purchase:detail' row.purchase_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ row.purchase_header.transaction_id }}</a></td>
+          {% endif %}
           <td>{{ row.purchase_header.tanggal }}</td>
           <td>{{ row.eb_display }}</td>
           <td>{{ row.item.item }}</td>
           <td>{{ row.item.sub_transaction_type.nama }}</td>
-          <td class="ni-text-right">{{ row.item.quantity }}</td>
-          <td class="ni-text-right">{{ row.item.unit_price }}</td>
-          <td class="ni-text-right">{{ row.item.total_value }}</td>
+          <td class="ni-text-right">{{ row.item.quantity|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ row.item.unit_price|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ row.item.total_value|floatformat:0|intcomma }}</td>
           <td>
             <div class="ni-btn-row">
               <a href="{% url 'purchase:detail' row.purchase_header.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>

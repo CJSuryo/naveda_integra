@@ -293,7 +293,7 @@ class NeracaSaldoViewTests(TestCase):
             'tanggal_sampai': '2024-12-31',
         })
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, '500000')
+        self.assertContains(response, '500.000')
 
     def test_neraca_saldo_filter_excludes(self):
         response = self.client.get(reverse('jurnal:neraca_saldo'), {

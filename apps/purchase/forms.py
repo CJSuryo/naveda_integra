@@ -34,6 +34,14 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
+    def __init__(self, *args, tipe_item_choices: list[str] | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if tipe_item_choices:
+            all_choices = ItemMasterPurchase.ITEM_TYPE_CHOICES
+            self.fields['tipe_item'].choices = [
+                c for c in all_choices if c[0] in tipe_item_choices
+            ]
+
 
 class SubTransactionTypeForm(forms.ModelForm):
     class Meta:
