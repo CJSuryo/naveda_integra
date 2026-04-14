@@ -6,6 +6,14 @@
     <h1 class="ni-page-header__title">Chart of Accounts</h1>
     <p class="ni-page-header__subtitle">Daftar semua akun berdasarkan kategori</p>
   </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'master_data:coa_export' %}" class="ni-btn ni-btn--outline ni-btn--sm">
+      <i data-lucide="download" style="width:14px;height:14px"></i> Export CSV
+    </a>
+    <button type="button" class="ni-btn ni-btn--primary ni-btn--sm" onclick="niCoa.openImport()">
+      <i data-lucide="upload" style="width:14px;height:14px"></i> Import CSV
+    </button>
+  </div>
 </div>
 
 {% for category in categories %}
@@ -229,6 +237,86 @@
     </div>
   </div>
 </div>
+
+<!-- ── Modal: Import CSV ────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalImport">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Import Chart of Accounts</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalImport')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaErrImport" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <p style="color:var(--ni-text-muted);font-size:0.875rem;margin-bottom:16px;">
+        Upload file CSV dengan kolom:
+        <em>Kode Akun Lvl 1, Nama Akun Lvl 1, Kode Akun Lvl 2, Nama Akun Lvl 2, Kode Akun Lvl 3, Nama Akun</em>.
+        Data akan ditampilkan dalam preview sebelum disimpan.
+      </p>
+      <form id="coaFormImport" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">File CSV <span style="color:var(--ni-danger)">*</span></label>
+          <input type="file" id="coaCsvFileInput" name="csv_file" accept=".csv" class="ni-input" required>
+        </div>
+      </form>
+      <p style="margin-top:8px;font-size:0.8125rem;color:var(--ni-text-muted);">
+        <a href="{% url 'master_data:coa_export' %}" style="color:var(--ni-primary);">
+          <i data-lucide="download" style="width:12px;height:12px;vertical-align:middle;"></i> Download template CSV
+        </a>
+      </p>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalImport')">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" id="coaBtnPreview" onclick="niCoa.previewImport()">
+        <i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal: Preview Import ────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="coaModalPreview">
+  <div class="ni-modal ni-modal--xl">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Preview Import Chart of Accounts</h3>
+      <button class="ni-modal__close" type="button" onclick="niCoa.close('coaModalPreview')"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div id="coaPreviewSummary" style="margin-bottom:12px;font-size:0.875rem;"></div>
+      <div id="coaErrPreview" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div class="ni-table-wrapper" style="max-height:55vh;overflow-y:auto;">
+        <table class="ni-table" id="coaPreviewTable" style="min-width:780px;font-size:0.8125rem;">
+          <thead>
+            <tr>
+              <th style="width:32px;">#</th>
+              <th>Kode Lvl&nbsp;1</th>
+              <th>Nama Lvl&nbsp;1</th>
+              <th>Kode Lvl&nbsp;2</th>
+              <th>Nama Lvl&nbsp;2</th>
+              <th>Kode Lvl&nbsp;3</th>
+              <th>Nama Akun</th>
+              <th style="width:110px;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="coaPreviewBody"></tbody>
+        </table>
+      </div>
+      <p class="ni-text-muted" style="margin-top:10px;font-size:0.8125rem;">
+        Baris <span style="color:var(--ni-danger);font-weight:600;">merah</span> gagal validasi — edit sel yang bermasalah lalu simpan.
+        Baris <span style="color:var(--ni-warning);font-weight:600;">kuning</span> akan memperbarui data yang sudah ada.
+      </p>
+    </div>
+    <div class="ni-modal__footer ni-modal__footer--between">
+      <span id="coaPreviewCount" class="ni-text-muted" style="font-size:0.875rem;"></span>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="niCoa.close('coaModalPreview')">Batal</button>
+        <button type="button" class="ni-btn ni-btn--primary" id="coaBtnSavePreview" onclick="niCoa.savePreview()">
+          <i data-lucide="save" style="width:14px;height:14px"></i> Simpan
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -305,6 +393,263 @@
       this._activeCategory = catIdx;
       this._activeLv1 = lv1Idx;
       this.open('coaModalDeleteLv2');
+    },
+    openImport: function () {
+      document.getElementById('coaFormImport').reset();
+      document.getElementById('coaCsvFileInput').value = '';
+      this._clearErr('coaErrImport');
+      var btn = document.getElementById('coaBtnPreview');
+      btn.disabled = false;
+      btn.innerHTML = '<i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview';
+      lucide.createIcons();
+      this.open('coaModalImport');
+    },
+
+    _clearErr: function (id) {
+      var el = document.getElementById(id);
+      if (el) { el.style.display = 'none'; el.textContent = ''; }
+    },
+    _showErr: function (id, msg) {
+      var el = document.getElementById(id);
+      if (el) { el.style.display = 'block'; el.textContent = msg; }
+    },
+
+    // ── Preview ──────────────────────────────────────────────────────────────
+
+    _csrfToken: function () {
+      var el = document.querySelector('[name=csrfmiddlewaretoken]');
+      return el ? el.value : '';
+    },
+
+    previewImport: function () {
+      var fileInput = document.getElementById('coaCsvFileInput');
+      if (!fileInput.files.length) {
+        this._showErr('coaErrImport', 'Pilih file CSV terlebih dahulu.');
+        return;
+      }
+      this._clearErr('coaErrImport');
+      var btn = document.getElementById('coaBtnPreview');
+      btn.disabled = true;
+      btn.textContent = 'Memuat…';
+
+      var formData = new FormData();
+      formData.append('csv_file', fileInput.files[0]);
+      formData.append('csrfmiddlewaretoken', this._csrfToken());
+
+      fetch('{% url "master_data:coa_preview" %}', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        body: formData,
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+          var btn2 = document.getElementById('coaBtnPreview');
+          btn2.disabled = false;
+          btn2.innerHTML = '<i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview';
+          lucide.createIcons();
+          if (!json.success) {
+            niCoa._showErr('coaErrImport', json.error || 'Terjadi kesalahan.');
+            return;
+          }
+          niCoa.close('coaModalImport');
+          niCoa._renderPreview(json.rows);
+          niCoa.open('coaModalPreview');
+        })
+        .catch(function () {
+          var btn3 = document.getElementById('coaBtnPreview');
+          btn3.disabled = false;
+          btn3.innerHTML = '<i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview';
+          lucide.createIcons();
+          niCoa._showErr('coaErrImport', 'Terjadi kesalahan jaringan.');
+        });
+    },
+
+    _renderPreview: function (rows) {
+      var tbody = document.getElementById('coaPreviewBody');
+      tbody.innerHTML = '';
+      var errorCount = 0;
+      var updateCount = 0;
+      var newCount = 0;
+
+      rows.forEach(function (row, idx) {
+        var isError = row.lv1_status === 'error' || row.lv2_status === 'error';
+        var isUpdate = !isError && (row.lv1_status === 'update' || row.lv2_status === 'update');
+        if (isError) errorCount++;
+        else if (isUpdate) updateCount++;
+        else newCount++;
+
+        var rowBg = isError
+          ? 'background:#fff1f2;'
+          : (isUpdate ? 'background:#fffbeb;' : '');
+
+        var statusBadge = isError
+          ? '<span class="ni-badge ni-badge--danger">Error</span>'
+          : (isUpdate
+              ? '<span class="ni-badge ni-badge--warning">Perbarui</span>'
+              : '<span class="ni-badge ni-badge--success">Baru</span>');
+
+        var errorTip = isError
+          ? '<div style="color:var(--ni-danger);font-size:0.75rem;margin-top:2px;">' + niCoa._esc(row.error) + '</div>'
+          : '';
+
+        var tr = document.createElement('tr');
+        tr.dataset.idx = idx;
+        if (isError) tr.dataset.error = '1';
+        tr.style.cssText = rowBg;
+        tr.innerHTML =
+          '<td style="color:var(--ni-text-muted);">' + (idx + 1) + '</td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:44px;" data-field="prefix" value="' + niCoa._esc(row.prefix) + '" maxlength="2"></td>' +
+          '<td><span class="coa-cat-label ni-text-muted" style="font-size:0.8125rem;">' + niCoa._esc(row.category_name || '') + '</span></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:80px;" data-field="lv1_kode" value="' + niCoa._esc(row.lv1_kode) + '" maxlength="50"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:120px;" data-field="lv1_nama" value="' + niCoa._esc(row.lv1_nama) + '"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:80px;" data-field="lv2_kode" value="' + niCoa._esc(row.lv2_kode) + '" maxlength="50"></td>' +
+          '<td><input type="text" class="ni-input ni-input--table-cell coa-cell" style="min-width:120px;" data-field="lv2_nama" value="' + niCoa._esc(row.lv2_nama) + '"></td>' +
+          '<td class="coa-status-cell">' + statusBadge + errorTip + '</td>';
+        tbody.appendChild(tr);
+      });
+
+      // Update category label when prefix input changes
+      tbody.querySelectorAll('[data-field="prefix"]').forEach(function (input) {
+        input.addEventListener('input', function () {
+          var CATS = {'1':'ASET','2':'KEWAJIBAN','3':'EKUITAS','4':'PENDAPATAN','5':'BEBAN'};
+          var label = input.closest('tr').querySelector('.coa-cat-label');
+          if (label) label.textContent = CATS[input.value.trim()] || '';
+        });
+      });
+
+      // Live re-validation on input change
+      tbody.querySelectorAll('.coa-cell').forEach(function (input) {
+        input.addEventListener('change', function () { niCoa._revalidateTable(); });
+        input.addEventListener('input', function () { niCoa._revalidateTable(); });
+      });
+
+      // Summary
+      var parts = [];
+      if (newCount) parts.push('<span style="color:var(--ni-success);">' + newCount + ' baru</span>');
+      if (updateCount) parts.push('<span style="color:var(--ni-warning);">' + updateCount + ' diperbarui</span>');
+      if (errorCount) parts.push('<span style="color:var(--ni-danger);">' + errorCount + ' error</span>');
+      document.getElementById('coaPreviewSummary').innerHTML =
+        '<strong>' + rows.length + ' baris total:</strong> ' + (parts.join(', ') || '—');
+      niCoa._updateSaveBtn(errorCount);
+    },
+
+    _esc: function (str) {
+      return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    },
+
+    _revalidateTable: function () {
+      var tbody = document.getElementById('coaPreviewBody');
+      var rows = tbody.querySelectorAll('tr');
+      var VALID_PREFIXES = {'1':true,'2':true,'3':true,'4':true,'5':true};
+      var errorCount = 0;
+      var errBadge = '<span class="ni-badge ni-badge--danger">Error</span>';
+      var newBadge = '<span class="ni-badge ni-badge--success">Baru</span>';
+
+      // First pass: count occurrences of each lv1_kode and lv2_kode across rows
+      var lv1Counts = {};
+      var lv2Counts = {};
+      rows.forEach(function (tr) {
+        var lv1k = tr.querySelector('[data-field="lv1_kode"]').value.trim();
+        var lv2k = tr.querySelector('[data-field="lv2_kode"]').value.trim();
+        if (lv1k) lv1Counts[lv1k] = (lv1Counts[lv1k] || 0) + 1;
+        if (lv2k) lv2Counts[lv2k] = (lv2Counts[lv2k] || 0) + 1;
+      });
+
+      // Second pass: validate each row and update status cell
+      rows.forEach(function (tr) {
+        var prefix = tr.querySelector('[data-field="prefix"]').value.trim();
+        var lv1k = tr.querySelector('[data-field="lv1_kode"]').value.trim();
+        var lv1n = tr.querySelector('[data-field="lv1_nama"]').value.trim();
+        var lv2k = tr.querySelector('[data-field="lv2_kode"]').value.trim();
+        var statusCell = tr.querySelector('.coa-status-cell');
+
+        var err = '';
+        if (!prefix || !lv1k || !lv1n) {
+          err = 'Kolom wajib kosong.';
+        } else if (!VALID_PREFIXES[prefix]) {
+          err = 'Prefix "' + niCoa._esc(prefix) + '" tidak valid (harus 1–5).';
+        } else if (lv2k && lv2Counts[lv2k] > 1) {
+          err = 'Kode Lvl 3 "' + niCoa._esc(lv2k) + '" duplikat dalam tabel.';
+        }
+
+        if (err) {
+          errorCount++;
+          tr.dataset.error = '1';
+          tr.style.background = '#fff1f2';
+          statusCell.innerHTML = errBadge + '<div style="color:var(--ni-danger);font-size:0.75rem;margin-top:2px;">' + err + '</div>';
+        } else {
+          delete tr.dataset.error;
+          tr.style.background = '';
+          statusCell.innerHTML = newBadge;
+        }
+      });
+
+      niCoa._updateSaveBtn(errorCount);
+    },
+
+    _updateSaveBtn: function (errorCount) {
+      var tbody = document.getElementById('coaPreviewBody');
+      var total = tbody.querySelectorAll('tr').length;
+      var errors = errorCount !== undefined ? errorCount : 0;
+      var validCount = total - errors;
+      var btn = document.getElementById('coaBtnSavePreview');
+      document.getElementById('coaPreviewCount').textContent =
+        validCount + ' dari ' + total + ' baris akan disimpan' + (errors ? ' (' + errors + ' baris error diabaikan)' : '') + '.';
+      btn.disabled = validCount === 0;
+    },
+
+    savePreview: function () {
+      this._clearErr('coaErrPreview');
+      var tbody = document.getElementById('coaPreviewBody');
+      var rows = [];
+      tbody.querySelectorAll('tr').forEach(function (tr) {
+        // Skip error rows (identified by data-error attribute)
+        if (tr.dataset.error) return;
+        rows.push({
+          prefix: tr.querySelector('[data-field="prefix"]').value.trim(),
+          lv1_kode: tr.querySelector('[data-field="lv1_kode"]').value.trim(),
+          lv1_nama: tr.querySelector('[data-field="lv1_nama"]').value.trim(),
+          lv2_kode: tr.querySelector('[data-field="lv2_kode"]').value.trim(),
+          lv2_nama: tr.querySelector('[data-field="lv2_nama"]').value.trim(),
+        });
+      });
+
+      if (!rows.length) {
+        this._showErr('coaErrPreview', 'Tidak ada baris valid untuk disimpan.');
+        return;
+      }
+
+      var btn = document.getElementById('coaBtnSavePreview');
+      btn.disabled = true;
+      btn.textContent = 'Menyimpan…';
+
+      fetch('{% url "master_data:coa_import_json" %}', {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': niCoa._csrfToken(),
+        },
+        body: JSON.stringify({ rows: rows }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (json) {
+          if (json.success) {
+            niCoa.close('coaModalPreview');
+            window.location.reload();
+          } else {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Simpan';
+            lucide.createIcons();
+            niCoa._showErr('coaErrPreview', json.error || 'Terjadi kesalahan saat menyimpan.');
+          }
+        })
+        .catch(function () {
+          btn.disabled = false;
+          btn.innerHTML = '<i data-lucide="save" style="width:14px;height:14px"></i> Simpan';
+          lucide.createIcons();
+          niCoa._showErr('coaErrPreview', 'Terjadi kesalahan jaringan.');
+        });
     },
     _activeCategory: null,
     _activeLv1: null,

@@ -1,10 +1,17 @@
 """Master data views."""
+import csv
+import io
+import json
+import logging
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+
+logger = logging.getLogger(__name__)
 
 from .forms import (
     AsetLv1Form, AsetLv2Form,
@@ -791,3 +798,391 @@ def prefix_list(request: HttpRequest) -> HttpResponse:
 def bukti_detail(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(Bukti, pk=pk)
     return render(request, 'master_data/bukti/detail.html', {'object': obj})
+
+
+# ── Chart of Accounts: Export ─────────────────────────────────────────────────
+
+# Category metadata used by both export and import views
+_COA_CATEGORIES: list[dict] = [
+    {
+        'prefix': '1', 'name': 'ASET',
+        'lv1_model': AsetLv1, 'lv2_model': AsetLv2,
+        'lv1_fk': 'aset',
+    },
+    {
+        'prefix': '2', 'name': 'KEWAJIBAN',
+        'lv1_model': KewajibanLv1, 'lv2_model': KewajibanLv2,
+        'lv1_fk': 'kewajiban',
+    },
+    {
+        'prefix': '3', 'name': 'EKUITAS',
+        'lv1_model': EkuitasLv1, 'lv2_model': EkuitasLv2,
+        'lv1_fk': 'ekuitas',
+    },
+    {
+        'prefix': '4', 'name': 'PENDAPATAN',
+        'lv1_model': PendapatanLv1, 'lv2_model': PendapatanLv2,
+        'lv1_fk': 'pendapatan',
+    },
+    {
+        'prefix': '5', 'name': 'BEBAN',
+        'lv1_model': BebanLv1, 'lv2_model': BebanLv2,
+        'lv1_fk': 'beban',
+    },
+]
+
+_COA_HEADERS = [
+    'Kode Akun Lvl 1', 'Nama Akun Lvl 1',
+    'Kode Akun Lvl 2', 'Nama Akun Lvl 2',
+    'Kode Akun Lvl 3', 'Nama Akun',
+]
+
+
+@login_required
+def coa_export(request: HttpRequest) -> HttpResponse:
+    """Export Chart of Accounts as a CSV file."""
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = 'attachment; filename="chart_of_accounts.csv"'
+    response.write('\ufeff')  # UTF-8 BOM for Excel compatibility
+
+    writer = csv.writer(response)
+    writer.writerow(_COA_HEADERS)
+
+    for cat in _COA_CATEGORIES:
+        lv1_qs = cat['lv1_model'].objects.prefetch_related('children').order_by('kode')
+        for lv1 in lv1_qs:
+            lv2_qs = lv1.children.order_by('kode')
+            if lv2_qs.exists():
+                for lv2 in lv2_qs:
+                    writer.writerow([
+                        cat['prefix'], cat['name'],
+                        lv1.kode, lv1.nama,
+                        lv2.kode, lv2.nama,
+                    ])
+            else:
+                writer.writerow([
+                    cat['prefix'], cat['name'],
+                    lv1.kode, lv1.nama,
+                    '', '',
+                ])
+
+    return response
+
+
+# ── Chart of Accounts: Import ─────────────────────────────────────────────────
+
+def _get_category_by_prefix(prefix: str) -> dict | None:
+    for cat in _COA_CATEGORIES:
+        if cat['prefix'] == prefix:
+            return cat
+    return None
+
+
+@login_required
+def coa_import(request: HttpRequest) -> HttpResponse:
+    """Import Chart of Accounts from a CSV file."""
+    if request.method != 'POST':
+        return redirect('master_data:chart_of_accounts')
+
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        messages.error(request, 'Pilih file CSV terlebih dahulu.')
+        return redirect('master_data:chart_of_accounts')
+
+    if not csv_file.name.endswith('.csv'):
+        messages.error(request, 'File harus berformat CSV.')
+        return redirect('master_data:chart_of_accounts')
+
+    try:
+        raw = csv_file.read()
+        # Strip UTF-8 BOM if present
+        decoded = raw.decode('utf-8-sig').strip()
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        # Validate headers
+        required_headers = set(_COA_HEADERS)
+        actual_headers = set(reader.fieldnames or [])
+        missing = required_headers - actual_headers
+        if missing:
+            messages.error(request, f'Kolom tidak ditemukan: {", ".join(sorted(missing))}')
+            return redirect('master_data:chart_of_accounts')
+
+        created_lv1 = updated_lv1 = created_lv2 = updated_lv2 = 0
+        errors: list[str] = []
+
+        with transaction.atomic():
+            for line_num, row in enumerate(reader, start=2):
+                prefix = (row.get('Kode Akun Lvl 1') or '').strip()
+                lv1_kode = (row.get('Kode Akun Lvl 2') or '').strip()
+                lv1_nama = (row.get('Nama Akun Lvl 2') or '').strip()
+                lv2_kode = (row.get('Kode Akun Lvl 3') or '').strip()
+                lv2_nama = (row.get('Nama Akun') or '').strip()
+
+                if not prefix or not lv1_kode or not lv1_nama:
+                    errors.append(f'Baris {line_num}: kolom wajib kosong, dilewati.')
+                    continue
+
+                cat = _get_category_by_prefix(prefix)
+                if not cat:
+                    errors.append(f'Baris {line_num}: prefix "{prefix}" tidak dikenal.')
+                    continue
+
+                # Upsert Lv1 (e.g. AsetLv1)
+                lv1_obj, lv1_created = cat['lv1_model'].objects.get_or_create(
+                    kode=lv1_kode,
+                    defaults={'nama': lv1_nama},
+                )
+                if not lv1_created and lv1_obj.nama != lv1_nama:
+                    lv1_obj.nama = lv1_nama
+                    lv1_obj.save()
+                    updated_lv1 += 1
+                elif lv1_created:
+                    created_lv1 += 1
+
+                # Upsert Lv2 (e.g. AsetLv2) only when kode provided
+                if lv2_kode:
+                    lv2_defaults = {cat['lv1_fk']: lv1_obj, 'nama': lv2_nama}
+                    lv2_obj, lv2_created = cat['lv2_model'].objects.get_or_create(
+                        kode=lv2_kode,
+                        defaults=lv2_defaults,
+                    )
+                    if not lv2_created:
+                        changed = False
+                        if getattr(lv2_obj, cat['lv1_fk']).pk != lv1_obj.pk:
+                            setattr(lv2_obj, cat['lv1_fk'], lv1_obj)
+                            changed = True
+                        if lv2_obj.nama != lv2_nama and lv2_nama:
+                            lv2_obj.nama = lv2_nama
+                            changed = True
+                        if changed:
+                            lv2_obj.save()
+                            updated_lv2 += 1
+                    else:
+                        created_lv2 += 1
+
+        parts = []
+        if created_lv1:
+            parts.append(f'{created_lv1} sub-kategori baru')
+        if updated_lv1:
+            parts.append(f'{updated_lv1} sub-kategori diperbarui')
+        if created_lv2:
+            parts.append(f'{created_lv2} akun baru')
+        if updated_lv2:
+            parts.append(f'{updated_lv2} akun diperbarui')
+
+        if errors:
+            extra = len(errors) - 5
+            shown = '; '.join(errors[:5])
+            suffix = f' (dan {extra} lainnya)' if extra > 0 else ''
+            messages.warning(request, f'Import selesai dengan peringatan: {shown}{suffix}')
+
+        summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
+        messages.success(request, f'Import berhasil: {summary}')
+
+    except Exception as exc:
+        messages.error(request, f'Gagal memproses file: {exc}')
+
+    return redirect('master_data:chart_of_accounts')
+
+
+# ── Chart of Accounts: Preview (AJAX) ────────────────────────────────────────
+
+@login_required
+def coa_preview(request: HttpRequest) -> JsonResponse:
+    """Parse an uploaded CSV and return rows with validation status (AJAX only).
+
+    Each row in the response has:
+      prefix, lv1_kode, lv1_nama, lv2_kode, lv2_nama,
+      lv1_status ('new'|'update'|'error'), lv2_status ('new'|'update'|'skip'|'error'),
+      error (human-readable message, empty when valid)
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+    csv_file = request.FILES.get('csv_file')
+    if not csv_file:
+        return JsonResponse({'success': False, 'error': 'Pilih file CSV terlebih dahulu.'})
+
+    try:
+        raw = csv_file.read()
+        decoded = raw.decode('utf-8-sig').strip()
+        reader = csv.DictReader(io.StringIO(decoded))
+
+        required_headers = set(_COA_HEADERS)
+        actual_headers = set(reader.fieldnames or [])
+        missing = required_headers - actual_headers
+        if missing:
+            return JsonResponse({
+                'success': False,
+                'error': f'Kolom tidak ditemukan: {", ".join(sorted(missing))}',
+            })
+
+        # Pre-load all existing lv1 and lv2 kodes per category for O(1) lookup
+        db_lv1: dict[str, set[str]] = {}
+        db_lv2: dict[str, set[str]] = {}
+        for cat in _COA_CATEGORIES:
+            slug = cat['lv1_fk']
+            db_lv1[slug] = set(cat['lv1_model'].objects.values_list('kode', flat=True))
+            db_lv2[slug] = set(cat['lv2_model'].objects.values_list('kode', flat=True))
+
+        rows_out = []
+        seen_lv1_in_csv: dict[str, str] = {}  # kode → first-seen category slug
+        seen_lv2_in_csv: set[str] = set()
+
+        for row in reader:
+            prefix = (row.get('Kode Akun Lvl 1') or '').strip()
+            lv1_kode = (row.get('Kode Akun Lvl 2') or '').strip()
+            lv1_nama = (row.get('Nama Akun Lvl 2') or '').strip()
+            lv2_kode = (row.get('Kode Akun Lvl 3') or '').strip()
+            lv2_nama = (row.get('Nama Akun') or '').strip()
+            cat_early = _get_category_by_prefix(prefix)
+
+            entry: dict = {
+                'prefix': prefix,
+                'category_name': cat_early['name'] if cat_early else '',
+                'lv1_kode': lv1_kode,
+                'lv1_nama': lv1_nama,
+                'lv2_kode': lv2_kode,
+                'lv2_nama': lv2_nama,
+                'lv1_status': 'new',
+                'lv2_status': 'skip',
+                'error': '',
+            }
+
+            # ── Required fields ──────────────────────────────────────────────
+            if not prefix or not lv1_kode or not lv1_nama:
+                entry['lv1_status'] = 'error'
+                entry['error'] = 'Kolom wajib (prefix / kode lvl2 / nama lvl2) kosong.'
+                rows_out.append(entry)
+                continue
+
+            cat = _get_category_by_prefix(prefix)
+            if not cat:
+                entry['lv1_status'] = 'error'
+                entry['error'] = f'Prefix "{prefix}" tidak dikenal (harus 1–5).'
+                rows_out.append(entry)
+                continue
+
+            entry['category_name'] = cat['name']
+            slug = cat['lv1_fk']
+
+            # ── Lv1 validation ───────────────────────────────────────────────
+            if lv1_kode in seen_lv1_in_csv and seen_lv1_in_csv[lv1_kode] == slug:
+                entry['lv1_status'] = 'update'  # repeated in CSV → treated as update
+            elif lv1_kode in seen_lv1_in_csv:
+                entry['lv1_status'] = 'error'
+                entry['error'] = f'Kode Lvl 2 "{lv1_kode}" muncul di kategori berbeda dalam file.'
+                rows_out.append(entry)
+                continue
+            elif lv1_kode in db_lv1[slug]:
+                entry['lv1_status'] = 'update'
+                seen_lv1_in_csv[lv1_kode] = slug
+            else:
+                entry['lv1_status'] = 'new'
+                seen_lv1_in_csv[lv1_kode] = slug
+
+            # ── Lv2 validation ───────────────────────────────────────────────
+            if lv2_kode:
+                if lv2_kode in seen_lv2_in_csv:
+                    entry['lv2_status'] = 'error'
+                    entry['error'] = f'Kode Lvl 3 "{lv2_kode}" duplikat dalam file.'
+                elif lv2_kode in db_lv2[slug]:
+                    entry['lv2_status'] = 'update'
+                    seen_lv2_in_csv.add(lv2_kode)
+                else:
+                    entry['lv2_status'] = 'new'
+                    seen_lv2_in_csv.add(lv2_kode)
+            else:
+                entry['lv2_status'] = 'skip'
+
+            rows_out.append(entry)
+
+        return JsonResponse({'success': True, 'rows': rows_out})
+
+    except Exception:
+        logger.exception('coa_preview: error processing CSV')
+        return JsonResponse({'success': False, 'error': 'Gagal memproses file. Periksa format CSV dan coba lagi.'})
+
+
+# ── Chart of Accounts: Import from JSON (AJAX) ────────────────────────────────
+
+@login_required
+def coa_import_json(request: HttpRequest) -> JsonResponse:
+    """Import rows submitted as JSON (from the preview modal)."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Method not allowed'}, status=405)
+
+    try:
+        body = json.loads(request.body)
+        rows = body.get('rows', [])
+    except Exception:
+        return JsonResponse({'success': False, 'error': 'Payload JSON tidak valid.'})
+
+    if not rows:
+        return JsonResponse({'success': False, 'error': 'Tidak ada baris untuk disimpan.'})
+
+    created_lv1 = updated_lv1 = created_lv2 = updated_lv2 = 0
+
+    try:
+        with transaction.atomic():
+            for row in rows:
+                prefix = str(row.get('prefix', '')).strip()
+                lv1_kode = str(row.get('lv1_kode', '')).strip()
+                lv1_nama = str(row.get('lv1_nama', '')).strip()
+                lv2_kode = str(row.get('lv2_kode', '')).strip()
+                lv2_nama = str(row.get('lv2_nama', '')).strip()
+
+                if not prefix or not lv1_kode or not lv1_nama:
+                    continue
+
+                cat = _get_category_by_prefix(prefix)
+                if not cat:
+                    continue
+
+                lv1_obj, lv1_created = cat['lv1_model'].objects.get_or_create(
+                    kode=lv1_kode,
+                    defaults={'nama': lv1_nama},
+                )
+                if not lv1_created and lv1_obj.nama != lv1_nama:
+                    lv1_obj.nama = lv1_nama
+                    lv1_obj.save()
+                    updated_lv1 += 1
+                elif lv1_created:
+                    created_lv1 += 1
+
+                if lv2_kode:
+                    lv2_defaults = {cat['lv1_fk']: lv1_obj, 'nama': lv2_nama}
+                    lv2_obj, lv2_created = cat['lv2_model'].objects.get_or_create(
+                        kode=lv2_kode,
+                        defaults=lv2_defaults,
+                    )
+                    if not lv2_created:
+                        changed = False
+                        if getattr(lv2_obj, cat['lv1_fk']).pk != lv1_obj.pk:
+                            setattr(lv2_obj, cat['lv1_fk'], lv1_obj)
+                            changed = True
+                        if lv2_obj.nama != lv2_nama and lv2_nama:
+                            lv2_obj.nama = lv2_nama
+                            changed = True
+                        if changed:
+                            lv2_obj.save()
+                            updated_lv2 += 1
+                    else:
+                        created_lv2 += 1
+
+        parts = []
+        if created_lv1:
+            parts.append(f'{created_lv1} sub-kategori baru')
+        if updated_lv1:
+            parts.append(f'{updated_lv1} sub-kategori diperbarui')
+        if created_lv2:
+            parts.append(f'{created_lv2} akun baru')
+        if updated_lv2:
+            parts.append(f'{updated_lv2} akun diperbarui')
+
+        summary = ', '.join(parts) if parts else 'Tidak ada perubahan.'
+        return JsonResponse({'success': True, 'summary': summary})
+
+    except Exception:
+        logger.exception('coa_import_json: error saving rows')
+        return JsonResponse({'success': False, 'error': 'Gagal menyimpan data. Silakan coba lagi.'})

@@ -186,3 +186,8 @@
     max-width: 100%;
   }
 }
+
+/* ---------- Preview modal footer (space-between layout) ---------- */
+.ni-modal__footer--between {
+  justify-content: space-between;
+}

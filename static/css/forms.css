@@ -396,3 +396,11 @@ input[type="checkbox"].ni-checkbox:focus-visible {
     align-items: stretch;
   }
 }
+
+/* ---------- Compact input for inline table editing ---------- */
+.ni-input--table-cell {
+  padding: 3px 6px;
+  font-size: 0.8125rem;
+  height: auto;
+  min-height: 0;
+}
