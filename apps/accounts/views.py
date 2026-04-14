@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from django.contrib import messages as dj_messages
 from django.contrib.auth import get_user_model, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -13,6 +13,12 @@ from .forms import LoginForm, RegisterForm, UserForm, UserPermissionForm
 from .models import NiPermission, UserEntitasBisnis
 
 User = get_user_model()
+
+
+def _check_perm(user, perm_code: str) -> HttpResponse | None:
+    """Return HttpResponseForbidden if user lacks the given permission, else None."""
+    if not user.has_ni_perm(perm_code):
+        return HttpResponseForbidden('Anda tidak memiliki izin untuk mengakses halaman ini.')
 
 
 def _get_safe_next(request: HttpRequest) -> str | None:
@@ -78,6 +84,9 @@ def home_view(request: HttpRequest) -> HttpResponse:
 @login_required
 def user_list(request: HttpRequest) -> HttpResponse:
     """List all users."""
+    denied = _check_perm(request.user, 'user_view')
+    if denied:
+        return denied
     users = User.objects.select_related('role').all().order_by('email')
     return render(request, 'accounts/user_list.html', {'users': users})
 
@@ -85,6 +94,9 @@ def user_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def user_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """User detail with permissions and entitas bisnis links."""
+    denied = _check_perm(request.user, 'user_view')
+    if denied:
+        return denied
     user_obj = get_object_or_404(User.objects.select_related('role').prefetch_related('ni_permissions'), pk=pk)
     user_perms = set(user_obj.ni_permissions.values_list('code', flat=True))
 
@@ -110,6 +122,9 @@ def user_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def user_create(request: HttpRequest) -> HttpResponse:
     """Create a new user."""
+    denied = _check_perm(request.user, 'user_create')
+    if denied:
+        return denied
     form = UserForm(request.POST or None)
     if request.method == 'POST' and form.is_valid():
         user_obj = form.save()
@@ -121,6 +136,9 @@ def user_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def user_update(request: HttpRequest, pk: int) -> HttpResponse:
     """Update an existing user."""
+    denied = _check_perm(request.user, 'user_update')
+    if denied:
+        return denied
     user_obj = get_object_or_404(User, pk=pk)
     form = UserForm(request.POST or None, instance=user_obj)
     if request.method == 'POST' and form.is_valid():
@@ -133,6 +151,9 @@ def user_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def user_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a user."""
+    denied = _check_perm(request.user, 'user_delete')
+    if denied:
+        return denied
     user_obj = get_object_or_404(User, pk=pk)
     if request.method == 'POST':
         email = user_obj.email
@@ -145,6 +166,9 @@ def user_delete(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def user_permissions(request: HttpRequest, pk: int) -> HttpResponse:
     """Manage a user's permissions."""
+    denied = _check_perm(request.user, 'user_manage_permissions')
+    if denied:
+        return denied
     user_obj = get_object_or_404(User.objects.prefetch_related('ni_permissions'), pk=pk)
 
     if request.method == 'POST':

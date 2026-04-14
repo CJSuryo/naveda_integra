@@ -12,6 +12,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         toml_path = Path(__file__).resolve().parents[4] / 'config' / 'roles_permissions.toml'
+        # Also try settings.BASE_DIR
+        try:
+            from django.conf import settings
+            alt_path = Path(settings.BASE_DIR) / 'config' / 'roles_permissions.toml'
+            if alt_path.exists():
+                toml_path = alt_path
+        except Exception:
+            pass
         if not toml_path.exists():
             self.stderr.write(self.style.ERROR(f'TOML config not found: {toml_path}'))
             return
