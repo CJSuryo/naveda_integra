@@ -9,9 +9,10 @@ from .models import (
 class KategoriItemForm(forms.ModelForm):
     class Meta:
         model = KategoriItem
-        fields = ('nama',)
+        fields = ('nama', 'entitas_bisnis')
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
 
@@ -20,7 +21,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         model = ItemMasterPurchase
         fields = (
             'nama', 'tipe_item', 'kategori', 'velocity_category',
-            'coa_account', 'expiry_date', 'threshold_days_outstanding', 'unit_price',
+            'coa_account', 'expiry_date', 'threshold_days_outstanding', 'entitas_bisnis',
         )
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
@@ -30,7 +31,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
             'expiry_date': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'threshold_days_outstanding': forms.NumberInput(attrs={'class': 'ni-input'}),
-            'unit_price': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
+            'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
 

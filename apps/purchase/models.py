@@ -14,6 +14,12 @@ from django.utils import timezone
 class KategoriItem(models.Model):
     """Free-form item category (Coffee, Tea, Snacks, Bahan Masak, etc.)."""
     nama = models.CharField(max_length=255, unique=True)
+    entitas_bisnis = models.ManyToManyField(
+        'entitas_bisnis.EntitasBisnis',
+        blank=True,
+        related_name='kategori_items',
+        verbose_name='Entitas Bisnis',
+    )
 
     class Meta:
         verbose_name = 'Kategori Item'
@@ -76,6 +82,12 @@ class ItemMasterPurchase(models.Model):
         decimal_places=4,
         default=0,
         verbose_name='Harga Satuan Default',
+    )
+    entitas_bisnis = models.ManyToManyField(
+        'entitas_bisnis.EntitasBisnis',
+        blank=True,
+        related_name='item_masters',
+        verbose_name='Entitas Bisnis',
     )
 
     class Meta:
@@ -205,9 +217,12 @@ class PurchaseHeader(models.Model):
 # ── Purchase Entitas Bisnis (per-EB grouping inside a purchase) ──────────────
 
 class PurchaseEntitasBisnis(models.Model):
-    """Links a purchase header to a specific business entity.
+    """Links a purchase header to a specific business entity (at any level).
 
-    A single purchase can distribute items to multiple entitas bisnis.
+    All three hierarchy levels are stored:
+    - ``entitas_bisnis`` (lv1) is always populated.
+    - ``entitas_bisnis_lv2`` is populated when a lv2 or lv3 entity was selected.
+    - ``entitas_bisnis_lv3`` is populated only when a lv3 entity was selected.
     """
     purchase_header = models.ForeignKey(
         PurchaseHeader,
@@ -218,17 +233,45 @@ class PurchaseEntitasBisnis(models.Model):
         'entitas_bisnis.EntitasBisnis',
         on_delete=models.PROTECT,
         related_name='purchase_groups',
+        verbose_name='Entitas Bisnis (Lv1)',
+    )
+    entitas_bisnis_lv2 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv2',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='purchase_groups',
+        verbose_name='Entitas Bisnis Lv2',
+    )
+    entitas_bisnis_lv3 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='purchase_groups',
+        verbose_name='Entitas Bisnis Lv3',
     )
 
     class Meta:
         verbose_name = 'Purchase Entitas Bisnis'
         verbose_name_plural = 'Purchase Entitas Bisnis'
-        unique_together = [('purchase_header', 'entitas_bisnis')]
         indexes = [
             models.Index(fields=['purchase_header', 'entitas_bisnis'], name='idx_peb_header_eb'),
+            models.Index(fields=['entitas_bisnis_lv2'], name='idx_peb_lv2'),
+            models.Index(fields=['entitas_bisnis_lv3'], name='idx_peb_lv3'),
         ]
 
     def __str__(self) -> str:
+        if self.entitas_bisnis_lv3_id:
+            return (
+                f'{self.purchase_header.transaction_id} → '
+                f'{self.entitas_bisnis.nama} / {self.entitas_bisnis_lv2.nama} / {self.entitas_bisnis_lv3.nama}'
+            )
+        if self.entitas_bisnis_lv2_id:
+            return (
+                f'{self.purchase_header.transaction_id} → '
+                f'{self.entitas_bisnis.nama} / {self.entitas_bisnis_lv2.nama}'
+            )
         return f'{self.purchase_header.transaction_id} → {self.entitas_bisnis.nama}'
 
 

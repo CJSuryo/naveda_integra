@@ -26,6 +26,84 @@ from .services import (
 )
 
 
+def _get_eb_dropdown_options() -> list[dict[str, str]]:
+    """Build hierarchical EntitasBisnis dropdown options (lv1/lv2/lv3)."""
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    lv1_list = list(EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'))
+    lv2_list = list(
+        EntitasBisnisLv2.objects.filter(status_aktif=True)
+        .select_related('entitas_bisnis').order_by('nama')
+    )
+    lv3_list = list(
+        EntitasBisnisLv3.objects.filter(status_aktif=True)
+        .select_related('parent_lv2__entitas_bisnis').order_by('nama')
+    )
+
+    lv2_by_lv1: dict[int, list] = {}
+    for lv2 in lv2_list:
+        lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
+    lv3_by_lv2: dict[int, list] = {}
+    for lv3 in lv3_list:
+        lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
+
+    options: list[dict[str, str]] = []
+    for eb in lv1_list:
+        options.append({'value': f'lv1:{eb.pk}', 'label': eb.nama})
+        for lv2 in lv2_by_lv1.get(eb.pk, []):
+            options.append({'value': f'lv2:{lv2.pk}', 'label': f'\u00a0\u00a0\u00a0\u00a0↳ {lv2.nama}'})
+            for lv3 in lv3_by_lv2.get(lv2.pk, []):
+                options.append({'value': f'lv3:{lv3.pk}', 'label': f'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0↳ {lv3.nama}'})
+    return options
+
+
+def _resolve_eb_selection(selection: str | int | None) -> dict | None:
+    """Resolve a lv1:/lv2:/lv3: prefixed selection to a dict of all EB level ids.
+
+    Returns ``{'lv1_id': X, 'lv2_id': Y_or_None, 'lv3_id': Z_or_None}`` or
+    ``None`` if the selection is empty or invalid.
+
+    Also accepts a bare integer (or integer-like string) as a direct lv1 pk
+    for backward compatibility.
+    """
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    if selection is None or selection == '':
+        return None
+    # Bare integer → treat as lv1 pk
+    if isinstance(selection, int):
+        return {'lv1_id': selection, 'lv2_id': None, 'lv3_id': None}
+    selection = str(selection)
+    if ':' not in selection:
+        try:
+            return {'lv1_id': int(selection), 'lv2_id': None, 'lv3_id': None}
+        except (ValueError, TypeError):
+            return None
+    try:
+        level, raw_pk = selection.split(':', 1)
+        pk = int(raw_pk)
+    except (ValueError, TypeError):
+        return None
+
+    if level == 'lv1':
+        return {'lv1_id': pk, 'lv2_id': None, 'lv3_id': None}
+    if level == 'lv2':
+        lv2 = EntitasBisnisLv2.objects.filter(pk=pk).select_related('entitas_bisnis').first()
+        if not lv2:
+            return None
+        return {'lv1_id': lv2.entitas_bisnis_id, 'lv2_id': lv2.pk, 'lv3_id': None}
+    if level == 'lv3':
+        lv3 = EntitasBisnisLv3.objects.filter(pk=pk).select_related('parent_lv2__entitas_bisnis').first()
+        if not lv3:
+            return None
+        return {
+            'lv1_id': lv3.parent_lv2.entitas_bisnis_id,
+            'lv2_id': lv3.parent_lv2_id,
+            'lv3_id': lv3.pk,
+        }
+    return None
+
+
 # ── Purchase List ────────────────────────────────────────────────────────────
 
 @login_required
@@ -35,6 +113,8 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
         PurchaseHeader.objects
         .prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
         )
@@ -65,10 +145,21 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
     rows = []
     for ph in purchases:
         for eg in ph.entitas_groups.all():
+            # Build display name at the most specific level
+            if eg.entitas_bisnis_lv3_id:
+                eb_display = (
+                    f'{eg.entitas_bisnis.nama} / '
+                    f'{eg.entitas_bisnis_lv2.nama} / '
+                    f'{eg.entitas_bisnis_lv3.nama}'
+                )
+            elif eg.entitas_bisnis_lv2_id:
+                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+            else:
+                eb_display = eg.entitas_bisnis.nama
             for pi in eg.items.all():
                 rows.append({
                     'purchase_header': ph,
-                    'entitas_bisnis': eg.entitas_bisnis,
+                    'eb_display': eb_display,
                     'item': pi,
                 })
 
@@ -97,7 +188,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
     return render(request, 'purchase/purchase_form.html', {
         'title': 'Tambah Purchase',
         'today': timezone.now().date(),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
     })
@@ -111,6 +202,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
             'entitas_groups__items__coa_account',
@@ -125,9 +218,18 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         return _handle_purchase_save(request, purchase)
 
-    # Serialize existing data for the form
+    # Serialize existing data for the form — use the most specific level for the selector
     eb_groups_data = []
     for eg in purchase.entitas_groups.all():
+        if eg.entitas_bisnis_lv3_id:
+            eb_selection = f'lv3:{eg.entitas_bisnis_lv3_id}'
+            eb_name = eg.entitas_bisnis_lv3.nama
+        elif eg.entitas_bisnis_lv2_id:
+            eb_selection = f'lv2:{eg.entitas_bisnis_lv2_id}'
+            eb_name = eg.entitas_bisnis_lv2.nama
+        else:
+            eb_selection = f'lv1:{eg.entitas_bisnis_id}'
+            eb_name = eg.entitas_bisnis.nama
         items_data = []
         for pi in eg.items.all():
             items_data.append({
@@ -147,8 +249,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'target_turnover': str(pi.target_turnover) if pi.target_turnover else '',
             })
         eb_groups_data.append({
-            'entitas_bisnis_id': eg.entitas_bisnis_id,
-            'entitas_bisnis_name': eg.entitas_bisnis.nama,
+            'entitas_bisnis_id': eb_selection,
+            'entitas_bisnis_name': eb_name,
             'items': items_data,
         })
 
@@ -156,7 +258,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'title': 'Edit Purchase',
         'today': purchase.tanggal,
         'purchase': purchase,
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
         'eb_groups_json': json.dumps(eb_groups_data),
@@ -171,6 +273,8 @@ def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
             'entitas_groups__items__item',
             'entitas_groups__items__sub_transaction_type',
             'entitas_groups__items__coa_account',
@@ -231,12 +335,20 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
             coa_text = item_data.get('coa_account_text', '')
             offset_text = item_data.get('offset_coa_account_text', '')
             item_name = item_data.get('item_name', '')
+            entry_no = len(entries) // 2 + 1
             entries.append({
-                'eb_name': eb_name,
-                'item_name': item_name,
-                'debit_account': coa_text,
-                'credit_account': offset_text,
-                'amount': str(total),
+                'no': entry_no,
+                'akun': coa_text,
+                'uraian': f'{item_name} ({eb_name})',
+                'debit': str(total),
+                'kredit': '',
+            })
+            entries.append({
+                'no': '',
+                'akun': offset_text,
+                'uraian': '',
+                'debit': '',
+                'kredit': str(total),
             })
 
     return JsonResponse({'entries': entries})
@@ -246,7 +358,7 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def item_master_list(request: HttpRequest) -> HttpResponse:
-    qs = ItemMasterPurchase.objects.select_related('kategori', 'coa_account').order_by('item_id')
+    qs = ItemMasterPurchase.objects.select_related('kategori', 'coa_account').prefetch_related('entitas_bisnis').order_by('item_id')
     search = request.GET.get('q', '')
     if search:
         qs = qs.filter(Q(nama__icontains=search) | Q(item_id__icontains=search))
@@ -336,7 +448,7 @@ def settings_delete(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def kategori_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'purchase/kategori_list.html', {
-        'object_list': KategoriItem.objects.order_by('nama'),
+        'object_list': KategoriItem.objects.prefetch_related('entitas_bisnis').order_by('nama'),
     })
 
 
@@ -488,11 +600,22 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
 
     # Validate each group has items
     for i, group in enumerate(groups):
-        if not group.get('entitas_bisnis_id'):
+        eb_raw = group.get('entitas_bisnis_id')
+        if not eb_raw:
             errors[f'group_{i}'] = f'Entitas bisnis wajib dipilih untuk group {i + 1}.'
+        elif _resolve_eb_selection(eb_raw) is None:
+            errors[f'group_{i}'] = f'Entitas bisnis tidak valid untuk group {i + 1}.'
         if not group.get('items'):
             errors[f'group_{i}_items'] = f'Minimal 1 item wajib diisi untuk group {i + 1}.'
         for j, item_data in enumerate(group.get('items', [])):
+            if not item_data.get('item_id'):
+                errors[f'item_{i}_{j}_item'] = f'Item wajib dipilih untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('sub_transaction_type_id'):
+                errors[f'item_{i}_{j}_stt'] = f'Sub-transaction type wajib dipilih untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('coa_account_id'):
+                errors[f'item_{i}_{j}_coa'] = f'Akun CoA wajib diisi untuk baris {j + 1} group {i + 1}.'
+            if not item_data.get('offset_coa_account_id'):
+                errors[f'item_{i}_{j}_offset'] = f'Akun Offset CoA wajib diisi untuk baris {j + 1} group {i + 1}.'
             try:
                 qty = Decimal(str(item_data.get('quantity', 0)))
                 price = Decimal(str(item_data.get('unit_price', 0)))
@@ -510,7 +633,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'title': 'Edit Purchase' if existing else 'Tambah Purchase',
             'today': tanggal or timezone.now().date(),
             'purchase': existing,
-            'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
             'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
             'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
             'errors': errors,
@@ -534,10 +657,12 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             )
 
         for group_data in groups:
-            eb_id = group_data['entitas_bisnis_id']
+            eb_resolved = _resolve_eb_selection(group_data['entitas_bisnis_id'])
             eb_group = PurchaseEntitasBisnis.objects.create(
                 purchase_header=purchase,
-                entitas_bisnis_id=eb_id,
+                entitas_bisnis_id=eb_resolved['lv1_id'],
+                entitas_bisnis_lv2_id=eb_resolved['lv2_id'],
+                entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
             )
             for item_data in group_data.get('items', []):
                 PurchaseItem.objects.create(
