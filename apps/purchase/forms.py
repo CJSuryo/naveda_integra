@@ -9,9 +9,10 @@ from .models import (
 class KategoriItemForm(forms.ModelForm):
     class Meta:
         model = KategoriItem
-        fields = ('nama', 'entitas_bisnis')
+        fields = ('nama', 'tipe_item', 'entitas_bisnis')
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+            'tipe_item': forms.Select(attrs={'class': 'ni-input'}),
             'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
@@ -21,7 +22,9 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         model = ItemMasterPurchase
         fields = (
             'nama', 'tipe_item', 'kategori', 'velocity_category',
-            'coa_account', 'expiry_date', 'threshold_days_outstanding', 'entitas_bisnis',
+            'coa_account', 'expiry_date', 'threshold_days_outstanding',
+            'masa_manfaat', 'metode_penyusutan', 'metode_amortisasi',
+            'entitas_bisnis',
         )
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
@@ -31,6 +34,9 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
             'expiry_date': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'threshold_days_outstanding': forms.NumberInput(attrs={'class': 'ni-input'}),
+            'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
+            'metode_penyusutan': forms.Select(attrs={'class': 'ni-input'}),
+            'metode_amortisasi': forms.Select(attrs={'class': 'ni-input'}),
             'entitas_bisnis': forms.SelectMultiple(attrs={'class': 'ni-input', 'size': '6'}),
         }
 
@@ -41,6 +47,24 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             self.fields['tipe_item'].choices = [
                 c for c in all_choices if c[0] in tipe_item_choices
             ]
+            # Filter kategori by tipe_item
+            self.fields['kategori'].queryset = KategoriItem.objects.filter(
+                tipe_item__in=tipe_item_choices
+            ).order_by('nama')
+        # For Aset Tetap: hide inventory-only fields, show penyusutan fields
+        tipe_val = self.instance.tipe_item if self.instance.pk else (
+            tipe_item_choices[0] if tipe_item_choices and len(tipe_item_choices) == 1 else None
+        )
+        if tipe_val == 'ATP' or (tipe_item_choices and tipe_item_choices == ['ATP']):
+            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding', 'metode_amortisasi'):
+                self.fields.pop(f, None)
+        elif tipe_val == 'ALL' or (tipe_item_choices and tipe_item_choices == ['ALL']):
+            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding', 'metode_penyusutan'):
+                self.fields.pop(f, None)
+        else:
+            # Inventory items: hide asset-specific fields
+            for f in ('masa_manfaat', 'metode_penyusutan', 'metode_amortisasi'):
+                self.fields.pop(f, None)
 
 
 class SubTransactionTypeForm(forms.ModelForm):
