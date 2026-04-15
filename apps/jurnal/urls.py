@@ -24,6 +24,9 @@ urlpatterns = [
     # Neraca Saldo (Trial Balance)
     path('neraca-saldo/', views.neraca_saldo, name='neraca_saldo'),
 
+    # Laporan Laba Rugi (Income Statement)
+    path('laporan-laba-rugi/', views.laporan_laba_rugi, name='laporan_laba_rugi'),
+
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
 

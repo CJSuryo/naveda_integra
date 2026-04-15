@@ -1,0 +1,233 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+{% block title %}Laporan Laba Rugi{% endblock %}
+
+{% block extra_css %}
+<style>
+  .lr-section { margin-bottom: 24px; }
+  .lr-section__title {
+    font-size: 0.9rem; font-weight: 700; color: var(--ni-primary-dark);
+    padding: 8px 16px; background: var(--ni-primary-light); border-radius: var(--ni-radius-sm);
+    margin-bottom: 8px;
+  }
+  .lr-row { display: flex; justify-content: space-between; padding: 6px 16px; font-size: 0.85rem; border-bottom: 1px solid var(--ni-border); }
+  .lr-row:last-child { border-bottom: none; }
+  .lr-row__label { color: var(--ni-text); }
+  .lr-row__kode { color: var(--ni-text-muted); font-size: 0.8rem; margin-right: 8px; }
+  .lr-row__value { font-weight: 600; text-align: right; min-width: 120px; }
+  .lr-total { display: flex; justify-content: space-between; padding: 12px 16px;
+    font-weight: 700; font-size: 0.95rem; border-radius: var(--ni-radius-sm); margin: 4px 0 16px; }
+  .lr-total--primary { background: var(--ni-primary-light); color: var(--ni-primary-dark); }
+  .lr-total--success { background: #d1fae5; color: #065f46; }
+  .lr-total--danger { background: #fef2f2; color: var(--ni-danger); }
+  .lr-total--accent { background: #e0e7ff; color: #312e81; }
+  .lr-total--final { background: var(--ni-primary); color: #fff; font-size: 1.05rem; border-radius: var(--ni-radius); }
+  .lr-subtotal { display: flex; justify-content: space-between; padding: 8px 16px;
+    font-weight: 600; font-size: 0.875rem; border-top: 2px solid var(--ni-border); margin-top: 4px; }
+  .lr-filter-active { display: inline-flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--ni-text-muted); margin-top: 8px; }
+  .lr-toggle { display: inline-flex; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); overflow: hidden; }
+  .lr-toggle__btn { padding: 6px 14px; font-size: 0.8rem; cursor: pointer; background: var(--ni-bg-card); color: var(--ni-text-muted);
+    border: none; text-decoration: none; }
+  .lr-toggle__btn--active { background: var(--ni-primary); color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Laba Rugi</h1>
+    <p class="ni-page-header__subtitle">Laporan Operasional — real-time dari jurnal otomatis</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <button onclick="window.print()" class="ni-btn ni-btn--secondary ni-btn--sm">
+      <i data-lucide="printer" style="width:14px;height:14px"></i> Print
+    </button>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;">
+        <label class="ni-form-label">Tampilan</label>
+        <div class="lr-toggle">
+          <button type="submit" name="tampilan" value="ringkas" class="lr-toggle__btn {% if tampilan == 'ringkas' %}lr-toggle__btn--active{% endif %}">Ringkas</button>
+          <button type="submit" name="tampilan" value="detail" class="lr-toggle__btn {% if tampilan == 'detail' %}lr-toggle__btn--active{% endif %}">Detail</button>
+        </div>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      {% if tanggal_dari or tanggal_sampai or eb_filter %}
+      <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<!-- Report -->
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-report-header">
+      <div>
+        <h2 class="ni-report-header__title">Laporan Laba Rugi</h2>
+        <p class="ni-report-header__period">
+          {% if tanggal_dari and tanggal_sampai %}
+            Periode: {{ tanggal_dari }} s/d {{ tanggal_sampai }}
+          {% elif tanggal_dari %}
+            Mulai: {{ tanggal_dari }}
+          {% elif tanggal_sampai %}
+            Sampai: {{ tanggal_sampai }}
+          {% else %}
+            Semua periode
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <!-- 1. Pendapatan Operasional -->
+    <div class="lr-section">
+      <div class="lr-section__title">
+        <i data-lucide="trending-up" style="width:14px;height:14px;vertical-align:text-bottom;"></i>
+        Pendapatan Operasional
+      </div>
+      {% if tampilan == 'detail' %}
+        {% for item in pendapatan_op_items %}
+        <div class="lr-row">
+          <div class="lr-row__label">
+            <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
+          </div>
+          <div class="lr-row__value">{{ item.kredit|floatformat:0|intcomma }}</div>
+        </div>
+        {% empty %}
+        <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
+        {% endfor %}
+      {% endif %}
+      <div class="lr-subtotal">
+        <span>Total Pendapatan Operasional</span>
+        <span>{{ total_pendapatan_op|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <!-- 2. HPP / COGS -->
+    <div class="lr-section">
+      <div class="lr-section__title">
+        <i data-lucide="package" style="width:14px;height:14px;vertical-align:text-bottom;"></i>
+        Harga Pokok Penjualan (HPP / COGS)
+      </div>
+      {% if tampilan == 'detail' %}
+        {% for item in hpp_items %}
+        <div class="lr-row">
+          <div class="lr-row__label">
+            <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
+          </div>
+          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+        </div>
+        {% empty %}
+        <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
+        {% endfor %}
+      {% endif %}
+      <div class="lr-subtotal">
+        <span>Total HPP</span>
+        <span>({{ total_hpp|floatformat:0|intcomma }})</span>
+      </div>
+    </div>
+
+    <!-- 3. Laba Kotor -->
+    <div class="lr-total lr-total--success">
+      <span>Laba Kotor</span>
+      <span>{{ laba_kotor|floatformat:0|intcomma }}</span>
+    </div>
+
+    <!-- 4. Beban Operasional -->
+    <div class="lr-section">
+      <div class="lr-section__title">
+        <i data-lucide="minus-circle" style="width:14px;height:14px;vertical-align:text-bottom;"></i>
+        Beban Operasional
+      </div>
+      {% if tampilan == 'detail' %}
+        {% for item in beban_op_items %}
+        <div class="lr-row">
+          <div class="lr-row__label">
+            <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
+          </div>
+          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+        </div>
+        {% empty %}
+        <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
+        {% endfor %}
+      {% endif %}
+      <div class="lr-subtotal">
+        <span>Total Beban Operasional</span>
+        <span>({{ total_beban_op|floatformat:0|intcomma }})</span>
+      </div>
+    </div>
+
+    <!-- 5. Laba Operasional -->
+    <div class="lr-total lr-total--primary">
+      <span>Laba Operasional</span>
+      <span>{{ laba_operasional|floatformat:0|intcomma }}</span>
+    </div>
+
+    <!-- 6. Pendapatan & Beban Non-Operasional -->
+    <div class="lr-section">
+      <div class="lr-section__title">
+        <i data-lucide="activity" style="width:14px;height:14px;vertical-align:text-bottom;"></i>
+        Pendapatan / Beban Non-Operasional
+      </div>
+      {% if tampilan == 'detail' %}
+        {% for item in pendapatan_non_op_items %}
+        <div class="lr-row">
+          <div class="lr-row__label">
+            <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
+          </div>
+          <div class="lr-row__value">{{ item.kredit|floatformat:0|intcomma }}</div>
+        </div>
+        {% endfor %}
+        {% for item in beban_non_op_items %}
+        <div class="lr-row">
+          <div class="lr-row__label">
+            <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
+          </div>
+          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+        </div>
+        {% endfor %}
+        {% if not pendapatan_non_op_items and not beban_non_op_items %}
+        <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
+        {% endif %}
+      {% endif %}
+      <div class="lr-subtotal">
+        <span>Net Non-Operasional</span>
+        <span>{{ net_non_op|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <!-- 7. Laba Bersih -->
+    <div class="lr-total lr-total--final">
+      <span>
+        <i data-lucide="award" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
+        Laba Bersih
+      </span>
+      <span>{{ laba_bersih|floatformat:0|intcomma }}</span>
+    </div>
+  </div>
+</div>
+{% endblock %}

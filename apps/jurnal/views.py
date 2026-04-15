@@ -654,3 +654,155 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
         'eb_list': eb_list,
         'errors': {},
     })
+
+
+# ── Laporan Laba Rugi (Income Statement) ────────────────────────────────────
+
+@login_required
+def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
+    """Read-only Income Statement (Laporan Operasional / Laba Rugi).
+
+    Sections:
+    - Pendapatan Operasional: akun prefix 4.1.x (kredit)
+    - HPP / COGS: akun prefix 5.1.1 s/d 5.1.5 (debit)
+    - Laba Kotor = Pendapatan - HPP
+    - Beban Operasional: akun prefix 5.1.6+ (debit)
+    - Laba Operasional = Laba Kotor - Beban Operasional
+    - Pendapatan Non-Operasional: akun prefix 4.2.x (kredit)
+    - Beban Non-Operasional: akun prefix 5.2.x (debit)
+    - Laba Bersih = Laba Operasional + (Pendapatan Non-Op - Beban Non-Op)
+    """
+    from apps.master_data.models import PendapatanLv1, PendapatanLv2, BebanLv1, BebanLv2
+
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    tampilan = request.GET.get('tampilan', 'ringkas')  # 'ringkas' or 'detail'
+
+    # Build period filter
+    period_filter: dict = {}
+    if tanggal_dari:
+        period_filter['jurnal_header__tanggal__gte'] = tanggal_dari
+    if tanggal_sampai:
+        period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+    if eb_filter:
+        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # Aggregate by akun
+    agg = (
+        JurnalDetail.objects
+        .filter(**period_filter)
+        .values('akun_id', 'akun__kode_akun', 'akun__nama', 'akun__kategori_id')
+        .annotate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+
+    # Build lookup by akun
+    akun_data: dict[str, dict] = {}
+    for row in agg:
+        kode = row['akun__kode_akun'] or ''
+        akun_data[kode] = {
+            'kode': kode,
+            'nama': row['akun__nama'] or '',
+            'kategori': row['akun__kategori_id'] or '',
+            'debit': row['total_debit'],
+            'kredit': row['total_kredit'],
+        }
+
+    def _is_prefix(kode: str, prefix: str) -> bool:
+        return kode.startswith(prefix + '.') or kode == prefix
+
+    def _collect(prefix: str) -> list[dict]:
+        """Collect all akun rows matching prefix, sorted by kode."""
+        return sorted(
+            [v for k, v in akun_data.items() if _is_prefix(k, prefix)],
+            key=lambda x: x['kode'],
+        )
+
+    def _sum_net(items: list[dict], net_type: str = 'kredit') -> Decimal:
+        """Sum net value. For pendapatan: kredit - debit. For beban: debit - kredit."""
+        if net_type == 'kredit':
+            return sum((i['kredit'] - i['debit'] for i in items), Decimal('0'))
+        return sum((i['debit'] - i['kredit'] for i in items), Decimal('0'))
+
+    # 1. Pendapatan Operasional (4.1.x)
+    pendapatan_op_items = _collect('4.1')
+    total_pendapatan_op = _sum_net(pendapatan_op_items, 'kredit')
+
+    # 2. HPP / COGS (5.1.1 through 5.1.5)
+    hpp_items = []
+    for sub in ['5.1.1', '5.1.2', '5.1.3', '5.1.4', '5.1.5']:
+        hpp_items.extend(_collect(sub))
+    total_hpp = _sum_net(hpp_items, 'debit')
+
+    # 3. Laba Kotor
+    laba_kotor = total_pendapatan_op - total_hpp
+
+    # 4. Beban Operasional (5.1.6 through 5.1.30)
+    beban_op_items = []
+    for i in range(6, 31):
+        beban_op_items.extend(_collect(f'5.1.{i}'))
+    # Also include any 5.1.x that aren't HPP (kode > 5.1.5)
+    for kode, data in akun_data.items():
+        if kode.startswith('5.1.') and data not in hpp_items and data not in beban_op_items:
+            parts = kode.split('.')
+            if len(parts) >= 3:
+                try:
+                    sub_num = int(parts[2])
+                    if sub_num >= 6:
+                        beban_op_items.append(data)
+                except ValueError:
+                    pass
+    # Deduplicate
+    seen_kodes: set[str] = set()
+    unique_beban_op: list[dict] = []
+    for item in sorted(beban_op_items, key=lambda x: x['kode']):
+        if item['kode'] not in seen_kodes:
+            seen_kodes.add(item['kode'])
+            unique_beban_op.append(item)
+    beban_op_items = unique_beban_op
+    total_beban_op = _sum_net(beban_op_items, 'debit')
+
+    # 5. Laba Operasional
+    laba_operasional = laba_kotor - total_beban_op
+
+    # 6. Pendapatan Non-Operasional (4.2.x)
+    pendapatan_non_op_items = _collect('4.2')
+    total_pendapatan_non_op = _sum_net(pendapatan_non_op_items, 'kredit')
+
+    # 7. Beban Non-Operasional (5.2.x)
+    beban_non_op_items = _collect('5.2')
+    total_beban_non_op = _sum_net(beban_non_op_items, 'debit')
+
+    # 8. Net Non-Operasional
+    net_non_op = total_pendapatan_non_op - total_beban_non_op
+
+    # 9. Laba Bersih
+    laba_bersih = laba_operasional + net_non_op
+
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+
+    return render(request, 'jurnal/laporan_laba_rugi.html', {
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'eb_filter': eb_filter,
+        'eb_list': eb_list,
+        'tampilan': tampilan,
+        # Data
+        'pendapatan_op_items': pendapatan_op_items,
+        'total_pendapatan_op': total_pendapatan_op,
+        'hpp_items': hpp_items,
+        'total_hpp': total_hpp,
+        'laba_kotor': laba_kotor,
+        'beban_op_items': beban_op_items,
+        'total_beban_op': total_beban_op,
+        'laba_operasional': laba_operasional,
+        'pendapatan_non_op_items': pendapatan_non_op_items,
+        'total_pendapatan_non_op': total_pendapatan_non_op,
+        'beban_non_op_items': beban_non_op_items,
+        'total_beban_non_op': total_beban_non_op,
+        'net_non_op': net_non_op,
+        'laba_bersih': laba_bersih,
+    })
