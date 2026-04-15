@@ -271,8 +271,10 @@
         <input type="text" id="kat_modal_nama" class="ni-input" placeholder="Nama kategori">
       </div>
       <div class="ni-form-group">
-        <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
-        <input type="text" id="kat_modal_entitas_bisnis" class="ni-input" placeholder="Entitas Bisnis">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <div id="kat_modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
+          <em>Otomatis dari form purchase</em>
+        </div>
       </div>
       <div class="ni-form-group">
         <label class="ni-form-label">Tipe Item</label>
@@ -731,6 +733,24 @@
     var tipeItem = document.getElementById('modal_tipe_item').value;
     var tipeLabels = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
     document.getElementById('kat_modal_tipe_display').value = tipeLabels[tipeItem] || tipeItem;
+
+    // Auto-populate EB display from the purchase form group
+    var gid = _modalCallbackGid;
+    var card = gid ? document.getElementById(gid) : null;
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text.replace(/^\s+↳\s*/, '') : '';
+    var ebDisplay = document.getElementById('kat_modal_eb_display');
+    ebDisplay.textContent = '';
+    if (ebText && ebText !== '— Pilih Entitas Bisnis —') {
+      var strong = document.createElement('strong');
+      strong.textContent = ebText;
+      ebDisplay.appendChild(strong);
+    } else {
+      var em = document.createElement('em');
+      em.textContent = 'Entitas bisnis belum dipilih di form purchase';
+      ebDisplay.appendChild(em);
+    }
+
     document.getElementById('kategoriModalBackdrop').classList.add('ni-modal-backdrop--visible');
     lucide.createIcons();
   };
@@ -748,14 +768,6 @@
       return;
     }
 
-    var entitasBisnis = document.getElementById('kat_modal_entitas_bisnis').value.trim();
-    if (!entitasBisnis) {
-      var errEl = document.getElementById('kat_modal_error');
-      errEl.textContent = 'Entitas Bisnis wajib diisi.';
-      errEl.style.display = '';
-      return;
-    }
-
     var tipeItem = document.getElementById('modal_tipe_item').value;
     var gid = _modalCallbackGid;
     var card = gid ? document.getElementById(gid) : null;
@@ -764,7 +776,6 @@
 
     var payload = {
       nama: nama,
-      entitasBisnis: entitasBisnis,
       tipe_item: tipeItem,
       entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
     };
