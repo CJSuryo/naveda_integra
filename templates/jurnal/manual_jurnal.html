@@ -182,6 +182,7 @@
       maxOptions: false,
       placeholder: ebSelected ? 'Ketik kode/nama akun...' : 'Pilih entitas bisnis dahulu...',
       preload: ebSelected ? 'focus' : false,
+      shouldLoad: function () { return false; },
       load: function (query, callback) {
         if (!isEBSelected()) { callback(); return; }
         fetch(buildAutocompleteUrl(query))
