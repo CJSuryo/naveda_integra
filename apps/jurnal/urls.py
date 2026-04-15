@@ -27,6 +27,11 @@ urlpatterns = [
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
 
+    # Rekap Jurnal CRUD API
+    path('api/rekap/<int:pk>/', views.rekap_jurnal_get, name='rekap_jurnal_get'),
+    path('api/rekap/<int:pk>/update/', views.rekap_jurnal_update, name='rekap_jurnal_update'),
+    path('api/rekap/<int:pk>/delete/', views.rekap_jurnal_delete, name='rekap_jurnal_delete'),
+
     # API
     path('api/akun-autocomplete/', views.akun_autocomplete, name='akun_autocomplete'),
 ]
