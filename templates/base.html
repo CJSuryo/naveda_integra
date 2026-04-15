@@ -160,6 +160,19 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'sales' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="receipt" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Sales</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'sales:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Penjualan</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'inventory' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="warehouse" class="ni-nav-link__icon"></i>
@@ -188,6 +201,9 @@
           </a>
           <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Neraca Saldo</span>
+          </a>
+          <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Laba Rugi</span>
           </a>
         </div>
       </div>

@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Detail Sales {{ sales.transaction_id }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ sales.transaction_id }}</h1>
+    <p class="ni-page-header__subtitle">Detail transaksi penjualan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if not sales.is_locked %}
+    <a href="{% url 'sales:update' sales.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'sales:delete' sales.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </a>
+    {% else %}
+    <span class="ni-badge ni-badge--secondary" style="font-size:0.9rem;padding:8px 16px;">Locked</span>
+    {% endif %}
+    <a href="{% url 'sales:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Transaction ID</dt><dd>{{ sales.transaction_id }}</dd>
+      <dt>Tanggal</dt><dd>{{ sales.tanggal }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ sales.entitas_bisnis.nama }}</dd>
+      <dt>Payment Account</dt><dd>{{ sales.payment_account }}</dd>
+      <dt>Deskripsi</dt><dd>{{ sales.deskripsi|default:'-' }}</dd>
+      <dt>Status</dt><dd>
+        {% if sales.is_locked %}
+        <span class="ni-badge ni-badge--secondary">Locked</span>
+        {% else %}
+        <span class="ni-badge ni-badge--success">Open</span>
+        {% endif %}
+      </dd>
+      <dt>Dibuat</dt><dd>{{ sales.created_at }}</dd>
+      <dt>Diperbarui</dt><dd>{{ sales.updated_at }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="package" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Item Penjualan
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Sub-Trx Type</th>
+            <th class="ni-text-right">Qty</th>
+            <th class="ni-text-right">Harga Jual</th>
+            <th class="ni-text-right">Total Sales</th>
+            <th class="ni-text-right">HPP (COGS)</th>
+            <th>Revenue Account</th>
+            <th>Offset CoA (HPP)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for si in items %}
+          <tr>
+            <td>{{ si.item }}</td>
+            <td>{{ si.sub_transaction_type.nama }}</td>
+            <td class="ni-text-right">{{ si.quantity|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ si.selling_price|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
+            <td class="ni-text-right">{{ si.cogs_amount|floatformat:0|intcomma }}</td>
+            <td>{{ si.revenue_account }}</td>
+            <td>{{ si.offset_coa_account }}</td>
+          </tr>
+          {% if si.tax %}
+          <tr style="background:var(--ni-bg);font-size:0.85rem;">
+            <td colspan="3"></td>
+            <td colspan="2" style="color:var(--ni-text-muted);">
+              Pajak: {{ si.get_tax_type_display|default:'-' }}
+              {% if si.tax_payment %} — {{ si.get_tax_payment_display }}{% endif %}
+            </td>
+            <td class="ni-text-right">{{ si.tax|floatformat:0|intcomma }}</td>
+            <td>{{ si.tax_account|default:'-' }}</td>
+            <td>{{ si.tax_payment_account|default:'-' }}</td>
+          </tr>
+          {% endif %}
+          {% empty %}
+          <tr><td colspan="8" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

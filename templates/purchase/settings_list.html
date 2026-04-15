@@ -12,12 +12,36 @@
     </a>
   </div>
 </div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Module</label>
+        <select name="module" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for code, label in module_choices %}
+          <option value="{{ code }}"{% if module_filter == code %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      {% if module_filter %}
+      <a href="{% url 'purchase:settings_list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
         <tr>
           <th>Sub-Transaction Type</th>
+          <th>Module</th>
           <th>Direction</th>
           <th>Default Offset Account</th>
           <th>Aksi</th>
@@ -27,6 +51,7 @@
         {% for obj in object_list %}
         <tr>
           <td>{{ obj.nama }}</td>
+          <td><span class="ni-badge ni-badge--primary">{{ obj.get_module_display }}</span></td>
           <td><span class="ni-badge {% if obj.direction == 'inflow' %}ni-badge--success{% else %}ni-badge--secondary{% endif %}">{{ obj.get_direction_display }}</span></td>
           <td>{{ obj.default_offset_account }}</td>
           <td>
@@ -37,7 +62,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada sub-transaction type.</td></tr>
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada sub-transaction type.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -379,6 +379,7 @@ class PurchaseViewTests(TestCase):
     def test_settings_create(self):
         resp = self.client.post(reverse('purchase:settings_create'), {
             'nama': 'Pembelian Tunai',
+            'module': 'purchase',
             'direction': 'inflow',
             'default_offset_account': self.akun_modal.pk,
         })
@@ -388,6 +389,7 @@ class PurchaseViewTests(TestCase):
     def test_settings_update(self):
         resp = self.client.post(reverse('purchase:settings_update', args=[self.stt.pk]), {
             'nama': 'Stok Awal v2',
+            'module': 'purchase',
             'direction': 'inflow',
             'default_offset_account': self.akun_modal.pk,
         })

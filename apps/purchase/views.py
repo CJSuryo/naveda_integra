@@ -192,7 +192,7 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'items': ItemMasterPurchase.objects.all().order_by('nama'),
-        'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
+        'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'item_filter': item_filter,
         'stt_filter': stt_filter,
@@ -213,7 +213,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'today': timezone.now().date(),
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
-        'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
+        'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': Akun.objects.all().order_by('kode_akun'),
     })
@@ -287,7 +287,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'purchase': purchase,
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
-        'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
+        'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'eb_groups_json': json.dumps(eb_groups_data),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': Akun.objects.all().order_by('kode_akun'),
@@ -547,8 +547,14 @@ def item_master_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def settings_list(request: HttpRequest) -> HttpResponse:
+    module_filter = request.GET.get('module', '')
+    qs = SubTransactionType.objects.select_related('default_offset_account').order_by('module', 'nama')
+    if module_filter:
+        qs = qs.filter(module=module_filter)
     return render(request, 'purchase/settings_list.html', {
-        'object_list': SubTransactionType.objects.select_related('default_offset_account').order_by('nama'),
+        'object_list': qs,
+        'module_filter': module_filter,
+        'module_choices': SubTransactionType.MODULE_CHOICES,
     })
 
 
@@ -871,7 +877,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'purchase': existing,
             'eb_options_json': json.dumps(_get_eb_dropdown_options()),
             'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
-            'sub_transaction_types': SubTransactionType.objects.all().order_by('nama'),
+            'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
             'errors': errors,
             'eb_groups_json': json.dumps(groups),
             'kategori_items': KategoriItem.objects.all().order_by('nama'),

@@ -1,0 +1,355 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ni-sales-item-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+  .ni-sales-item-table th { background: var(--ni-bg); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; color: var(--ni-text-muted); }
+  .ni-sales-item-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+  .ni-sales-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
+  .ni-sales-input:focus { outline: none; border-color: var(--ni-primary); }
+  .ni-sales-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
+  .ni-sales-item-table-wrapper { overflow-x: auto; }
+  .ni-stock-info { font-size: 0.75rem; color: var(--ni-text-muted); margin-top: 2px; }
+  .ni-stock-warning { color: var(--ni-danger); font-weight: 600; }
+  .ni-tax-row { background: var(--ni-bg); }
+  .ni-tax-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
+  @media (max-width: 768px) {
+    .ni-sales-item-table { min-width: 700px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">Catat penjualan — stok otomatis dikurangi via FIFO</p>
+  </div>
+</div>
+
+{% if errors %}
+<div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+  <ul style="margin:0;padding-left:16px;">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form id="salesForm" method="post">
+      {% csrf_token %}
+      <!-- Header fields -->
+      <div class="ni-form-row" style="margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Transaction ID</label>
+          <input type="text" class="ni-input" value="{% if sales %}{{ sales.transaction_id }}{% else %}TRX-SAL-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" name="tanggal" id="salesTanggal" class="ni-input" value="{{ today|date:'Y-m-d' }}" required>
+        </div>
+      </div>
+      <div class="ni-form-row" style="margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
+          <select name="entitas_bisnis" id="salesEB" class="ni-input" required>
+            <option value="">— Pilih Entitas Bisnis —</option>
+            {% for eb in entitas_list %}
+            <option value="{{ eb.pk }}"{% if sales and sales.entitas_bisnis_id == eb.pk %} selected{% endif %}>{{ eb.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Payment Account <span style="color:var(--ni-danger)">*</span></label>
+          <select name="payment_account" id="salesPaymentAccount" class="ni-input" required>
+            <option value="">— Pilih Payment Account —</option>
+            {% for akun in akun_list %}
+            <option value="{{ akun.pk }}"{% if sales and sales.payment_account_id == akun.pk %} selected{% endif %}>{{ akun }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:24px;">
+        <label class="ni-form-label">Deskripsi</label>
+        <textarea name="deskripsi" class="ni-input" rows="2" placeholder="Deskripsi transaksi (opsional)">{% if sales %}{{ sales.deskripsi }}{% endif %}</textarea>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--ni-border);margin-bottom:20px;">
+
+      <!-- Items -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h3 style="margin:0;font-size:1rem;color:var(--ni-text);">
+          <i data-lucide="package" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
+          Item Penjualan
+        </h3>
+        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="addItemRow()">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item
+        </button>
+      </div>
+
+      <div class="ni-sales-item-table-wrapper">
+        <table class="ni-sales-item-table" id="itemsTable">
+          <thead>
+            <tr>
+              <th style="width:200px;">Item</th>
+              <th style="width:160px;">Sub-Transaction Type</th>
+              <th style="width:90px;">Qty</th>
+              <th style="width:120px;">Harga Jual</th>
+              <th style="width:120px;">Total</th>
+              <th style="width:180px;">Offset CoA (HPP)</th>
+              <th style="width:180px;">Revenue Account</th>
+              <th style="width:60px;"></th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody">
+          </tbody>
+        </table>
+      </div>
+
+      <input type="hidden" name="items_data" id="itemsData">
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary" onclick="return submitSalesForm()">Simpan</button>
+        <a href="{% url 'sales:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+
+  const ITEMS_MASTER = [
+    {% for item in items_master %}
+    {id: {{ item.pk }}, name: '{{ item|escapejs }}', coa_id: {{ item.coa_account_id|default:'null' }}, coa_text: '{{ item.coa_account|default:""|escapejs }}'},
+    {% endfor %}
+  ];
+
+  const STT_LIST = [
+    {% for stt in sub_transaction_types %}
+    {id: {{ stt.pk }}, name: '{{ stt.nama|escapejs }}'},
+    {% endfor %}
+  ];
+
+  const AKUN_LIST = [
+    {% for akun in akun_list %}
+    {id: {{ akun.pk }}, text: '{{ akun|escapejs }}'},
+    {% endfor %}
+  ];
+
+  let rowCounter = 0;
+
+  // HTML escape utility to prevent XSS
+  function esc(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  // Pre-populate existing items (for edit mode)
+  const existingItems = {% if items_json %}{{ items_json|safe }}{% else %}[]{% endif %};
+
+  function init() {
+    if (existingItems.length > 0) {
+      existingItems.forEach(item => addItemRow(item));
+    }
+    lucide.createIcons();
+  }
+
+  window.addItemRow = function(data) {
+    const idx = rowCounter++;
+    const tbody = document.getElementById('itemsBody');
+
+    // Main row
+    const tr = document.createElement('tr');
+    tr.id = `item-row-${idx}`;
+    tr.innerHTML = `
+      <td>
+        <select class="ni-sales-input" data-field="item_id" data-idx="${idx}" onchange="onItemChange(${idx})">
+          <option value="">— Pilih Item —</option>
+          ${ITEMS_MASTER.map(i => `<option value="${i.id}" ${data && data.item_id == i.id ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}
+        </select>
+        <div class="ni-stock-info" id="stock-info-${idx}"></div>
+      </td>
+      <td>
+        <select class="ni-sales-input" data-field="sub_transaction_type_id" data-idx="${idx}" onchange="onSTTChange(${idx})">
+          <option value="">— Pilih —</option>
+          ${STT_LIST.map(s => `<option value="${s.id}" ${data && data.sub_transaction_type_id == s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="number" class="ni-sales-input" data-field="quantity" data-idx="${idx}" value="${data ? data.quantity : ''}" min="0" step="any" oninput="calcTotal(${idx})"></td>
+      <td><input type="number" class="ni-sales-input" data-field="selling_price" data-idx="${idx}" value="${data ? data.selling_price : ''}" min="0" step="any" oninput="calcTotal(${idx})"></td>
+      <td><input type="text" class="ni-sales-input" data-field="total" data-idx="${idx}" readonly value="${data ? (parseFloat(data.quantity || 0) * parseFloat(data.selling_price || 0)).toLocaleString('id-ID') : ''}"></td>
+      <td>
+        <select class="ni-sales-input" data-field="offset_coa_account_id" data-idx="${idx}">
+          <option value="">— HPP Account —</option>
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.offset_coa_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select class="ni-sales-input" data-field="revenue_account_id" data-idx="${idx}">
+          <option value="">— Revenue Account —</option>
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.revenue_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(${idx})" style="padding:4px 8px;">
+          <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+        </button>
+        <br>
+        <span class="ni-tax-toggle" onclick="toggleTax(${idx})" style="margin-top:4px;">
+          <i data-lucide="receipt" style="width:12px;height:12px"></i> Pajak
+        </span>
+      </td>
+    `;
+    tbody.appendChild(tr);
+
+    // Tax row (hidden by default)
+    const taxTr = document.createElement('tr');
+    taxTr.id = `tax-row-${idx}`;
+    taxTr.className = 'ni-tax-row';
+    taxTr.style.display = (data && data.tax) ? '' : 'none';
+    taxTr.innerHTML = `
+      <td colspan="2">
+        <div style="display:flex;gap:8px;">
+          <input type="number" class="ni-sales-input" data-field="tax" data-idx="${idx}" placeholder="Nominal Pajak" value="${data && data.tax ? data.tax : ''}" min="0" step="any" style="flex:1;">
+          <select class="ni-sales-input" data-field="tax_type" data-idx="${idx}" style="flex:1;">
+            <option value="">— Tax Type —</option>
+            <option value="ppn_keluaran" ${data && data.tax_type === 'ppn_keluaran' ? 'selected' : ''}>PPN Keluaran</option>
+            <option value="pph_23" ${data && data.tax_type === 'pph_23' ? 'selected' : ''}>PPh 23</option>
+            <option value="pph_21" ${data && data.tax_type === 'pph_21' ? 'selected' : ''}>PPh 21</option>
+            <option value="pph_4_2" ${data && data.tax_type === 'pph_4_2' ? 'selected' : ''}>PPh 4(2)</option>
+          </select>
+        </div>
+      </td>
+      <td colspan="2">
+        <select class="ni-sales-input" data-field="tax_account_id" data-idx="${idx}">
+          <option value="">— Tax Account —</option>
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
+        </select>
+      </td>
+      <td>
+        <select class="ni-sales-input" data-field="tax_payment" data-idx="${idx}">
+          <option value="">— Status —</option>
+          <option value="belum_transfer" ${data && data.tax_payment === 'belum_transfer' ? 'selected' : ''}>Belum Transfer</option>
+          <option value="sudah_transfer" ${data && data.tax_payment === 'sudah_transfer' ? 'selected' : ''}>Sudah Transfer</option>
+        </select>
+      </td>
+      <td colspan="2">
+        <select class="ni-sales-input" data-field="tax_payment_account_id" data-idx="${idx}">
+          <option value="">— Tax Payment Account —</option>
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_payment_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
+        </select>
+      </td>
+      <td></td>
+    `;
+    tbody.appendChild(taxTr);
+
+    // Check stock if item is pre-selected
+    if (data && data.item_id) {
+      checkStock(idx, data.item_id);
+    }
+
+    lucide.createIcons();
+  };
+
+  window.removeItemRow = function(idx) {
+    const row = document.getElementById(`item-row-${idx}`);
+    const taxRow = document.getElementById(`tax-row-${idx}`);
+    if (row) row.remove();
+    if (taxRow) taxRow.remove();
+  };
+
+  window.toggleTax = function(idx) {
+    const taxRow = document.getElementById(`tax-row-${idx}`);
+    if (taxRow) {
+      taxRow.style.display = taxRow.style.display === 'none' ? '' : 'none';
+    }
+  };
+
+  window.onItemChange = function(idx) {
+    const itemSelect = document.querySelector(`[data-field="item_id"][data-idx="${idx}"]`);
+    const itemId = itemSelect.value;
+    if (itemId) {
+      checkStock(idx, itemId);
+    } else {
+      document.getElementById(`stock-info-${idx}`).textContent = '';
+    }
+  };
+
+  window.onSTTChange = function(idx) {
+    const sttSelect = document.querySelector(`[data-field="sub_transaction_type_id"][data-idx="${idx}"]`);
+    const sttId = sttSelect.value;
+    if (sttId) {
+      fetch(`{% url 'sales:api_stt_offset' %}?stt_id=${sttId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.offset_account_id) {
+            const offsetSelect = document.querySelector(`[data-field="offset_coa_account_id"][data-idx="${idx}"]`);
+            if (offsetSelect) offsetSelect.value = data.offset_account_id;
+          }
+        });
+    }
+  };
+
+  function checkStock(idx, itemId) {
+    fetch(`{% url 'sales:api_stock_check' %}?item_id=${itemId}`)
+      .then(r => r.json())
+      .then(data => {
+        const info = document.getElementById(`stock-info-${idx}`);
+        const stock = parseFloat(data.available_stock || 0);
+        info.textContent = `Stok: ${stock.toLocaleString('id-ID')} unit`;
+        info.className = stock > 0 ? 'ni-stock-info' : 'ni-stock-info ni-stock-warning';
+      });
+  }
+
+  window.calcTotal = function(idx) {
+    const qty = parseFloat(document.querySelector(`[data-field="quantity"][data-idx="${idx}"]`).value) || 0;
+    const price = parseFloat(document.querySelector(`[data-field="selling_price"][data-idx="${idx}"]`).value) || 0;
+    const total = qty * price;
+    document.querySelector(`[data-field="total"][data-idx="${idx}"]`).value = total.toLocaleString('id-ID');
+  };
+
+  window.submitSalesForm = function() {
+    // Collect items data
+    const items = [];
+    const rows = document.querySelectorAll('#itemsBody tr[id^="item-row-"]');
+    rows.forEach(row => {
+      const idx = row.id.replace('item-row-', '');
+      const getVal = (field) => {
+        const el = row.querySelector(`[data-field="${field}"]`) ||
+                   document.querySelector(`#tax-row-${idx} [data-field="${field}"]`);
+        return el ? el.value : '';
+      };
+
+      const itemId = getVal('item_id');
+      if (!itemId) return;
+
+      items.push({
+        item_id: itemId,
+        sub_transaction_type_id: getVal('sub_transaction_type_id'),
+        quantity: getVal('quantity'),
+        selling_price: getVal('selling_price'),
+        offset_coa_account_id: getVal('offset_coa_account_id'),
+        revenue_account_id: getVal('revenue_account_id'),
+        tax: getVal('tax') || null,
+        tax_type: getVal('tax_type'),
+        tax_account_id: getVal('tax_account_id') || null,
+        tax_payment: getVal('tax_payment'),
+        tax_payment_account_id: getVal('tax_payment_account_id') || null,
+      });
+    });
+
+    document.getElementById('itemsData').value = JSON.stringify(items);
+    return true;
+  };
+
+  document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
+{% endblock %}
