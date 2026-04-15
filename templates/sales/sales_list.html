@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daftar Penjualan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Sales (Penjualan)</h1>
+    <p class="ni-page-header__subtitle">Daftar semua transaksi penjualan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'sales:create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Penjualan
+    </a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Item</label>
+        <select name="item" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for item in items %}
+          <option value="{{ item.pk }}"{% if item_filter == item.pk|stringformat:'d' %} selected{% endif %}>{{ item }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Sub-Transaction Type</label>
+        <select name="sub_transaction_type" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for stt in sub_transaction_types %}
+          <option value="{{ stt.pk }}"{% if stt_filter == stt.pk|stringformat:'d' %} selected{% endif %}>{{ stt.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in entitas_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'sales:list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Transaction ID</th>
+          <th>Tanggal</th>
+          <th>Item</th>
+          <th>Sub-Transaction Type</th>
+          <th class="ni-text-right">Qty</th>
+          <th class="ni-text-right">Harga Jual</th>
+          <th class="ni-text-right">Total</th>
+          <th>Payment Account</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          {% if row.show_trx_cell %}
+          <td rowspan="{{ row.trx_rowspan }}">
+            <a href="{% url 'sales:detail' row.sales_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:600;">
+              {{ row.sales_header.transaction_id }}
+            </a>
+          </td>
+          {% endif %}
+          <td>{{ row.sales_header.tanggal }}</td>
+          <td>{{ row.item.item }}</td>
+          <td>{{ row.item.sub_transaction_type.nama }}</td>
+          <td class="ni-text-right">{{ row.item.quantity|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ row.item.selling_price|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right"><strong>{{ row.item.total_sales|floatformat:0|intcomma }}</strong></td>
+          <td>{{ row.sales_header.payment_account }}</td>
+          {% if row.show_trx_cell %}
+          <td rowspan="{{ row.trx_rowspan }}">
+            <div class="ni-btn-row">
+              {% if not row.sales_header.is_locked %}
+              <a href="{% url 'sales:update' row.sales_header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'sales:delete' row.sales_header.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+              {% else %}
+              <span class="ni-badge ni-badge--secondary">Locked</span>
+              {% endif %}
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada transaksi penjualan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
