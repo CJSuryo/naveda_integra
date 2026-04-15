@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun, EntitasBisnisAkun
+from apps.master_data.utils import get_akun_sorted
 
 from .forms import (
     ItemMasterPurchaseForm, KategoriItemForm, SubTransactionTypeForm,
@@ -215,7 +216,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
-        'akun_list': Akun.objects.all().order_by('kode_akun'),
+        'akun_list': get_akun_sorted(),
     })
 
 
@@ -290,7 +291,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'eb_groups_json': json.dumps(eb_groups_data),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
-        'akun_list': Akun.objects.all().order_by('kode_akun'),
+        'akun_list': get_akun_sorted(),
     })
 
 
@@ -881,7 +882,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'errors': errors,
             'eb_groups_json': json.dumps(groups),
             'kategori_items': KategoriItem.objects.all().order_by('nama'),
-            'akun_list': Akun.objects.all().order_by('kode_akun'),
+            'akun_list': get_akun_sorted(),
         })
 
     # Determine the dominant tipe_item prefix for all items to decide the transaction ID prefix.

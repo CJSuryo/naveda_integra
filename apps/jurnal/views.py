@@ -291,7 +291,8 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
 
-    akun_list = Akun.objects.all().order_by('kode_akun')
+    from apps.master_data.utils import get_akun_sorted
+    akun_list = get_akun_sorted()
 
     # Helper: aggregate debit/kredit for a queryset of JurnalDetail
     def _aggregate(qs):
@@ -398,9 +399,11 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     eb_id = request.GET.get('eb_id', '')
     return_all = request.GET.get('all', '')
 
+    from apps.master_data.utils import natural_sort_key
+
     qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
-    ).order_by('kategori_id', 'kategori_akun')
+    )
 
     # If eb_id is provided, filter to only available akuns for that EB
     if eb_id:
@@ -412,7 +415,9 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(pk__in=available_akun_ids)
 
     if not return_all:
-        qs = qs[:200]
+        akun_objs = sorted(qs[:200], key=lambda a: natural_sort_key(a.kode_akun))
+    else:
+        akun_objs = sorted(qs, key=lambda a: natural_sort_key(a.kode_akun))
 
     results = [
         {
@@ -421,7 +426,7 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             'kode': a.kode_akun,
             'nama': a.nama,
         }
-        for a in qs
+        for a in akun_objs
     ]
     return JsonResponse(results, safe=False)
 

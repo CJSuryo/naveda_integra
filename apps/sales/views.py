@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
+from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 
 from .models import SalesHeader, SalesItem
@@ -120,7 +121,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'today': timezone.now().date(),
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
-        'akun_list': Akun.objects.all().order_by('kode_akun'),
+        'akun_list': get_akun_sorted(),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
     })
 
@@ -170,7 +171,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'sales': sales,
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
-        'akun_list': Akun.objects.all().order_by('kode_akun'),
+        'akun_list': get_akun_sorted(),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'items_json': json.dumps(items_data),
     })
@@ -380,7 +381,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'sales': existing,
             'items_master': inventory_items,
             'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
-            'akun_list': Akun.objects.all().order_by('kode_akun'),
+            'akun_list': get_akun_sorted(),
             'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
             'errors': errors,
             'items_json': json.dumps(items_list),
