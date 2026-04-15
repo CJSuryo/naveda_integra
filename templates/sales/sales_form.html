@@ -1,21 +1,32 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}{{ title }}{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
 <style>
+  .ni-sales-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
+  .ni-sales-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ni-sales-eb-card__header select { flex: 1; min-width: 0; }
   .ni-sales-item-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
   .ni-sales-item-table th { background: var(--ni-bg); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; color: var(--ni-text-muted); }
   .ni-sales-item-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+  .ni-sales-item-table tr:last-child td { border-bottom: none; }
   .ni-sales-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
   .ni-sales-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-sales-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
+  .ts-wrapper.single .ts-control { border: 0px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; overflow-x: auto; }
+  .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
+  .ni-journal-preview th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--ni-border); color: var(--ni-text-muted); font-size: 0.75rem; }
+  .ni-journal-preview td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); }
+  .ni-advanced-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
   .ni-sales-item-table-wrapper { overflow-x: auto; }
   .ni-stock-info { font-size: 0.75rem; color: var(--ni-text-muted); margin-top: 2px; }
   .ni-stock-warning { color: var(--ni-danger); font-weight: 600; }
-  .ni-tax-row { background: var(--ni-bg); }
-  .ni-tax-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
   @media (max-width: 768px) {
-    .ni-sales-item-table { min-width: 700px; }
+    .ni-sales-eb-card { padding: 12px; }
+    .ni-sales-item-table { min-width: 900px; }
   }
 </style>
 {% endblock %}
@@ -51,67 +62,56 @@
           <input type="date" name="tanggal" id="salesTanggal" class="ni-input" value="{{ today|date:'Y-m-d' }}" required>
         </div>
       </div>
-      <div class="ni-form-row" style="margin-bottom:20px;">
-        <div class="ni-form-group" style="margin:0;">
-          <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
-          <select name="entitas_bisnis" id="salesEB" class="ni-input" required>
-            <option value="">— Pilih Entitas Bisnis —</option>
-            {% for eb in entitas_list %}
-            <option value="{{ eb.pk }}"{% if sales and sales.entitas_bisnis_id == eb.pk %} selected{% endif %}>{{ eb.nama }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="ni-form-group" style="margin:0;">
-          <label class="ni-form-label">Payment Account <span style="color:var(--ni-danger)">*</span></label>
-          <select name="payment_account" id="salesPaymentAccount" class="ni-input" required>
-            <option value="">— Pilih Payment Account —</option>
-            {% for akun in akun_list %}
-            <option value="{{ akun.pk }}"{% if sales and sales.payment_account_id == akun.pk %} selected{% endif %}>{{ akun }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
       <div class="ni-form-group" style="margin-bottom:24px;">
         <label class="ni-form-label">Deskripsi</label>
-        <textarea name="deskripsi" class="ni-input" rows="2" placeholder="Deskripsi transaksi (opsional)">{% if sales %}{{ sales.deskripsi }}{% endif %}</textarea>
+        <textarea name="deskripsi" class="ni-input" rows="2" placeholder="Deskripsi transaksi penjualan (opsional)">{% if sales %}{{ sales.deskripsi }}{% endif %}</textarea>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--ni-border);margin-bottom:20px;">
 
-      <!-- Items -->
+      <!-- Entitas Bisnis Groups -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <h3 style="margin:0;font-size:1rem;color:var(--ni-text);">
-          <i data-lucide="package" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
-          Item Penjualan
+          <i data-lucide="building-2" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
+          Entitas Bisnis &amp; Items
         </h3>
-        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="addItemRow()">
-          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item
+        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="addEBGroup()">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Pilih Entitas Bisnis
         </button>
       </div>
 
-      <div class="ni-sales-item-table-wrapper">
-        <table class="ni-sales-item-table" id="itemsTable">
+      <div id="ebGroupsContainer">
+        <!-- EB groups inserted by JS -->
+      </div>
+
+      <input type="hidden" name="eb_groups_data" id="ebGroupsData">
+
+      <!-- Journal Preview -->
+      <div id="journalPreview" class="ni-journal-preview" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h4 style="margin:0;font-size:0.9rem;color:var(--ni-text);">
+            <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+            Journal Preview
+          </h4>
+          <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="closeJournalPreview()" style="padding:4px 8px;">
+            <i data-lucide="x" style="width:14px;height:14px"></i> Tutup
+          </button>
+        </div>
+        <table>
           <thead>
-            <tr>
-              <th style="width:200px;">Item</th>
-              <th style="width:160px;">Sub-Transaction Type</th>
-              <th style="width:90px;">Qty</th>
-              <th style="width:120px;">Harga Jual</th>
-              <th style="width:120px;">Total</th>
-              <th style="width:180px;">Offset CoA (HPP)</th>
-              <th style="width:180px;">Revenue Account</th>
-              <th style="width:60px;"></th>
-            </tr>
+            <tr><th>No</th><th>Entitas Bisnis</th><th>Akun</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
           </thead>
-          <tbody id="itemsBody">
-          </tbody>
+          <tbody id="journalPreviewBody"></tbody>
         </table>
       </div>
 
-      <input type="hidden" name="items_data" id="itemsData">
-
       <div class="ni-btn-row" style="margin-top:24px;">
-        <button type="submit" class="ni-btn ni-btn--primary" onclick="return submitSalesForm()">Simpan</button>
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="showJournalPreview()">
+          <i data-lucide="eye" style="width:16px;height:16px"></i> Journal Preview
+        </button>
+        <button type="submit" class="ni-btn ni-btn--primary" id="salesSubmit">
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan
+        </button>
         <a href="{% url 'sales:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
@@ -120,236 +120,564 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
-(function() {
+(function () {
   'use strict';
 
-  const ITEMS_MASTER = [
-    {% for item in items_master %}
-    {id: {{ item.pk }}, name: '{{ item|escapejs }}', coa_id: {{ item.coa_account_id|default:'null' }}, coa_text: '{{ item.coa_account|default:""|escapejs }}'},
+  var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var akunAutocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var stockCheckUrl = '{% url "sales:api_stock_check" %}';
+  var sttOffsetUrl = '{% url "sales:api_stt_offset" %}';
+  var csrfToken = '{{ csrf_token }}';
+
+  var ebGroupCount = 0;
+  var itemCounters = {};
+
+  // Data from server (for edit mode)
+  var existingGroups = {{ eb_groups_json|default:"[]"|safe }};
+
+  // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
+  var ebOptions = [
+    {% for eb in eb_options %}
+    { value: '{{ eb.value|escapejs }}', label: '{{ eb.label|escapejs }}' },
     {% endfor %}
   ];
 
-  const STT_LIST = [
+  // Sub-transaction type options (module=sales)
+  var sttOptions = [
     {% for stt in sub_transaction_types %}
-    {id: {{ stt.pk }}, name: '{{ stt.nama|escapejs }}'},
+    { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
     {% endfor %}
   ];
 
-  const AKUN_LIST = [
+  // All akun list for static dropdowns
+  var akunList = [
     {% for akun in akun_list %}
-    {id: {{ akun.pk }}, text: '{{ akun|escapejs }}'},
+    { id: {{ akun.pk }}, text: '{{ akun|escapejs }}' },
     {% endfor %}
   ];
 
-  let rowCounter = 0;
+  function formatNum(n) {
+    var num = parseFloat(n || 0);
+    return num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+  }
 
-  // HTML escape utility to prevent XSS
   function esc(str) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   }
 
-  // Pre-populate existing items (for edit mode)
-  const existingItems = {% if items_json %}{{ items_json|safe }}{% else %}[]{% endif %};
-
-  function init() {
-    if (existingItems.length > 0) {
-      existingItems.forEach(item => addItemRow(item));
+  /**
+   * Resolve the lv1 ID from an EB selection string like "lv1:5", "lv2:3", etc.
+   */
+  function getEBLv1Id(ebValue) {
+    if (!ebValue) return '';
+    if (ebValue.indexOf('lv1:') === 0) return ebValue.split(':')[1];
+    var lastLv1 = '';
+    for (var i = 0; i < ebOptions.length; i++) {
+      if (ebOptions[i].value.indexOf('lv1:') === 0) lastLv1 = ebOptions[i].value.split(':')[1];
+      if (ebOptions[i].value === ebValue) return lastLv1;
     }
-    lucide.createIcons();
+    return '';
   }
 
-  window.addItemRow = function(data) {
-    const idx = rowCounter++;
-    const tbody = document.getElementById('itemsBody');
+  // ── Add EB Group ──────────────────────────────────────────────────────────
+  window.addEBGroup = function (prefill) {
+    ebGroupCount++;
+    var gid = 'eb_group_' + ebGroupCount;
+    itemCounters[gid] = 0;
 
-    // Main row
-    const tr = document.createElement('tr');
-    tr.id = `item-row-${idx}`;
-    tr.innerHTML = `
-      <td>
-        <select class="ni-sales-input" data-field="item_id" data-idx="${idx}" onchange="onItemChange(${idx})">
-          <option value="">— Pilih Item —</option>
-          ${ITEMS_MASTER.map(i => `<option value="${i.id}" ${data && data.item_id == i.id ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}
-        </select>
-        <div class="ni-stock-info" id="stock-info-${idx}"></div>
-      </td>
-      <td>
-        <select class="ni-sales-input" data-field="sub_transaction_type_id" data-idx="${idx}" onchange="onSTTChange(${idx})">
-          <option value="">— Pilih —</option>
-          ${STT_LIST.map(s => `<option value="${s.id}" ${data && data.sub_transaction_type_id == s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
-        </select>
-      </td>
-      <td><input type="number" class="ni-sales-input" data-field="quantity" data-idx="${idx}" value="${data ? data.quantity : ''}" min="0" step="any" oninput="calcTotal(${idx})"></td>
-      <td><input type="number" class="ni-sales-input" data-field="selling_price" data-idx="${idx}" value="${data ? data.selling_price : ''}" min="0" step="any" oninput="calcTotal(${idx})"></td>
-      <td><input type="text" class="ni-sales-input" data-field="total" data-idx="${idx}" readonly value="${data ? (parseFloat(data.quantity || 0) * parseFloat(data.selling_price || 0)).toLocaleString('id-ID') : ''}"></td>
-      <td>
-        <select class="ni-sales-input" data-field="offset_coa_account_id" data-idx="${idx}">
-          <option value="">— HPP Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.offset_coa_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
-        </select>
-      </td>
-      <td>
-        <select class="ni-sales-input" data-field="revenue_account_id" data-idx="${idx}">
-          <option value="">— Revenue Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.revenue_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
-        </select>
-      </td>
-      <td>
-        <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(${idx})" style="padding:4px 8px;">
-          <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-        </button>
-        <br>
-        <span class="ni-tax-toggle" onclick="toggleTax(${idx})" style="margin-top:4px;">
-          <i data-lucide="receipt" style="width:12px;height:12px"></i> Pajak
-        </span>
-      </td>
-    `;
+    var container = document.getElementById('ebGroupsContainer');
+    var card = document.createElement('div');
+    card.className = 'ni-sales-eb-card';
+    card.id = gid;
+
+    var ebSelectOptions = '<option value="">— Pilih Entitas Bisnis —</option>';
+    ebOptions.forEach(function (eb) {
+      var sel = (prefill && prefill.eb_selection === eb.value) ? ' selected' : '';
+      ebSelectOptions += '<option value="' + esc(eb.value) + '"' + sel + '>' + esc(eb.label) + '</option>';
+    });
+
+    card.innerHTML =
+      '<div class="ni-sales-eb-card__header">' +
+        '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);"></i>' +
+        '<select class="ni-input eb-select" data-gid="' + gid + '" onchange="onEBChange(\'' + gid + '\')">' + ebSelectOptions + '</select>' +
+        '<div class="ni-form-group" style="margin:0;flex:1;min-width:200px;">' +
+          '<select id="' + gid + '_payment_account" class="ni-sales-input payment-account-select" placeholder="Payment Account..."></select>' +
+        '</div>' +
+        '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
+          '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
+        '</button>' +
+      '</div>' +
+      '<div class="ni-sales-item-table-wrapper">' +
+        '<table class="ni-sales-item-table">' +
+          '<thead><tr>' +
+            '<th style="width:18%">Item</th>' +
+            '<th style="width:13%">Sub-Trx Type</th>' +
+            '<th style="width:7%">Qty</th>' +
+            '<th style="width:11%">Harga Jual</th>' +
+            '<th style="width:10%">Total</th>' +
+            '<th style="width:15%">Offset CoA (HPP)</th>' +
+            '<th style="width:15%">Revenue Account</th>' +
+            '<th style="width:5%"></th>' +
+          '</tr></thead>' +
+          '<tbody id="' + gid + '_items"></tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
+        '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addItemRow(\'' + gid + '\')">' +
+          '<i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item' +
+        '</button>' +
+        '<span class="ni-advanced-toggle" onclick="toggleAdvanced(\'' + gid + '\')">' +
+          '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced (Pajak)' +
+        '</span>' +
+      '</div>';
+
+    container.appendChild(card);
+    lucide.createIcons();
+
+    // Init TomSelect for Payment Account
+    initPaymentAccountSelect(gid, prefill ? prefill.payment_account_id : null);
+
+    // Pre-fill items if editing
+    if (prefill && prefill.items) {
+      prefill.items.forEach(function (itemData) {
+        addItemRow(gid, itemData);
+      });
+    } else {
+      addItemRow(gid);
+    }
+  };
+
+  function initPaymentAccountSelect(gid, prefillId) {
+    var el = document.getElementById(gid + '_payment_account');
+    if (!el) return;
+
+    var ts = new TomSelect(el, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      placeholder: 'Ketik kode/nama akun...',
+      maxOptions: false,
+      preload: 'focus',
+      load: function (query, callback) {
+        var ebSelect = document.querySelector('#' + gid + ' .eb-select');
+        var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+        var url = akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1';
+        if (ebLv1Id) url += '&eb_id=' + encodeURIComponent(ebLv1Id);
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      shouldLoad: function () { return true; },
+    });
+
+    // Pre-select if editing
+    if (prefillId) {
+      var match = akunList.find(function (a) { return a.id === prefillId; });
+      if (match) {
+        ts.addOption({ id: match.id, text: match.text });
+        ts.setValue(match.id, true);
+      }
+    }
+  }
+
+  window.removeEBGroup = function (gid) {
+    var el = document.getElementById(gid);
+    if (el) el.remove();
+  };
+
+  /**
+   * When EB selection changes, clear and reload all TomSelect item dropdowns
+   * in this group so they filter by the new EB.
+   */
+  window.onEBChange = function (gid) {
+    var card = document.getElementById(gid);
+    if (!card) return;
+    // Refresh item selects
+    var selects = card.querySelectorAll('.item-select');
+    selects.forEach(function (sel) {
+      if (sel.tomselect) {
+        sel.tomselect.clearOptions();
+        sel.tomselect.clear();
+      }
+    });
+    // Refresh payment account select
+    var paymentSel = document.getElementById(gid + '_payment_account');
+    if (paymentSel && paymentSel.tomselect) {
+      paymentSel.tomselect.clearOptions();
+      paymentSel.tomselect.clear();
+    }
+  };
+
+  // ── Add Item Row ──────────────────────────────────────────────────────────
+  window.addItemRow = function (gid, prefill) {
+    itemCounters[gid] = (itemCounters[gid] || 0) + 1;
+    var rid = gid + '_item_' + itemCounters[gid];
+    var tbody = document.getElementById(gid + '_items');
+
+    var sttSelectOptions = '<option value="">— Pilih —</option>';
+    sttOptions.forEach(function (stt) {
+      var sel = (prefill && prefill.sub_transaction_type_id == stt.id) ? ' selected' : '';
+      sttSelectOptions += '<option value="' + stt.id + '"' + sel + '>' + esc(stt.nama) + '</option>';
+    });
+
+    // Build offset CoA options from static akun list
+    var offsetOptions = '<option value="">— HPP Account —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.offset_coa_account_id == a.id) ? ' selected' : '';
+      offsetOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    // Build revenue account options from static akun list
+    var revenueOptions = '<option value="">— Revenue Account —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.revenue_account_id == a.id) ? ' selected' : '';
+      revenueOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    var prefillQty = prefill ? prefill.quantity : '';
+    var prefillPrice = prefill ? prefill.selling_price : '';
+    var prefillTotal = (prefill && prefill.quantity && prefill.selling_price)
+      ? formatNum(parseFloat(prefill.quantity) * parseFloat(prefill.selling_price))
+      : '0';
+
+    var tr = document.createElement('tr');
+    tr.id = rid;
+    tr.innerHTML =
+      '<td>' +
+        '<select id="' + rid + '_item" class="ni-sales-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select>' +
+        '<div class="ni-stock-info" id="' + rid + '_stock"></div>' +
+      '</td>' +
+      '<td><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
+      '<td><input type="number" id="' + rid + '_qty" class="ni-sales-input" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="number" id="' + rid + '_price" class="ni-sales-input" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="text" id="' + rid + '_total" class="ni-sales-input" readonly value="' + prefillTotal + '"></td>' +
+      '<td><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
+      '<td><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
+      '<td>' +
+        '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
+          '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
+        '</button>' +
+      '</td>';
+
+    // Advanced tax row (hidden by default)
+    var hasTax = prefill && (prefill.tax || prefill.tax_type);
+    var trAdv = document.createElement('tr');
+    trAdv.id = rid + '_adv';
+    trAdv.className = 'advanced-row';
+    trAdv.style.display = hasTax ? '' : 'none';
+
+    // Tax account options
+    var taxAccountOptions = '<option value="">— Tax Account —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.tax_account_id == a.id) ? ' selected' : '';
+      taxAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    // Tax payment account options
+    var taxPaymentAccountOptions = '<option value="">— Tax Payment Account —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.tax_payment_account_id == a.id) ? ' selected' : '';
+      taxPaymentAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    trAdv.innerHTML =
+      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<div style="display:flex;gap:8px;">' +
+          '<div style="flex:1;"><label style="color:var(--ni-text-muted);font-size:0.75rem;">Nominal Pajak</label>' +
+            '<input type="number" id="' + rid + '_tax" class="ni-sales-input" placeholder="0" value="' + (prefill && prefill.tax ? prefill.tax : '') + '" min="0" step="any">' +
+          '</div>' +
+          '<div style="flex:1;"><label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Type</label>' +
+            '<select id="' + rid + '_tax_type" class="ni-sales-input">' +
+              '<option value="">— Tax Type —</option>' +
+              '<option value="ppn_keluaran"' + (prefill && prefill.tax_type === 'ppn_keluaran' ? ' selected' : '') + '>PPN Keluaran</option>' +
+              '<option value="pph_23"' + (prefill && prefill.tax_type === 'pph_23' ? ' selected' : '') + '>PPh 23</option>' +
+              '<option value="pph_21"' + (prefill && prefill.tax_type === 'pph_21' ? ' selected' : '') + '>PPh 21</option>' +
+              '<option value="pph_4_2"' + (prefill && prefill.tax_type === 'pph_4_2' ? ' selected' : '') + '>PPh 4(2)</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+      '</td>' +
+      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Account</label>' +
+        '<select id="' + rid + '_tax_account" class="ni-sales-input">' + taxAccountOptions + '</select>' +
+      '</td>' +
+      '<td style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Payment Status</label>' +
+        '<select id="' + rid + '_tax_payment" class="ni-sales-input">' +
+          '<option value="">— Status —</option>' +
+          '<option value="belum_transfer"' + (prefill && prefill.tax_payment === 'belum_transfer' ? ' selected' : '') + '>Belum Transfer</option>' +
+          '<option value="sudah_transfer"' + (prefill && prefill.tax_payment === 'sudah_transfer' ? ' selected' : '') + '>Sudah Transfer</option>' +
+        '</select>' +
+      '</td>' +
+      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Payment Account</label>' +
+        '<select id="' + rid + '_tax_payment_account" class="ni-sales-input">' + taxPaymentAccountOptions + '</select>' +
+      '</td>' +
+      '<td style="background:var(--ni-bg);"></td>';
+
     tbody.appendChild(tr);
+    tbody.appendChild(trAdv);
 
-    // Tax row (hidden by default)
-    const taxTr = document.createElement('tr');
-    taxTr.id = `tax-row-${idx}`;
-    taxTr.className = 'ni-tax-row';
-    taxTr.style.display = (data && data.tax) ? '' : 'none';
-    taxTr.innerHTML = `
-      <td colspan="2">
-        <div style="display:flex;gap:8px;">
-          <input type="number" class="ni-sales-input" data-field="tax" data-idx="${idx}" placeholder="Nominal Pajak" value="${data && data.tax ? data.tax : ''}" min="0" step="any" style="flex:1;">
-          <select class="ni-sales-input" data-field="tax_type" data-idx="${idx}" style="flex:1;">
-            <option value="">— Tax Type —</option>
-            <option value="ppn_keluaran" ${data && data.tax_type === 'ppn_keluaran' ? 'selected' : ''}>PPN Keluaran</option>
-            <option value="pph_23" ${data && data.tax_type === 'pph_23' ? 'selected' : ''}>PPh 23</option>
-            <option value="pph_21" ${data && data.tax_type === 'pph_21' ? 'selected' : ''}>PPh 21</option>
-            <option value="pph_4_2" ${data && data.tax_type === 'pph_4_2' ? 'selected' : ''}>PPh 4(2)</option>
-          </select>
-        </div>
-      </td>
-      <td colspan="2">
-        <select class="ni-sales-input" data-field="tax_account_id" data-idx="${idx}">
-          <option value="">— Tax Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
-        </select>
-      </td>
-      <td>
-        <select class="ni-sales-input" data-field="tax_payment" data-idx="${idx}">
-          <option value="">— Status —</option>
-          <option value="belum_transfer" ${data && data.tax_payment === 'belum_transfer' ? 'selected' : ''}>Belum Transfer</option>
-          <option value="sudah_transfer" ${data && data.tax_payment === 'sudah_transfer' ? 'selected' : ''}>Sudah Transfer</option>
-        </select>
-      </td>
-      <td colspan="2">
-        <select class="ni-sales-input" data-field="tax_payment_account_id" data-idx="${idx}">
-          <option value="">— Tax Payment Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_payment_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
-        </select>
-      </td>
-      <td></td>
-    `;
-    tbody.appendChild(taxTr);
+    // Get the EB lv1 ID for filtering
+    var card = document.getElementById(gid);
+    var ebSelect = card ? card.querySelector('.eb-select') : null;
+    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
 
-    // Check stock if item is pre-selected
-    if (data && data.item_id) {
-      checkStock(idx, data.item_id);
+    // Init TomSelect for item with EB-filtered autocomplete
+    var itemSelect = new TomSelect('#' + rid + '_item', {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      placeholder: 'Ketik nama/kode item...',
+      preload: 'focus',
+      load: function (query, callback) {
+        var currentEbLv1 = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+        var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
+        if (currentEbLv1) url += '&eb_lv1_id=' + encodeURIComponent(currentEbLv1);
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        if (!val) {
+          document.getElementById(rid + '_stock').textContent = '';
+          return;
+        }
+        checkStock(rid, val);
+      },
+      shouldLoad: function (query) {
+        return query.length >= 1;
+      },
+    });
+
+    // Pre-select item if editing
+    if (prefill && prefill.item_id) {
+      itemSelect.addOption({ id: prefill.item_id, text: prefill.item_name || ('Item ' + prefill.item_id) });
+      itemSelect.setValue(prefill.item_id, true);
+      checkStock(rid, prefill.item_id);
     }
 
     lucide.createIcons();
+    if (prefill) updateTotal(rid);
   };
 
-  window.removeItemRow = function(idx) {
-    const row = document.getElementById(`item-row-${idx}`);
-    const taxRow = document.getElementById(`tax-row-${idx}`);
-    if (row) row.remove();
-    if (taxRow) taxRow.remove();
+  window.removeItemRow = function (rid) {
+    var tr = document.getElementById(rid);
+    var trAdv = document.getElementById(rid + '_adv');
+    if (tr) tr.remove();
+    if (trAdv) trAdv.remove();
   };
 
-  window.toggleTax = function(idx) {
-    const taxRow = document.getElementById(`tax-row-${idx}`);
-    if (taxRow) {
-      taxRow.style.display = taxRow.style.display === 'none' ? '' : 'none';
-    }
+  window.toggleAdvanced = function (gid) {
+    var tbody = document.getElementById(gid + '_items');
+    if (!tbody) return;
+    var advRows = tbody.querySelectorAll('.advanced-row');
+    advRows.forEach(function (row) {
+      row.style.display = row.style.display === 'none' ? '' : 'none';
+    });
   };
 
-  window.onItemChange = function(idx) {
-    const itemSelect = document.querySelector(`[data-field="item_id"][data-idx="${idx}"]`);
-    const itemId = itemSelect.value;
-    if (itemId) {
-      checkStock(idx, itemId);
-    } else {
-      document.getElementById(`stock-info-${idx}`).textContent = '';
-    }
+  window.updateTotal = function (rid) {
+    var qty = parseFloat(document.getElementById(rid + '_qty').value) || 0;
+    var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
+    var total = qty * price;
+    document.getElementById(rid + '_total').value = formatNum(total);
   };
 
-  window.onSTTChange = function(idx) {
-    const sttSelect = document.querySelector(`[data-field="sub_transaction_type_id"][data-idx="${idx}"]`);
-    const sttId = sttSelect.value;
-    if (sttId) {
-      fetch(`{% url 'sales:api_stt_offset' %}?stt_id=${sttId}`)
-        .then(r => r.json())
-        .then(data => {
-          if (data.offset_account_id) {
-            const offsetSelect = document.querySelector(`[data-field="offset_coa_account_id"][data-idx="${idx}"]`);
-            if (offsetSelect) offsetSelect.value = data.offset_account_id;
-          }
-        });
-    }
-  };
-
-  function checkStock(idx, itemId) {
-    fetch(`{% url 'sales:api_stock_check' %}?item_id=${itemId}`)
-      .then(r => r.json())
-      .then(data => {
-        const info = document.getElementById(`stock-info-${idx}`);
-        const stock = parseFloat(data.available_stock || 0);
-        info.textContent = `Stok: ${stock.toLocaleString('id-ID')} unit`;
+  function checkStock(rid, itemId) {
+    fetch(stockCheckUrl + '?item_id=' + encodeURIComponent(itemId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var info = document.getElementById(rid + '_stock');
+        if (!info) return;
+        var stock = parseFloat(data.available_stock || 0);
+        info.textContent = 'Stok: ' + stock.toLocaleString('id-ID') + ' unit';
         info.className = stock > 0 ? 'ni-stock-info' : 'ni-stock-info ni-stock-warning';
+      })
+      .catch(function () {
+        var info = document.getElementById(rid + '_stock');
+        if (info) info.textContent = '';
       });
   }
 
-  window.calcTotal = function(idx) {
-    const qty = parseFloat(document.querySelector(`[data-field="quantity"][data-idx="${idx}"]`).value) || 0;
-    const price = parseFloat(document.querySelector(`[data-field="selling_price"][data-idx="${idx}"]`).value) || 0;
-    const total = qty * price;
-    document.querySelector(`[data-field="total"][data-idx="${idx}"]`).value = total.toLocaleString('id-ID');
+  window.onSTTChange = function (selectEl, rid) {
+    var sttId = selectEl.value;
+    if (!sttId) return;
+    fetch(sttOffsetUrl + '?stt_id=' + encodeURIComponent(sttId))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.offset_account_id) {
+          var offsetSel = document.getElementById(rid + '_offset');
+          if (offsetSel) offsetSel.value = data.offset_account_id;
+        }
+      });
   };
 
-  window.submitSalesForm = function() {
-    // Collect items data
-    const items = [];
-    const rows = document.querySelectorAll('#itemsBody tr[id^="item-row-"]');
-    rows.forEach(row => {
-      const idx = row.id.replace('item-row-', '');
-      const getVal = (field) => {
-        const el = row.querySelector(`[data-field="${field}"]`) ||
-                   document.querySelector(`#tax-row-${idx} [data-field="${field}"]`);
-        return el ? el.value : '';
-      };
+  // ── Journal Preview ───────────────────────────────────────────────────────
+  window.showJournalPreview = function () {
+    var payload = collectFormData();
+    var tbody = document.getElementById('journalPreviewBody');
+    tbody.innerHTML = '';
 
-      const itemId = getVal('item_id');
-      if (!itemId) return;
+    var rowNum = 0;
+    payload.eb_groups.forEach(function (g) {
+      if (!g.eb_selection) return;
+      var ebLabel = g.eb_name || g.eb_selection;
 
-      items.push({
-        item_id: itemId,
-        sub_transaction_type_id: getVal('sub_transaction_type_id'),
-        quantity: getVal('quantity'),
-        selling_price: getVal('selling_price'),
-        offset_coa_account_id: getVal('offset_coa_account_id'),
-        revenue_account_id: getVal('revenue_account_id'),
-        tax: getVal('tax') || null,
-        tax_type: getVal('tax_type'),
-        tax_account_id: getVal('tax_account_id') || null,
-        tax_payment: getVal('tax_payment'),
-        tax_payment_account_id: getVal('tax_payment_account_id') || null,
+      g.items.forEach(function (item) {
+        if (!item.item_id) return;
+        var total = parseFloat(item.quantity || 0) * parseFloat(item.selling_price || 0);
+        if (total <= 0) return;
+
+        // Debit: Payment Account (cash/bank received)
+        rowNum++;
+        var paymentText = 'Payment Account';
+        if (g.payment_account_id) {
+          var match = akunList.find(function (a) { return a.id == g.payment_account_id; });
+          if (match) paymentText = match.text;
+        }
+        tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(paymentText) + '</td><td style="text-align:right;">' + formatNum(total) + '</td><td></td></tr>';
+
+        // Credit: Revenue Account
+        rowNum++;
+        var revenueText = 'Revenue Account';
+        if (item.revenue_account_id) {
+          var rMatch = akunList.find(function (a) { return a.id == item.revenue_account_id; });
+          if (rMatch) revenueText = rMatch.text;
+        }
+        tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(revenueText) + '</td><td></td><td style="text-align:right;">' + formatNum(total) + '</td></tr>';
+
+        // Tax entries if present
+        var tax = parseFloat(item.tax || 0);
+        if (tax > 0 && item.tax_account_id) {
+          rowNum++;
+          var taxText = 'Tax Account';
+          var tMatch = akunList.find(function (a) { return a.id == item.tax_account_id; });
+          if (tMatch) taxText = tMatch.text;
+          tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(taxText) + '</td><td style="text-align:right;">' + formatNum(tax) + '</td><td></td></tr>';
+
+          if (item.tax_payment_account_id) {
+            rowNum++;
+            var tpMatch = akunList.find(function (a) { return a.id == item.tax_payment_account_id; });
+            var tpText = tpMatch ? tpMatch.text : 'Tax Payment Account';
+            tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(tpText) + '</td><td></td><td style="text-align:right;">' + formatNum(tax) + '</td></tr>';
+          }
+        }
       });
     });
 
-    document.getElementById('itemsData').value = JSON.stringify(items);
-    return true;
+    if (rowNum === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry. Tambahkan item terlebih dahulu.</td></tr>';
+    }
+
+    document.getElementById('journalPreview').style.display = '';
+    lucide.createIcons();
   };
 
-  document.addEventListener('DOMContentLoaded', init);
+  window.closeJournalPreview = function () {
+    document.getElementById('journalPreview').style.display = 'none';
+  };
+
+  // ── Form Submission ───────────────────────────────────────────────────────
+  function collectFormData() {
+    var groups = [];
+    document.querySelectorAll('.ni-sales-eb-card').forEach(function (card) {
+      var gid = card.id;
+      var ebSelect = card.querySelector('.eb-select');
+      var ebSelection = ebSelect ? ebSelect.value : '';
+      var ebName = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
+      if (!ebSelection) return;
+
+      var paymentAccountEl = document.getElementById(gid + '_payment_account');
+      var paymentAccountId = paymentAccountEl ? paymentAccountEl.value : '';
+
+      var items = [];
+      var tbody = document.getElementById(gid + '_items');
+      var itemRows = tbody.querySelectorAll('tr:not(.advanced-row)');
+      itemRows.forEach(function (tr) {
+        var rid = tr.id;
+        var itemSel = tr.querySelector('.item-select');
+        var sttSel = tr.querySelector('.stt-select');
+        var itemVal = itemSel ? itemSel.value : '';
+        if (!itemVal) return;
+
+        var itemText = '';
+        if (itemSel && itemSel.tomselect) {
+          var opt = itemSel.tomselect.options[itemVal];
+          if (opt) itemText = opt.text || '';
+        }
+
+        items.push({
+          item_id: itemVal,
+          item_name: itemText,
+          sub_transaction_type_id: sttSel ? sttSel.value : '',
+          quantity: document.getElementById(rid + '_qty').value || '0',
+          selling_price: document.getElementById(rid + '_price').value || '0',
+          offset_coa_account_id: document.getElementById(rid + '_offset').value || '',
+          revenue_account_id: document.getElementById(rid + '_revenue').value || '',
+          tax: document.getElementById(rid + '_tax') ? document.getElementById(rid + '_tax').value : '',
+          tax_type: document.getElementById(rid + '_tax_type') ? document.getElementById(rid + '_tax_type').value : '',
+          tax_account_id: document.getElementById(rid + '_tax_account') ? document.getElementById(rid + '_tax_account').value : '',
+          tax_payment: document.getElementById(rid + '_tax_payment') ? document.getElementById(rid + '_tax_payment').value : '',
+          tax_payment_account_id: document.getElementById(rid + '_tax_payment_account') ? document.getElementById(rid + '_tax_payment_account').value : '',
+        });
+      });
+
+      groups.push({
+        eb_selection: ebSelection,
+        eb_name: ebName,
+        payment_account_id: paymentAccountId,
+        items: items,
+      });
+    });
+    return { eb_groups: groups };
+  }
+
+  document.getElementById('salesForm').addEventListener('submit', function (e) {
+    var payload = collectFormData();
+    if (payload.eb_groups.length === 0) {
+      alert('Pilih minimal satu entitas bisnis dan tambahkan item.');
+      e.preventDefault();
+      return;
+    }
+    var errorMsgs = [];
+    payload.eb_groups.forEach(function (g, gi) {
+      if (!g.payment_account_id) {
+        errorMsgs.push('Group ' + (gi + 1) + ': Payment Account wajib dipilih.');
+      }
+      if (g.items.length === 0) {
+        errorMsgs.push('Group ' + (gi + 1) + ': Tambahkan minimal satu item.');
+      }
+      g.items.forEach(function (item, ji) {
+        if (!item.offset_coa_account_id) {
+          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Offset CoA (HPP) wajib diisi.');
+        }
+        if (!item.revenue_account_id) {
+          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Revenue Account wajib diisi.');
+        }
+      });
+    });
+    if (errorMsgs.length > 0) {
+      alert('Terdapat kesalahan:\n\n' + errorMsgs.join('\n'));
+      e.preventDefault();
+      return;
+    }
+    document.getElementById('ebGroupsData').value = JSON.stringify(payload.eb_groups);
+  });
+
+  // ── Init: load existing data or add one empty group ───────────────────────
+  if (existingGroups.length > 0) {
+    existingGroups.forEach(function (g) { addEBGroup(g); });
+  } else {
+    addEBGroup();
+  }
 })();
 </script>
 {% endblock %}
