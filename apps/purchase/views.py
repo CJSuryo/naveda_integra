@@ -784,11 +784,14 @@ def api_kategori_create(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'error': 'Invalid JSON'}, status=400)
 
     nama = (data.get('nama') or '').strip()
+    entitas_bisnis = (data.get('entitas_bisnis') or '').strip()
     tipe_item = data.get('tipe_item', 'RM')
     eb_ids = data.get('entitas_bisnis_ids', [])
 
     if not nama:
         return JsonResponse({'error': 'Nama kategori wajib diisi.'}, status=400)
+    if not entitas_bisnis:
+        return JsonResponse({'error': 'Entitas Bisnis wajib diisi.'}, status=400)
     if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
         tipe_item = 'RM'
 
@@ -802,7 +805,7 @@ def api_kategori_create(request: HttpRequest) -> JsonResponse:
             'created': False,
         })
 
-    kategori = KategoriItem.objects.create(nama=nama, tipe_item=tipe_item)
+    kategori = KategoriItem.objects.create(nama=nama, tipe_item=tipe_item, entitas_bisnis_id=entitas_bisnis)
     if eb_ids:
         kategori.entitas_bisnis.set(eb_ids)
 

@@ -271,6 +271,10 @@
         <input type="text" id="kat_modal_nama" class="ni-input" placeholder="Nama kategori">
       </div>
       <div class="ni-form-group">
+        <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="kat_modal_entitas_bisnis" class="ni-input" placeholder="Entitas Bisnis">
+      </div>
+      <div class="ni-form-group">
         <label class="ni-form-label">Tipe Item</label>
         <input type="text" id="kat_modal_tipe_display" class="ni-input" readonly style="opacity:0.6;">
         <small style="color:var(--ni-text-muted);">Otomatis dari tipe item yang dipilih</small>
@@ -742,6 +746,14 @@
       return;
     }
 
+    var entitasBisnis = document.getElementById('kat_modal_entitas_bisnis').value.trim();
+    if (!entitasBisnis) {
+      var errEl = document.getElementById('kat_modal_error');
+      errEl.textContent = 'Entitas Bisnis wajib diisi.';
+      errEl.style.display = '';
+      return;
+    }
+
     var tipeItem = document.getElementById('modal_tipe_item').value;
     var gid = _modalCallbackGid;
     var card = gid ? document.getElementById(gid) : null;
@@ -750,6 +762,7 @@
 
     var payload = {
       nama: nama,
+      entitasBisnis: entitasBisnis,
       tipe_item: tipeItem,
       entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
     };
