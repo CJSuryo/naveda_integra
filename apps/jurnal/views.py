@@ -404,9 +404,10 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
 
     # If eb_id is provided, filter to only available akuns for that EB
     if eb_id:
+        resolved_eb_id = _resolve_entitas_bisnis_id(eb_id)
         available_akun_ids = list(EntitasBisnisAkun.objects.filter(
-            entitas_bisnis_id=eb_id,
-        ).values_list('akun_id', flat=True))
+            entitas_bisnis_id=resolved_eb_id,
+        ).values_list('akun_id', flat=True)) if resolved_eb_id else []
         if available_akun_ids:
             qs = qs.filter(pk__in=available_akun_ids)
 
