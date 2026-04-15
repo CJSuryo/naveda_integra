@@ -22,7 +22,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         model = ItemMasterPurchase
         fields = (
             'nama', 'tipe_item', 'kategori', 'velocity_category',
-            'coa_account', 'expiry_date', 'threshold_days_outstanding',
+            'coa_account', 'lama_kadaluarsa', 'threshold_days_outstanding',
             'masa_manfaat', 'metode_penyusutan', 'metode_amortisasi',
             'metode_biaya_persediaan',
             'entitas_bisnis',
@@ -33,7 +33,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'kategori': forms.Select(attrs={'class': 'ni-input'}),
             'velocity_category': forms.Select(attrs={'class': 'ni-input'}),
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
-            'expiry_date': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'lama_kadaluarsa': forms.NumberInput(attrs={'class': 'ni-input'}),
             'threshold_days_outstanding': forms.NumberInput(attrs={'class': 'ni-input'}),
             'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
             'metode_penyusutan': forms.Select(attrs={'class': 'ni-input'}),
@@ -58,11 +58,11 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             tipe_item_choices[0] if tipe_item_choices and len(tipe_item_choices) == 1 else None
         )
         if tipe_val == 'ATP' or (tipe_item_choices and tipe_item_choices == ['ATP']):
-            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding',
+            for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
                       'metode_amortisasi', 'metode_biaya_persediaan'):
                 self.fields.pop(f, None)
         elif tipe_val == 'ALL' or (tipe_item_choices and tipe_item_choices == ['ALL']):
-            for f in ('velocity_category', 'expiry_date', 'threshold_days_outstanding',
+            for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
                       'metode_penyusutan', 'metode_biaya_persediaan'):
                 self.fields.pop(f, None)
         else:

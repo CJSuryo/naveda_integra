@@ -105,7 +105,12 @@ class ItemMasterPurchase(models.Model):
         related_name='item_masters',
         verbose_name='CoA Account',
     )
-    expiry_date = models.DateField(null=True, blank=True, verbose_name='Tanggal Kadaluarsa')
+    lama_kadaluarsa = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Lama Kadaluarsa (Hari)',
+        help_text='Default jumlah hari sampai kadaluarsa dari tanggal pembelian.',
+    )
     threshold_days_outstanding = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -423,6 +428,18 @@ class PurchaseItem(models.Model):
         null=True,
         blank=True,
         verbose_name='Target Turnover',
+    )
+    metode_alokasi_biaya = models.CharField(
+        max_length=30,
+        choices=[
+            ('fifo', 'FIFO (First In First Out)'),
+            ('lifo', 'LIFO (Last In First Out)'),
+            ('average', 'Average (Rata-rata Tertimbang)'),
+            ('weighted_moving_average', 'Weighted Moving Average'),
+        ],
+        blank=True,
+        default='',
+        verbose_name='Metode Alokasi Biaya',
     )
 
     class Meta:

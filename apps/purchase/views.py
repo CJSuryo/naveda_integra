@@ -267,6 +267,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'offset_coa_account_text': str(pi.offset_coa_account),
                 'quantity': str(pi.quantity),
                 'unit_price': str(pi.unit_price),
+                'metode_alokasi_biaya': pi.metode_alokasi_biaya or '',
+                'tanggal_kadaluarsa': '',
                 'lead_time_days': pi.lead_time_days or '',
                 'ordering_cost': str(pi.ordering_cost) if pi.ordering_cost else '',
                 'holding_cost_pct': str(pi.holding_cost_pct) if pi.holding_cost_pct else '',
@@ -651,6 +653,8 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
             'kategori': item.kategori.nama if item.kategori else '',
             'coa_account_id': item.coa_account_id or '',
             'coa_account_text': str(item.coa_account) if item.coa_account else '',
+            'metode_biaya_persediaan': item.metode_biaya_persediaan or '',
+            'lama_kadaluarsa': item.lama_kadaluarsa or '',
         }
         for item in items
     ]
@@ -708,8 +712,9 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
     # Fields for inventory items (RM/FG/ITM)
     if tipe_item in ('RM', 'FG', 'ITM'):
         create_kwargs['velocity_category'] = data.get('velocity_category', '')
-        create_kwargs['expiry_date'] = data.get('expiry_date') or None
+        create_kwargs['lama_kadaluarsa'] = data.get('lama_kadaluarsa') or None
         create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None
+        create_kwargs['metode_biaya_persediaan'] = data.get('metode_biaya_persediaan', '')
     # Fields for Aset Tetap (ATP)
     elif tipe_item == 'ATP':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
@@ -765,6 +770,48 @@ def api_kategori_filter(request: HttpRequest) -> JsonResponse:
 
     results = [{'id': k.pk, 'nama': k.nama} for k in qs]
     return JsonResponse(results, safe=False)
+
+
+@login_required
+def api_kategori_create(request: HttpRequest) -> JsonResponse:
+    """Create a new KategoriItem inline from the purchase form modal."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    nama = (data.get('nama') or '').strip()
+    tipe_item = data.get('tipe_item', 'RM')
+    eb_ids = data.get('entitas_bisnis_ids', [])
+
+    if not nama:
+        return JsonResponse({'error': 'Nama kategori wajib diisi.'}, status=400)
+    if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
+        tipe_item = 'RM'
+
+    # Check for duplicate
+    existing = KategoriItem.objects.filter(nama__iexact=nama, tipe_item=tipe_item).first()
+    if existing:
+        return JsonResponse({
+            'id': existing.pk,
+            'nama': existing.nama,
+            'tipe_item': existing.tipe_item,
+            'created': False,
+        })
+
+    kategori = KategoriItem.objects.create(nama=nama, tipe_item=tipe_item)
+    if eb_ids:
+        kategori.entitas_bisnis.set(eb_ids)
+
+    return JsonResponse({
+        'id': kategori.pk,
+        'nama': kategori.nama,
+        'tipe_item': kategori.tipe_item,
+        'created': True,
+    }, status=201)
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
@@ -910,6 +957,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         offset_coa_account_id=item_data['offset_coa_account_id'],
                         quantity=Decimal(str(item_data['quantity'])),
                         unit_price=Decimal(str(item_data['unit_price'])),
+                        metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                         lead_time_days=item_data.get('lead_time_days') or None,
                         ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
                         holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
@@ -947,6 +995,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                             offset_coa_account_id=item_data['offset_coa_account_id'],
                             quantity=Decimal(str(item_data['quantity'])),
                             unit_price=Decimal(str(item_data['unit_price'])),
+                            metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                             lead_time_days=item_data.get('lead_time_days') or None,
                             ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
                             holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,

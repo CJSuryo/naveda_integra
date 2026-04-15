@@ -41,4 +41,5 @@ urlpatterns = [
     path('api/stt-offset/', views.api_stt_offset, name='api_stt_offset'),
     path('api/journal-preview/', views.journal_preview, name='api_journal_preview'),
     path('api/kategori-filter/', views.api_kategori_filter, name='api_kategori_filter'),
+    path('api/kategori-create/', views.api_kategori_create, name='api_kategori_create'),
 ]
