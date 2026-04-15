@@ -1,4 +1,5 @@
 """Purchase services — automated journal generation, FIFO engine, and inventory record updates."""
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -109,8 +110,6 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
     Numbering format: PREFIX-XXXX-YYY where PREFIX=RM/FG/ITM,
     XXXX = item_id suffix, YYY = sequential number per item.
     """
-    from datetime import timedelta
-
     records: list[InventoryRecord] = []
 
     for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
@@ -128,7 +127,8 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
             # Determine tanggal_kadaluarsa: auto-calculate from lama_kadaluarsa if not manually set
             tanggal_kadaluarsa = None
             if pi.item.lama_kadaluarsa:
-                tanggal_kadaluarsa = purchase_header.tanggal + timedelta(days=pi.item.lama_kadaluarsa)
+                tanggal_base = purchase_header.tanggal if isinstance(purchase_header.tanggal, date) else date.fromisoformat(str(purchase_header.tanggal))
+                tanggal_kadaluarsa = tanggal_base + timedelta(days=pi.item.lama_kadaluarsa)
 
             record = InventoryRecord(
                 item=pi.item,
