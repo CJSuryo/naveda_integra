@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
-from apps.master_data.models import Akun
+from apps.master_data.models import Akun, EntitasBisnisAkun
 
 from .forms import (
     ItemMasterPurchaseForm, KategoriItemForm, SubTransactionTypeForm,
@@ -267,6 +267,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'offset_coa_account_text': str(pi.offset_coa_account),
                 'quantity': str(pi.quantity),
                 'unit_price': str(pi.unit_price),
+                'metode_alokasi_biaya': pi.metode_alokasi_biaya or '',
+                'tanggal_kadaluarsa': '',
                 'lead_time_days': pi.lead_time_days or '',
                 'ordering_cost': str(pi.ordering_cost) if pi.ordering_cost else '',
                 'holding_cost_pct': str(pi.holding_cost_pct) if pi.holding_cost_pct else '',
@@ -651,6 +653,8 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
             'kategori': item.kategori.nama if item.kategori else '',
             'coa_account_id': item.coa_account_id or '',
             'coa_account_text': str(item.coa_account) if item.coa_account else '',
+            'metode_biaya_persediaan': item.metode_biaya_persediaan or '',
+            'lama_kadaluarsa': item.lama_kadaluarsa or '',
         }
         for item in items
     ]
@@ -708,8 +712,9 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
     # Fields for inventory items (RM/FG/ITM)
     if tipe_item in ('RM', 'FG', 'ITM'):
         create_kwargs['velocity_category'] = data.get('velocity_category', '')
-        create_kwargs['expiry_date'] = data.get('expiry_date') or None
+        create_kwargs['lama_kadaluarsa'] = data.get('lama_kadaluarsa') or None
         create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None
+        create_kwargs['metode_biaya_persediaan'] = data.get('metode_biaya_persediaan', '')
     # Fields for Aset Tetap (ATP)
     elif tipe_item == 'ATP':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
@@ -765,6 +770,48 @@ def api_kategori_filter(request: HttpRequest) -> JsonResponse:
 
     results = [{'id': k.pk, 'nama': k.nama} for k in qs]
     return JsonResponse(results, safe=False)
+
+
+@login_required
+def api_kategori_create(request: HttpRequest) -> JsonResponse:
+    """Create a new KategoriItem inline from the purchase form modal."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    nama = (data.get('nama') or '').strip()
+    tipe_item = data.get('tipe_item', 'RM')
+    eb_ids = data.get('entitas_bisnis_ids', [])
+
+    if not nama:
+        return JsonResponse({'error': 'Nama kategori wajib diisi.'}, status=400)
+    if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
+        tipe_item = 'RM'
+
+    # Check for duplicate
+    existing = KategoriItem.objects.filter(nama__iexact=nama, tipe_item=tipe_item).first()
+    if existing:
+        return JsonResponse({
+            'id': existing.pk,
+            'nama': existing.nama,
+            'tipe_item': existing.tipe_item,
+            'created': False,
+        })
+
+    kategori = KategoriItem.objects.create(nama=nama, tipe_item=tipe_item)
+    if eb_ids:
+        kategori.entitas_bisnis.set(eb_ids)
+
+    return JsonResponse({
+        'id': kategori.pk,
+        'nama': kategori.nama,
+        'tipe_item': kategori.tipe_item,
+        'created': True,
+    }, status=201)
 
 
 # ── Internal helpers ─────────────────────────────────────────────────────────
@@ -910,6 +957,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         offset_coa_account_id=item_data['offset_coa_account_id'],
                         quantity=Decimal(str(item_data['quantity'])),
                         unit_price=Decimal(str(item_data['unit_price'])),
+                        metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                         lead_time_days=item_data.get('lead_time_days') or None,
                         ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
                         holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
@@ -947,6 +995,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                             offset_coa_account_id=item_data['offset_coa_account_id'],
                             quantity=Decimal(str(item_data['quantity'])),
                             unit_price=Decimal(str(item_data['unit_price'])),
+                            metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                             lead_time_days=item_data.get('lead_time_days') or None,
                             ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
                             holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
@@ -967,3 +1016,106 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         trx_ids = ', '.join(p.transaction_id for p in created_purchases)
         dj_messages.success(request, f'Purchase berhasil dibuat: {trx_ids}')
         return redirect('purchase:list')
+
+
+# ── Available Akun per Entitas Bisnis Settings ───────────────────────────────
+
+@login_required
+def akun_settings(request: HttpRequest) -> HttpResponse:
+    """Settings page for available akuns per entitas bisnis with CoA-like tree checkboxes."""
+    from apps.master_data.models import (
+        AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2,
+        EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2,
+        BebanLv1, BebanLv2,
+    )
+
+    eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+    first_eb = eb_list.first()
+    selected_eb_id = request.GET.get('eb') or (str(first_eb.pk) if first_eb else '')
+    selected_eb = None
+    selected_akun_ids: set[int] = set()
+
+    if selected_eb_id:
+        selected_eb = EntitasBisnis.objects.filter(pk=selected_eb_id).first()
+        if selected_eb:
+            selected_akun_ids = set(
+                EntitasBisnisAkun.objects
+                .filter(entitas_bisnis=selected_eb)
+                .values_list('akun_id', flat=True)
+            )
+
+    # Build CoA tree structure
+    categories = [
+        ('Aset', '1', AsetLv1, AsetLv2, 'aset', 'aset'),
+        ('Kewajiban', '2', KewajibanLv1, KewajibanLv2, 'kewajiban', 'kewajiban'),
+        ('Ekuitas', '3', EkuitasLv1, EkuitasLv2, 'ekuitas', 'ekuitas'),
+        ('Pendapatan', '4', PendapatanLv1, PendapatanLv2, 'pendapatan', 'pendapatan'),
+        ('Beban', '5', BebanLv1, BebanLv2, 'beban', 'beban'),
+    ]
+
+    coa_tree = []
+    for cat_name, prefix, Lv1Model, Lv2Model, kategori_id, fk_name in categories:
+        lv1_items = Lv1Model.objects.all().order_by('kode')
+        cat_children = []
+        for lv1 in lv1_items:
+            lv2_items = Lv2Model.objects.filter(**{fk_name: lv1}).order_by('kode')
+            lv2_children = []
+            for lv2 in lv2_items:
+                akun = Akun.objects.filter(kategori_id=kategori_id, kategori_akun=lv2.pk).first()
+                if akun:
+                    lv2_children.append({
+                        'akun_id': akun.pk,
+                        'kode': akun.kode_akun,
+                        'nama': akun.nama,
+                        'checked': akun.pk in selected_akun_ids,
+                    })
+            cat_children.append({
+                'kode': lv1.kode,
+                'nama': lv1.nama,
+                'lv2s': lv2_children,
+            })
+        coa_tree.append({
+            'name': cat_name,
+            'prefix': prefix,
+            'lv1s': cat_children,
+        })
+
+    return render(request, 'purchase/akun_settings.html', {
+        'eb_list': eb_list,
+        'selected_eb': selected_eb,
+        'selected_eb_id': selected_eb_id,
+        'coa_tree': coa_tree,
+        'selected_akun_ids': selected_akun_ids,
+    })
+
+
+@login_required
+def akun_settings_save(request: HttpRequest) -> JsonResponse:
+    """Save the available akuns for a specific entitas bisnis via AJAX."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    eb_id = data.get('entitas_bisnis_id')
+    akun_ids = data.get('akun_ids', [])
+
+    if not eb_id:
+        return JsonResponse({'error': 'Entitas bisnis wajib dipilih.'}, status=400)
+
+    eb = EntitasBisnis.objects.filter(pk=eb_id).first()
+    if not eb:
+        return JsonResponse({'error': 'Entitas bisnis tidak ditemukan.'}, status=400)
+
+    with transaction.atomic():
+        EntitasBisnisAkun.objects.filter(entitas_bisnis=eb).delete()
+        EntitasBisnisAkun.objects.bulk_create([
+            EntitasBisnisAkun(entitas_bisnis=eb, akun_id=aid)
+            for aid in akun_ids
+            if Akun.objects.filter(pk=aid).exists()
+        ])
+
+    return JsonResponse({'ok': True, 'count': len(akun_ids)})

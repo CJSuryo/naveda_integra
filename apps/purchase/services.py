@@ -109,6 +109,8 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
     Numbering format: PREFIX-XXXX-YYY where PREFIX=RM/FG/ITM,
     XXXX = item_id suffix, YYY = sequential number per item.
     """
+    from datetime import timedelta
+
     records: list[InventoryRecord] = []
 
     for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
@@ -119,6 +121,14 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
                 continue
             if pi.sub_transaction_type.direction != 'inflow':
                 continue
+
+            # Determine metode_alokasi: use PurchaseItem value, fallback to ItemMaster
+            metode = pi.metode_alokasi_biaya or pi.item.metode_biaya_persediaan or ''
+
+            # Determine tanggal_kadaluarsa: auto-calculate from lama_kadaluarsa if not manually set
+            tanggal_kadaluarsa = None
+            if pi.item.lama_kadaluarsa:
+                tanggal_kadaluarsa = purchase_header.tanggal + timedelta(days=pi.item.lama_kadaluarsa)
 
             record = InventoryRecord(
                 item=pi.item,
@@ -131,6 +141,8 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
                 ordering_cost=pi.ordering_cost,
                 holding_cost_pct=pi.holding_cost_pct,
                 moq=pi.moq,
+                metode_alokasi=metode,
+                tanggal_kadaluarsa=tanggal_kadaluarsa,
             )
             record.save()
             records.append(record)

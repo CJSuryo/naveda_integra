@@ -35,10 +35,15 @@ urlpatterns = [
     path('settings/<int:pk>/edit/', views.settings_update, name='settings_update'),
     path('settings/<int:pk>/delete/', views.settings_delete, name='settings_delete'),
 
+    # Available Akun per Entitas Bisnis Settings
+    path('settings/akun/', views.akun_settings, name='akun_settings'),
+    path('api/akun-settings-save/', views.akun_settings_save, name='akun_settings_save'),
+
     # API endpoints
     path('api/item-autocomplete/', views.api_item_autocomplete, name='api_item_autocomplete'),
     path('api/item-create/', views.api_item_create, name='api_item_create'),
     path('api/stt-offset/', views.api_stt_offset, name='api_stt_offset'),
     path('api/journal-preview/', views.journal_preview, name='api_journal_preview'),
     path('api/kategori-filter/', views.api_kategori_filter, name='api_kategori_filter'),
+    path('api/kategori-create/', views.api_kategori_create, name='api_kategori_create'),
 ]

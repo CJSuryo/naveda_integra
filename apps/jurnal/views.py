@@ -385,11 +385,34 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def akun_autocomplete(request: HttpRequest) -> JsonResponse:
-    """Return Akun options matching a search term, for autocomplete widgets."""
+    """Return Akun options matching a search term, for autocomplete widgets.
+
+    Optional query params:
+    - term: search text
+    - eb_id: filter to akuns available for this entitas bisnis (via EntitasBisnisAkun)
+    - all: if '1', return all matching akuns (no limit)
+    """
+    from apps.master_data.models import EntitasBisnisAkun
+
     term = request.GET.get('term', '')
-    akuns = Akun.objects.filter(
+    eb_id = request.GET.get('eb_id', '')
+    return_all = request.GET.get('all', '')
+
+    qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
-    ).order_by('kategori_id', 'kategori_akun')[:200]
+    ).order_by('kategori_id', 'kategori_akun')
+
+    # If eb_id is provided, filter to only available akuns for that EB
+    if eb_id:
+        available_akun_ids = list(EntitasBisnisAkun.objects.filter(
+            entitas_bisnis_id=eb_id,
+        ).values_list('akun_id', flat=True))
+        if available_akun_ids:
+            qs = qs.filter(pk__in=available_akun_ids)
+
+    if not return_all:
+        qs = qs[:200]
+
     results = [
         {
             'id': a.pk,
@@ -397,9 +420,100 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             'kode': a.kode_akun,
             'nama': a.nama,
         }
-        for a in akuns
+        for a in qs
     ]
     return JsonResponse(results, safe=False)
+
+
+@login_required
+def rekap_jurnal_get(request: HttpRequest, pk: int) -> JsonResponse:
+    """Return JurnalHeader data + details for the edit modal in rekap jurnal."""
+    header = get_object_or_404(
+        JurnalHeader.objects.select_related('entitas_bisnis', 'transaction_prefix'),
+        pk=pk,
+    )
+    details = header.details.select_related('akun').order_by('pk')
+    return JsonResponse({
+        'id': header.pk,
+        'tanggal': str(header.tanggal),
+        'nomor_transaksi': header.nomor_transaksi,
+        'uraian_transaksi': header.uraian_transaksi,
+        'entitas_bisnis_id': header.entitas_bisnis_id or '',
+        'is_penyesuaian': header.is_penyesuaian,
+        'details': [
+            {
+                'id': d.pk,
+                'akun_id': d.akun_id,
+                'akun_text': f'{d.akun.kode_akun} - {d.akun.nama}',
+                'debit': str(d.debit),
+                'kredit': str(d.kredit),
+            }
+            for d in details
+        ],
+    })
+
+
+@login_required
+def rekap_jurnal_update(request: HttpRequest, pk: int) -> JsonResponse:
+    """Update a JurnalHeader + details via AJAX from the rekap jurnal edit modal."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    header = get_object_or_404(JurnalHeader, pk=pk)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    tanggal = data.get('tanggal')
+    uraian = (data.get('uraian_transaksi') or '').strip()
+    eb_id = data.get('entitas_bisnis_id') or None
+
+    if not tanggal:
+        return JsonResponse({'error': 'Tanggal wajib diisi.'}, status=400)
+    if not uraian:
+        return JsonResponse({'error': 'Uraian transaksi wajib diisi.'}, status=400)
+
+    rows = data.get('details', [])
+    rows = [r for r in rows if r.get('akun_id')]
+    if not rows:
+        return JsonResponse({'error': 'Minimal 1 baris akun wajib diisi.'}, status=400)
+
+    total_debit = sum(Decimal(str(r.get('debit') or 0)) for r in rows)
+    total_kredit = sum(Decimal(str(r.get('kredit') or 0)) for r in rows)
+    if total_debit != total_kredit:
+        return JsonResponse({'error': f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'}, status=400)
+
+    header.tanggal = tanggal
+    header.uraian_transaksi = uraian
+    header.entitas_bisnis_id = eb_id
+    header.save()
+
+    # Replace all details
+    header.details.all().delete()
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(
+            jurnal_header=header,
+            akun_id=row['akun_id'],
+            debit=Decimal(str(row.get('debit') or 0)),
+            kredit=Decimal(str(row.get('kredit') or 0)),
+        )
+        for row in rows
+    ])
+
+    return JsonResponse({'ok': True})
+
+
+@login_required
+def rekap_jurnal_delete(request: HttpRequest, pk: int) -> JsonResponse:
+    """Delete a JurnalHeader via AJAX from the rekap jurnal page."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    header = get_object_or_404(JurnalHeader, pk=pk)
+    header.delete()
+    return JsonResponse({'ok': True})
 
 
 def _get_entitas_bisnis_dropdown_options() -> list[dict[str, str]]:

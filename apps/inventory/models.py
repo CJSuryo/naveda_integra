@@ -101,6 +101,12 @@ class InventoryRecord(models.Model):
         default='',
         verbose_name='Metode Alokasi Biaya',
     )
+    tanggal_kadaluarsa = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Tanggal Kadaluarsa',
+        help_text='Tanggal kadaluarsa item. Otomatis dihitung dari lama_kadaluarsa item master jika tidak diisi manual.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
