@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+{% block title %}Laporan Perubahan Ekuitas{% endblock %}
+
+{% block extra_css %}
+<style>
+  .lpe-row { display: flex; justify-content: space-between; padding: 12px 16px; font-size: 0.9rem; border-bottom: 1px solid var(--ni-border); }
+  .lpe-row:last-child { border-bottom: none; }
+  .lpe-row__label { color: var(--ni-text); }
+  .lpe-row__value { font-weight: 600; text-align: right; min-width: 140px; }
+  .lpe-total { display: flex; justify-content: space-between; padding: 14px 16px;
+    font-weight: 700; font-size: 1.05rem; background: var(--ni-primary); color: #fff;
+    border-radius: var(--ni-radius); margin-top: 8px; }
+  .lpe-prefix { color: var(--ni-text-muted); margin-right: 6px; }
+  @media print {
+    .ni-sidebar, .ni-mobile-topbar, .ni-page-header__actions, .no-print { display: none !important; }
+    .ni-main { margin-left: 0 !important; padding: 0 !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Perubahan Ekuitas</h1>
+    <p class="ni-page-header__subtitle">Statement of Changes in Equity</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <button onclick="window.print()" class="ni-btn ni-btn--secondary ni-btn--sm">
+      <i data-lucide="printer" style="width:14px;height:14px"></i> Print
+    </button>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in no-print" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan
+      </button>
+      <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+
+    <div class="lpe-row">
+      <span class="lpe-row__label">Saldo Awal Ekuitas</span>
+      <span class="lpe-row__value">{{ saldo_awal_ekuitas|floatformat:0|intcomma }}</span>
+    </div>
+
+    <div class="lpe-row">
+      <span class="lpe-row__label"><span class="lpe-prefix">+</span> Laba Bersih Periode</span>
+      <span class="lpe-row__value" style="color:{% if laba_bersih >= 0 %}var(--ni-success){% else %}var(--ni-danger){% endif %};">{{ laba_bersih|floatformat:0|intcomma }}</span>
+    </div>
+
+    <div class="lpe-row">
+      <span class="lpe-row__label"><span class="lpe-prefix">−</span> Prive / Drawing</span>
+      <span class="lpe-row__value" style="color:var(--ni-danger);">{{ prive|floatformat:0|intcomma }}</span>
+    </div>
+
+    <div class="lpe-total">
+      <span>= Saldo Akhir Ekuitas</span>
+      <span>{{ saldo_akhir_ekuitas|floatformat:0|intcomma }}</span>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

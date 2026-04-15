@@ -1,0 +1,268 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Setting Saldo Awal{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<style>
+  .ni-jm-table { width: 100%; border-collapse: collapse; }
+  .ni-jm-table th { background: var(--ni-bg); font-size: 0.8rem; color: var(--ni-text-muted); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); }
+  .ni-jm-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+  .ni-jm-table tr:last-child td { border-bottom: none; }
+  .ni-jm-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
+  .ni-jm-input:focus { outline: none; border-color: var(--ni-primary); }
+  .ts-wrapper.single .ts-control { border: 0px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ts-wrapper .ts-dropdown { z-index: 2500; position: absolute; }
+  .ni-jm-balance { font-weight: 600; font-size: 0.9rem; }
+  .ni-jm-balanced { color: var(--ni-success); }
+  .ni-jm-unbalanced { color: var(--ni-danger); }
+  @media (max-width: 768px) {
+    .ni-jm-table { min-width: 600px; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Setting Saldo Awal</h1>
+    <p class="ni-page-header__subtitle">Masukkan saldo awal per akun untuk entitas bisnis</p>
+  </div>
+</div>
+
+{% if errors %}
+<div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+  <ul style="margin:0;padding-left:16px;">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in" style="overflow:visible;">
+  <div class="ni-card__body" style="overflow:visible;">
+    <form id="saForm" method="post">
+      {% csrf_token %}
+      <!-- Header fields -->
+      <div class="ni-form-row" style="margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" name="tanggal" id="saTanggal" class="ni-input" value="{{ today|date:'Y-m-d' }}" required>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">ID Transaksi</label>
+          <input type="text" class="ni-input" value="SA-###" readonly style="opacity:0.6;cursor:default;">
+          <small style="color:var(--ni-text-muted);">Auto-generated saat disimpan</small>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
+          <select name="entitas_bisnis" id="saEntitasBisnis" class="ni-input" onchange="saOnEBChange()" required>
+            <option value="">— Pilih Entitas —</option>
+            {% for eb in eb_list %}
+            <option value="{{ eb.value }}"{% if eb.value == selected_entitas_bisnis %} selected{% endif %}>{{ eb.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <!-- Rows table -->
+      <div style="margin-bottom:12px;overflow:visible;">
+        <div class="ni-table-wrapper">
+          <table class="ni-jm-table">
+            <thead>
+              <tr>
+                <th style="width:30%">Kode Akun</th>
+                <th style="width:25%">Nama Akun</th>
+                <th style="width:18%">Debit (Rp)</th>
+                <th style="width:18%">Kredit (Rp)</th>
+                <th style="width:9%"></th>
+              </tr>
+            </thead>
+            <tbody id="saRows">
+              <!-- rows inserted by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="saAddRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+      </button>
+
+      <!-- Totals -->
+      <div style="margin-top:20px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+        <span>Total Debit: <strong id="saTotalDebit" class="ni-jm-balance">0</strong></span>
+        <span>Total Kredit: <strong id="saTotalKredit" class="ni-jm-balance">0</strong></span>
+        <span id="saBalanceStatus" class="ni-jm-balance ni-jm-unbalanced">Tidak Seimbang</span>
+      </div>
+
+      <input type="hidden" name="rows_data" id="saRowsData">
+
+      <div class="ni-btn-row" style="margin-top:20px;">
+        <button type="submit" class="ni-btn ni-btn--primary" id="saSubmit" disabled>
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Saldo Awal
+        </button>
+        <a href="{% url 'master_data:chart_of_accounts' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var rowCount = 0;
+  var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var _tomSelectInstances = [];
+
+  function formatNum(n) {
+    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+  }
+
+  function getEBId() {
+    return document.getElementById('saEntitasBisnis').value || '';
+  }
+
+  function buildAutocompleteUrl(query) {
+    var url = autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1';
+    var ebId = getEBId();
+    if (ebId) url += '&eb_id=' + encodeURIComponent(ebId);
+    return url;
+  }
+
+  function isEBSelected() {
+    return !!getEBId();
+  }
+
+  window.saOnEBChange = function () {
+    var ebSelected = isEBSelected();
+    _tomSelectInstances.forEach(function (ts) {
+      ts.clearOptions();
+      ts.clear();
+      if (ebSelected) {
+        ts.enable();
+        ts.load('');
+      } else {
+        ts.disable();
+      }
+    });
+  };
+
+  window.saAddRow = function () {
+    rowCount++;
+    var id = 'row_' + rowCount;
+    var tbody = document.getElementById('saRows');
+    var tr = document.createElement('tr');
+    tr.id = id;
+    tr.innerHTML =
+      '<td><select id="akun_sel_' + rowCount + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select></td>' +
+      '<td><input type="text" id="akun_nama_' + rowCount + '" class="ni-jm-input" readonly placeholder="Nama akun" style="background:var(--ni-bg);"></td>' +
+      '<td><input type="number" id="debit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
+      '<td><input type="number" id="kredit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saRemoveRow(\'' + id + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var currentRowNum = rowCount;
+    var ebSelected = isEBSelected();
+    var ts = new TomSelect('#akun_sel_' + rowCount, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      maxOptions: false,
+      placeholder: ebSelected ? 'Ketik kode/nama akun...' : 'Pilih entitas bisnis dahulu...',
+      preload: ebSelected ? 'focus' : false,
+      shouldLoad: function () { return false; },
+      load: function (query, callback) {
+        if (!isEBSelected()) { callback(); return; }
+        fetch(buildAutocompleteUrl(query))
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        if (!val) {
+          document.getElementById('akun_nama_' + currentRowNum).value = '';
+          return;
+        }
+        var opt = this.options[val];
+        if (opt) {
+          document.getElementById('akun_nama_' + currentRowNum).value = opt.nama || opt.text;
+        }
+        saUpdateTotals();
+      },
+      create: false,
+    });
+
+    if (!ebSelected) {
+      ts.disable();
+    }
+
+    _tomSelectInstances.push(ts);
+    lucide.createIcons();
+    saUpdateTotals();
+  };
+
+  window.saRemoveRow = function (id) {
+    var tr = document.getElementById(id);
+    if (tr) {
+      var selEl = tr.querySelector('select');
+      if (selEl && selEl.tomselect) {
+        var idx = _tomSelectInstances.indexOf(selEl.tomselect);
+        if (idx !== -1) _tomSelectInstances.splice(idx, 1);
+        selEl.tomselect.destroy();
+      }
+      tr.remove();
+    }
+    saUpdateTotals();
+  };
+
+  window.saUpdateTotals = function () {
+    var rows = document.querySelectorAll('#saRows tr');
+    var totalD = 0, totalK = 0;
+    rows.forEach(function (tr) {
+      var dInp = tr.querySelector('input[id^="debit_"]');
+      var kInp = tr.querySelector('input[id^="kredit_"]');
+      if (dInp) totalD += parseFloat(dInp.value || 0);
+      if (kInp) totalK += parseFloat(kInp.value || 0);
+    });
+    document.getElementById('saTotalDebit').textContent = formatNum(totalD);
+    document.getElementById('saTotalKredit').textContent = formatNum(totalK);
+    var balanced = Math.abs(totalD - totalK) < 0.01 && totalD > 0;
+    var statusEl = document.getElementById('saBalanceStatus');
+    var submitBtn = document.getElementById('saSubmit');
+    if (balanced) {
+      statusEl.textContent = 'Seimbang ✓';
+      statusEl.className = 'ni-jm-balance ni-jm-balanced';
+      submitBtn.disabled = false;
+    } else {
+      statusEl.textContent = 'Tidak Seimbang';
+      statusEl.className = 'ni-jm-balance ni-jm-unbalanced';
+      submitBtn.disabled = true;
+    }
+  };
+
+  document.getElementById('saForm').addEventListener('submit', function () {
+    var rows = document.querySelectorAll('#saRows tr');
+    var data = [];
+    rows.forEach(function (tr) {
+      var selEl = tr.querySelector('select');
+      var dInp = tr.querySelector('input[id^="debit_"]');
+      var kInp = tr.querySelector('input[id^="kredit_"]');
+      if (!selEl || !selEl.value) return;
+      data.push({
+        akun_id: selEl.value,
+        debit: parseFloat(dInp ? dInp.value : 0) || 0,
+        kredit: parseFloat(kInp ? kInp.value : 0) || 0,
+      });
+    });
+    document.getElementById('saRowsData').value = JSON.stringify(data);
+  });
+
+  saAddRow();
+  saAddRow();
+})();
+</script>
+{% endblock %}
