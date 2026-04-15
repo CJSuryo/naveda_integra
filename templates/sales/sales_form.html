@@ -144,6 +144,13 @@
 
   let rowCounter = 0;
 
+  // HTML escape utility to prevent XSS
+  function esc(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   // Pre-populate existing items (for edit mode)
   const existingItems = {% if items_json %}{{ items_json|safe }}{% else %}[]{% endif %};
 
@@ -165,14 +172,14 @@
       <td>
         <select class="ni-sales-input" data-field="item_id" data-idx="${idx}" onchange="onItemChange(${idx})">
           <option value="">— Pilih Item —</option>
-          ${ITEMS_MASTER.map(i => `<option value="${i.id}" ${data && data.item_id == i.id ? 'selected' : ''}>${i.name}</option>`).join('')}
+          ${ITEMS_MASTER.map(i => `<option value="${i.id}" ${data && data.item_id == i.id ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}
         </select>
         <div class="ni-stock-info" id="stock-info-${idx}"></div>
       </td>
       <td>
         <select class="ni-sales-input" data-field="sub_transaction_type_id" data-idx="${idx}" onchange="onSTTChange(${idx})">
           <option value="">— Pilih —</option>
-          ${STT_LIST.map(s => `<option value="${s.id}" ${data && data.sub_transaction_type_id == s.id ? 'selected' : ''}>${s.name}</option>`).join('')}
+          ${STT_LIST.map(s => `<option value="${s.id}" ${data && data.sub_transaction_type_id == s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
         </select>
       </td>
       <td><input type="number" class="ni-sales-input" data-field="quantity" data-idx="${idx}" value="${data ? data.quantity : ''}" min="0" step="any" oninput="calcTotal(${idx})"></td>
@@ -181,13 +188,13 @@
       <td>
         <select class="ni-sales-input" data-field="offset_coa_account_id" data-idx="${idx}">
           <option value="">— HPP Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.offset_coa_account_id == a.id ? 'selected' : ''}>${a.text}</option>`).join('')}
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.offset_coa_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
         </select>
       </td>
       <td>
         <select class="ni-sales-input" data-field="revenue_account_id" data-idx="${idx}">
           <option value="">— Revenue Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.revenue_account_id == a.id ? 'selected' : ''}>${a.text}</option>`).join('')}
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.revenue_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
         </select>
       </td>
       <td>
@@ -223,7 +230,7 @@
       <td colspan="2">
         <select class="ni-sales-input" data-field="tax_account_id" data-idx="${idx}">
           <option value="">— Tax Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_account_id == a.id ? 'selected' : ''}>${a.text}</option>`).join('')}
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
         </select>
       </td>
       <td>
@@ -236,7 +243,7 @@
       <td colspan="2">
         <select class="ni-sales-input" data-field="tax_payment_account_id" data-idx="${idx}">
           <option value="">— Tax Payment Account —</option>
-          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_payment_account_id == a.id ? 'selected' : ''}>${a.text}</option>`).join('')}
+          ${AKUN_LIST.map(a => `<option value="${a.id}" ${data && data.tax_payment_account_id == a.id ? 'selected' : ''}>${esc(a.text)}</option>`).join('')}
         </select>
       </td>
       <td></td>

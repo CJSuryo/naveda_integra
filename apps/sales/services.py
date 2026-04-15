@@ -161,10 +161,9 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
 
 def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:
     """Delete all automated journal entries linked to this sales transaction."""
-    nomor_prefix = f'Penjualan {sales_header.transaction_id}'
+    uraian_match = f'Penjualan {sales_header.transaction_id} —'
     JurnalHeader.objects.filter(
-        nomor_transaksi__startswith='TRX-SAL-',
-        uraian_transaksi__startswith=nomor_prefix,
+        uraian_transaksi__startswith=uraian_match,
         is_penyesuaian=False,
     ).delete()
 

@@ -741,28 +741,27 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
     laba_kotor = total_pendapatan_op - total_hpp
 
     # 4. Beban Operasional (5.1.6 through 5.1.30)
+    hpp_kodes = {item['kode'] for item in hpp_items}
     beban_op_items = []
+    beban_op_kodes: set[str] = set()
     for i in range(6, 31):
-        beban_op_items.extend(_collect(f'5.1.{i}'))
+        for item in _collect(f'5.1.{i}'):
+            if item['kode'] not in beban_op_kodes:
+                beban_op_kodes.add(item['kode'])
+                beban_op_items.append(item)
     # Also include any 5.1.x that aren't HPP (kode > 5.1.5)
     for kode, data in akun_data.items():
-        if kode.startswith('5.1.') and data not in hpp_items and data not in beban_op_items:
+        if kode.startswith('5.1.') and kode not in hpp_kodes and kode not in beban_op_kodes:
             parts = kode.split('.')
             if len(parts) >= 3:
                 try:
                     sub_num = int(parts[2])
                     if sub_num >= 6:
+                        beban_op_kodes.add(kode)
                         beban_op_items.append(data)
                 except ValueError:
                     pass
-    # Deduplicate
-    seen_kodes: set[str] = set()
-    unique_beban_op: list[dict] = []
-    for item in sorted(beban_op_items, key=lambda x: x['kode']):
-        if item['kode'] not in seen_kodes:
-            seen_kodes.add(item['kode'])
-            unique_beban_op.append(item)
-    beban_op_items = unique_beban_op
+    beban_op_items.sort(key=lambda x: x['kode'])
     total_beban_op = _sum_net(beban_op_items, 'debit')
 
     # 5. Laba Operasional

@@ -202,6 +202,7 @@ class SubTransactionType(models.Model):
 
     Examples: 'Stok Awal', 'Pembelian - Transfer', 'Pembelian - Tunai'.
     Each STT is associated with a specific module (purchase, sales, etc.).
+    The same nama can exist across different modules via unique_together on (nama, module).
     """
     MODULE_CHOICES = [
         ('purchase', 'Purchase'),

@@ -299,6 +299,20 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     if not items_list:
         errors['items'] = 'Minimal satu item harus ditambahkan.'
 
+    # Pre-compute total demand per item for cross-row stock validation
+    item_demands: dict[int, Decimal] = {}
+    for i, item_data in enumerate(items_list):
+        item_id = item_data.get('item_id')
+        if not item_id:
+            continue
+        try:
+            qty = Decimal(str(item_data.get('quantity', 0)))
+            if qty > 0:
+                iid = int(item_id)
+                item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
+        except (InvalidOperation, ValueError):
+            pass
+
     # Validate each item
     for i, item_data in enumerate(items_list):
         item_id = item_data.get('item_id')
@@ -321,16 +335,21 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
         except (InvalidOperation, ValueError):
             errors[f'item_{i}_price'] = f'Item {i + 1}: Harga jual tidak valid.'
 
-        # Stock validation
-        available = get_available_stock(int(item_id))
-        # When editing, add back the existing consumed qty
+        # Stock validation (check total demand for this item across all rows)
+        iid = int(item_id)
+        total_demand = item_demands.get(iid, Decimal('0'))
+        available = get_available_stock(iid)
+        # When editing, add back the existing consumed qty for this item
         if existing:
-            for old_si in existing.items.filter(item_id=item_id):
+            for old_si in existing.items.filter(item_id=iid):
                 available += old_si.quantity
-        if qty > available:
-            errors[f'item_{i}_stock'] = (
-                f'Item {i + 1}: Stok tidak mencukupi. Stok tersedia: {available} unit.'
-            )
+        if total_demand > available:
+            # Only show error on the first row for this item
+            if f'item_stock_{iid}' not in errors:
+                errors[f'item_stock_{iid}'] = (
+                    f'Stok tidak mencukupi untuk item tersebut. '
+                    f'Total permintaan: {total_demand} unit, Stok tersedia: {available} unit.'
+                )
 
         # Tax validation
         tax_val = item_data.get('tax')
