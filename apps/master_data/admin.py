@@ -6,7 +6,7 @@ from .models import (
     EkuitasLv1, EkuitasLv2,
     PendapatanLv1, PendapatanLv2,
     BebanLv1, BebanLv2,
-    Akun, TipeTransaksi, Bukti,
+    Akun, EntitasBisnisAkun, TipeTransaksi, Bukti,
 )
 
 
@@ -121,3 +121,12 @@ class TipeTransaksiAdmin(admin.ModelAdmin):
 class BuktiAdmin(admin.ModelAdmin):
     list_display = ('referensi_eksternal', 'tipe_dokumen', 'uploaded_at')
     search_fields = ('referensi_eksternal',)
+
+
+@admin.register(EntitasBisnisAkun)
+class EntitasBisnisAkunAdmin(admin.ModelAdmin):
+    list_display = ('entitas_bisnis', 'akun')
+    list_filter = ('entitas_bisnis',)
+    search_fields = ('akun__kode_akun', 'akun__nama', 'entitas_bisnis__nama')
+    list_select_related = ('entitas_bisnis', 'akun')
+    raw_id_fields = ('akun',)

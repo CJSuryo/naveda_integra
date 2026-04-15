@@ -243,6 +243,38 @@ class TipeTransaksi(models.Model):
         return f'{self.kode_transaksi} - {self.nama}'
 
 
+# ── Entitas Bisnis — Akun Available ──────────────────────────────────────────
+
+class EntitasBisnisAkun(models.Model):
+    """Links an Entitas Bisnis to available Akun from Chart of Accounts.
+
+    Used to filter which akuns are available for journal entries per EB.
+    """
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis',
+        on_delete=models.CASCADE,
+        related_name='available_akuns',
+        verbose_name='Entitas Bisnis',
+    )
+    akun = models.ForeignKey(
+        Akun,
+        on_delete=models.CASCADE,
+        related_name='entitas_bisnis_links',
+        verbose_name='Akun',
+    )
+
+    class Meta:
+        verbose_name = 'Entitas Bisnis Akun'
+        verbose_name_plural = 'Entitas Bisnis Akun'
+        unique_together = [('entitas_bisnis', 'akun')]
+        indexes = [
+            models.Index(fields=['entitas_bisnis', 'akun'], name='idx_eba_eb_akun'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.entitas_bisnis} → {self.akun}'
+
+
 # ── Bukti ─────────────────────────────────────────────────────────────────────
 
 class Bukti(models.Model):

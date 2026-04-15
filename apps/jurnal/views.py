@@ -385,11 +385,34 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def akun_autocomplete(request: HttpRequest) -> JsonResponse:
-    """Return Akun options matching a search term, for autocomplete widgets."""
+    """Return Akun options matching a search term, for autocomplete widgets.
+
+    Optional query params:
+    - term: search text
+    - eb_id: filter to akuns available for this entitas bisnis (via EntitasBisnisAkun)
+    - all: if '1', return all matching akuns (no limit)
+    """
+    from apps.master_data.models import EntitasBisnisAkun
+
     term = request.GET.get('term', '')
-    akuns = Akun.objects.filter(
+    eb_id = request.GET.get('eb_id', '')
+    return_all = request.GET.get('all', '')
+
+    qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
-    ).order_by('kategori_id', 'kategori_akun')[:200]
+    ).order_by('kategori_id', 'kategori_akun')
+
+    # If eb_id is provided, filter to only available akuns for that EB
+    if eb_id:
+        available_akun_ids = EntitasBisnisAkun.objects.filter(
+            entitas_bisnis_id=eb_id,
+        ).values_list('akun_id', flat=True)
+        if available_akun_ids:
+            qs = qs.filter(pk__in=available_akun_ids)
+
+    if not return_all:
+        qs = qs[:200]
+
     results = [
         {
             'id': a.pk,
@@ -397,7 +420,7 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             'kode': a.kode_akun,
             'nama': a.nama,
         }
-        for a in akuns
+        for a in qs
     ]
     return JsonResponse(results, safe=False)
 

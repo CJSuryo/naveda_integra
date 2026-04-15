@@ -12,6 +12,7 @@
   .ni-jm-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
   .ni-jm-input:focus { outline: none; border-color: var(--ni-primary); }
   .ts-wrapper.single .ts-control { border: 0px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ts-wrapper .ts-dropdown { z-index: 2500; position: absolute; }
   .ni-jm-balance { font-weight: 600; font-size: 0.9rem; }
   .ni-jm-balanced { color: var(--ni-success); }
   .ni-jm-unbalanced { color: var(--ni-danger); }
@@ -37,8 +38,8 @@
 </div>
 {% endif %}
 
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__body">
+<div class="ni-card ni-animate-fade-in" style="overflow:visible;">
+  <div class="ni-card__body" style="overflow:visible;">
     <form id="jmForm" method="post">
       {% csrf_token %}
       <!-- Header fields -->
@@ -54,7 +55,7 @@
         </div>
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Entitas Bisnis</label>
-          <select name="entitas_bisnis" class="ni-input">
+          <select name="entitas_bisnis" id="jmEntitasBisnis" class="ni-input" onchange="jmOnEBChange()">
             <option value="">— Pilih Entitas —</option>
             {% for eb in eb_list %}
             <option value="{{ eb.value }}"{% if eb.value == selected_entitas_bisnis %} selected{% endif %}>{{ eb.label }}</option>
@@ -68,7 +69,7 @@
       </div>
 
       <!-- Rows table -->
-      <div class="ni-table-wrapper" style="margin-bottom:12px;">
+      <div style="margin-bottom:12px;overflow:visible;">
         <table class="ni-jm-table">
           <thead>
             <tr>
@@ -116,6 +117,7 @@
 
   var rowCount = 0;
   var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var _tomSelectInstances = [];  // Track all TomSelect instances for rows
 
   function formatNum(n) {
     return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
@@ -124,6 +126,36 @@
   function parseNum(s) {
     return parseFloat(String(s).replace(/[^0-9.,-]/g, '').replace(',', '.')) || 0;
   }
+
+  function getEBId() {
+    return document.getElementById('jmEntitasBisnis').value || '';
+  }
+
+  function buildAutocompleteUrl(query) {
+    var url = autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1';
+    var ebId = getEBId();
+    if (ebId) url += '&eb_id=' + encodeURIComponent(ebId);
+    return url;
+  }
+
+  function isEBSelected() {
+    return !!getEBId();
+  }
+
+  window.jmOnEBChange = function () {
+    var ebSelected = isEBSelected();
+    // Reload all TomSelect instances with new EB filter
+    _tomSelectInstances.forEach(function (ts) {
+      ts.clearOptions();
+      ts.clear();
+      if (ebSelected) {
+        ts.enable();
+        ts.load('');
+      } else {
+        ts.disable();
+      }
+    });
+  };
 
   window.jmAddRow = function () {
     rowCount++;
@@ -140,16 +172,18 @@
     tbody.appendChild(tr);
 
     // Init TomSelect for the akun select
-    var currentRowNum = rowCount;  // capture in local variable for closure
+    var currentRowNum = rowCount;
+    var ebSelected = isEBSelected();
     var ts = new TomSelect('#akun_sel_' + rowCount, {
       valueField: 'id',
       labelField: 'text',
       searchField: 'text',
       options: [],
-      placeholder: 'Ketik kode/nama akun...',
-      preload: 'focus',
+      placeholder: ebSelected ? 'Ketik kode/nama akun...' : 'Pilih entitas bisnis dahulu...',
+      preload: ebSelected ? 'focus' : false,
       load: function (query, callback) {
-        fetch(autocompleteUrl + '?term=' + encodeURIComponent(query))
+        if (!isEBSelected()) { callback(); return; }
+        fetch(buildAutocompleteUrl(query))
           .then(function (r) { return r.json(); })
           .then(function (data) { callback(data); })
           .catch(function () { callback(); });
@@ -168,13 +202,26 @@
       create: false,
     });
 
+    if (!ebSelected) {
+      ts.disable();
+    }
+
+    _tomSelectInstances.push(ts);
     lucide.createIcons();
     jmUpdateTotals();
   };
 
   window.jmRemoveRow = function (id) {
     var tr = document.getElementById(id);
-    if (tr) tr.remove();
+    if (tr) {
+      var selEl = tr.querySelector('select');
+      if (selEl && selEl.tomselect) {
+        var idx = _tomSelectInstances.indexOf(selEl.tomselect);
+        if (idx !== -1) _tomSelectInstances.splice(idx, 1);
+        selEl.tomselect.destroy();
+      }
+      tr.remove();
+    }
     jmUpdateTotals();
   };
 

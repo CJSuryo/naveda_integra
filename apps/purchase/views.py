@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
-from apps.master_data.models import Akun
+from apps.master_data.models import Akun, EntitasBisnisAkun
 
 from .forms import (
     ItemMasterPurchaseForm, KategoriItemForm, SubTransactionTypeForm,
@@ -1016,3 +1016,105 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         trx_ids = ', '.join(p.transaction_id for p in created_purchases)
         dj_messages.success(request, f'Purchase berhasil dibuat: {trx_ids}')
         return redirect('purchase:list')
+
+
+# ── Available Akun per Entitas Bisnis Settings ───────────────────────────────
+
+@login_required
+def akun_settings(request: HttpRequest) -> HttpResponse:
+    """Settings page for available akuns per entitas bisnis with CoA-like tree checkboxes."""
+    from apps.master_data.models import (
+        AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2,
+        EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2,
+        BebanLv1, BebanLv2,
+    )
+
+    eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+    selected_eb_id = request.GET.get('eb') or (str(eb_list.first().pk) if eb_list.exists() else '')
+    selected_eb = None
+    selected_akun_ids: set[int] = set()
+
+    if selected_eb_id:
+        selected_eb = EntitasBisnis.objects.filter(pk=selected_eb_id).first()
+        if selected_eb:
+            selected_akun_ids = set(
+                EntitasBisnisAkun.objects
+                .filter(entitas_bisnis=selected_eb)
+                .values_list('akun_id', flat=True)
+            )
+
+    # Build CoA tree structure
+    categories = [
+        ('Aset', '1', AsetLv1, AsetLv2, 'aset', 'aset'),
+        ('Kewajiban', '2', KewajibanLv1, KewajibanLv2, 'kewajiban', 'kewajiban'),
+        ('Ekuitas', '3', EkuitasLv1, EkuitasLv2, 'ekuitas', 'ekuitas'),
+        ('Pendapatan', '4', PendapatanLv1, PendapatanLv2, 'pendapatan', 'pendapatan'),
+        ('Beban', '5', BebanLv1, BebanLv2, 'beban', 'beban'),
+    ]
+
+    coa_tree = []
+    for cat_name, prefix, Lv1Model, Lv2Model, kategori_id, fk_name in categories:
+        lv1_items = Lv1Model.objects.all().order_by('kode')
+        cat_children = []
+        for lv1 in lv1_items:
+            lv2_items = Lv2Model.objects.filter(**{fk_name: lv1}).order_by('kode')
+            lv2_children = []
+            for lv2 in lv2_items:
+                akun = Akun.objects.filter(kategori_id=kategori_id, kategori_akun=lv2.pk).first()
+                if akun:
+                    lv2_children.append({
+                        'akun_id': akun.pk,
+                        'kode': akun.kode_akun,
+                        'nama': akun.nama,
+                        'checked': akun.pk in selected_akun_ids,
+                    })
+            cat_children.append({
+                'kode': lv1.kode,
+                'nama': lv1.nama,
+                'lv2s': lv2_children,
+            })
+        coa_tree.append({
+            'name': cat_name,
+            'prefix': prefix,
+            'lv1s': cat_children,
+        })
+
+    return render(request, 'purchase/akun_settings.html', {
+        'eb_list': eb_list,
+        'selected_eb': selected_eb,
+        'selected_eb_id': selected_eb_id,
+        'coa_tree': coa_tree,
+        'selected_akun_ids': selected_akun_ids,
+    })
+
+
+@login_required
+def akun_settings_save(request: HttpRequest) -> JsonResponse:
+    """Save the available akuns for a specific entitas bisnis via AJAX."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+    except (ValueError, TypeError):
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    eb_id = data.get('entitas_bisnis_id')
+    akun_ids = data.get('akun_ids', [])
+
+    if not eb_id:
+        return JsonResponse({'error': 'Entitas bisnis wajib dipilih.'}, status=400)
+
+    eb = EntitasBisnis.objects.filter(pk=eb_id).first()
+    if not eb:
+        return JsonResponse({'error': 'Entitas bisnis tidak ditemukan.'}, status=400)
+
+    with transaction.atomic():
+        EntitasBisnisAkun.objects.filter(entitas_bisnis=eb).delete()
+        EntitasBisnisAkun.objects.bulk_create([
+            EntitasBisnisAkun(entitas_bisnis=eb, akun_id=aid)
+            for aid in akun_ids
+            if Akun.objects.filter(pk=aid).exists()
+        ])
+
+    return JsonResponse({'ok': True, 'count': len(akun_ids)})

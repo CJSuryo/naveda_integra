@@ -30,6 +30,7 @@
       <dt>Holding Cost %</dt><dd>{% if record.holding_cost_pct %}{{ record.holding_cost_pct|floatformat:4 }}{% else %}-{% endif %}</dd>
       <dt>MOQ</dt><dd>{% if record.moq %}{{ record.moq|floatformat:4|intcomma }}{% else %}-{% endif %}</dd>
       <dt>Metode Alokasi Biaya</dt><dd>{{ record.get_metode_alokasi_display|default:'-' }}</dd>
+      <dt>Tanggal Kadaluarsa</dt><dd>{{ record.tanggal_kadaluarsa|default:'-' }}</dd>
       {% if record.purchase_item %}
       <dt>Purchase</dt><dd><a href="{% url 'purchase:detail' record.purchase_item.purchase_eb.purchase_header_id %}" style="color:var(--ni-primary);">{{ record.purchase_item.purchase_eb.purchase_header.transaction_id }}</a></dd>
       {% endif %}
