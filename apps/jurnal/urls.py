@@ -27,6 +27,15 @@ urlpatterns = [
     # Laporan Laba Rugi (Income Statement)
     path('laporan-laba-rugi/', views.laporan_laba_rugi, name='laporan_laba_rugi'),
 
+    # Neraca (Balance Sheet)
+    path('neraca/', views.neraca, name='neraca'),
+
+    # Laporan Perubahan Ekuitas
+    path('laporan-perubahan-ekuitas/', views.laporan_perubahan_ekuitas, name='laporan_perubahan_ekuitas'),
+
+    # Saldo Awal (Opening Balance)
+    path('saldo-awal/', views.saldo_awal, name='saldo_awal'),
+
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
 

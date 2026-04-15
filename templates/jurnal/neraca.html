@@ -1,0 +1,205 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+{% block title %}Neraca (Balance Sheet){% endblock %}
+
+{% block extra_css %}
+<style>
+  .nr-section { margin-bottom: 24px; }
+  .nr-section__title {
+    font-size: 0.9rem; font-weight: 700; color: var(--ni-primary-dark);
+    padding: 8px 16px; background: var(--ni-primary-light); border-radius: var(--ni-radius-sm);
+    margin-bottom: 8px;
+  }
+  .nr-row { display: flex; justify-content: space-between; padding: 6px 16px; font-size: 0.85rem; border-bottom: 1px solid var(--ni-border); }
+  .nr-row:last-child { border-bottom: none; }
+  .nr-row__kode { color: var(--ni-text-muted); font-size: 0.8rem; margin-right: 8px; }
+  .nr-row__value { font-weight: 600; text-align: right; min-width: 120px; }
+  .nr-subtotal { display: flex; justify-content: space-between; padding: 8px 16px;
+    font-weight: 600; font-size: 0.875rem; border-top: 2px solid var(--ni-border); margin-top: 4px; }
+  .nr-total { display: flex; justify-content: space-between; padding: 12px 16px;
+    font-weight: 700; font-size: 0.95rem; border-radius: var(--ni-radius-sm); margin: 4px 0 16px; }
+  .nr-total--primary { background: var(--ni-primary-light); color: var(--ni-primary-dark); }
+  .nr-total--success { background: #d1fae5; color: #065f46; }
+  .nr-total--accent { background: #e0e7ff; color: #312e81; }
+  .nr-total--final { background: var(--ni-primary); color: #fff; font-size: 1.05rem; border-radius: var(--ni-radius); }
+  .nr-balance { padding: 16px; border-radius: var(--ni-radius); text-align: center; font-weight: 700; font-size: 1rem; margin-top: 16px; }
+  .nr-balance--ok { background: #d1fae5; color: #065f46; }
+  .nr-balance--warn { background: #fef2f2; color: var(--ni-danger); }
+  @media print {
+    .ni-sidebar, .ni-mobile-topbar, .ni-page-header__actions, .no-print { display: none !important; }
+    .ni-main { margin-left: 0 !important; padding: 0 !important; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Neraca (Balance Sheet)</h1>
+    <p class="ni-page-header__subtitle">Laporan posisi keuangan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <button onclick="window.print()" class="ni-btn ni-btn--secondary ni-btn--sm">
+      <i data-lucide="printer" style="width:14px;height:14px"></i> Print
+    </button>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in no-print" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan
+      </button>
+      <a href="{% url 'jurnal:neraca' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+
+    <!-- ASET -->
+    <div class="nr-section">
+      <div class="nr-section__title">ASET LANCAR</div>
+      {% for item in aset_lancar_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% empty %}
+      <div class="nr-row" style="color:var(--ni-text-muted);">Tidak ada data</div>
+      {% endfor %}
+      <div class="nr-subtotal">
+        <span>Total Aset Lancar</span>
+        <span>{{ total_aset_lancar|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-section">
+      <div class="nr-section__title">ASET TETAP</div>
+      {% for item in aset_tetap_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% empty %}
+      <div class="nr-row" style="color:var(--ni-text-muted);">Tidak ada data</div>
+      {% endfor %}
+      <div class="nr-subtotal">
+        <span>Total Aset Tetap</span>
+        <span>{{ total_aset_tetap|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-section">
+      <div class="nr-section__title">ASET LAIN-LAIN</div>
+      {% for item in aset_lain_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% empty %}
+      <div class="nr-row" style="color:var(--ni-text-muted);">Tidak ada data</div>
+      {% endfor %}
+      <div class="nr-subtotal">
+        <span>Total Aset Lain-lain</span>
+        <span>{{ total_aset_lain|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-total nr-total--primary">
+      <span>TOTAL ASET</span>
+      <span>{{ total_aset|floatformat:0|intcomma }}</span>
+    </div>
+
+    <!-- KEWAJIBAN -->
+    <div class="nr-section">
+      <div class="nr-section__title">KEWAJIBAN JANGKA PENDEK</div>
+      {% for item in kwj_pendek_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% empty %}
+      <div class="nr-row" style="color:var(--ni-text-muted);">Tidak ada data</div>
+      {% endfor %}
+      <div class="nr-subtotal">
+        <span>Total Kewajiban Jangka Pendek</span>
+        <span>{{ total_kwj_pendek|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-section">
+      <div class="nr-section__title">KEWAJIBAN JANGKA PANJANG</div>
+      {% for item in kwj_panjang_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% empty %}
+      <div class="nr-row" style="color:var(--ni-text-muted);">Tidak ada data</div>
+      {% endfor %}
+      <div class="nr-subtotal">
+        <span>Total Kewajiban Jangka Panjang</span>
+        <span>{{ total_kwj_panjang|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-total nr-total--accent">
+      <span>TOTAL KEWAJIBAN</span>
+      <span>{{ total_kewajiban|floatformat:0|intcomma }}</span>
+    </div>
+
+    <!-- EKUITAS -->
+    <div class="nr-section">
+      <div class="nr-section__title">EKUITAS</div>
+      {% for item in ekuitas_items %}
+      <div class="nr-row">
+        <span><span class="nr-row__kode">{{ item.kode }}</span> {{ item.nama }}</span>
+        <span class="nr-row__value">{{ item.saldo|floatformat:0|intcomma }}</span>
+      </div>
+      {% endfor %}
+      <div class="nr-row" style="font-style:italic;">
+        <span>Laba Tahun Berjalan</span>
+        <span class="nr-row__value">{{ laba_berjalan|floatformat:0|intcomma }}</span>
+      </div>
+      <div class="nr-subtotal">
+        <span>Total Ekuitas</span>
+        <span>{{ total_ekuitas|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+
+    <div class="nr-total nr-total--accent">
+      <span>TOTAL KEWAJIBAN + EKUITAS</span>
+      <span>{{ total_kewajiban_ekuitas|floatformat:0|intcomma }}</span>
+    </div>
+
+    <!-- Balance Check -->
+    {% if is_balanced %}
+    <div class="nr-balance nr-balance--ok">
+      ✅ Neraca Seimbang — Total Aset = Total Kewajiban + Ekuitas
+    </div>
+    {% else %}
+    <div class="nr-balance nr-balance--warn">
+      ⚠️ Neraca Tidak Seimbang — Selisih: Rp {{ selisih|floatformat:0|intcomma }}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

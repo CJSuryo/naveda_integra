@@ -5,8 +5,9 @@ from django.db import transaction
 
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 from apps.purchase.models import FIFOBatch
+from apps.inventory.models import InventoryRecord
 
-from .models import SalesHeader, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem
 
 
 def get_available_stock(item_id: int) -> Decimal:
@@ -56,88 +57,84 @@ def consume_fifo(item_id: int, quantity: Decimal) -> tuple[Decimal, list[tuple[F
 def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHeader]:
     """Generate automated journal entries for a sales transaction.
 
-    For each SalesItem:
-      1. Debit HPP (offset_coa_account) — cogs_amount
-         Credit Persediaan (inventory_account) — cogs_amount
-      2. Debit Kas/Piutang (payment_account) — total_sales
-         Credit Pendapatan (revenue_account) — total_sales
-      3. If tax:
-         Debit Kas/Piutang (payment_account) — tax amount
-         Credit Tax Liability (tax_payment_account or tax_account) — tax amount
+    Per EB group, one journal header with detail lines for all items.
     """
     created_headers: list[JurnalHeader] = []
 
     with transaction.atomic():
-        items = sales_header.items.select_related(
-            'item', 'offset_coa_account', 'revenue_account',
-            'inventory_account', 'tax_account', 'tax_payment_account',
-            'sub_transaction_type',
-        ).all()
+        for eb_group in sales_header.entitas_groups.select_related(
+            'entitas_bisnis', 'payment_account',
+        ).all():
+            items = eb_group.items.select_related(
+                'item', 'offset_coa_account', 'revenue_account',
+                'inventory_account', 'tax_account', 'tax_payment_account',
+                'sub_transaction_type',
+            ).all()
 
-        if not items:
-            return created_headers
+            if not items:
+                continue
 
-        nomor = _next_sales_journal_number()
-        header = JurnalHeader.objects.create(
-            tanggal=sales_header.tanggal,
-            nomor_transaksi=nomor,
-            uraian_transaksi=f'Penjualan {sales_header.transaction_id} — {sales_header.entitas_bisnis.nama}',
-            entitas_bisnis=sales_header.entitas_bisnis,
-            is_penyesuaian=False,
-        )
+            nomor = _next_sales_journal_number()
+            header = JurnalHeader.objects.create(
+                tanggal=sales_header.tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Penjualan {sales_header.transaction_id} — {eb_group.entitas_bisnis.nama}',
+                entitas_bisnis=eb_group.entitas_bisnis,
+                is_penyesuaian=False,
+            )
 
-        detail_lines: list[JurnalDetail] = []
+            detail_lines: list[JurnalDetail] = []
 
-        for si in items:
-            # 1. COGS entry: Debit HPP, Credit Persediaan
-            if si.cogs_amount > 0:
-                detail_lines.append(JurnalDetail(
-                    jurnal_header=header,
-                    akun=si.offset_coa_account,
-                    debit=si.cogs_amount,
-                    kredit=Decimal('0'),
-                ))
-                if si.inventory_account:
+            for si in items:
+                # 1. COGS entry: Debit HPP, Credit Persediaan
+                if si.cogs_amount > 0:
                     detail_lines.append(JurnalDetail(
                         jurnal_header=header,
-                        akun=si.inventory_account,
-                        debit=Decimal('0'),
-                        kredit=si.cogs_amount,
-                    ))
-
-            # 2. Revenue entry: Debit Kas/Piutang, Credit Pendapatan
-            detail_lines.append(JurnalDetail(
-                jurnal_header=header,
-                akun=sales_header.payment_account,
-                debit=si.total_sales,
-                kredit=Decimal('0'),
-            ))
-            detail_lines.append(JurnalDetail(
-                jurnal_header=header,
-                akun=si.revenue_account,
-                debit=Decimal('0'),
-                kredit=si.total_sales,
-            ))
-
-            # 3. Tax entry (if applicable)
-            if si.tax and si.tax > 0:
-                tax_liability_account = si.tax_payment_account or si.tax_account
-                if tax_liability_account:
-                    detail_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=sales_header.payment_account,
-                        debit=si.tax,
+                        akun=si.offset_coa_account,
+                        debit=si.cogs_amount,
                         kredit=Decimal('0'),
                     ))
-                    detail_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=tax_liability_account,
-                        debit=Decimal('0'),
-                        kredit=si.tax,
-                    ))
+                    if si.inventory_account:
+                        detail_lines.append(JurnalDetail(
+                            jurnal_header=header,
+                            akun=si.inventory_account,
+                            debit=Decimal('0'),
+                            kredit=si.cogs_amount,
+                        ))
 
-        JurnalDetail.objects.bulk_create(detail_lines)
-        created_headers.append(header)
+                # 2. Revenue entry: Debit Kas/Piutang, Credit Pendapatan
+                detail_lines.append(JurnalDetail(
+                    jurnal_header=header,
+                    akun=eb_group.payment_account,
+                    debit=si.total_sales,
+                    kredit=Decimal('0'),
+                ))
+                detail_lines.append(JurnalDetail(
+                    jurnal_header=header,
+                    akun=si.revenue_account,
+                    debit=Decimal('0'),
+                    kredit=si.total_sales,
+                ))
+
+                # 3. Tax entry (if applicable)
+                if si.tax and si.tax > 0:
+                    tax_liability_account = si.tax_payment_account or si.tax_account
+                    if tax_liability_account:
+                        detail_lines.append(JurnalDetail(
+                            jurnal_header=header,
+                            akun=eb_group.payment_account,
+                            debit=si.tax,
+                            kredit=Decimal('0'),
+                        ))
+                        detail_lines.append(JurnalDetail(
+                            jurnal_header=header,
+                            akun=tax_liability_account,
+                            debit=Decimal('0'),
+                            kredit=si.tax,
+                        ))
+
+            JurnalDetail.objects.bulk_create(detail_lines)
+            created_headers.append(header)
 
     return created_headers
 
@@ -146,17 +143,39 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
     """Process FIFO outflow for all items in a sales transaction.
 
     Updates cogs_amount and inventory_account on each SalesItem.
+    Also updates InventoryRecord quantities based on FIFO consumption.
     """
     with transaction.atomic():
-        for si in sales_header.items.select_related('item').all():
-            # Only process inventory items (RM/FG/ITM)
-            if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
-                continue
+        for eb_group in sales_header.entitas_groups.all():
+            for si in eb_group.items.select_related('item').all():
+                # Only process inventory items (RM/FG/ITM)
+                if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
+                    continue
 
-            total_cogs, _ = consume_fifo(si.item_id, si.quantity)
-            si.cogs_amount = total_cogs
-            si.inventory_account = si.item.coa_account
-            si.save()
+                total_cogs, consumed = consume_fifo(si.item_id, si.quantity)
+                si.cogs_amount = total_cogs
+                si.inventory_account = si.item.coa_account
+                si.save()
+
+                # Update InventoryRecord quantities based on FIFO consumption
+                records_to_update = []
+                for batch, qty_consumed in consumed:
+                    if batch.purchase_item_id:
+                        inv_records = InventoryRecord.objects.filter(
+                            purchase_item=batch.purchase_item,
+                            item=si.item,
+                        ).order_by('tanggal', 'created_at')
+                        remaining_to_reduce = qty_consumed
+                        for inv_rec in inv_records:
+                            if remaining_to_reduce <= 0:
+                                break
+                            reduce = min(inv_rec.quantity, remaining_to_reduce)
+                            if reduce > 0:
+                                inv_rec.quantity -= reduce
+                                records_to_update.append(inv_rec)
+                                remaining_to_reduce -= reduce
+                if records_to_update:
+                    InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
 
 
 def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:
@@ -171,33 +190,46 @@ def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:
 def reverse_sales_fifo(sales_header: SalesHeader) -> None:
     """Reverse FIFO consumption for a sales transaction.
 
-    Restores remaining_qty on FIFO batches based on cogs_amount and batch unit_price.
-    This is an approximation — re-adds consumed qty back to the most recent batches.
+    Restores remaining_qty on FIFO batches and InventoryRecord quantities.
     """
     with transaction.atomic():
-        for si in sales_header.items.select_related('item').all():
-            if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
-                continue
-            if si.cogs_amount <= 0:
-                continue
+        for eb_group in sales_header.entitas_groups.all():
+            for si in eb_group.items.select_related('item').all():
+                if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
+                    continue
+                if si.cogs_amount <= 0:
+                    continue
 
-            # Restore the consumed quantity back to FIFO batches (reverse order)
-            batches = (
-                FIFOBatch.objects
-                .filter(item_id=si.item_id)
-                .order_by('-tanggal', '-created_at')
-                .select_for_update()
-            )
-            remaining_to_restore = si.quantity
-            for batch in batches:
-                if remaining_to_restore <= 0:
-                    break
-                can_restore = batch.quantity_in - batch.remaining_qty
-                restore = min(can_restore, remaining_to_restore)
-                if restore > 0:
-                    batch.remaining_qty += restore
-                    batch.save()
-                    remaining_to_restore -= restore
+                # Restore FIFO batches (reverse order)
+                batches = (
+                    FIFOBatch.objects
+                    .filter(item_id=si.item_id)
+                    .order_by('-tanggal', '-created_at')
+                    .select_for_update()
+                )
+                remaining_to_restore = si.quantity
+                for batch in batches:
+                    if remaining_to_restore <= 0:
+                        break
+                    can_restore = batch.quantity_in - batch.remaining_qty
+                    restore = min(can_restore, remaining_to_restore)
+                    if restore > 0:
+                        batch.remaining_qty += restore
+                        batch.save()
+                        remaining_to_restore -= restore
+
+                        # Also restore the corresponding InventoryRecord
+                        if batch.purchase_item_id:
+                            inv_records = InventoryRecord.objects.filter(
+                                purchase_item=batch.purchase_item,
+                                item=si.item,
+                            )
+                            records_to_restore = []
+                            for inv_rec in inv_records:
+                                inv_rec.quantity += restore
+                                records_to_restore.append(inv_rec)
+                            if records_to_restore:
+                                InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
 
 
 def _next_sales_journal_number() -> str:

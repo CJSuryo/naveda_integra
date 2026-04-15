@@ -6,6 +6,7 @@ from .models import (
     JurnalAutomasi, JurnalAutomasiAkun,
 )
 from apps.master_data.models import Akun
+from apps.master_data.utils import natural_sort_key
 
 
 def _kode_nama_widgets():
@@ -59,7 +60,9 @@ class JurnalDetailForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['akun'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun'].choices = [('', '---------')] + [
+            (a.pk, str(a)) for a in sorted(Akun.objects.all(), key=lambda a: natural_sort_key(a.kode_akun))
+        ]
 
 
 class JurnalAutomasiForm(forms.ModelForm):
@@ -81,7 +84,9 @@ class JurnalAutomasiAkunForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['akun'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun'].choices = [('', '---------')] + [
+            (a.pk, str(a)) for a in sorted(Akun.objects.all(), key=lambda a: natural_sort_key(a.kode_akun))
+        ]
 
 
 class AutomasiEntryForm(forms.Form):

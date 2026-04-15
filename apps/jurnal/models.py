@@ -77,6 +77,11 @@ class JurnalHeader(models.Model):
         verbose_name='Penyesuaian Manual',
         help_text='True jika jurnal berasal dari penyesuaian manual, False jika dari modul otomatis.',
     )
+    is_saldo_awal = models.BooleanField(
+        default=False,
+        verbose_name='Saldo Awal',
+        help_text='True jika jurnal merupakan entry saldo awal.',
+    )
 
     class Meta:
         verbose_name = 'Jurnal Header'

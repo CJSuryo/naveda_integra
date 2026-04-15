@@ -291,7 +291,8 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
 
-    akun_list = Akun.objects.all().order_by('kode_akun')
+    from apps.master_data.utils import get_akun_sorted
+    akun_list = get_akun_sorted()
 
     # Helper: aggregate debit/kredit for a queryset of JurnalDetail
     def _aggregate(qs):
@@ -398,9 +399,11 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     eb_id = request.GET.get('eb_id', '')
     return_all = request.GET.get('all', '')
 
+    from apps.master_data.utils import natural_sort_key
+
     qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
-    ).order_by('kategori_id', 'kategori_akun')
+    )
 
     # If eb_id is provided, filter to only available akuns for that EB
     if eb_id:
@@ -412,7 +415,9 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             qs = qs.filter(pk__in=available_akun_ids)
 
     if not return_all:
-        qs = qs[:200]
+        akun_objs = sorted(qs[:200], key=lambda a: natural_sort_key(a.kode_akun))
+    else:
+        akun_objs = sorted(qs, key=lambda a: natural_sort_key(a.kode_akun))
 
     results = [
         {
@@ -421,7 +426,7 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
             'kode': a.kode_akun,
             'nama': a.nama,
         }
-        for a in qs
+        for a in akun_objs
     ]
     return JsonResponse(results, safe=False)
 
@@ -804,4 +809,273 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
         'total_beban_non_op': total_beban_non_op,
         'net_non_op': net_non_op,
         'laba_bersih': laba_bersih,
+    })
+
+
+# ── Saldo Awal (Opening Balance) ────────────────────────────────────────────
+
+@login_required
+def saldo_awal(request: HttpRequest) -> HttpResponse:
+    """Spreadsheet-style opening balance entry form (like manual_jurnal_create)."""
+    if request.method == 'POST':
+        tanggal = request.POST.get('tanggal')
+        eb_selection = request.POST.get('entitas_bisnis') or ''
+        eb_id = _resolve_entitas_bisnis_id(eb_selection)
+        rows_json = request.POST.get('rows_data', '[]')
+
+        errors = {}
+        if not tanggal:
+            errors['tanggal'] = 'Tanggal wajib diisi.'
+        if not eb_selection:
+            errors['entitas_bisnis'] = 'Entitas Bisnis wajib dipilih.'
+        elif eb_id is None:
+            errors['entitas_bisnis'] = 'Pilihan entitas bisnis tidak valid.'
+
+        try:
+            rows = json.loads(rows_json)
+        except (ValueError, TypeError):
+            rows = []
+
+        rows = [r for r in rows if r.get('akun_id')]
+        if not rows:
+            errors['rows'] = 'Minimal 1 baris akun wajib diisi.'
+
+        total_debit = sum(Decimal(str(r.get('debit') or 0)) for r in rows)
+        total_kredit = sum(Decimal(str(r.get('kredit') or 0)) for r in rows)
+
+        if not errors and total_debit != total_kredit:
+            errors['balance'] = f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'
+
+        if errors:
+            eb_list = _get_entitas_bisnis_dropdown_options()
+            return render(request, 'jurnal/saldo_awal.html', {
+                'today': tanggal or timezone.now().date(),
+                'eb_list': eb_list,
+                'errors': errors,
+                'posted': True,
+                'selected_entitas_bisnis': eb_selection,
+            })
+
+        nomor = _next_nomor_transaksi('SA')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Saldo Awal — {tanggal}',
+            entitas_bisnis_id=eb_id,
+            is_penyesuaian=True,
+            is_saldo_awal=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun_id=row['akun_id'],
+                debit=Decimal(str(row.get('debit') or 0)),
+                kredit=Decimal(str(row.get('kredit') or 0)),
+            )
+            for row in rows
+        ])
+        dj_messages.success(request, f'Saldo Awal {nomor} berhasil disimpan.')
+        return redirect('jurnal:header_detail', pk=header.pk)
+
+    eb_list = _get_entitas_bisnis_dropdown_options()
+    return render(request, 'jurnal/saldo_awal.html', {
+        'today': timezone.now().date(),
+        'eb_list': eb_list,
+        'errors': {},
+    })
+
+
+# ── Neraca (Balance Sheet) ──────────────────────────────────────────────────
+
+@login_required
+def neraca(request: HttpRequest) -> HttpResponse:
+    """Balance Sheet: Aset, Kewajiban, Ekuitas with balance check."""
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    period_filter: dict = {}
+    if tanggal_sampai:
+        period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+    if eb_filter:
+        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # Aggregate all journal details up to tanggal_sampai
+    agg = (
+        JurnalDetail.objects
+        .filter(**period_filter)
+        .values('akun_id', 'akun__kode_akun', 'akun__nama')
+        .annotate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+
+    akun_balances: dict[str, dict] = {}
+    for row in agg:
+        kode = row['akun__kode_akun'] or ''
+        akun_balances[kode] = {
+            'kode': kode,
+            'nama': row['akun__nama'] or '',
+            'debit': row['total_debit'],
+            'kredit': row['total_kredit'],
+        }
+
+    def _collect_net(prefix: str, normal: str = 'debit') -> tuple[list[dict], Decimal]:
+        """Collect akun items matching prefix and compute net balance.
+        normal='debit': balance = debit - kredit (assets)
+        normal='kredit': balance = kredit - debit (liabilities/equity)
+        """
+        items = []
+        total = Decimal('0')
+        for kode, data in sorted(akun_balances.items(), key=lambda x: x[0]):
+            if kode.startswith(prefix + '.') or kode == prefix:
+                if normal == 'debit':
+                    net = data['debit'] - data['kredit']
+                else:
+                    net = data['kredit'] - data['debit']
+                items.append({'kode': kode, 'nama': data['nama'], 'saldo': net})
+                total += net
+        return items, total
+
+    # ASET
+    aset_lancar_items, total_aset_lancar = _collect_net('1.1', 'debit')
+    aset_tetap_items, total_aset_tetap = _collect_net('1.2', 'debit')
+    aset_lain_items, total_aset_lain = _collect_net('1.3', 'debit')
+    total_aset = total_aset_lancar + total_aset_tetap + total_aset_lain
+
+    # KEWAJIBAN
+    kwj_pendek_items, total_kwj_pendek = _collect_net('2.1', 'kredit')
+    kwj_panjang_items, total_kwj_panjang = _collect_net('2.2', 'kredit')
+    total_kewajiban = total_kwj_pendek + total_kwj_panjang
+
+    # EKUITAS (3.1.x)
+    ekuitas_items, total_ekuitas_akun = _collect_net('3.1', 'kredit')
+
+    # Laba Tahun Berjalan = Pendapatan (4.x) - Beban (5.x)
+    pendapatan_total = Decimal('0')
+    beban_total = Decimal('0')
+    for kode, data in akun_balances.items():
+        if kode.startswith('4.'):
+            pendapatan_total += data['kredit'] - data['debit']
+        elif kode.startswith('5.'):
+            beban_total += data['debit'] - data['kredit']
+
+    laba_berjalan = pendapatan_total - beban_total
+    total_ekuitas = total_ekuitas_akun + laba_berjalan
+
+    total_kewajiban_ekuitas = total_kewajiban + total_ekuitas
+    selisih = total_aset - total_kewajiban_ekuitas
+    is_balanced = abs(selisih) < Decimal('0.01')
+
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+
+    return render(request, 'jurnal/neraca.html', {
+        'tanggal_sampai': tanggal_sampai,
+        'eb_filter': eb_filter,
+        'eb_list': eb_list,
+        # Aset
+        'aset_lancar_items': aset_lancar_items, 'total_aset_lancar': total_aset_lancar,
+        'aset_tetap_items': aset_tetap_items, 'total_aset_tetap': total_aset_tetap,
+        'aset_lain_items': aset_lain_items, 'total_aset_lain': total_aset_lain,
+        'total_aset': total_aset,
+        # Kewajiban
+        'kwj_pendek_items': kwj_pendek_items, 'total_kwj_pendek': total_kwj_pendek,
+        'kwj_panjang_items': kwj_panjang_items, 'total_kwj_panjang': total_kwj_panjang,
+        'total_kewajiban': total_kewajiban,
+        # Ekuitas
+        'ekuitas_items': ekuitas_items, 'total_ekuitas_akun': total_ekuitas_akun,
+        'laba_berjalan': laba_berjalan, 'total_ekuitas': total_ekuitas,
+        # Balance
+        'total_kewajiban_ekuitas': total_kewajiban_ekuitas,
+        'selisih': selisih,
+        'is_balanced': is_balanced,
+    })
+
+
+# ── Laporan Perubahan Ekuitas (LPE) ─────────────────────────────────────────
+
+@login_required
+def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
+    """Statement of Changes in Equity."""
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    # Build period filter for the reporting period
+    period_filter: dict = {}
+    if tanggal_dari:
+        period_filter['jurnal_header__tanggal__gte'] = tanggal_dari
+    if tanggal_sampai:
+        period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+    if eb_filter:
+        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # Build filter for before-period (saldo awal)
+    before_filter: dict = {}
+    if eb_filter:
+        before_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # 1. Saldo Awal Ekuitas = net balance of 3.x accounts BEFORE tanggal_dari
+    saldo_awal_ekuitas = Decimal('0')
+    if tanggal_dari:
+        agg_before = (
+            JurnalDetail.objects
+            .filter(
+                akun__kode_akun__startswith='3.',
+                jurnal_header__tanggal__lt=tanggal_dari,
+                **before_filter,
+            )
+            .aggregate(
+                total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+                total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+            )
+        )
+        saldo_awal_ekuitas = agg_before['total_kredit'] - agg_before['total_debit']
+
+    # 2. Laba Bersih Periode = Pendapatan (4.x) - Beban (5.x) within period
+    pendapatan_agg = (
+        JurnalDetail.objects
+        .filter(akun__kode_akun__startswith='4.', **period_filter)
+        .aggregate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    beban_agg = (
+        JurnalDetail.objects
+        .filter(akun__kode_akun__startswith='5.', **period_filter)
+        .aggregate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    total_pendapatan = pendapatan_agg['total_kredit'] - pendapatan_agg['total_debit']
+    total_beban = beban_agg['total_debit'] - beban_agg['total_kredit']
+    laba_bersih = total_pendapatan - total_beban
+
+    # 3. Prive / Drawing = debit balance of 3.1.4.x accounts within period
+    prive_agg = (
+        JurnalDetail.objects
+        .filter(akun__kode_akun__startswith='3.1.4', **period_filter)
+        .aggregate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    prive = prive_agg['total_debit'] - prive_agg['total_kredit']
+
+    # 4. Saldo Akhir
+    saldo_akhir_ekuitas = saldo_awal_ekuitas + laba_bersih - prive
+
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+
+    return render(request, 'jurnal/laporan_perubahan_ekuitas.html', {
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'eb_filter': eb_filter,
+        'eb_list': eb_list,
+        'saldo_awal_ekuitas': saldo_awal_ekuitas,
+        'laba_bersih': laba_bersih,
+        'prive': prive,
+        'saldo_akhir_ekuitas': saldo_akhir_ekuitas,
     })
