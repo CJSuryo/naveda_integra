@@ -41,9 +41,55 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show inventory record detail."""
+    """Show inventory record detail with mutation history."""
     record = get_object_or_404(
-        InventoryRecord.objects.select_related('item', 'entitas_bisnis', 'purchase_item'),
+        InventoryRecord.objects.select_related(
+            'item', 'entitas_bisnis',
+            'purchase_item__purchase_eb__purchase_header',
+        ),
         pk=pk,
     )
-    return render(request, 'inventory/inventory_detail.html', {'record': record})
+
+    # Build mutation history for this inventory record
+    # Purchase inflow (the purchase that created this record)
+    mutations = []
+    if record.purchase_item:
+        mutations.append({
+            'tanggal': record.tanggal,
+            'tipe': 'Masuk (Purchase)',
+            'referensi': record.purchase_item.purchase_eb.purchase_header.transaction_id,
+            'url': None,
+            'quantity': record.purchase_item.quantity,
+            'keterangan': f'Pembelian via {record.purchase_item.purchase_eb.purchase_header.transaction_id}',
+        })
+
+        # Sales outflows — find SalesItems that consumed FIFO batches linked to this purchase item
+        from apps.purchase.models import FIFOBatch
+        from apps.sales.models import SalesItem
+
+        fifo_batches = FIFOBatch.objects.filter(purchase_item=record.purchase_item)
+        original_qty = sum(b.quantity_in for b in fifo_batches)
+        consumed_qty = sum(b.quantity_in - b.remaining_qty for b in fifo_batches)
+
+        if consumed_qty > 0:
+            # Find sales items that used this item during the same period
+            sales_items = (
+                SalesItem.objects
+                .filter(item=record.item, cogs_amount__gt=0)
+                .select_related('sales_eb__sales_header', 'sales_eb__entitas_bisnis')
+                .order_by('sales_eb__sales_header__tanggal')
+            )
+            for si in sales_items:
+                mutations.append({
+                    'tanggal': si.sales_eb.sales_header.tanggal,
+                    'tipe': 'Keluar (Sales)',
+                    'referensi': si.sales_eb.sales_header.transaction_id,
+                    'url': f'/sales/{si.sales_eb.sales_header_id}/',
+                    'quantity': si.quantity,
+                    'keterangan': f'Penjualan via {si.sales_eb.sales_header.transaction_id} ({si.sales_eb.entitas_bisnis.nama})',
+                })
+
+    return render(request, 'inventory/inventory_detail.html', {
+        'record': record,
+        'mutations': mutations,
+    })

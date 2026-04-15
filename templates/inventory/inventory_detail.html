@@ -14,7 +14,7 @@
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in">
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body">
     <dl class="ni-detail-grid">
       <dt>Inventory Number</dt><dd>{{ record.inventory_number }}</dd>
@@ -37,6 +37,54 @@
       <dt>Dibuat</dt><dd>{{ record.created_at }}</dd>
       <dt>Diperbarui</dt><dd>{{ record.updated_at }}</dd>
     </dl>
+  </div>
+</div>
+
+<!-- Mutasi Persediaan Table -->
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="repeat" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Mutasi Persediaan
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Tipe</th>
+            <th>Referensi</th>
+            <th class="ni-text-right">Quantity</th>
+            <th>Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in mutations %}
+          <tr>
+            <td>{{ m.tanggal }}</td>
+            <td>
+              {% if 'Masuk' in m.tipe %}
+              <span class="ni-badge ni-badge--success">{{ m.tipe }}</span>
+              {% else %}
+              <span class="ni-badge ni-badge--danger">{{ m.tipe }}</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if m.url %}
+              <a href="{{ m.url }}" style="color:var(--ni-primary);">{{ m.referensi }}</a>
+              {% else %}
+              {{ m.referensi }}
+              {% endif %}
+            </td>
+            <td class="ni-text-right">{{ m.quantity|floatformat:4|intcomma }}</td>
+            <td>{{ m.keterangan }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada mutasi.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}

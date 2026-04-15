@@ -29,8 +29,6 @@
     <dl class="ni-detail-grid">
       <dt>Transaction ID</dt><dd>{{ sales.transaction_id }}</dd>
       <dt>Tanggal</dt><dd>{{ sales.tanggal }}</dd>
-      <dt>Entitas Bisnis</dt><dd>{{ sales.entitas_bisnis.nama }}</dd>
-      <dt>Payment Account</dt><dd>{{ sales.payment_account }}</dd>
       <dt>Deskripsi</dt><dd>{{ sales.deskripsi|default:'-' }}</dd>
       <dt>Status</dt><dd>
         {% if sales.is_locked %}
@@ -45,12 +43,18 @@
   </div>
 </div>
 
+{% for eg in eb_groups %}
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body">
-    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
-      <i data-lucide="package" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
-      Item Penjualan
+    <h3 style="margin:0 0 8px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="building-2" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      {{ eg.entitas_bisnis.nama }}
+      {% if eg.entitas_bisnis_lv2 %} / {{ eg.entitas_bisnis_lv2.nama }}{% endif %}
+      {% if eg.entitas_bisnis_lv3 %} / {{ eg.entitas_bisnis_lv3.nama }}{% endif %}
     </h3>
+    <p style="font-size:0.85rem;color:var(--ni-text-muted);margin:0 0 12px;">
+      Payment Account: <strong>{{ eg.payment_account }}</strong>
+    </p>
     <div class="ni-table-wrapper">
       <table class="ni-table">
         <thead>
@@ -66,7 +70,7 @@
           </tr>
         </thead>
         <tbody>
-          {% for si in items %}
+          {% for si in eg.items.all %}
           <tr>
             <td>{{ si.item }}</td>
             <td>{{ si.sub_transaction_type.nama }}</td>
@@ -97,4 +101,54 @@
     </div>
   </div>
 </div>
+{% empty %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body ni-text-center ni-text-muted" style="padding:32px;">
+    Tidak ada data entitas bisnis.
+  </div>
+</div>
+{% endfor %}
+
+<!-- Inventory Mutations Table -->
+{% if inventory_mutations %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="warehouse" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Mutasi Inventory
+    </h3>
+    <p style="font-size:0.85rem;color:var(--ni-text-muted);margin:0 0 12px;">
+      Daftar inventory record yang terpengaruh oleh penjualan ini.
+    </p>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Inventory Number</th>
+            <th>Item</th>
+            <th>Entitas Bisnis</th>
+            <th class="ni-text-right">Qty Terjual</th>
+            <th class="ni-text-right">COGS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in inventory_mutations %}
+          <tr>
+            <td>
+              <a href="{% url 'inventory:detail' m.inventory_pk %}" style="color:var(--ni-primary);">
+                {{ m.inventory_number }}
+              </a>
+            </td>
+            <td>{{ m.item }}</td>
+            <td>{{ m.entitas_bisnis }}</td>
+            <td class="ni-text-right">{{ m.quantity_sold|floatformat:4 }}</td>
+            <td class="ni-text-right">{{ m.cogs|floatformat:0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

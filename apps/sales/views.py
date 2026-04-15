@@ -279,9 +279,30 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'items__tax_account', 'items__tax_payment_account',
     ).all()
 
+    # Build inventory mutations linked to this sales transaction
+    from apps.inventory.models import InventoryRecord
+    inventory_mutations = []
+    for eg in eb_groups:
+        for si in eg.items.all():
+            if si.cogs_amount > 0 and si.item.tipe_item in ('RM', 'FG', 'ITM'):
+                inv_records = InventoryRecord.objects.filter(
+                    item=si.item,
+                    entitas_bisnis=eg.entitas_bisnis,
+                ).select_related('item').order_by('tanggal')
+                for inv_rec in inv_records:
+                    inventory_mutations.append({
+                        'inventory_number': inv_rec.inventory_number,
+                        'inventory_pk': inv_rec.pk,
+                        'item': str(inv_rec.item),
+                        'entitas_bisnis': eg.entitas_bisnis.nama,
+                        'quantity_sold': si.quantity,
+                        'cogs': si.cogs_amount,
+                    })
+
     return render(request, 'sales/sales_detail.html', {
         'sales': sales,
         'eb_groups': eb_groups,
+        'inventory_mutations': inventory_mutations,
     })
 
 
