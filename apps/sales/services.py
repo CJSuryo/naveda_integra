@@ -158,6 +158,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
                 si.save()
 
                 # Update InventoryRecord quantities based on FIFO consumption
+                records_to_update = []
                 for batch, qty_consumed in consumed:
                     if batch.purchase_item_id:
                         inv_records = InventoryRecord.objects.filter(
@@ -171,8 +172,10 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
                             reduce = min(inv_rec.quantity, remaining_to_reduce)
                             if reduce > 0:
                                 inv_rec.quantity -= reduce
-                                inv_rec.save()
+                                records_to_update.append(inv_rec)
                                 remaining_to_reduce -= reduce
+                if records_to_update:
+                    InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
 
 
 def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:
@@ -221,9 +224,12 @@ def reverse_sales_fifo(sales_header: SalesHeader) -> None:
                                 purchase_item=batch.purchase_item,
                                 item=si.item,
                             )
+                            records_to_restore = []
                             for inv_rec in inv_records:
                                 inv_rec.quantity += restore
-                                inv_rec.save()
+                                records_to_restore.append(inv_rec)
+                            if records_to_restore:
+                                InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
 
 
 def _next_sales_journal_number() -> str:

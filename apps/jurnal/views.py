@@ -890,7 +890,6 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
 @login_required
 def neraca(request: HttpRequest) -> HttpResponse:
     """Balance Sheet: Aset, Kewajiban, Ekuitas with balance check."""
-    tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     eb_filter = request.GET.get('entitas_bisnis', '')
 
@@ -971,7 +970,6 @@ def neraca(request: HttpRequest) -> HttpResponse:
     eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
 
     return render(request, 'jurnal/neraca.html', {
-        'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'eb_filter': eb_filter,
         'eb_list': eb_list,
