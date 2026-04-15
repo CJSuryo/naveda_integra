@@ -10,26 +10,9 @@ class SalesHeader(models.Model):
 
     Transaction ID format: TRX-SAL-XXX (auto-generated).
     """
-    TAX_PAYMENT_CHOICES = [
-        ('belum_transfer', 'Belum Transfer'),
-        ('sudah_transfer', 'Sudah Transfer'),
-    ]
     transaction_id = models.CharField(max_length=100, unique=True, editable=False)
     tanggal = models.DateField(db_index=True, default=timezone.now, verbose_name='Tanggal')
-    entitas_bisnis = models.ForeignKey(
-        'entitas_bisnis.EntitasBisnis',
-        on_delete=models.PROTECT,
-        related_name='new_sales_headers',
-        verbose_name='Entitas Bisnis',
-    )
     deskripsi = models.TextField(blank=True, default='', verbose_name='Deskripsi')
-    payment_account = models.ForeignKey(
-        'master_data.Akun',
-        on_delete=models.PROTECT,
-        related_name='sales_payment_headers',
-        verbose_name='Payment Account',
-        help_text='Kas Tunai, Kas di Bank, dll.',
-    )
     is_locked = models.BooleanField(
         default=False,
         verbose_name='Locked',
@@ -44,7 +27,6 @@ class SalesHeader(models.Model):
         ordering = ['-tanggal', '-created_at']
         indexes = [
             models.Index(fields=['tanggal', 'is_locked'], name='idx_nsh_tanggal_locked'),
-            models.Index(fields=['entitas_bisnis', 'tanggal'], name='idx_nsh_eb_tanggal'),
         ]
 
     def __str__(self) -> str:
@@ -78,6 +60,66 @@ class SalesHeader(models.Model):
             return f'{prefix}-{seq:03d}'
 
 
+class SalesEntitasBisnis(models.Model):
+    """Links a sales header to a specific business entity (at any level)."""
+    sales_header = models.ForeignKey(
+        SalesHeader,
+        on_delete=models.CASCADE,
+        related_name='entitas_groups',
+    )
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis',
+        on_delete=models.PROTECT,
+        related_name='sales_groups',
+        verbose_name='Entitas Bisnis (Lv1)',
+    )
+    entitas_bisnis_lv2 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv2',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_groups',
+        verbose_name='Entitas Bisnis Lv2',
+    )
+    entitas_bisnis_lv3 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='sales_groups',
+        verbose_name='Entitas Bisnis Lv3',
+    )
+    payment_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='sales_eb_payment',
+        verbose_name='Payment Account',
+        help_text='Kas Tunai, Kas di Bank, dll.',
+    )
+
+    class Meta:
+        verbose_name = 'Sales Entitas Bisnis'
+        verbose_name_plural = 'Sales Entitas Bisnis'
+        indexes = [
+            models.Index(fields=['sales_header', 'entitas_bisnis'], name='idx_seb_header_eb'),
+            models.Index(fields=['entitas_bisnis_lv2'], name='idx_seb_lv2'),
+            models.Index(fields=['entitas_bisnis_lv3'], name='idx_seb_lv3'),
+        ]
+
+    def __str__(self) -> str:
+        if self.entitas_bisnis_lv3_id:
+            return (
+                f'{self.sales_header.transaction_id} → '
+                f'{self.entitas_bisnis.nama} / {self.entitas_bisnis_lv2.nama} / {self.entitas_bisnis_lv3.nama}'
+            )
+        if self.entitas_bisnis_lv2_id:
+            return (
+                f'{self.sales_header.transaction_id} → '
+                f'{self.entitas_bisnis.nama} / {self.entitas_bisnis_lv2.nama}'
+            )
+        return f'{self.sales_header.transaction_id} → {self.entitas_bisnis.nama}'
+
+
 class SalesItem(models.Model):
     """Individual item line within a sales transaction."""
     TAX_TYPE_CHOICES = [
@@ -90,8 +132,8 @@ class SalesItem(models.Model):
         ('belum_transfer', 'Belum Transfer'),
         ('sudah_transfer', 'Sudah Transfer'),
     ]
-    sales_header = models.ForeignKey(
-        SalesHeader,
+    sales_eb = models.ForeignKey(
+        SalesEntitasBisnis,
         on_delete=models.CASCADE,
         related_name='items',
     )
@@ -191,7 +233,7 @@ class SalesItem(models.Model):
         verbose_name = 'Sales Item'
         verbose_name_plural = 'Sales Items'
         indexes = [
-            models.Index(fields=['sales_header', 'item'], name='idx_nsi_header_item'),
+            models.Index(fields=['sales_eb', 'item'], name='idx_nsi_eb_item'),
             models.Index(fields=['item'], name='idx_nsi_item'),
         ]
 
