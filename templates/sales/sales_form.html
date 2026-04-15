@@ -15,7 +15,7 @@
   .ni-sales-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
   .ni-sales-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-sales-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
-  .ts-wrapper.single .ts-control { border: 0px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
+  .ts-wrapper.single .ts-control { border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
   .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; overflow-x: auto; }
   .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
   .ni-journal-preview th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--ni-border); color: var(--ni-text-muted); font-size: 0.75rem; }
@@ -277,7 +277,7 @@
 
     // Pre-select if editing
     if (prefillId) {
-      var match = akunList.find(function (a) { return a.id === prefillId; });
+      var match = akunList.find(function (a) { return a.id == prefillId; });
       if (match) {
         ts.addOption({ id: match.id, text: match.text });
         ts.setValue(match.id, true);
