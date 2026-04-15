@@ -201,12 +201,24 @@ class SubTransactionType(models.Model):
     """Settings: maps sub-transaction types to default offset CoA accounts.
 
     Examples: 'Stok Awal', 'Pembelian - Transfer', 'Pembelian - Tunai'.
+    Each STT is associated with a specific module (purchase, sales, etc.).
     """
+    MODULE_CHOICES = [
+        ('purchase', 'Purchase'),
+        ('sales', 'Sales'),
+    ]
     DIRECTION_CHOICES = [
         ('inflow', 'Inflow'),
         ('outflow', 'Outflow'),
     ]
-    nama = models.CharField(max_length=255, unique=True, verbose_name='Sub-Transaction Type')
+    nama = models.CharField(max_length=255, verbose_name='Sub-Transaction Type')
+    module = models.CharField(
+        max_length=20,
+        choices=MODULE_CHOICES,
+        default='purchase',
+        db_index=True,
+        verbose_name='Module',
+    )
     direction = models.CharField(
         max_length=10,
         choices=DIRECTION_CHOICES,
@@ -223,6 +235,7 @@ class SubTransactionType(models.Model):
     class Meta:
         verbose_name = 'Sub-Transaction Type'
         verbose_name_plural = 'Sub-Transaction Types'
+        unique_together = [('nama', 'module')]
 
     def __str__(self) -> str:
         return f'{self.nama} ({self.get_direction_display()})'
