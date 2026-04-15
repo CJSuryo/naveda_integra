@@ -5,29 +5,47 @@ from django.test import TestCase
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
-from .models import SalesHeader, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem
 from .services import get_available_stock, consume_fifo
 
 
 class SalesHeaderModelTests(TestCase):
-    def setUp(self):
-        self.tipe = TipeEntitas.objects.create(nama='FnB')
-        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
-        self.akun = Akun.objects.create(kategori_id='aset', nama='Kas')
-
     def test_str(self):
-        h = SalesHeader.objects.create(
-            entitas_bisnis=self.entitas,
-            payment_account=self.akun,
-        )
+        h = SalesHeader.objects.create()
         self.assertTrue(h.transaction_id.startswith('TRX-SAL-'))
         self.assertEqual(str(h), h.transaction_id)
 
     def test_auto_transaction_id(self):
-        h1 = SalesHeader.objects.create(entitas_bisnis=self.entitas, payment_account=self.akun)
-        h2 = SalesHeader.objects.create(entitas_bisnis=self.entitas, payment_account=self.akun)
+        h1 = SalesHeader.objects.create()
+        h2 = SalesHeader.objects.create()
         self.assertEqual(h1.transaction_id, 'TRX-SAL-001')
         self.assertEqual(h2.transaction_id, 'TRX-SAL-002')
+
+
+class SalesEntitasBisnisModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun = Akun.objects.create(kategori_id='aset', nama='Kas')
+        self.header = SalesHeader.objects.create()
+
+    def test_str(self):
+        eb = SalesEntitasBisnis.objects.create(
+            sales_header=self.header,
+            entitas_bisnis=self.entitas,
+            payment_account=self.akun,
+        )
+        self.assertIn('PT Test', str(eb))
+        self.assertIn(self.header.transaction_id, str(eb))
+
+    def test_cascade_delete(self):
+        SalesEntitasBisnis.objects.create(
+            sales_header=self.header,
+            entitas_bisnis=self.entitas,
+            payment_account=self.akun,
+        )
+        self.header.delete()
+        self.assertEqual(SalesEntitasBisnis.objects.count(), 0)
 
 
 class SalesItemModelTests(TestCase):
@@ -44,14 +62,16 @@ class SalesItemModelTests(TestCase):
             nama='Penjualan FnB', module='sales', direction='outflow',
             default_offset_account=self.akun_hpp,
         )
-        self.header = SalesHeader.objects.create(
+        self.header = SalesHeader.objects.create()
+        self.eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=self.header,
             entitas_bisnis=self.entitas,
             payment_account=self.akun_kas,
         )
 
     def test_total_sales_computed(self):
         si = SalesItem.objects.create(
-            sales_header=self.header,
+            sales_eb=self.eb_group,
             item=self.item,
             sub_transaction_type=self.stt,
             quantity=Decimal('10'),
@@ -63,7 +83,7 @@ class SalesItemModelTests(TestCase):
 
     def test_str(self):
         si = SalesItem.objects.create(
-            sales_header=self.header,
+            sales_eb=self.eb_group,
             item=self.item,
             sub_transaction_type=self.stt,
             quantity=Decimal('5'),
@@ -75,7 +95,7 @@ class SalesItemModelTests(TestCase):
 
     def test_cascade_delete(self):
         SalesItem.objects.create(
-            sales_header=self.header,
+            sales_eb=self.eb_group,
             item=self.item,
             sub_transaction_type=self.stt,
             quantity=Decimal('1'),
@@ -111,11 +131,9 @@ class StockAndFIFOTests(TestCase):
 
     def test_consume_fifo(self):
         cogs, consumed = consume_fifo(self.item.pk, Decimal('120'))
-        # 100 × 10000 + 20 × 12000 = 1,240,000
         expected_cogs = Decimal('100') * Decimal('10000') + Decimal('20') * Decimal('12000')
         self.assertEqual(cogs, expected_cogs)
         self.assertEqual(len(consumed), 2)
-        # Remaining stock should be 30
         self.assertEqual(get_available_stock(self.item.pk), Decimal('30'))
 
     def test_consume_fifo_insufficient_stock(self):

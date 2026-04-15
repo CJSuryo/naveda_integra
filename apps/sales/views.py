@@ -1,4 +1,4 @@
-"""Sales views."""
+"""Sales views — restructured with SalesEntitasBisnis groups (like purchase module)."""
 import json
 from decimal import Decimal, InvalidOperation
 
@@ -15,7 +15,7 @@ from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 
-from .models import SalesHeader, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem
 from .services import (
     get_available_stock,
     process_sales_fifo,
@@ -25,6 +25,76 @@ from .services import (
 )
 
 
+def _get_eb_dropdown_options() -> list[dict[str, str]]:
+    """Build hierarchical EntitasBisnis dropdown options (lv1/lv2/lv3)."""
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    lv1_list = list(EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'))
+    lv2_list = list(
+        EntitasBisnisLv2.objects.filter(status_aktif=True)
+        .select_related('entitas_bisnis').order_by('nama')
+    )
+    lv3_list = list(
+        EntitasBisnisLv3.objects.filter(status_aktif=True)
+        .select_related('parent_lv2__entitas_bisnis').order_by('nama')
+    )
+
+    lv2_by_lv1: dict[int, list] = {}
+    for lv2 in lv2_list:
+        lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
+    lv3_by_lv2: dict[int, list] = {}
+    for lv3 in lv3_list:
+        lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
+
+    options: list[dict[str, str]] = []
+    for eb in lv1_list:
+        options.append({'value': f'lv1:{eb.pk}', 'label': eb.nama})
+        for lv2 in lv2_by_lv1.get(eb.pk, []):
+            options.append({'value': f'lv2:{lv2.pk}', 'label': f'\u00a0\u00a0\u00a0\u00a0↳ {lv2.nama}'})
+            for lv3 in lv3_by_lv2.get(lv2.pk, []):
+                options.append({'value': f'lv3:{lv3.pk}', 'label': f'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0↳ {lv3.nama}'})
+    return options
+
+
+def _resolve_eb_selection(selection: str | int | None) -> dict | None:
+    """Resolve a lv1:/lv2:/lv3: prefixed selection to EB level ids."""
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    if selection is None or selection == '':
+        return None
+    if isinstance(selection, int):
+        return {'lv1_id': selection, 'lv2_id': None, 'lv3_id': None}
+    selection = str(selection)
+    if ':' not in selection:
+        try:
+            return {'lv1_id': int(selection), 'lv2_id': None, 'lv3_id': None}
+        except (ValueError, TypeError):
+            return None
+    try:
+        level, raw_pk = selection.split(':', 1)
+        pk = int(raw_pk)
+    except (ValueError, TypeError):
+        return None
+
+    if level == 'lv1':
+        return {'lv1_id': pk, 'lv2_id': None, 'lv3_id': None}
+    if level == 'lv2':
+        lv2 = EntitasBisnisLv2.objects.filter(pk=pk).select_related('entitas_bisnis').first()
+        if not lv2:
+            return None
+        return {'lv1_id': lv2.entitas_bisnis_id, 'lv2_id': lv2.pk, 'lv3_id': None}
+    if level == 'lv3':
+        lv3 = EntitasBisnisLv3.objects.filter(pk=pk).select_related('parent_lv2__entitas_bisnis').first()
+        if not lv3:
+            return None
+        return {
+            'lv1_id': lv3.parent_lv2.entitas_bisnis_id,
+            'lv2_id': lv3.parent_lv2_id,
+            'lv3_id': lv3.pk,
+        }
+    return None
+
+
 # ── Sales List ───────────────────────────────────────────────────────────────
 
 @login_required
@@ -32,10 +102,11 @@ def sales_list(request: HttpRequest) -> HttpResponse:
     """List all sales transactions with filtering."""
     qs = (
         SalesHeader.objects
-        .select_related('entitas_bisnis', 'payment_account')
         .prefetch_related(
-            'items__item',
-            'items__sub_transaction_type',
+            'entitas_groups__entitas_bisnis',
+            'entitas_groups__payment_account',
+            'entitas_groups__items__item',
+            'entitas_groups__items__sub_transaction_type',
         )
         .order_by('-tanggal', '-created_at')
     )
@@ -51,24 +122,26 @@ def sales_list(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
     if item_filter:
-        qs = qs.filter(items__item_id=item_filter).distinct()
+        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
     if stt_filter:
-        qs = qs.filter(items__sub_transaction_type_id=stt_filter).distinct()
+        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
     if eb_filter:
-        qs = qs.filter(entitas_bisnis_id=eb_filter).distinct()
+        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
 
     # Build flat rows
     rows = []
     for sh in qs:
-        for si in sh.items.all():
-            if stt_filter and str(si.sub_transaction_type_id) != str(stt_filter):
-                continue
-            if item_filter and str(si.item_id) != str(item_filter):
-                continue
-            rows.append({
-                'sales_header': sh,
-                'item': si,
-            })
+        for eg in sh.entitas_groups.all():
+            for si in eg.items.all():
+                if stt_filter and str(si.sub_transaction_type_id) != str(stt_filter):
+                    continue
+                if item_filter and str(si.item_id) != str(item_filter):
+                    continue
+                rows.append({
+                    'sales_header': sh,
+                    'entitas_group': eg,
+                    'item': si,
+                })
 
     # Compute rowspan
     trx_rowspan: dict[str, int] = {}
@@ -86,7 +159,6 @@ def sales_list(request: HttpRequest) -> HttpResponse:
             row['show_trx_cell'] = False
             row['trx_rowspan'] = 0
 
-    # Inventory items for filter dropdown (RM/FG/ITM only)
     inventory_items = ItemMasterPurchase.objects.filter(
         tipe_item__in=['RM', 'FG', 'ITM']
     ).order_by('nama')
@@ -122,7 +194,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
         'akun_list': get_akun_sorted(),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_options': _get_eb_dropdown_options(),
     })
 
 
@@ -139,26 +211,42 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         return _handle_sales_save(request, existing=sales)
 
-    items_data = []
-    for si in sales.items.select_related('item', 'sub_transaction_type', 'offset_coa_account',
-                                          'revenue_account', 'tax_account', 'tax_payment_account'):
-        items_data.append({
-            'item_id': si.item_id,
-            'item_name': str(si.item),
-            'sub_transaction_type_id': si.sub_transaction_type_id,
-            'quantity': str(si.quantity),
-            'selling_price': str(si.selling_price),
-            'offset_coa_account_id': si.offset_coa_account_id,
-            'offset_coa_text': str(si.offset_coa_account),
-            'revenue_account_id': si.revenue_account_id,
-            'revenue_account_text': str(si.revenue_account),
-            'tax': str(si.tax) if si.tax else '',
-            'tax_type': si.tax_type or '',
-            'tax_account_id': si.tax_account_id or '',
-            'tax_account_text': str(si.tax_account) if si.tax_account else '',
-            'tax_payment': si.tax_payment or '',
-            'tax_payment_account_id': si.tax_payment_account_id or '',
-            'tax_payment_account_text': str(si.tax_payment_account) if si.tax_payment_account else '',
+    # Build existing EB groups data for JS
+    eb_groups_data = []
+    for eg in sales.entitas_groups.select_related(
+        'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3', 'payment_account',
+    ).all():
+        # Determine the eb_selection value
+        if eg.entitas_bisnis_lv3_id:
+            eb_val = f'lv3:{eg.entitas_bisnis_lv3_id}'
+        elif eg.entitas_bisnis_lv2_id:
+            eb_val = f'lv2:{eg.entitas_bisnis_lv2_id}'
+        else:
+            eb_val = f'lv1:{eg.entitas_bisnis_id}'
+
+        items_data = []
+        for si in eg.items.select_related(
+            'item', 'sub_transaction_type', 'offset_coa_account',
+            'revenue_account', 'tax_account', 'tax_payment_account',
+        ).all():
+            items_data.append({
+                'item_id': si.item_id,
+                'sub_transaction_type_id': si.sub_transaction_type_id,
+                'quantity': str(si.quantity),
+                'selling_price': str(si.selling_price),
+                'offset_coa_account_id': si.offset_coa_account_id,
+                'revenue_account_id': si.revenue_account_id,
+                'tax': str(si.tax) if si.tax else '',
+                'tax_type': si.tax_type or '',
+                'tax_account_id': si.tax_account_id or '',
+                'tax_payment': si.tax_payment or '',
+                'tax_payment_account_id': si.tax_payment_account_id or '',
+            })
+
+        eb_groups_data.append({
+            'eb_selection': eb_val,
+            'payment_account_id': eg.payment_account_id,
+            'items': items_data,
         })
 
     inventory_items = ItemMasterPurchase.objects.filter(
@@ -172,8 +260,8 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
         'akun_list': get_akun_sorted(),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
-        'items_json': json.dumps(items_data),
+        'eb_options': _get_eb_dropdown_options(),
+        'eb_groups_json': json.dumps(eb_groups_data),
     })
 
 
@@ -182,17 +270,18 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """View sales transaction detail."""
-    sales = get_object_or_404(
-        SalesHeader.objects.select_related('entitas_bisnis', 'payment_account'),
-        pk=pk,
-    )
-    items = sales.items.select_related(
-        'item', 'sub_transaction_type', 'offset_coa_account',
-        'revenue_account', 'tax_account', 'tax_payment_account',
+    sales = get_object_or_404(SalesHeader, pk=pk)
+    eb_groups = sales.entitas_groups.select_related(
+        'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3', 'payment_account',
+    ).prefetch_related(
+        'items__item', 'items__sub_transaction_type',
+        'items__offset_coa_account', 'items__revenue_account',
+        'items__tax_account', 'items__tax_payment_account',
     ).all()
+
     return render(request, 'sales/sales_detail.html', {
         'sales': sales,
-        'items': items,
+        'eb_groups': eb_groups,
     })
 
 
@@ -255,28 +344,14 @@ def api_stt_offset(request: HttpRequest) -> JsonResponse:
 
 def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None) -> HttpResponse:
     """Process the sales form submission (create or update)."""
-    try:
-        data = json.loads(request.body) if request.content_type == 'application/json' else None
-    except (ValueError, TypeError):
-        data = None
+    tanggal_str = request.POST.get('tanggal', '')
+    deskripsi = request.POST.get('deskripsi', '')
+    eb_groups_json = request.POST.get('eb_groups_data', '[]')
 
-    if data is None:
-        # Form-encoded data
-        tanggal_str = request.POST.get('tanggal', '')
-        eb_id = request.POST.get('entitas_bisnis', '')
-        payment_account_id = request.POST.get('payment_account', '')
-        deskripsi = request.POST.get('deskripsi', '')
-        items_json = request.POST.get('items_data', '[]')
-        try:
-            items_list = json.loads(items_json)
-        except (ValueError, TypeError):
-            items_list = []
-    else:
-        tanggal_str = data.get('tanggal', '')
-        eb_id = data.get('entitas_bisnis', '')
-        payment_account_id = data.get('payment_account', '')
-        deskripsi = data.get('deskripsi', '')
-        items_list = data.get('items', [])
+    try:
+        eb_groups_list = json.loads(eb_groups_json)
+    except (ValueError, TypeError):
+        eb_groups_list = []
 
     # Validation
     errors: dict[str, str] = {}
@@ -291,84 +366,77 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     else:
         errors['tanggal'] = 'Tanggal wajib diisi.'
 
-    if not eb_id:
-        errors['entitas_bisnis'] = 'Entitas Bisnis wajib dipilih.'
-
-    if not payment_account_id:
-        errors['payment_account'] = 'Payment Account wajib dipilih.'
-
-    if not items_list:
-        errors['items'] = 'Minimal satu item harus ditambahkan.'
+    if not eb_groups_list:
+        errors['eb_groups'] = 'Minimal satu Entitas Bisnis harus ditambahkan.'
 
     # Pre-compute total demand per item for cross-row stock validation
     item_demands: dict[int, Decimal] = {}
-    for i, item_data in enumerate(items_list):
-        item_id = item_data.get('item_id')
-        if not item_id:
-            continue
-        try:
-            qty = Decimal(str(item_data.get('quantity', 0)))
-            if qty > 0:
-                iid = int(item_id)
-                item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
-        except (InvalidOperation, ValueError):
-            pass
+    all_items_flat: list[dict] = []
 
-    # Validate each item
-    for i, item_data in enumerate(items_list):
-        item_id = item_data.get('item_id')
-        if not item_id:
-            errors[f'item_{i}_id'] = f'Item {i + 1}: Item wajib dipilih.'
+    for g_idx, group in enumerate(eb_groups_list):
+        eb_sel = group.get('eb_selection', '')
+        if not eb_sel:
+            errors[f'group_{g_idx}_eb'] = f'Grup {g_idx + 1}: Entitas Bisnis wajib dipilih.'
             continue
 
-        try:
-            qty = Decimal(str(item_data.get('quantity', 0)))
-            if qty <= 0:
-                errors[f'item_{i}_qty'] = f'Item {i + 1}: Quantity harus > 0.'
-        except (InvalidOperation, ValueError):
-            errors[f'item_{i}_qty'] = f'Item {i + 1}: Quantity tidak valid.'
+        eb_resolved = _resolve_eb_selection(eb_sel)
+        if not eb_resolved:
+            errors[f'group_{g_idx}_eb'] = f'Grup {g_idx + 1}: Entitas Bisnis tidak valid.'
             continue
 
-        try:
-            price = Decimal(str(item_data.get('selling_price', 0)))
-            if price <= 0:
-                errors[f'item_{i}_price'] = f'Item {i + 1}: Harga jual harus > 0.'
-        except (InvalidOperation, ValueError):
-            errors[f'item_{i}_price'] = f'Item {i + 1}: Harga jual tidak valid.'
+        payment_account_id = group.get('payment_account_id', '')
+        if not payment_account_id:
+            errors[f'group_{g_idx}_payment'] = f'Grup {g_idx + 1}: Payment Account wajib dipilih.'
 
-        # Stock validation (check total demand for this item across all rows)
-        iid = int(item_id)
-        total_demand = item_demands.get(iid, Decimal('0'))
-        available = get_available_stock(iid)
-        # When editing, add back the existing consumed qty for this item
-        if existing:
-            for old_si in existing.items.filter(item_id=iid):
-                available += old_si.quantity
-        if total_demand > available:
-            # Only show error on the first row for this item
-            if f'item_stock_{iid}' not in errors:
-                errors[f'item_stock_{iid}'] = (
-                    f'Stok tidak mencukupi untuk item tersebut. '
-                    f'Total permintaan: {total_demand} unit, Stok tersedia: {available} unit.'
-                )
+        items = group.get('items', [])
+        if not items:
+            errors[f'group_{g_idx}_items'] = f'Grup {g_idx + 1}: Minimal satu item harus ditambahkan.'
+            continue
 
-        # Tax validation
-        tax_val = item_data.get('tax')
-        if tax_val:
+        for i, item_data in enumerate(items):
+            item_id = item_data.get('item_id')
+            if not item_id:
+                errors[f'group_{g_idx}_item_{i}_id'] = f'Grup {g_idx + 1}, Item {i + 1}: Item wajib dipilih.'
+                continue
+
             try:
-                tax_amount = Decimal(str(tax_val))
-                if tax_amount > 0:
-                    if not item_data.get('tax_type'):
-                        errors[f'item_{i}_tax_type'] = f'Item {i + 1}: Tax Type wajib diisi jika ada pajak.'
-                    if not item_data.get('tax_payment'):
-                        errors[f'item_{i}_tax_payment'] = f'Item {i + 1}: Tax Payment Status wajib diisi jika ada pajak.'
+                qty = Decimal(str(item_data.get('quantity', 0)))
+                if qty <= 0:
+                    errors[f'group_{g_idx}_item_{i}_qty'] = f'Grup {g_idx + 1}, Item {i + 1}: Quantity harus > 0.'
             except (InvalidOperation, ValueError):
-                errors[f'item_{i}_tax'] = f'Item {i + 1}: Nilai pajak tidak valid.'
+                errors[f'group_{g_idx}_item_{i}_qty'] = f'Grup {g_idx + 1}, Item {i + 1}: Quantity tidak valid.'
+                continue
 
-        if not item_data.get('offset_coa_account_id'):
-            errors[f'item_{i}_offset'] = f'Item {i + 1}: Offset CoA (HPP) wajib diisi.'
-        if not item_data.get('revenue_account_id'):
-            errors[f'item_{i}_revenue'] = f'Item {i + 1}: Revenue Account wajib diisi.'
+            try:
+                price = Decimal(str(item_data.get('selling_price', 0)))
+                if price <= 0:
+                    errors[f'group_{g_idx}_item_{i}_price'] = f'Grup {g_idx + 1}, Item {i + 1}: Harga jual harus > 0.'
+            except (InvalidOperation, ValueError):
+                errors[f'group_{g_idx}_item_{i}_price'] = f'Grup {g_idx + 1}, Item {i + 1}: Harga jual tidak valid.'
+
+            # Stock validation
+            iid = int(item_id)
+            item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
+
+            if not item_data.get('offset_coa_account_id'):
+                errors[f'group_{g_idx}_item_{i}_offset'] = f'Grup {g_idx + 1}, Item {i + 1}: Offset CoA (HPP) wajib diisi.'
+            if not item_data.get('revenue_account_id'):
+                errors[f'group_{g_idx}_item_{i}_revenue'] = f'Grup {g_idx + 1}, Item {i + 1}: Revenue Account wajib diisi.'
+
+            all_items_flat.append(item_data)
+
+    # Check stock availability
+    for iid, total_demand in item_demands.items():
+        available = get_available_stock(iid)
+        if existing:
+            for eg in existing.entitas_groups.all():
+                for old_si in eg.items.filter(item_id=iid):
+                    available += old_si.quantity
+        if total_demand > available:
+            errors[f'item_stock_{iid}'] = (
+                f'Stok tidak mencukupi. '
+                f'Total permintaan: {total_demand} unit, Stok tersedia: {available} unit.'
+            )
 
     if errors:
         dj_messages.error(request, 'Terdapat kesalahan pada form. Silakan periksa kembali.')
@@ -382,9 +450,9 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'items_master': inventory_items,
             'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
             'akun_list': get_akun_sorted(),
-            'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+            'eb_options': _get_eb_dropdown_options(),
             'errors': errors,
-            'items_json': json.dumps(items_list),
+            'eb_groups_json': json.dumps(eb_groups_list),
         })
 
     # Save
@@ -392,39 +460,45 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
         if existing:
             reverse_sales_automated_journals(existing)
             reverse_sales_fifo(existing)
-            existing.items.all().delete()
+            existing.entitas_groups.all().delete()
             existing.tanggal = tanggal
-            existing.entitas_bisnis_id = eb_id
-            existing.payment_account_id = payment_account_id
             existing.deskripsi = deskripsi
             existing.save()
             sales = existing
         else:
             sales = SalesHeader.objects.create(
                 tanggal=tanggal,
-                entitas_bisnis_id=eb_id,
-                payment_account_id=payment_account_id,
                 deskripsi=deskripsi,
             )
 
-        for item_data in items_list:
-            tax_val = item_data.get('tax')
-            tax_amount = Decimal(str(tax_val)) if tax_val else None
-
-            SalesItem.objects.create(
+        for group in eb_groups_list:
+            eb_resolved = _resolve_eb_selection(group['eb_selection'])
+            eb_group = SalesEntitasBisnis.objects.create(
                 sales_header=sales,
-                item_id=item_data['item_id'],
-                sub_transaction_type_id=item_data['sub_transaction_type_id'],
-                quantity=Decimal(str(item_data['quantity'])),
-                selling_price=Decimal(str(item_data['selling_price'])),
-                offset_coa_account_id=item_data['offset_coa_account_id'],
-                revenue_account_id=item_data['revenue_account_id'],
-                tax=tax_amount,
-                tax_type=item_data.get('tax_type', ''),
-                tax_account_id=item_data.get('tax_account_id') or None,
-                tax_payment=item_data.get('tax_payment', ''),
-                tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
+                entitas_bisnis_id=eb_resolved['lv1_id'],
+                entitas_bisnis_lv2_id=eb_resolved.get('lv2_id'),
+                entitas_bisnis_lv3_id=eb_resolved.get('lv3_id'),
+                payment_account_id=group['payment_account_id'],
             )
+
+            for item_data in group.get('items', []):
+                tax_val = item_data.get('tax')
+                tax_amount = Decimal(str(tax_val)) if tax_val else None
+
+                SalesItem.objects.create(
+                    sales_eb=eb_group,
+                    item_id=item_data['item_id'],
+                    sub_transaction_type_id=item_data['sub_transaction_type_id'],
+                    quantity=Decimal(str(item_data['quantity'])),
+                    selling_price=Decimal(str(item_data['selling_price'])),
+                    offset_coa_account_id=item_data['offset_coa_account_id'],
+                    revenue_account_id=item_data['revenue_account_id'],
+                    tax=tax_amount,
+                    tax_type=item_data.get('tax_type', ''),
+                    tax_account_id=item_data.get('tax_account_id') or None,
+                    tax_payment=item_data.get('tax_payment', ''),
+                    tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
+                )
 
         # Process FIFO outflow
         process_sales_fifo(sales)
