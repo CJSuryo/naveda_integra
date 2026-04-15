@@ -601,9 +601,10 @@
       labelField: 'text',
       searchField: 'text',
       placeholder: 'Ketik kode/nama akun...',
+      maxOptions: false,
       preload: 'focus',
       load: function (query, callback) {
-        fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query))
+        fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
           .then(function (r) { return r.json(); })
           .then(function (data) { callback(data); })
           .catch(function () { callback(); });
