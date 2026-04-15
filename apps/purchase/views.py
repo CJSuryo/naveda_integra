@@ -1030,7 +1030,8 @@ def akun_settings(request: HttpRequest) -> HttpResponse:
     )
 
     eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
-    selected_eb_id = request.GET.get('eb') or (str(eb_list.first().pk) if eb_list.exists() else '')
+    first_eb = eb_list.first()
+    selected_eb_id = request.GET.get('eb') or (str(first_eb.pk) if first_eb else '')
     selected_eb = None
     selected_akun_ids: set[int] = set()
 

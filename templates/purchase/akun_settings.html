@@ -163,6 +163,18 @@
     if (el) el.textContent = '(' + count + ' akun dipilih)';
   };
 
+  function showToast(message, type) {
+    var toast = document.createElement('div');
+    toast.className = 'ni-toast ni-toast--' + (type || 'success');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.classList.add('ni-toast--visible'); }, 10);
+    setTimeout(function() {
+      toast.classList.remove('ni-toast--visible');
+      setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
+  }
+
   window.saveSettings = function() {
     var ebId = document.getElementById('ebSelector').value;
     if (!ebId) return;
@@ -180,10 +192,10 @@
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (data.error) {
-        alert(data.error);
+        showToast(data.error, 'danger');
         return;
       }
-      alert('Berhasil disimpan! ' + data.count + ' akun tersedia untuk entitas bisnis ini.');
+      showToast('Berhasil disimpan! ' + data.count + ' akun tersedia untuk entitas bisnis ini.', 'success');
     });
   };
 })();
