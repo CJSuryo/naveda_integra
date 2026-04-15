@@ -111,7 +111,7 @@
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div class="ni-modal-backdrop" id="deleteModal" style="display:none;">
+<div class="ni-modal-backdrop" id="deleteModal">
   <div class="ni-modal ni-modal--sm">
     <div class="ni-modal__header">
       <h3 class="ni-modal__title">Konfirmasi Hapus</h3>
@@ -141,11 +141,11 @@
   window.openDeleteModal = function(url, name) {
     document.getElementById('deleteModalForm').action = url;
     document.getElementById('deleteModalName').textContent = name;
-    document.getElementById('deleteModal').style.display = 'flex';
+    document.getElementById('deleteModal').classList.add('ni-modal-backdrop--visible');
     lucide.createIcons();
   };
   window.closeDeleteModal = function() {
-    document.getElementById('deleteModal').style.display = 'none';
+    document.getElementById('deleteModal').classList.remove('ni-modal-backdrop--visible');
   };
   document.getElementById('deleteModal').addEventListener('click', function(e) {
     if (e.target === this) closeDeleteModal();
