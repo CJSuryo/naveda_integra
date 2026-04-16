@@ -7,7 +7,7 @@ from apps.jurnal.models import JurnalHeader, JurnalDetail
 from apps.purchase.models import FIFOBatch
 from apps.inventory.models import InventoryRecord
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation
 
 
 def get_available_stock(item_id: int) -> Decimal:
@@ -159,6 +159,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
 
                 # Update InventoryRecord quantities based on FIFO consumption
                 records_to_update = []
+                allocations_to_create = []
                 for batch, qty_consumed in consumed:
                     if batch.purchase_item_id:
                         inv_records = InventoryRecord.objects.filter(
@@ -173,9 +174,17 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
                             if reduce > 0:
                                 inv_rec.quantity -= reduce
                                 records_to_update.append(inv_rec)
+                                allocations_to_create.append(SalesItemFIFOAllocation(
+                                    sales_item=si,
+                                    inventory_record=inv_rec,
+                                    quantity_consumed=reduce,
+                                    cogs_amount=reduce * batch.unit_price,
+                                ))
                                 remaining_to_reduce -= reduce
                 if records_to_update:
                     InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
+                if allocations_to_create:
+                    SalesItemFIFOAllocation.objects.bulk_create(allocations_to_create)
 
 
 def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:

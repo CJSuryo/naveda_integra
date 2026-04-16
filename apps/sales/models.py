@@ -244,3 +244,43 @@ class SalesItem(models.Model):
         self.total_sales = self.quantity * self.selling_price
         super().save(*args, **kwargs)
 
+
+class SalesItemFIFOAllocation(models.Model):
+    """Per-batch FIFO allocation — records exactly which InventoryRecord batch
+    was consumed by a SalesItem and in what quantity.
+
+    Created by process_sales_fifo; cascades on SalesItem delete.
+    """
+    sales_item = models.ForeignKey(
+        SalesItem,
+        on_delete=models.CASCADE,
+        related_name='fifo_allocations',
+    )
+    inventory_record = models.ForeignKey(
+        'inventory.InventoryRecord',
+        on_delete=models.CASCADE,
+        related_name='sales_allocations',
+    )
+    quantity_consumed = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        verbose_name='Qty Consumed',
+    )
+    cogs_amount = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        default=0,
+        verbose_name='COGS Amount',
+    )
+
+    class Meta:
+        verbose_name = 'Sales FIFO Allocation'
+        verbose_name_plural = 'Sales FIFO Allocations'
+        indexes = [
+            models.Index(fields=['sales_item'], name='idx_sfa_sales_item'),
+            models.Index(fields=['inventory_record'], name='idx_sfa_inv_record'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.sales_item} → {self.inventory_record} × {self.quantity_consumed}'
+

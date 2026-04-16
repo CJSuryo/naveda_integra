@@ -1,0 +1,55 @@
+/* ============================================================
+   Transaction Forms — shared styles for purchase, sales,
+   and manual journal form pages.
+   ============================================================ */
+
+/* TomSelect: ensure dropdown floats above container/card borders */
+.ts-wrapper .ts-dropdown {
+  z-index: 2500;
+  position: absolute;
+}
+
+/* TomSelect: compact control sizing for table cells */
+.ts-wrapper.single .ts-control {
+  border: 0 solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  min-height: unset;
+}
+
+/* Journal preview panel (purchase & sales) */
+.ni-journal-preview {
+  background: var(--ni-bg);
+  border-radius: var(--ni-radius);
+  padding: 16px;
+  margin-top: 16px;
+  overflow-x: auto;
+}
+.ni-journal-preview table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  min-width: 500px;
+}
+.ni-journal-preview th {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--ni-border);
+  color: var(--ni-text-muted);
+  font-size: 0.75rem;
+}
+.ni-journal-preview td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ni-border);
+}
+
+/* Advanced toggle link (purchase & sales) */
+.ni-advanced-toggle {
+  cursor: pointer;
+  color: var(--ni-primary);
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}

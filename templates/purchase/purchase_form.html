@@ -4,6 +4,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<link rel="stylesheet" href="{% static 'css/transaction-forms.css' %}">
 <style>
   .ni-purchase-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
   .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -15,12 +16,6 @@
   .ni-purchase-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
   .ni-purchase-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-purchase-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
-  .ts-wrapper.single .ts-control { border: 0px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; }
-  .ni-journal-preview { background: var(--ni-bg); border-radius: var(--ni-radius); padding: 16px; margin-top: 16px; overflow-x: auto; }
-  .ni-journal-preview table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
-  .ni-journal-preview th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--ni-border); color: var(--ni-text-muted); font-size: 0.75rem; }
-  .ni-journal-preview td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); }
-  .ni-advanced-toggle { cursor: pointer; color: var(--ni-primary); font-size: 0.8rem; display: inline-flex; align-items: center; gap: 4px; }
   .ni-purchase-item-table-wrapper { overflow-x: auto; }
   @media (max-width: 768px) {
     .ni-purchase-eb-card { padding: 12px; }
@@ -492,6 +487,7 @@
       searchField: 'text',
       options: [],
       placeholder: 'Ketik nama/kode item...',
+      dropdownParent: 'body',
       preload: 'focus',
       load: function (query, callback) {
         var currentEbLv1 = ebSelect ? getEBLv1Id(ebSelect.value) : '';
@@ -603,6 +599,7 @@
       labelField: 'text',
       searchField: 'text',
       placeholder: 'Ketik kode/nama akun...',
+      dropdownParent: 'body',
       maxOptions: false,
       preload: 'focus',
       shouldLoad: function () { return false; },

@@ -15,7 +15,7 @@ from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation
 from .services import (
     get_available_stock,
     process_sales_fifo,
@@ -279,25 +279,28 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'items__tax_account', 'items__tax_payment_account',
     ).all()
 
-    # Build inventory mutations linked to this sales transaction
-    from apps.inventory.models import InventoryRecord
+    # Build inventory mutations from per-batch FIFO allocations
     inventory_mutations = []
-    for eg in eb_groups:
-        for si in eg.items.all():
-            if si.cogs_amount > 0 and si.item.tipe_item in ('RM', 'FG', 'ITM'):
-                inv_records = InventoryRecord.objects.filter(
-                    item=si.item,
-                    entitas_bisnis=eg.entitas_bisnis,
-                ).select_related('item').order_by('tanggal')
-                for inv_rec in inv_records:
-                    inventory_mutations.append({
-                        'inventory_number': inv_rec.inventory_number,
-                        'inventory_pk': inv_rec.pk,
-                        'item': str(inv_rec.item),
-                        'entitas_bisnis': eg.entitas_bisnis.nama,
-                        'quantity_sold': si.quantity,
-                        'cogs': si.cogs_amount,
-                    })
+    allocations = (
+        SalesItemFIFOAllocation.objects
+        .filter(sales_item__sales_eb__sales_header=sales)
+        .select_related(
+            'inventory_record__item',
+            'inventory_record__entitas_bisnis',
+            'sales_item__sales_eb__entitas_bisnis',
+        )
+        .order_by('inventory_record__tanggal', 'inventory_record__inventory_number')
+    )
+    for alloc in allocations:
+        inv_rec = alloc.inventory_record
+        inventory_mutations.append({
+            'inventory_number': inv_rec.inventory_number,
+            'inventory_pk': inv_rec.pk,
+            'item': str(inv_rec.item),
+            'entitas_bisnis': alloc.sales_item.sales_eb.entitas_bisnis.nama,
+            'quantity_sold': alloc.quantity_consumed,
+            'cogs': alloc.cogs_amount,
+        })
 
     return render(request, 'sales/sales_detail.html', {
         'sales': sales,
