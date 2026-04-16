@@ -95,7 +95,7 @@ class InventoryRecord(models.Model):
         max_digits=15, decimal_places=4, null=True, blank=True, verbose_name='MOQ',
     )
     metode_alokasi = models.CharField(
-        max_length=20,
+        max_length=50,
         choices=METODE_ALOKASI_CHOICES,
         blank=True,
         default='',
