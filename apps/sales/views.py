@@ -328,7 +328,7 @@ def sales_delete(request: HttpRequest, pk: int) -> HttpResponse:
         dj_messages.success(request, f'Sales {tid} berhasil dihapus.')
         return redirect('sales:list')
 
-    return render(request, 'sales/sales_confirm_delete.html', {'object': sales})
+    return redirect('sales:list')
 
 
 # ── API Endpoints ────────────────────────────────────────────────────────────

@@ -367,7 +367,7 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
         dj_messages.success(request, f'Purchase {purchase.transaction_id} berhasil dihapus.')
         return redirect('purchase:list')
 
-    return render(request, 'purchase/purchase_confirm_delete.html', {'object': purchase})
+    return redirect('purchase:list')
 
 
 # ── Journal Preview API ──────────────────────────────────────────────────────
@@ -538,10 +538,7 @@ def item_master_delete(request: HttpRequest, pk: int) -> HttpResponse:
         obj.delete()
         dj_messages.success(request, 'Item berhasil dihapus.')
         return redirect(list_url)
-    return render(request, 'purchase/item_master_confirm_delete.html', {
-        'object': obj,
-        'list_url': list_url,
-    })
+    return redirect(list_url)
 
 
 # ── Sub-Transaction Type (Settings) CRUD ─────────────────────────────────────
@@ -596,7 +593,7 @@ def settings_delete(request: HttpRequest, pk: int) -> HttpResponse:
                 f'"{obj.nama}" tidak dapat dihapus karena masih digunakan oleh transaksi lain.',
             )
         return redirect('purchase:settings_list')
-    return render(request, 'purchase/settings_confirm_delete.html', {'object': obj})
+    return redirect('purchase:settings_list')
 
 
 # ── Kategori Item CRUD ───────────────────────────────────────────────────────
@@ -638,7 +635,7 @@ def kategori_delete(request: HttpRequest, pk: int) -> HttpResponse:
         obj.delete()
         dj_messages.success(request, 'Kategori berhasil dihapus.')
         return redirect('purchase:kategori_list')
-    return render(request, 'purchase/kategori_confirm_delete.html', {'object': obj})
+    return redirect('purchase:kategori_list')
 
 
 # ── API endpoints ────────────────────────────────────────────────────────────

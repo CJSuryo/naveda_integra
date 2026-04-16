@@ -244,7 +244,7 @@ def aset_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/aset/lv1_confirm_delete.html', {'object': obj})
+    return redirect('master_data:chart_of_accounts')
 
 
 @login_required
@@ -296,7 +296,7 @@ def aset_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/aset/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('master_data:chart_of_accounts')
 
 
 # ── Kewajiban Level 1 ─────────────────────────────────────────────────────────
@@ -348,7 +348,7 @@ def kewajiban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/kewajiban/lv1_confirm_delete.html', {'object': obj})
+    return redirect('master_data:chart_of_accounts')
 
 
 @login_required
@@ -400,7 +400,7 @@ def kewajiban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResp
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/kewajiban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('master_data:chart_of_accounts')
 
 
 # ── Ekuitas Level 1 ───────────────────────────────────────────────────────────
@@ -452,7 +452,7 @@ def ekuitas_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/ekuitas/lv1_confirm_delete.html', {'object': obj})
+    return redirect('master_data:chart_of_accounts')
 
 
 @login_required
@@ -504,7 +504,7 @@ def ekuitas_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRespon
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/ekuitas/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('master_data:chart_of_accounts')
 
 
 # ── Pendapatan Level 1 ────────────────────────────────────────────────────────
@@ -556,7 +556,7 @@ def pendapatan_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/pendapatan/lv1_confirm_delete.html', {'object': obj})
+    return redirect('master_data:chart_of_accounts')
 
 
 @login_required
@@ -608,7 +608,7 @@ def pendapatan_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpRes
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/pendapatan/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('master_data:chart_of_accounts')
 
 
 # ── Beban Level 1 ────────────────────────────────────────────────────────────
@@ -660,7 +660,7 @@ def beban_lv1_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, 'Tidak dapat dihapus karena masih ada akun yang digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/beban/lv1_confirm_delete.html', {'object': obj})
+    return redirect('master_data:chart_of_accounts')
 
 
 @login_required
@@ -712,7 +712,7 @@ def beban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse
             messages.error(request, 'Tidak dapat dihapus karena akun ini masih digunakan dalam jurnal.')
             return redirect('master_data:chart_of_accounts')
         return redirect('master_data:chart_of_accounts')
-    return render(request, 'master_data/beban/lv2_confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('master_data:chart_of_accounts')
 
 
 # ── Chart of Accounts ─────────────────────────────────────────────────────────

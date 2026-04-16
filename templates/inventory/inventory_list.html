@@ -99,38 +99,5 @@
   </div>
 </div>
 
-<!-- Delete Modal -->
-<div class="ni-modal-backdrop" id="deleteModal">
-  <div class="ni-modal ni-modal--sm">
-    <div class="ni-modal__header">
-      <h3 class="ni-modal__title">Konfirmasi Hapus</h3>
-      <button class="ni-modal__close" type="button" onclick="closeDeleteModal()"><i data-lucide="x"></i></button>
-    </div>
-    <div class="ni-modal__body" style="text-align:center;padding:24px;">
-      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
-      </div>
-      <p style="color:var(--ni-text);margin-bottom:0;">Hapus <strong id="deleteModalName"></strong>?</p>
-    </div>
-    <div class="ni-modal__footer">
-      <form id="deleteModalForm" method="post" action="">
-        {% csrf_token %}
-        <div class="ni-btn-row" style="justify-content:center;">
-          <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
-          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeDeleteModal()">Batal</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-<script>
-function openDeleteModal(url, name) {
-  document.getElementById('deleteModalForm').action = url;
-  document.getElementById('deleteModalName').textContent = name;
-  document.getElementById('deleteModal').classList.add('ni-modal-backdrop--visible');
-}
-function closeDeleteModal() {
-  document.getElementById('deleteModal').classList.remove('ni-modal-backdrop--visible');
-}
-</script>
+{% include 'components/delete_modal.html' %}
 {% endblock %}

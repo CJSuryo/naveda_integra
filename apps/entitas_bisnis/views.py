@@ -55,7 +55,7 @@ def tipe_entitas_delete(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         obj.delete()
         return redirect('entitas_bisnis:tipe_entitas_list')
-    return render(request, 'entitas_bisnis/tipe_entitas/confirm_delete.html', {'object': obj})
+    return redirect('entitas_bisnis:tipe_entitas_list')
 
 
 # ── Entitas Bisnis (Level 1) ─────────────────────────────────────────────────
@@ -129,7 +129,7 @@ def delete_view(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         obj.delete()
         return redirect('entitas_bisnis:list')
-    return render(request, 'entitas_bisnis/confirm_delete.html', {'object': obj})
+    return redirect('entitas_bisnis:list')
 
 
 # ── Entitas Bisnis Level 2 ───────────────────────────────────────────────────
@@ -172,7 +172,7 @@ def lv2_delete(request: HttpRequest, eb_pk: int, pk: int) -> HttpResponse:
     if request.method == 'POST':
         obj.delete()
         return redirect('entitas_bisnis:detail', pk=eb_pk)
-    return render(request, 'entitas_bisnis/lv2/confirm_delete.html', {'object': obj, 'parent': parent})
+    return redirect('entitas_bisnis:list')
 
 
 @login_required
@@ -226,4 +226,4 @@ def lv3_delete(request: HttpRequest, eb_pk: int, lv2_pk: int, pk: int) -> HttpRe
     if request.method == 'POST':
         obj.delete()
         return redirect('entitas_bisnis:lv2_detail', eb_pk=eb_pk, pk=lv2_pk)
-    return render(request, 'entitas_bisnis/lv3/confirm_delete.html', {'object': obj, 'parent_lv2': parent_lv2, 'parent_lv1': parent_lv1})
+    return redirect('entitas_bisnis:list')

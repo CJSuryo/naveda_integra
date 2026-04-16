@@ -139,7 +139,7 @@ def item_delete(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         obj.delete()
         return redirect('jurnal:item_list')
-    return render(request, 'jurnal/item_confirm_delete.html', {'object': obj})
+    return redirect('jurnal:item_list')
 
 
 # ── Automasi / Jurnal Manual CRUD ────────────────────────────────────────────
@@ -176,7 +176,7 @@ def automasi_delete(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         obj.delete()
         return redirect('jurnal:automasi_list')
-    return render(request, 'jurnal/automasi_confirm_delete.html', {'object': obj})
+    return redirect('jurnal:automasi_list')
 
 
 @login_required

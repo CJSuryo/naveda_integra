@@ -116,7 +116,7 @@ class AsetLainnyaViewTests(TestCase):
 
     def test_delete_get(self):
         res = self.client.get(reverse('aset_lainnya:delete', args=[self.record.pk]))
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 302)
 
     def test_delete_post(self):
         res = self.client.post(reverse('aset_lainnya:delete', args=[self.record.pk]))

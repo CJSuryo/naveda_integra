@@ -93,4 +93,4 @@ def aset_lainnya_delete(request: HttpRequest, pk: int) -> HttpResponse:
         record.delete()
         messages.success(request, f'Aset lainnya {number} berhasil dihapus.')
         return redirect('aset_lainnya:list')
-    return render(request, 'aset_lainnya/aset_lainnya_confirm_delete.html', {'record': record})
+    return redirect('aset_lainnya:list')

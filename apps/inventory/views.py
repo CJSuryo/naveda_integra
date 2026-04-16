@@ -154,4 +154,4 @@ def inventory_delete(request: HttpRequest, pk: int) -> HttpResponse:
         record.delete()
         messages.success(request, f'Inventory record {number} berhasil dihapus.')
         return redirect('inventory:list')
-    return render(request, 'inventory/inventory_confirm_delete.html', {'record': record})
+    return redirect('inventory:list')

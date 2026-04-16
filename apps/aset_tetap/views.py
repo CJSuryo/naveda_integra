@@ -98,4 +98,4 @@ def aset_tetap_delete(request: HttpRequest, pk: int) -> HttpResponse:
         record.delete()
         messages.success(request, f'Aset tetap {number} berhasil dihapus.')
         return redirect('aset_tetap:list')
-    return render(request, 'aset_tetap/aset_tetap_confirm_delete.html', {'record': record})
+    return redirect('aset_tetap:list')

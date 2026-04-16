@@ -160,7 +160,7 @@ def user_delete(request: HttpRequest, pk: int) -> HttpResponse:
         user_obj.delete()
         dj_messages.success(request, f'User {email} berhasil dihapus.')
         return redirect('accounts:user_list')
-    return render(request, 'accounts/user_confirm_delete.html', {'user_obj': user_obj})
+    return redirect('accounts:user_list')
 
 
 @login_required

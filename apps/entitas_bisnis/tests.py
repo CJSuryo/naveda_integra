@@ -171,7 +171,7 @@ class EntitasBisnisViewTests(TestCase):
 
     def test_delete_view_get(self):
         response = self.client.get(reverse('entitas_bisnis:delete', args=[self.eb.pk]))
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, 302)
 
     def test_delete_view_post(self):
         response = self.client.post(reverse('entitas_bisnis:delete', args=[self.eb.pk]))
