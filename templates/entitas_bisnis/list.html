@@ -33,9 +33,11 @@
           style="padding:4px 8px;">
           <i data-lucide="pencil" style="width:14px;height:14px"></i>
         </button>
-        <a href="{% url 'entitas_bisnis:delete' lv1.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:4px 8px;">
+        <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
+          onclick="openDeleteModal('{% url 'entitas_bisnis:delete' lv1.pk %}', '{{ lv1.nama|escapejs }}')"
+          style="padding:4px 8px;">
           <i data-lucide="trash-2" style="width:14px;height:14px"></i>
-        </a>
+        </button>
       </div>
     </div>
     <!-- Lv2 children -->
@@ -57,9 +59,11 @@
               style="padding:3px 6px;">
               <i data-lucide="pencil" style="width:12px;height:12px"></i>
             </button>
-            <a href="{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:3px 6px;">
+            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
+              onclick="openDeleteModal('{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}', '{{ lv2.nama|escapejs }}')"
+              style="padding:3px 6px;">
               <i data-lucide="trash-2" style="width:12px;height:12px"></i>
-            </a>
+            </button>
           </div>
         </div>
         <!-- Lv3 children -->
@@ -75,9 +79,11 @@
                 style="padding:2px 5px;">
                 <i data-lucide="pencil" style="width:11px;height:11px"></i>
               </button>
-              <a href="{% url 'entitas_bisnis:lv3_delete' lv1.pk lv2.pk lv3.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus" style="padding:2px 5px;">
+              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
+                onclick="openDeleteModal('{% url 'entitas_bisnis:lv3_delete' lv1.pk lv2.pk lv3.pk %}', '{{ lv3.nama|escapejs }}')"
+                style="padding:2px 5px;">
                 <i data-lucide="trash-2" style="width:11px;height:11px"></i>
-              </a>
+              </button>
             </div>
           </div>
           {% empty %}
@@ -256,12 +262,43 @@
     </div>
   </div>
 </div>
+<!-- ── Modal: Delete ─────────────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="deleteModal">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Konfirmasi Hapus</h3>
+      <button class="ni-modal__close" type="button" onclick="closeDeleteModal()"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body" style="text-align:center;padding:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <p style="color:var(--ni-text);margin-bottom:0;">Hapus <strong id="deleteModalName"></strong>?</p>
+    </div>
+    <div class="ni-modal__footer">
+      <form id="deleteModalForm" method="post" action="">
+        {% csrf_token %}
+        <div class="ni-btn-row" style="justify-content:center;">
+          <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeDeleteModal()">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endblock %}
-
-{% block extra_js %}
 <script>
 (function () {
   'use strict';
+
+  function openDeleteModal(url, name) {
+    document.getElementById('deleteModalForm').action = url;
+    document.getElementById('deleteModalName').textContent = name;
+    document.getElementById('deleteModal').classList.add('ni-modal-backdrop--visible');
+  }
+  function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.remove('ni-modal-backdrop--visible');
+  }
 
   // URL templates using Django's URL reversal (sentinel PK = 0 replaced at runtime)
   var _URL_SENTINEL = '0';

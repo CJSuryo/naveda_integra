@@ -1,8 +1,10 @@
 """Inventory views — CRUD for InventoryRecord."""
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from .forms import InventoryRecordForm
 from .models import InventoryRecord
 
 
@@ -108,3 +110,48 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'record': record,
         'mutations': mutations,
     })
+
+
+@login_required
+def inventory_create(request: HttpRequest) -> HttpResponse:
+    """Manually create a new InventoryRecord (e.g. saldo awal)."""
+    if request.method == 'POST':
+        form = InventoryRecordForm(request.POST)
+        if form.is_valid():
+            record = form.save()
+            messages.success(request, f'Inventory record {record.inventory_number} berhasil dibuat.')
+            return redirect('inventory:detail', pk=record.pk)
+    else:
+        form = InventoryRecordForm()
+    return render(request, 'inventory/inventory_form.html', {'form': form, 'title': 'Tambah Inventory Record'})
+
+
+@login_required
+def inventory_update(request: HttpRequest, pk: int) -> HttpResponse:
+    """Edit an existing InventoryRecord."""
+    record = get_object_or_404(InventoryRecord, pk=pk)
+    if request.method == 'POST':
+        form = InventoryRecordForm(request.POST, instance=record)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Inventory record {record.inventory_number} berhasil diperbarui.')
+            return redirect('inventory:detail', pk=record.pk)
+    else:
+        form = InventoryRecordForm(instance=record)
+    return render(request, 'inventory/inventory_form.html', {
+        'form': form,
+        'record': record,
+        'title': f'Edit {record.inventory_number}',
+    })
+
+
+@login_required
+def inventory_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete an InventoryRecord."""
+    record = get_object_or_404(InventoryRecord, pk=pk)
+    if request.method == 'POST':
+        number = record.inventory_number
+        record.delete()
+        messages.success(request, f'Inventory record {number} berhasil dihapus.')
+        return redirect('inventory:list')
+    return render(request, 'inventory/inventory_confirm_delete.html', {'record': record})

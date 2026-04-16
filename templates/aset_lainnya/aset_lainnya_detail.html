@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Detail Aset Lainnya {{ record.aset_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ record.aset_number }}</h1>
+    <p class="ni-page-header__subtitle">Detail aset lainnya</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'aset_lainnya:update' record.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="openDeleteModal()">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </button>
+    <a href="{% url 'aset_lainnya:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Nomor Aset</dt><dd>{{ record.aset_number }}</dd>
+      <dt>Item</dt><dd>{{ record.item.item_id }} - {{ record.item.nama }}</dd>
+      <dt>Tipe Item</dt><dd>{{ record.item.get_tipe_item_display }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
+      <dt>Tanggal Perolehan</dt><dd>{{ record.tanggal_perolehan }}</dd>
+      <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}</dd>
+      <dt>Harga Perolehan</dt><dd>{{ record.harga_perolehan|floatformat:0|intcomma }}</dd>
+      <dt>Nilai Perolehan</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
+      <dt>Akumulasi Amortisasi</dt><dd>{{ record.akumulasi_amortisasi|floatformat:0|intcomma }}</dd>
+      <dt>Nilai Buku</dt><dd><strong>{{ record.nilai_buku|floatformat:0|intcomma }}</strong></dd>
+      <dt>Masa Manfaat</dt><dd>{% if record.masa_manfaat %}{{ record.masa_manfaat }} tahun{% elif record.item.masa_manfaat %}{{ record.item.masa_manfaat }} tahun (dari item master){% else %}-{% endif %}</dd>
+      <dt>Metode Amortisasi</dt>
+      <dd>
+        {% if record.metode_amortisasi %}
+          {{ record.get_metode_amortisasi_display }}
+        {% elif record.item.metode_amortisasi %}
+          {{ record.item.get_metode_amortisasi_display }} (dari item master)
+        {% else %}
+          -
+        {% endif %}
+      </dd>
+      {% if record.purchase_item %}
+      <dt>Purchase</dt>
+      <dd>
+        <a href="{% url 'purchase:detail' record.purchase_item.purchase_eb.purchase_header_id %}" style="color:var(--ni-primary);">
+          {{ record.purchase_item.purchase_eb.purchase_header.transaction_id }}
+        </a>
+      </dd>
+      {% endif %}
+      <dt>Keterangan</dt><dd>{{ record.keterangan|default:'-' }}</dd>
+      <dt>Dibuat</dt><dd>{{ record.created_at }}</dd>
+      <dt>Diperbarui</dt><dd>{{ record.updated_at }}</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="ni-modal-backdrop" id="deleteModal">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Konfirmasi Hapus</h3>
+      <button class="ni-modal__close" type="button" onclick="closeDeleteModal()"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body" style="text-align:center;padding:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <p style="color:var(--ni-text);margin-bottom:0;">Hapus <strong>{{ record.aset_number }}</strong>?</p>
+    </div>
+    <div class="ni-modal__footer">
+      <form method="post" action="{% url 'aset_lainnya:delete' record.pk %}">
+        {% csrf_token %}
+        <div class="ni-btn-row" style="justify-content:center;">
+          <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeDeleteModal()">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+function openDeleteModal() {
+  document.getElementById('deleteModal').classList.add('ni-modal-backdrop--visible');
+}
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('ni-modal-backdrop--visible');
+}
+</script>
+{% endblock %}

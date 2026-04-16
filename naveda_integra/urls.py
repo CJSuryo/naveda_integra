@@ -13,6 +13,8 @@ urlpatterns = [
     path('purchase/', include('apps.purchase.urls')),
     path('sales/', include('apps.sales.urls')),
     path('inventory/', include('apps.inventory.urls')),
+    path('aset-tetap/', include('apps.aset_tetap.urls')),
+    path('aset-lainnya/', include('apps.aset_lainnya.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 

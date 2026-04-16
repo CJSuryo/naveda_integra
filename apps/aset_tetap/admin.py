@@ -1,0 +1,16 @@
+"""Aset Tetap admin."""
+from django.contrib import admin
+from .models import AsetTetapRecord
+
+
+@admin.register(AsetTetapRecord)
+class AsetTetapRecordAdmin(admin.ModelAdmin):
+    list_display = (
+        'aset_number', 'item', 'entitas_bisnis',
+        'quantity', 'harga_perolehan', 'total_value',
+        'akumulasi_penyusutan', 'tanggal_perolehan', 'kondisi',
+    )
+    list_select_related = ('item', 'entitas_bisnis')
+    list_filter = ('tanggal_perolehan', 'kondisi', 'metode_penyusutan')
+    search_fields = ('aset_number', 'item__nama', 'item__item_id', 'lokasi')
+    raw_id_fields = ('item', 'purchase_item', 'entitas_bisnis')

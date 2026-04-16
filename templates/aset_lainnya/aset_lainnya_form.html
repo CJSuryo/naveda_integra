@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">{% if record %}Edit data aset lainnya{% else %}Tambah catatan aset lainnya baru{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% if record %}{% url 'aset_lainnya:detail' record.pk %}{% else %}{% url 'aset_lainnya:list' %}{% endif %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:800px;">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.item.label }}</label>
+          {{ form.item }}
+          {% if form.item.errors %}<div class="ni-form-error">{{ form.item.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
+          {{ form.entitas_bisnis }}
+          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.tanggal_perolehan.label }}</label>
+          {{ form.tanggal_perolehan }}
+          {% if form.tanggal_perolehan.errors %}<div class="ni-form-error">{{ form.tanggal_perolehan.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.quantity.label }}</label>
+          {{ form.quantity }}
+          {% if form.quantity.errors %}<div class="ni-form-error">{{ form.quantity.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.harga_perolehan.label }}</label>
+          {{ form.harga_perolehan }}
+          {% if form.harga_perolehan.errors %}<div class="ni-form-error">{{ form.harga_perolehan.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.akumulasi_amortisasi.label }}</label>
+          {{ form.akumulasi_amortisasi }}
+          {% if form.akumulasi_amortisasi.errors %}<div class="ni-form-error">{{ form.akumulasi_amortisasi.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--ni-border);">
+      <p style="font-size:0.8125rem;color:var(--ni-text-muted);margin:0 0 12px;">Override Parameter (opsional — kosongkan untuk pakai nilai item master)</p>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.masa_manfaat.label }}</label>
+          {{ form.masa_manfaat }}
+          {% if form.masa_manfaat.errors %}<div class="ni-form-error">{{ form.masa_manfaat.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.metode_amortisasi.label }}</label>
+          {{ form.metode_amortisasi }}
+          {% if form.metode_amortisasi.errors %}<div class="ni-form-error">{{ form.metode_amortisasi.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.keterangan.label }}</label>
+        {{ form.keterangan }}
+        {% if form.keterangan.errors %}<div class="ni-form-error">{{ form.keterangan.errors }}</div>{% endif %}
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% if record %}{% url 'aset_lainnya:detail' record.pk %}{% else %}{% url 'aset_lainnya:list' %}{% endif %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

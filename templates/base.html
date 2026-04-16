@@ -189,6 +189,32 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'aset-tetap' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="building" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Aset Tetap</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'aset_tetap:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Aset Tetap</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="ni-nav-item {% if 'aset-lainnya' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="layers" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Aset Lainnya</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'aset_lainnya:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Aset Lainnya</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'jurnal' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="book-open" class="ni-nav-link__icon"></i>

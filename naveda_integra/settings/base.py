@@ -38,6 +38,8 @@ INSTALLED_APPS = [
     'apps.piutang',
     'apps.inventory',
     'apps.purchase',
+    'apps.aset_tetap',
+    'apps.aset_lainnya',
 ]
 
 MIDDLEWARE = [
