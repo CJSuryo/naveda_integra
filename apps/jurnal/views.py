@@ -885,6 +885,148 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
     })
 
 
+# ── Saldo Awal Persediaan (Inventory Opening Balance) ───────────────────────
+
+@login_required
+def saldo_awal_persediaan(request: HttpRequest) -> HttpResponse:
+    """Opening balance for inventory: initialises FIFOBatch + InventoryRecord + journal."""
+    from django.db import transaction as db_transaction
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.inventory.models import InventoryRecord
+
+    if request.method == 'POST':
+        tanggal = request.POST.get('tanggal', '').strip()
+        eb_selection = request.POST.get('entitas_bisnis', '').strip()
+        offset_akun_id_raw = request.POST.get('offset_akun_id', '').strip()
+        rows_json = request.POST.get('rows_data', '[]')
+
+        errors: dict = {}
+        if not tanggal:
+            errors['tanggal'] = 'Tanggal wajib diisi.'
+
+        eb_id: int | None = None
+        if not eb_selection:
+            errors['entitas_bisnis'] = 'Entitas Bisnis wajib dipilih.'
+        else:
+            eb_id = _resolve_entitas_bisnis_id(eb_selection)
+            if eb_id is None:
+                errors['entitas_bisnis'] = 'Pilihan entitas bisnis tidak valid.'
+
+        if not offset_akun_id_raw:
+            errors['offset_akun'] = 'Akun penyeimbang (kredit) wajib dipilih.'
+
+        try:
+            rows = json.loads(rows_json)
+        except (ValueError, TypeError):
+            rows = []
+
+        valid_rows: list[dict] = []
+        for r in rows:
+            item_pk_raw = str(r.get('item_id') or '').strip()
+            coa_id_raw = str(r.get('coa_account_id') or '').strip()
+            try:
+                qty = Decimal(str(r.get('quantity') or '0'))
+                unit_price = Decimal(str(r.get('unit_price') or '0'))
+            except Exception:
+                qty = Decimal('0')
+                unit_price = Decimal('0')
+            if item_pk_raw and item_pk_raw.isdigit() and coa_id_raw and coa_id_raw.isdigit() and qty > 0 and unit_price >= 0:
+                valid_rows.append({
+                    'item_pk': int(item_pk_raw),
+                    'coa_id': int(coa_id_raw),
+                    'qty': qty,
+                    'unit_price': unit_price,
+                    'total': qty * unit_price,
+                })
+
+        if not valid_rows and not errors:
+            errors['rows'] = 'Minimal 1 baris item persediaan valid wajib diisi.'
+
+        if errors:
+            eb_list = _get_entitas_bisnis_dropdown_options()
+            return render(request, 'jurnal/saldo_awal_persediaan.html', {
+                'today': tanggal or timezone.now().date(),
+                'eb_list': eb_list,
+                'errors': errors,
+                'posted': True,
+                'selected_entitas_bisnis': eb_selection,
+            })
+
+        total_value = sum(r['total'] for r in valid_rows)
+        offset_akun_id = int(offset_akun_id_raw)
+
+        with db_transaction.atomic():
+            nomor = _next_nomor_transaksi('SAINV')
+            header = JurnalHeader.objects.create(
+                tanggal=tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Saldo Awal Persediaan — {tanggal}',
+                entitas_bisnis_id=eb_id,
+                is_penyesuaian=True,
+                is_saldo_awal=True,
+            )
+
+            items_map = {
+                item.pk: item
+                for item in ItemMasterPurchase.objects.filter(
+                    pk__in=[r['item_pk'] for r in valid_rows]
+                )
+            }
+
+            journal_details: list[JurnalDetail] = []
+            for row in valid_rows:
+                item = items_map.get(row['item_pk'])
+                if not item:
+                    continue
+                # Debit: inventory CoA account
+                journal_details.append(JurnalDetail(
+                    jurnal_header=header,
+                    akun_id=row['coa_id'],
+                    debit=row['total'],
+                    kredit=Decimal('0'),
+                ))
+            # Single credit: offset account for full total
+            journal_details.append(JurnalDetail(
+                jurnal_header=header,
+                akun_id=offset_akun_id,
+                debit=Decimal('0'),
+                kredit=total_value,
+            ))
+            JurnalDetail.objects.bulk_create(journal_details)
+
+            # Create InventoryRecord and FIFOBatch per row (needs .save() for auto-numbering)
+            for row in valid_rows:
+                item = items_map.get(row['item_pk'])
+                if not item:
+                    continue
+                InventoryRecord.objects.create(
+                    item=item,
+                    purchase_item=None,
+                    entitas_bisnis_id=eb_id,
+                    quantity=row['qty'],
+                    unit_price=row['unit_price'],
+                    tanggal=tanggal,
+                )
+                FIFOBatch.objects.create(
+                    purchase_item=None,
+                    item=item,
+                    tanggal=tanggal,
+                    quantity_in=row['qty'],
+                    unit_price=row['unit_price'],
+                    remaining_qty=row['qty'],
+                )
+
+        dj_messages.success(request, f'Saldo Awal Persediaan {nomor} berhasil disimpan.')
+        return redirect('jurnal:header_detail', pk=header.pk)
+
+    eb_list = _get_entitas_bisnis_dropdown_options()
+    return render(request, 'jurnal/saldo_awal_persediaan.html', {
+        'today': timezone.now().date(),
+        'eb_list': eb_list,
+        'errors': {},
+    })
+
+
 # ── Neraca (Balance Sheet) ──────────────────────────────────────────────────
 
 @login_required

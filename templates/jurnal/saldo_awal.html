@@ -30,6 +30,22 @@
   </div>
 </div>
 
+<!-- ── Shortcut cards for specialised opening balance forms ── -->
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
+  <a href="{% url 'jurnal:saldo_awal_persediaan' %}" class="ni-card ni-card--hover ni-animate-fade-in" style="flex:1;min-width:220px;max-width:320px;text-decoration:none;cursor:pointer;">
+    <div class="ni-card__body" style="display:flex;align-items:center;gap:14px;padding:18px 20px;">
+      <div style="width:44px;height:44px;border-radius:12px;background:var(--ni-primary-light);color:var(--ni-primary);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i data-lucide="package" style="width:22px;height:22px"></i>
+      </div>
+      <div>
+        <div style="font-weight:700;color:var(--ni-text);font-size:0.95rem;">Saldo Awal Persediaan</div>
+        <div style="font-size:0.78rem;color:var(--ni-text-muted);margin-top:2px;">Input stok riil + HPP → FIFO Engine &amp; InventoryRecord</div>
+      </div>
+      <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--ni-text-muted);margin-left:auto;flex-shrink:0;"></i>
+    </div>
+  </a>
+</div>
+
 {% if errors %}
 <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
   <ul style="margin:0;padding-left:16px;">

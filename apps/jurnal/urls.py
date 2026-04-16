@@ -35,6 +35,7 @@ urlpatterns = [
 
     # Saldo Awal (Opening Balance)
     path('saldo-awal/', views.saldo_awal, name='saldo_awal'),
+    path('saldo-awal/persediaan/', views.saldo_awal_persediaan, name='saldo_awal_persediaan'),
 
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
