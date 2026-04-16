@@ -1,9 +1,12 @@
 """Unit tests for the sales app."""
+import json
 from decimal import Decimal
-from django.test import TestCase
+from django.test import TestCase, Client
+from django.urls import reverse
 
+from apps.accounts.models import Role, User
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
-from apps.master_data.models import Akun
+from apps.master_data.models import Akun, AsetLv1, AsetLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem
 from .services import get_available_stock, consume_fifo
@@ -139,3 +142,126 @@ class StockAndFIFOTests(TestCase):
     def test_consume_fifo_insufficient_stock(self):
         with self.assertRaises(ValueError):
             consume_fifo(self.item.pk, Decimal('200'))
+
+
+class SalesViewTests(TestCase):
+    """View-level tests that cover the POST paths which failed in production."""
+
+    def setUp(self):
+        self.role = Role.objects.create(kode='admin', nama='Admin')
+        self.user = User.objects.create_user(email='test@test.com', password='pass1234', role=self.role)
+        self.client = Client()
+        self.client.login(email='test@test.com', password='pass1234')
+
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe ABC', tipe_entitas=self.tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        self.akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='3', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan Tunai', module='sales', direction='outflow',
+            default_offset_account=self.akun_persediaan,
+        )
+        # Create FIFO stock so sales can proceed
+        FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01',
+            quantity_in=Decimal('100'), unit_price=Decimal('10000'),
+            remaining_qty=Decimal('100'),
+        )
+
+    def _eb_groups_payload(self, quantity='5', selling_price='20000'):
+        """Return valid eb_groups_data JSON for a single group / single item."""
+        groups = [{
+            'eb_selection': f'lv1:{self.eb.pk}',
+            'payment_account_id': self.akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'quantity': quantity,
+                'selling_price': selling_price,
+                'offset_coa_account_id': self.akun_persediaan.pk,
+                'revenue_account_id': self.akun_pendapatan.pk,
+            }],
+        }]
+        return json.dumps(groups)
+
+    def test_sales_list_get(self):
+        resp = self.client.get(reverse('sales:list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_sales_list_login_required(self):
+        self.client.logout()
+        resp = self.client.get(reverse('sales:list'))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_sales_create_get(self):
+        resp = self.client.get(reverse('sales:create'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_sales_create_post_creates_header_without_entitas_bisnis_on_header(self):
+        """Bug 1 regression: SalesHeader must NOT have entitas_bisnis_id.
+        The EB lives in SalesEntitasBisnis; the header itself has no such FK.
+        """
+        resp = self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test penjualan',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(SalesHeader.objects.count(), 1)
+        header = SalesHeader.objects.first()
+        # Header must NOT have entitas_bisnis field at all
+        self.assertFalse(hasattr(header, 'entitas_bisnis_id'))
+        # EB group must be linked via SalesEntitasBisnis
+        self.assertEqual(header.entitas_groups.count(), 1)
+        eb_group = header.entitas_groups.first()
+        self.assertEqual(eb_group.entitas_bisnis, self.eb)
+        # Item must be linked via EB group
+        self.assertEqual(eb_group.items.count(), 1)
+        self.assertEqual(eb_group.items.first().item, self.item)
+
+    def test_sales_create_post_missing_eb_returns_form(self):
+        """Submitting without an EB group should re-render form with errors."""
+        resp = self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test',
+            'eb_groups_data': json.dumps([]),
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(SalesHeader.objects.count(), 0)
+
+    def test_sales_detail_get(self):
+        header = SalesHeader.objects.create()
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_sales_delete_post(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Hapus test',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        header = SalesHeader.objects.first()
+        resp = self.client.post(reverse('sales:delete', args=[header.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(SalesHeader.objects.exists())
+
+    def test_sales_delete_locked_blocked(self):
+        header = SalesHeader.objects.create(is_locked=True)
+        resp = self.client.post(reverse('sales:delete', args=[header.pk]))
+        # Should redirect but NOT delete
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(SalesHeader.objects.filter(pk=header.pk).exists())

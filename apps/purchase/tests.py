@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from apps.accounts.models import User, Role
 from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
-from apps.master_data.models import Akun, AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2
+from apps.master_data.models import Akun, AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from .models import (
@@ -405,7 +405,101 @@ class PurchaseViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(SubTransactionType.objects.filter(pk=stt2.pk).exists())
 
-    # ── Kategori Views ───────────────────────────────────────────────────────
+    def test_settings_delete_protected_by_sales_item(self):
+        """Bug 2 regression: deleting an STT referenced by a SalesItem must be
+        blocked (ProtectedError / non-2xx response) because SalesItem has a
+        PROTECT FK to SubTransactionType.  The view must handle this gracefully.
+        """
+        from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
+        from apps.master_data.models import PendapatanLv1, PendapatanLv2
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+
+        stt_sales = SubTransactionType.objects.create(
+            nama='Penjualan Tunai', module='sales', direction='outflow',
+            default_offset_account=self.akun_modal,
+        )
+        tipe = TipeEntitas.objects.create(nama='Test')
+        eb = EntitasBisnis.objects.create(nama='EB Test', tipe_entitas=tipe)
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pend Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        header = SalesHeader.objects.create()
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=eb, payment_account=self.akun_modal,
+        )
+        SalesItem.objects.create(
+            sales_eb=eb_group,
+            item=self.item,
+            sub_transaction_type=stt_sales,
+            quantity=Decimal('1'),
+            selling_price=Decimal('10000'),
+            offset_coa_account=self.akun_persediaan,
+            revenue_account=akun_pendapatan,
+        )
+        # Attempting to delete should NOT succeed (PROTECT FK).
+        # After the fix the view redirects back with an error message instead of 500.
+        resp = self.client.post(reverse('purchase:settings_delete', args=[stt_sales.pk]))
+        self.assertEqual(resp.status_code, 302)
+        # The STT must still exist in the database.
+        self.assertTrue(
+            SubTransactionType.objects.filter(pk=stt_sales.pk).exists(),
+            'STT referenced by a SalesItem must not be deletable.',
+        )
+
+    def test_is_saldo_awal_field_on_jurnal_header(self):
+        """Bug 3 regression: JurnalHeader.is_saldo_awal must exist and be
+        queryable.  Any queryset evaluation on JurnalHeader (e.g. during
+        purchase deletion) will fail if this column is absent.
+        """
+        h = JurnalHeader.objects.create(
+            nomor_transaksi='TRX-SALDO-001',
+            uraian_transaksi='Saldo Awal Test',
+            tanggal='2026-01-01',
+            is_saldo_awal=True,
+        )
+        h.refresh_from_db()
+        self.assertTrue(h.is_saldo_awal)
+
+        # Verify filter works (this is the query pattern used in reverse_automated_journals)
+        self.assertEqual(JurnalHeader.objects.filter(is_saldo_awal=True).count(), 1)
+        self.assertEqual(JurnalHeader.objects.filter(is_saldo_awal=False).count(), 0)
+
+    def test_purchase_delete_does_not_delete_saldo_awal_journals(self):
+        """Saldo awal journals have different nomor_transaksi so they must not be
+        removed when a purchase is deleted (reverse_automated_journals only
+        matches TRX-PUR- prefixed entries).
+        """
+        import json
+        groups = [{
+            'entitas_bisnis_id': self.eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'coa_account_id': self.akun_persediaan.pk,
+                'offset_coa_account_id': self.akun_modal.pk,
+                'quantity': '5',
+                'unit_price': '1000',
+            }],
+        }]
+        self.client.post(reverse('purchase:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test',
+            'eb_groups_data': json.dumps(groups),
+        })
+        # Create an unrelated saldo awal journal that must survive the delete
+        jh = JurnalHeader.objects.create(
+            nomor_transaksi='TRX-SALDO-AWAL-001',
+            uraian_transaksi='Saldo Awal',
+            tanggal='2026-01-01',
+            is_saldo_awal=True,
+        )
+        ph = PurchaseHeader.objects.first()
+        self.client.post(reverse('purchase:delete', args=[ph.pk]))
+        # Purchase journal removed, saldo awal journal untouched
+        self.assertFalse(PurchaseHeader.objects.exists())
+        self.assertTrue(JurnalHeader.objects.filter(pk=jh.pk).exists())
+
 
     def test_kategori_list(self):
         resp = self.client.get(reverse('purchase:kategori_list'))

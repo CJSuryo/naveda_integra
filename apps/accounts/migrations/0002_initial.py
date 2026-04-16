@@ -9,6 +9,16 @@ class Migration(migrations.Migration):
 
     initial = True
 
+    # These are the old incremental migrations that were squashed into
+    # accounts/0001_initial.py + this file.  On production databases that
+    # already have these migrations applied, Django will treat this migration
+    # as already applied and skip it — preventing AddField conflicts.
+    replaces = [
+        ('accounts', '0002_role_user_role_userentitasbisnis'),
+        ('accounts', '0003_alter_user_role'),
+        ('accounts', '0004_nipermission_role_deskripsi_user_ni_permissions'),
+    ]
+
     dependencies = [
         ('accounts', '0001_initial'),
         ('entitas_bisnis', '0001_initial'),
