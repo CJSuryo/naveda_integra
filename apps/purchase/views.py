@@ -586,8 +586,15 @@ def settings_update(request: HttpRequest, pk: int) -> HttpResponse:
 def settings_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(SubTransactionType, pk=pk)
     if request.method == 'POST':
-        obj.delete()
-        dj_messages.success(request, 'Sub-Transaction Type berhasil dihapus.')
+        from django.db.models import ProtectedError
+        try:
+            obj.delete()
+            dj_messages.success(request, 'Sub-Transaction Type berhasil dihapus.')
+        except ProtectedError:
+            dj_messages.error(
+                request,
+                f'"{obj.nama}" tidak dapat dihapus karena masih digunakan oleh transaksi lain.',
+            )
         return redirect('purchase:settings_list')
     return render(request, 'purchase/settings_confirm_delete.html', {'object': obj})
 
