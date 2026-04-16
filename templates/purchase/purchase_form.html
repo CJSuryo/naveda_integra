@@ -17,6 +17,8 @@
   .ni-purchase-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-purchase-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
   .ni-purchase-item-table-wrapper { overflow-x: auto; }
+  /* TomSelect dropdown must appear above modal backdrop (z-index: 2000) */
+  .ts-dropdown { z-index: 2500 !important; }
   @media (max-width: 768px) {
     .ni-purchase-eb-card { padding: 12px; }
     .ni-purchase-item-table { min-width: 600px; }
