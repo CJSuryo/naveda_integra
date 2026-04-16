@@ -6,6 +6,8 @@ from django.db import transaction
 
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 from apps.inventory.models import InventoryRecord
+from apps.aset_tetap.models import AsetTetapRecord
+from apps.aset_lainnya.models import AsetLainnyaRecord
 
 from .models import PurchaseHeader, PurchaseItem, FIFOBatch
 
@@ -65,12 +67,15 @@ def create_automated_journals(purchase_header: PurchaseHeader) -> list[JurnalHea
 
 
 def create_fifo_batches(purchase_header: PurchaseHeader) -> list[FIFOBatch]:
-    """Create FIFO batch records for each purchase item (inflow)."""
+    """Create FIFO batch records for each inventory purchase item (inflow only)."""
     batches: list[FIFOBatch] = []
 
     for eb_group in purchase_header.entitas_groups.all():
         items = eb_group.items.select_related('item', 'sub_transaction_type').all()
         for pi in items:
+            # Only create FIFO batches for inventory items (not assets)
+            if pi.item.tipe_item not in ('RM', 'FG', 'ITM'):
+                continue
             # Only create FIFO batches for inflow transactions
             if pi.sub_transaction_type.direction != 'inflow':
                 continue
@@ -155,6 +160,56 @@ def reverse_inventory_records(purchase_header: PurchaseHeader) -> None:
     InventoryRecord.objects.filter(
         purchase_item__purchase_eb__purchase_header=purchase_header,
     ).delete()
+
+
+def create_aset_tetap_records(purchase_header: PurchaseHeader) -> list[AsetTetapRecord]:
+    """Create AsetTetapRecord for each ATP purchase item (inflow only)."""
+    records: list[AsetTetapRecord] = []
+    for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
+        items = eb_group.items.select_related('item', 'sub_transaction_type').all()
+        for pi in items:
+            if pi.item.tipe_item != 'ATP':
+                continue
+            if pi.sub_transaction_type.direction != 'inflow':
+                continue
+            record = AsetTetapRecord(
+                item=pi.item,
+                purchase_item=pi,
+                entitas_bisnis=eb_group.entitas_bisnis,
+                quantity=pi.quantity,
+                harga_perolehan=pi.unit_price,
+                tanggal_perolehan=purchase_header.tanggal,
+                masa_manfaat=pi.item.masa_manfaat or None,
+                metode_penyusutan=pi.item.metode_penyusutan or '',
+            )
+            record.save()
+            records.append(record)
+    return records
+
+
+def create_aset_lainnya_records(purchase_header: PurchaseHeader) -> list[AsetLainnyaRecord]:
+    """Create AsetLainnyaRecord for each ALL purchase item (inflow only)."""
+    records: list[AsetLainnyaRecord] = []
+    for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
+        items = eb_group.items.select_related('item', 'sub_transaction_type').all()
+        for pi in items:
+            if pi.item.tipe_item != 'ALL':
+                continue
+            if pi.sub_transaction_type.direction != 'inflow':
+                continue
+            record = AsetLainnyaRecord(
+                item=pi.item,
+                purchase_item=pi,
+                entitas_bisnis=eb_group.entitas_bisnis,
+                quantity=pi.quantity,
+                harga_perolehan=pi.unit_price,
+                tanggal_perolehan=purchase_header.tanggal,
+                masa_manfaat=pi.item.masa_manfaat or None,
+                metode_amortisasi=pi.item.metode_amortisasi or '',
+            )
+            record.save()
+            records.append(record)
+    return records
 
 
 def _next_purchase_journal_number() -> str:

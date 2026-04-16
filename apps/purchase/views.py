@@ -25,6 +25,7 @@ from .services import (
     create_automated_journals, create_fifo_batches,
     reverse_automated_journals, reverse_fifo_batches,
     create_inventory_records, reverse_inventory_records,
+    create_aset_tetap_records, create_aset_lainnya_records,
 )
 
 
@@ -1016,6 +1017,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                 create_automated_journals(purchase)
                 create_fifo_batches(purchase)
                 create_inventory_records(purchase)
+                create_aset_tetap_records(purchase)
+                create_aset_lainnya_records(purchase)
                 created_purchases.append(purchase)
 
     if len(created_purchases) == 1:

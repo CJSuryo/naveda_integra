@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
+from apps.aset_tetap.models import AsetTetapRecord
+from apps.aset_lainnya.models import AsetLainnyaRecord
 
 from .forms import (
     ItemForm,
@@ -842,6 +844,9 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         '1.1.7': 'persediaan',
         '1.1.8': 'persediaan',
         '1.1.9': 'persediaan',
+        '1.1.10': 'persediaan',
+        '1.2': 'aset_tetap',
+        '1.3': 'aset_lainnya',
     }
 
     if request.method == 'POST':
@@ -950,6 +955,90 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             quantity_in=qty,
                             unit_price=unit_price,
                             remaining_qty=qty,
+                        )
+
+            # ── Aset Tetap detail: AsetTetapRecord ─────────────
+            aset_tetap_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_tetap' and r.get('detail_rows')
+            ]
+            if aset_tetap_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_tetap_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_tetap_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                            masa_manfaat = d.get('masa_manfaat')
+                            metode_penyusutan = d.get('metode_penyusutan')
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        AsetTetapRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=masa_manfaat or item.masa_manfaat,
+                            metode_penyusutan=metode_penyusutan or item.metode_penyusutan,
+                        )
+
+            # ── Aset Lainnya detail: AsetLainnyaRecord ─────────────
+            aset_lainnya_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_lainnya' and r.get('detail_rows')
+            ]
+            if aset_lainnya_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_lainnya_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_lainnya_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                            masa_manfaat = d.get('masa_manfaat')
+                            metode_amortisasi = d.get('metode_amortisasi')
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        AsetLainnyaRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=masa_manfaat or item.masa_manfaat,
+                            metode_amortisasi=metode_amortisasi or item.metode_amortisasi,
                         )
 
         dj_messages.success(request, f'Saldo Awal {nomor} berhasil disimpan.')

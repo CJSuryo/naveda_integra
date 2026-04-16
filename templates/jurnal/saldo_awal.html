@@ -324,6 +324,90 @@
     </div>
   </div>
 </div>
+
+<!-- ── Aset Tetap Detail Modal ─────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalAsetTetapBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="landmark" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Aset Tetap &mdash; <span id="saModalAsetTetapAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseAsetTetapModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:520px;">
+          <thead>
+            <tr>
+              <th style="width:40%">Item Aset Tetap</th>
+              <th style="width:12%">Qty</th>
+              <th style="width:18%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:14%">Masa Manfaat</th>
+              <th style="width:16%">Metode Penyusutan</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalAsetTetapRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAsetTetapAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Aset
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalAsetTetapTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmAsetTetapDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseAsetTetapModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Aset Lainnya Detail Modal ───────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalAsetLainnyaBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="database" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Aset Lainnya &mdash; <span id="saModalAsetLainnyaAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseAsetLainnyaModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:520px;">
+          <thead>
+            <tr>
+              <th style="width:40%">Item Aset Lainnya</th>
+              <th style="width:12%">Qty</th>
+              <th style="width:18%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:14%">Masa Manfaat</th>
+              <th style="width:16%">Metode Amortisasi</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalAsetLainnyaRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAsetLainnyaAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Aset
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalAsetLainnyaTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmAsetLainnyaDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseAsetLainnyaModal()">Batal</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -409,6 +493,24 @@
       if (_rowDetailMap[rid] && _rowDetailMap[rid].type !== detailType) {
         _rowDetailMap[rid] = null;
         _updateDetailBadge(rid);
+      }
+      // Change icon and modal for each type
+      var btn = wrapEl.querySelector('button');
+      if (btn) {
+        if (detailType === 'persediaan') {
+          btn.title = 'Isi detail persediaan';
+          btn.innerHTML = '<i data-lucide="package" style="width:13px;height:13px"></i>';
+          btn.onclick = function() { saOpenDetailModal(rid); };
+        } else if (detailType === 'aset_tetap') {
+          btn.title = 'Isi detail aset tetap';
+          btn.innerHTML = '<i data-lucide="landmark" style="width:13px;height:13px"></i>';
+          btn.onclick = function() { saOpenAsetTetapModal(rid); };
+        } else if (detailType === 'aset_lainnya') {
+          btn.title = 'Isi detail aset lainnya';
+          btn.innerHTML = '<i data-lucide="database" style="width:13px;height:13px"></i>';
+          btn.onclick = function() { saOpenAsetLainnyaModal(rid); };
+        }
+        lucide.createIcons();
       }
     } else {
       wrapEl.style.display = 'none';
