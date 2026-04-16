@@ -9,6 +9,7 @@ from apps.purchase.models import ItemMasterPurchase
 
 from .forms import AsetLainnyaRecordForm
 from .models import AsetLainnyaRecord
+from .services import calculate_amortization, process_amortization
 
 
 @login_required
@@ -43,12 +44,33 @@ def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def aset_lainnya_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show other asset record detail."""
+    """Show other asset record detail with amortization preview."""
+    from decimal import Decimal
     record = get_object_or_404(
         AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis', 'purchase_item'),
         pk=pk,
     )
-    return render(request, 'aset_lainnya/aset_lainnya_detail.html', {'record': record})
+
+    metode = record.metode_amortisasi or (record.item.metode_amortisasi if record.item else '')
+    needs_activity_input = metode in ('units_of_production', 'revenue_based')
+
+    preview_amount = Decimal('0')
+    if not needs_activity_input:
+        preview_amount = calculate_amortization(record)
+
+    from apps.jurnal.models import JurnalHeader
+    amort_journals = JurnalHeader.objects.filter(
+        uraian_transaksi__startswith=f'Amortisasi {record.aset_number}',
+    ).order_by('-tanggal')
+
+    return render(request, 'aset_lainnya/aset_lainnya_detail.html', {
+        'record': record,
+        'preview_amount': preview_amount,
+        'needs_activity_input': needs_activity_input,
+        'metode': metode,
+        'can_amortize': record.nilai_buku > record.nilai_residu,
+        'amort_journals': amort_journals,
+    })
 
 
 @login_required
@@ -94,3 +116,63 @@ def aset_lainnya_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f'Aset lainnya {number} berhasil dihapus.')
         return redirect('aset_lainnya:list')
     return redirect('aset_lainnya:list')
+
+
+@login_required
+def aset_lainnya_process_amortization(request: HttpRequest, pk: int) -> HttpResponse:
+    """Process amortization for an other asset record, creating a journal entry."""
+    from decimal import Decimal, InvalidOperation
+
+    record = get_object_or_404(
+        AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis'),
+        pk=pk,
+    )
+
+    if request.method != 'POST':
+        return redirect('aset_lainnya:detail', pk=pk)
+
+    metode = record.metode_amortisasi or (record.item.metode_amortisasi if record.item else '')
+    tanggal_str = request.POST.get('tanggal', '')
+
+    try:
+        from datetime import date as date_cls
+        tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else None
+    except ValueError:
+        tanggal = None
+
+    if metode == 'units_of_production':
+        try:
+            unit_aktual = Decimal(request.POST.get('unit_aktual', '0'))
+        except InvalidOperation:
+            messages.error(request, 'Unit produksi aktual harus berupa angka.')
+            return redirect('aset_lainnya:detail', pk=pk)
+        amortization = calculate_amortization(record, unit_aktual=unit_aktual)
+    elif metode == 'revenue_based':
+        try:
+            pendapatan = Decimal(request.POST.get('pendapatan_aktual', '0'))
+        except InvalidOperation:
+            messages.error(request, 'Pendapatan aktual harus berupa angka.')
+            return redirect('aset_lainnya:detail', pk=pk)
+        amortization = calculate_amortization(record, pendapatan_aktual=pendapatan)
+    else:
+        manual_amount = request.POST.get('amount', '')
+        if manual_amount:
+            try:
+                amortization = Decimal(manual_amount)
+            except InvalidOperation:
+                messages.error(request, 'Jumlah amortisasi harus berupa angka.')
+                return redirect('aset_lainnya:detail', pk=pk)
+        else:
+            amortization = calculate_amortization(record)
+
+    try:
+        header = process_amortization(record, amortization, tanggal)
+        messages.success(
+            request,
+            f'Amortisasi {record.aset_number} sebesar Rp {amortization:,.0f} berhasil diproses. '
+            f'Jurnal: {header.nomor_transaksi}',
+        )
+    except ValueError as e:
+        messages.error(request, str(e))
+
+    return redirect('aset_lainnya:detail', pk=pk)

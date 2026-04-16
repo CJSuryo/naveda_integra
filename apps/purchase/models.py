@@ -17,6 +17,9 @@ class KategoriItem(models.Model):
         ('RM', 'Raw Material'),
         ('FG', 'Finished Good'),
         ('ITM', 'Item Lainnya'),
+        ('RMB', 'Raw Material (Bulk)'),
+        ('FGB', 'Finished Good (Bulk)'),
+        ('ITMB', 'Item Lainnya (Bulk)'),
         ('ATP', 'Aset Tetap'),
         ('ALL', 'Aset Lainnya'),
     ]
@@ -52,6 +55,9 @@ class ItemMasterPurchase(models.Model):
         ('RM', 'Raw Material'),
         ('FG', 'Finished Good'),
         ('ITM', 'Item Lainnya'),
+        ('RMB', 'Raw Material (Bulk)'),
+        ('FGB', 'Finished Good (Bulk)'),
+        ('ITMB', 'Item Lainnya (Bulk)'),
         ('ATP', 'Aset Tetap'),
         ('ALL', 'Aset Lainnya'),
     ]
@@ -256,6 +262,9 @@ class PurchaseHeader(models.Model):
         'RM': 'PUR-INV',
         'FG': 'PUR-INV',
         'ITM': 'PUR-INV',
+        'RMB': 'PUR-INV',
+        'FGB': 'PUR-INV',
+        'ITMB': 'PUR-INV',
         'ATP': 'PUR-ATP',
         'ALL': 'PUR-ALL',
     }

@@ -70,6 +70,29 @@ class AsetTetapRecord(models.Model):
         default=0,
         verbose_name='Akumulasi Penyusutan',
     )
+    nilai_residu = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        default=0,
+        verbose_name='Nilai Residu',
+        help_text='Nilai sisa aset di akhir masa manfaat.',
+    )
+    estimasi_jam_kerja = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Estimasi Total Jam Kerja',
+        help_text='Total estimasi jam kerja selama masa manfaat (untuk metode Service Hours).',
+    )
+    estimasi_unit_produksi = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Estimasi Total Unit Produksi',
+        help_text='Total estimasi unit produksi selama masa manfaat (untuk metode Units of Production).',
+    )
     tanggal_perolehan = models.DateField(
         db_index=True,
         default=timezone.now,

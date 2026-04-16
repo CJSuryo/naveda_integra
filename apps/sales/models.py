@@ -157,6 +157,14 @@ class SalesItem(models.Model):
         default=0,
         verbose_name='Total Penjualan',
     )
+    hpp_terpakai = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='HPP Terpakai (Bulk)',
+        help_text='Untuk item bulk: mengurangi nilai persediaan bulk.',
+    )
     # CoA accounts
     offset_coa_account = models.ForeignKey(
         'master_data.Akun',

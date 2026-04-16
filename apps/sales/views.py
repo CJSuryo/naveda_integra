@@ -423,24 +423,35 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                 errors[f'group_{g_idx}_item_{i}_id'] = f'Grup {g_idx + 1}, Item {i + 1}: Item wajib dipilih.'
                 continue
 
+            is_bulk = item_data.get('is_bulk') == '1'
+
             try:
-                qty = Decimal(str(item_data.get('quantity', 0)))
-                if qty <= 0:
-                    errors[f'group_{g_idx}_item_{i}_qty'] = f'Grup {g_idx + 1}, Item {i + 1}: Quantity harus > 0.'
+                if is_bulk:
+                    hpp = Decimal(str(item_data.get('hpp_terpakai', 0)))
+                    if hpp <= 0:
+                        errors[f'group_{g_idx}_item_{i}_hpp'] = f'Grup {g_idx + 1}, Item {i + 1}: HPP Terpakai harus > 0.'
+                    qty = Decimal('0')
+                    price = Decimal('0')
+                else:
+                    qty = Decimal(str(item_data.get('quantity', 0)))
+                    if qty <= 0:
+                        errors[f'group_{g_idx}_item_{i}_qty'] = f'Grup {g_idx + 1}, Item {i + 1}: Quantity harus > 0.'
             except (InvalidOperation, ValueError):
                 errors[f'group_{g_idx}_item_{i}_qty'] = f'Grup {g_idx + 1}, Item {i + 1}: Quantity tidak valid.'
                 continue
 
             try:
-                price = Decimal(str(item_data.get('selling_price', 0)))
-                if price <= 0:
-                    errors[f'group_{g_idx}_item_{i}_price'] = f'Grup {g_idx + 1}, Item {i + 1}: Harga jual harus > 0.'
+                if not is_bulk:
+                    price = Decimal(str(item_data.get('selling_price', 0)))
+                    if price <= 0:
+                        errors[f'group_{g_idx}_item_{i}_price'] = f'Grup {g_idx + 1}, Item {i + 1}: Harga jual harus > 0.'
             except (InvalidOperation, ValueError):
                 errors[f'group_{g_idx}_item_{i}_price'] = f'Grup {g_idx + 1}, Item {i + 1}: Harga jual tidak valid.'
 
-            # Stock validation
-            iid = int(item_id)
-            item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
+            # Stock validation (skip for bulk items — value-based tracking)
+            if not is_bulk:
+                iid = int(item_id)
+                item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
 
             if not item_data.get('offset_coa_account_id'):
                 errors[f'group_{g_idx}_item_{i}_offset'] = f'Grup {g_idx + 1}, Item {i + 1}: Offset CoA (HPP) wajib diisi.'
@@ -450,7 +461,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             # Validate item has coa_account set (required for balanced COGS journal entry)
             try:
                 item_obj = ItemMasterPurchase.objects.only('tipe_item', 'coa_account_id', 'nama').get(pk=int(item_id))
-                if item_obj.tipe_item in ('RM', 'FG', 'ITM') and not item_obj.coa_account_id:
+                if item_obj.tipe_item in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB') and not item_obj.coa_account_id:
                     errors[f'group_{g_idx}_item_{i}_coa'] = (
                         f'Grup {g_idx + 1}, Item {i + 1}: Item "{item_obj.nama}" belum memiliki '
                         'CoA Account (Persediaan). Harap set CoA Account di Item Master terlebih dahulu.'
@@ -476,7 +487,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     if errors:
         dj_messages.error(request, 'Terdapat kesalahan pada form. Silakan periksa kembali.')
         inventory_items = ItemMasterPurchase.objects.filter(
-            tipe_item__in=['RM', 'FG', 'ITM']
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
         ).select_related('coa_account').order_by('nama')
         return render(request, 'sales/sales_form.html', {
             'title': 'Edit Penjualan' if existing else 'Tambah Penjualan',
@@ -519,13 +530,15 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             for item_data in group.get('items', []):
                 tax_val = item_data.get('tax')
                 tax_amount = Decimal(str(tax_val)) if tax_val else None
+                is_bulk = item_data.get('is_bulk') == '1'
 
                 SalesItem.objects.create(
                     sales_eb=eb_group,
                     item_id=item_data['item_id'],
                     sub_transaction_type_id=item_data['sub_transaction_type_id'],
-                    quantity=Decimal(str(item_data['quantity'])),
-                    selling_price=Decimal(str(item_data['selling_price'])),
+                    quantity=Decimal('0') if is_bulk else Decimal(str(item_data['quantity'])),
+                    selling_price=Decimal('0') if is_bulk else Decimal(str(item_data['selling_price'])),
+                    hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
                     offset_coa_account_id=item_data['offset_coa_account_id'],
                     revenue_account_id=item_data['revenue_account_id'],
                     tax=tax_amount,

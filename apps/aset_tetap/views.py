@@ -9,6 +9,7 @@ from apps.purchase.models import ItemMasterPurchase
 
 from .forms import AsetTetapRecordForm
 from .models import AsetTetapRecord
+from .services import calculate_depreciation, process_depreciation
 
 
 @login_required
@@ -48,12 +49,46 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
-    """Show fixed asset record detail."""
+    """Show fixed asset record detail with depreciation preview."""
+    from decimal import Decimal
     record = get_object_or_404(
         AsetTetapRecord.objects.select_related('item', 'entitas_bisnis', 'purchase_item'),
         pk=pk,
     )
-    return render(request, 'aset_tetap/aset_tetap_detail.html', {'record': record})
+
+    # Calculate depreciation preview
+    metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
+    masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+    needs_activity_input = metode in ('service_hours', 'units_of_production')
+
+    # For time-based methods, calculate current year number
+    if masa > 0 and record.tanggal_perolehan:
+        from datetime import date
+        years_elapsed = (date.today() - record.tanggal_perolehan).days / Decimal('365.25')
+        tahun_ke = int(years_elapsed) + 1
+    else:
+        tahun_ke = 1
+
+    # Preview amount (for time-based methods)
+    preview_amount = Decimal('0')
+    if not needs_activity_input:
+        preview_amount = calculate_depreciation(record, tahun_ke=tahun_ke)
+
+    # Depreciation journal history
+    from apps.jurnal.models import JurnalHeader
+    dep_journals = JurnalHeader.objects.filter(
+        uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
+    ).order_by('-tanggal')
+
+    return render(request, 'aset_tetap/aset_tetap_detail.html', {
+        'record': record,
+        'preview_amount': preview_amount,
+        'tahun_ke': tahun_ke,
+        'needs_activity_input': needs_activity_input,
+        'metode': metode,
+        'can_depreciate': record.nilai_buku > record.nilai_residu,
+        'dep_journals': dep_journals,
+    })
 
 
 @login_required
@@ -99,3 +134,72 @@ def aset_tetap_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f'Aset tetap {number} berhasil dihapus.')
         return redirect('aset_tetap:list')
     return redirect('aset_tetap:list')
+
+
+@login_required
+def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpResponse:
+    """Process depreciation for a fixed asset record, creating a journal entry."""
+    from decimal import Decimal, InvalidOperation
+
+    record = get_object_or_404(
+        AsetTetapRecord.objects.select_related('item', 'entitas_bisnis'),
+        pk=pk,
+    )
+
+    if request.method != 'POST':
+        return redirect('aset_tetap:detail', pk=pk)
+
+    metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
+    tanggal_str = request.POST.get('tanggal', '')
+
+    try:
+        from datetime import date as date_cls
+        tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else None
+    except ValueError:
+        tanggal = None
+
+    # For activity-based methods, get input values
+    if metode == 'service_hours':
+        try:
+            jam_aktual = Decimal(request.POST.get('jam_aktual', '0'))
+        except InvalidOperation:
+            messages.error(request, 'Jam kerja aktual harus berupa angka.')
+            return redirect('aset_tetap:detail', pk=pk)
+        depreciation = calculate_depreciation(record, jam_aktual=jam_aktual)
+    elif metode == 'units_of_production':
+        try:
+            unit_aktual = Decimal(request.POST.get('unit_aktual', '0'))
+        except InvalidOperation:
+            messages.error(request, 'Unit produksi aktual harus berupa angka.')
+            return redirect('aset_tetap:detail', pk=pk)
+        depreciation = calculate_depreciation(record, unit_aktual=unit_aktual)
+    else:
+        # Allow manual override
+        manual_amount = request.POST.get('amount', '')
+        if manual_amount:
+            try:
+                depreciation = Decimal(manual_amount)
+            except InvalidOperation:
+                messages.error(request, 'Jumlah penyusutan harus berupa angka.')
+                return redirect('aset_tetap:detail', pk=pk)
+        else:
+            masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+            if masa > 0 and record.tanggal_perolehan:
+                from datetime import date as d
+                years_elapsed = (d.today() - record.tanggal_perolehan).days / Decimal('365.25')
+                tahun_ke = int(years_elapsed) + 1
+            else:
+                tahun_ke = 1
+            depreciation = calculate_depreciation(record, tahun_ke=tahun_ke)
+
+    try:
+        header = process_depreciation(record, depreciation, tanggal)
+        messages.success(
+            request,
+            f'Penyusutan {record.aset_number} sebesar Rp {depreciation:,.0f} berhasil diproses. '
+            f'Jurnal: {header.nomor_transaksi}',
+        )
+    except ValueError as e:
+        messages.error(request, str(e))
+
+    return redirect('aset_tetap:detail', pk=pk)

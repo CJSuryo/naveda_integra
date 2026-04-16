@@ -8,6 +8,11 @@
     <p class="ni-page-header__subtitle">Detail record inventory</p>
   </div>
   <div class="ni-page-header__actions">
+    {% if is_bulk and record.total_value > 0 %}
+    <button type="button" class="ni-btn ni-btn--primary" onclick="document.getElementById('convertModal').style.display='flex'">
+      <i data-lucide="split" style="width:16px;height:16px"></i> Konversi ke Satuan
+    </button>
+    {% endif %}
     <a href="{% url 'inventory:update' record.pk %}" class="ni-btn ni-btn--warning">
       <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
     </a>
@@ -95,4 +100,65 @@
 </div>
 
 {% include 'components/delete_modal.html' %}
+
+{% if is_bulk %}
+<!-- Konversi Bulk ke Satuan Modal -->
+<div id="convertModal" class="ni-modal-backdrop" style="display:none;">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Konversi Bulk ke Satuan</h3>
+      <button type="button" class="ni-modal__close" onclick="document.getElementById('convertModal').style.display='none'">&times;</button>
+    </div>
+    <form method="post" action="{% url 'inventory:convert_to_satuan' record.pk %}">
+      {% csrf_token %}
+      <div class="ni-modal__body">
+        <p style="margin-bottom:16px;color:var(--ni-text-muted);font-size:0.875rem;">
+          Sisa nilai bulk: <strong>Rp {{ record.total_value|floatformat:0|intcomma }}</strong>
+        </p>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Item Satuan Tujuan</label>
+          <select name="satuan_item_id" class="ni-input" required>
+            <option value="">— Pilih Item —</option>
+            {% for item in satuan_items %}
+            <option value="{{ item.pk }}">{{ item.item_id }} - {{ item.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Jumlah (Qty)</label>
+            <input type="number" name="quantity" class="ni-input" min="0.0001" step="0.0001" required id="conv_qty">
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Harga Satuan</label>
+            <input type="number" name="unit_price" class="ni-input" min="0.01" step="0.01" required id="conv_price">
+          </div>
+        </div>
+        <p style="margin-top:8px;font-size:0.875rem;color:var(--ni-text-muted);">
+          Total pengurangan: <strong id="conv_total">Rp 0</strong>
+        </p>
+      </div>
+      <div class="ni-modal__footer">
+        <button type="submit" class="ni-btn ni-btn--primary">Konversi</button>
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="document.getElementById('convertModal').style.display='none'">Batal</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var qtyEl = document.getElementById('conv_qty');
+  var priceEl = document.getElementById('conv_price');
+  var totalEl = document.getElementById('conv_total');
+  function update() {
+    var q = parseFloat(qtyEl.value) || 0;
+    var p = parseFloat(priceEl.value) || 0;
+    totalEl.textContent = 'Rp ' + (q * p).toLocaleString('id-ID', {maximumFractionDigits: 0});
+  }
+  qtyEl.addEventListener('input', update);
+  priceEl.addEventListener('input', update);
+})();
+</script>
+{% endif %}
 {% endblock %}

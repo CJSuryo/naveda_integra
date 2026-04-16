@@ -13,7 +13,8 @@ class AsetLainnyaRecordForm(forms.ModelForm):
         fields = (
             'item', 'entitas_bisnis', 'quantity', 'harga_perolehan',
             'tanggal_perolehan', 'masa_manfaat', 'metode_amortisasi',
-            'akumulasi_amortisasi', 'keterangan',
+            'akumulasi_amortisasi', 'nilai_residu', 'estimasi_unit_produksi',
+            'keterangan',
         )
         widgets = {
             'item': forms.Select(attrs={'class': 'ni-input'}),
@@ -24,6 +25,8 @@ class AsetLainnyaRecordForm(forms.ModelForm):
             'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
             'metode_amortisasi': forms.Select(attrs={'class': 'ni-input'}),
             'akumulasi_amortisasi': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'nilai_residu': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'estimasi_unit_produksi': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
         }
 
@@ -37,4 +40,6 @@ class AsetLainnyaRecordForm(forms.ModelForm):
         ).order_by('nama')
         self.fields['masa_manfaat'].required = False
         self.fields['metode_amortisasi'].required = False
+        self.fields['nilai_residu'].required = False
+        self.fields['estimasi_unit_produksi'].required = False
         self.fields['keterangan'].required = False

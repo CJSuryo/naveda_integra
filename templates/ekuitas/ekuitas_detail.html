@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Detail Modal Disetor — {{ record.nama_pemilik }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ record.nama_pemilik }}</h1>
+    <p class="ni-page-header__subtitle">Detail modal disetor</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'ekuitas:update' record.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="openDeleteModal('{% url 'ekuitas:delete' record.pk %}', '{{ record.nama_pemilik }}')">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </button>
+    <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Nama Pemilik</dt><dd>{{ record.nama_pemilik }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
+      <dt>Jumlah Modal Disetor</dt><dd><strong>Rp {{ record.jumlah_modal|floatformat:0|intcomma }}</strong></dd>
+      <dt>Persentase Kepemilikan</dt><dd>{{ record.persentase_kepemilikan|floatformat:2 }}%</dd>
+      <dt>Tanggal Setor</dt><dd>{{ record.tanggal_setor }}</dd>
+      <dt>Keterangan</dt><dd>{{ record.keterangan|default:'-' }}</dd>
+      <dt>Dibuat</dt><dd>{{ record.created_at }}</dd>
+      <dt>Diperbarui</dt><dd>{{ record.updated_at }}</dd>
+    </dl>
+  </div>
+</div>
+
+{% include 'components/delete_modal.html' %}
+{% endblock %}

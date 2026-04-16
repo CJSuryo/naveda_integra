@@ -33,7 +33,7 @@ class InventoryRecordForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
-            tipe_item__in=['RM', 'FG', 'ITM'],
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
         ).order_by('item_id')
         self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
             status_aktif=True,

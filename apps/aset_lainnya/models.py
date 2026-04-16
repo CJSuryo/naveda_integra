@@ -63,6 +63,21 @@ class AsetLainnyaRecord(models.Model):
         default=0,
         verbose_name='Akumulasi Amortisasi',
     )
+    nilai_residu = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        default=0,
+        verbose_name='Nilai Residu',
+        help_text='Nilai sisa aset di akhir masa manfaat.',
+    )
+    estimasi_unit_produksi = models.DecimalField(
+        max_digits=15,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Estimasi Total Unit Produksi',
+        help_text='Total estimasi unit produksi selama masa manfaat (untuk metode Units of Production).',
+    )
     tanggal_perolehan = models.DateField(
         db_index=True,
         default=timezone.now,

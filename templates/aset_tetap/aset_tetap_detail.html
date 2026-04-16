@@ -31,6 +31,7 @@
       <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}</dd>
       <dt>Harga Perolehan</dt><dd>{{ record.harga_perolehan|floatformat:0|intcomma }}</dd>
       <dt>Nilai Perolehan</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
+      <dt>Nilai Residu</dt><dd>{{ record.nilai_residu|floatformat:0|intcomma }}</dd>
       <dt>Akumulasi Penyusutan</dt><dd>{{ record.akumulasi_penyusutan|floatformat:0|intcomma }}</dd>
       <dt>Nilai Buku</dt><dd><strong>{{ record.nilai_buku|floatformat:0|intcomma }}</strong></dd>
       <dt>Masa Manfaat</dt><dd>{% if record.masa_manfaat %}{{ record.masa_manfaat }} tahun{% elif record.item.masa_manfaat %}{{ record.item.masa_manfaat }} tahun (dari item master){% else %}-{% endif %}</dd>
@@ -71,6 +72,83 @@
     </dl>
   </div>
 </div>
+
+{% if can_depreciate %}
+<!-- Proses Penyusutan -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 16px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="calculator" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Proses Penyusutan
+    </h3>
+    <form method="post" action="{% url 'aset_tetap:process_depreciation' record.pk %}">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tanggal Jurnal</label>
+          <input type="date" name="tanggal" class="ni-input" value="{{ today }}">
+        </div>
+        {% if needs_activity_input %}
+          {% if metode == 'service_hours' %}
+          <div class="ni-form-group">
+            <label class="ni-form-label">Jam Kerja Aktual Periode Ini</label>
+            <input type="number" name="jam_aktual" class="ni-input" min="0.01" step="0.01" required>
+          </div>
+          {% elif metode == 'units_of_production' %}
+          <div class="ni-form-group">
+            <label class="ni-form-label">Unit Produksi Aktual Periode Ini</label>
+            <input type="number" name="unit_aktual" class="ni-input" min="0.01" step="0.01" required>
+          </div>
+          {% endif %}
+        {% else %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Jumlah Penyusutan</label>
+          <input type="number" name="amount" class="ni-input" step="0.01" value="{{ preview_amount|floatformat:2 }}" placeholder="Auto-calculated">
+          <small style="color:var(--ni-text-muted);">Tahun ke-{{ tahun_ke }} — preview: Rp {{ preview_amount|floatformat:0|intcomma }}</small>
+        </div>
+        {% endif %}
+      </div>
+      <div class="ni-btn-row" style="margin-top:12px;">
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="play" style="width:14px;height:14px"></i> Proses Penyusutan
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% if dep_journals %}
+<!-- Riwayat Penyusutan -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="history" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Riwayat Jurnal Penyusutan
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Nomor Jurnal</th>
+            <th>Uraian</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in dep_journals %}
+          <tr>
+            <td>{{ j.tanggal }}</td>
+            <td><a href="{% url 'jurnal:detail' j.pk %}" style="color:var(--ni-primary);">{{ j.nomor_transaksi }}</a></td>
+            <td>{{ j.uraian_transaksi }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% include 'components/delete_modal.html' %}
 {% endblock %}

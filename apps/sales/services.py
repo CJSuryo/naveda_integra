@@ -147,54 +147,111 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
     with transaction.atomic():
         for eb_group in sales_header.entitas_groups.all():
             for si in eb_group.items.select_related('item').all():
-                # Only process inventory items (RM/FG/ITM)
-                if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
-                    continue
+                BULK_TYPES = ('RMB', 'FGB', 'ITMB')
+                SATUAN_TYPES = ('RM', 'FG', 'ITM')
 
-                total_cogs, consumed = consume_fifo(si.item_id, si.quantity)
-                si.cogs_amount = total_cogs
-                si.inventory_account_id = si.item.coa_account_id  # Use FK ID directly
-                si.save()
+                if si.item.tipe_item in SATUAN_TYPES:
+                    # Standard FIFO quantity-based consumption
+                    total_cogs, consumed = consume_fifo(si.item_id, si.quantity)
+                    si.cogs_amount = total_cogs
+                    si.inventory_account_id = si.item.coa_account_id
+                    si.save()
 
-                # Update InventoryRecord quantities based on FIFO consumption
-                records_to_update = []
-                allocations_to_create = []
-                for batch, qty_consumed in consumed:
-                    # Find matching InventoryRecord(s) for this batch
-                    if batch.purchase_item_id:
-                        # Purchase-sourced batch — linked via purchase_item FK
-                        inv_records = InventoryRecord.objects.filter(
-                            purchase_item=batch.purchase_item,
-                            item=si.item,
-                        ).order_by('tanggal', 'created_at')
-                    else:
-                        # Saldo-awal batch — match by item + tanggal + unit_price
-                        inv_records = InventoryRecord.objects.filter(
-                            purchase_item__isnull=True,
-                            item=si.item,
-                            tanggal=batch.tanggal,
-                            unit_price=batch.unit_price,
-                        ).order_by('tanggal', 'created_at')
+                    # Update InventoryRecord quantities based on FIFO consumption
+                    records_to_update = []
+                    allocations_to_create = []
+                    for batch, qty_consumed in consumed:
+                        if batch.purchase_item_id:
+                            inv_records = InventoryRecord.objects.filter(
+                                purchase_item=batch.purchase_item,
+                                item=si.item,
+                            ).order_by('tanggal', 'created_at')
+                        else:
+                            inv_records = InventoryRecord.objects.filter(
+                                purchase_item__isnull=True,
+                                item=si.item,
+                                tanggal=batch.tanggal,
+                                unit_price=batch.unit_price,
+                            ).order_by('tanggal', 'created_at')
 
-                    remaining_to_reduce = qty_consumed
+                        remaining_to_reduce = qty_consumed
+                        for inv_rec in inv_records:
+                            if remaining_to_reduce <= 0:
+                                break
+                            reduce = min(inv_rec.quantity, remaining_to_reduce)
+                            if reduce > 0:
+                                inv_rec.quantity -= reduce
+                                records_to_update.append(inv_rec)
+                                allocations_to_create.append(SalesItemFIFOAllocation(
+                                    sales_item=si,
+                                    inventory_record=inv_rec,
+                                    quantity_consumed=reduce,
+                                    cogs_amount=reduce * batch.unit_price,
+                                ))
+                                remaining_to_reduce -= reduce
+                    if records_to_update:
+                        InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
+                    if allocations_to_create:
+                        SalesItemFIFOAllocation.objects.bulk_create(allocations_to_create)
+
+                elif si.item.tipe_item in BULK_TYPES:
+                    # Bulk: value-based deduction using hpp_terpakai
+                    hpp = si.hpp_terpakai or Decimal('0')
+                    if hpp <= 0:
+                        continue
+
+                    si.cogs_amount = hpp
+                    si.inventory_account_id = si.item.coa_account_id
+                    si.save()
+
+                    # Reduce InventoryRecord total_value (bulk has qty=1, value tracks worth)
+                    inv_records = InventoryRecord.objects.filter(
+                        item=si.item,
+                        entitas_bisnis=eb_group.entitas_bisnis,
+                        total_value__gt=0,
+                    ).order_by('tanggal', 'created_at').select_for_update()
+
+                    remaining_value = hpp
+                    records_to_update = []
+                    allocations_to_create = []
                     for inv_rec in inv_records:
-                        if remaining_to_reduce <= 0:
+                        if remaining_value <= 0:
                             break
-                        reduce = min(inv_rec.quantity, remaining_to_reduce)
-                        if reduce > 0:
-                            inv_rec.quantity -= reduce
+                        deduct = min(inv_rec.total_value, remaining_value)
+                        if deduct > 0:
+                            inv_rec.total_value -= deduct
+                            inv_rec.unit_price = inv_rec.total_value  # bulk: unit_price = total_value
                             records_to_update.append(inv_rec)
                             allocations_to_create.append(SalesItemFIFOAllocation(
                                 sales_item=si,
                                 inventory_record=inv_rec,
-                                quantity_consumed=reduce,
-                                cogs_amount=reduce * batch.unit_price,
+                                quantity_consumed=Decimal('0'),
+                                cogs_amount=deduct,
                             ))
-                            remaining_to_reduce -= reduce
-                if records_to_update:
-                    InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
-                if allocations_to_create:
-                    SalesItemFIFOAllocation.objects.bulk_create(allocations_to_create)
+                            remaining_value -= deduct
+
+                    if records_to_update:
+                        InventoryRecord.objects.bulk_update(records_to_update, ['total_value', 'unit_price'])
+                    if allocations_to_create:
+                        SalesItemFIFOAllocation.objects.bulk_create(allocations_to_create)
+
+                    # Also reduce FIFO batch values for bulk
+                    fifo_batches = (
+                        FIFOBatch.objects
+                        .filter(item=si.item, remaining_qty__gt=0)
+                        .order_by('tanggal', 'created_at')
+                        .select_for_update()
+                    )
+                    remaining_fifo = hpp
+                    for batch in fifo_batches:
+                        if remaining_fifo <= 0:
+                            break
+                        batch_value = batch.remaining_qty * batch.unit_price
+                        deduct = min(batch_value, remaining_fifo)
+                        if deduct > 0:
+                            batch.remaining_qty = (batch_value - deduct) / batch.unit_price if batch.unit_price else Decimal('0')
+                            batch.save()
+                            remaining_fifo -= deduct
 
 
 def reverse_sales_automated_journals(sales_header: SalesHeader) -> None:
@@ -218,38 +275,74 @@ def reverse_sales_fifo(sales_header: SalesHeader) -> None:
             for si in eb_group.items.select_related('item').prefetch_related(
                 'fifo_allocations__inventory_record',
             ).all():
-                if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
-                    continue
-                if si.cogs_amount <= 0:
-                    continue
+                BULK_TYPES = ('RMB', 'FGB', 'ITMB')
+                SATUAN_TYPES = ('RM', 'FG', 'ITM')
 
-                # Restore FIFO batches (reverse order)
-                batches = (
-                    FIFOBatch.objects
-                    .filter(item_id=si.item_id)
-                    .order_by('-tanggal', '-created_at')
-                    .select_for_update()
-                )
-                remaining_to_restore = si.quantity
-                for batch in batches:
-                    if remaining_to_restore <= 0:
-                        break
-                    can_restore = batch.quantity_in - batch.remaining_qty
-                    restore = min(can_restore, remaining_to_restore)
-                    if restore > 0:
-                        batch.remaining_qty += restore
-                        batch.save()
-                        remaining_to_restore -= restore
+                if si.item.tipe_item in SATUAN_TYPES:
+                    if si.cogs_amount <= 0:
+                        continue
 
-                # Restore InventoryRecord quantities using per-allocation data
-                # (works for both purchase-sourced and saldo-awal-sourced batches)
-                records_to_restore = []
-                for alloc in si.fifo_allocations.select_related('inventory_record').all():
-                    inv_rec = alloc.inventory_record
-                    inv_rec.quantity += alloc.quantity_consumed
-                    records_to_restore.append(inv_rec)
-                if records_to_restore:
-                    InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
+                    # Restore FIFO batches (reverse order)
+                    batches = (
+                        FIFOBatch.objects
+                        .filter(item_id=si.item_id)
+                        .order_by('-tanggal', '-created_at')
+                        .select_for_update()
+                    )
+                    remaining_to_restore = si.quantity
+                    for batch in batches:
+                        if remaining_to_restore <= 0:
+                            break
+                        can_restore = batch.quantity_in - batch.remaining_qty
+                        restore = min(can_restore, remaining_to_restore)
+                        if restore > 0:
+                            batch.remaining_qty += restore
+                            batch.save()
+                            remaining_to_restore -= restore
+
+                    # Restore InventoryRecord quantities
+                    records_to_restore = []
+                    for alloc in si.fifo_allocations.select_related('inventory_record').all():
+                        inv_rec = alloc.inventory_record
+                        inv_rec.quantity += alloc.quantity_consumed
+                        records_to_restore.append(inv_rec)
+                    if records_to_restore:
+                        InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
+
+                elif si.item.tipe_item in BULK_TYPES:
+                    if si.cogs_amount <= 0:
+                        continue
+
+                    # Restore InventoryRecord values using allocations
+                    records_to_restore = []
+                    for alloc in si.fifo_allocations.select_related('inventory_record').all():
+                        inv_rec = alloc.inventory_record
+                        inv_rec.total_value += alloc.cogs_amount
+                        inv_rec.unit_price = inv_rec.total_value  # bulk: unit_price = total_value
+                        records_to_restore.append(inv_rec)
+                    if records_to_restore:
+                        InventoryRecord.objects.bulk_update(records_to_restore, ['total_value', 'unit_price'])
+
+                    # Restore FIFO batch values
+                    hpp = si.cogs_amount
+                    batches = (
+                        FIFOBatch.objects
+                        .filter(item_id=si.item_id)
+                        .order_by('-tanggal', '-created_at')
+                        .select_for_update()
+                    )
+                    remaining_to_restore = hpp
+                    for batch in batches:
+                        if remaining_to_restore <= 0:
+                            break
+                        max_value = batch.quantity_in * batch.unit_price
+                        current_value = batch.remaining_qty * batch.unit_price
+                        can_restore = max_value - current_value
+                        restore = min(can_restore, remaining_to_restore)
+                        if restore > 0 and batch.unit_price:
+                            batch.remaining_qty += restore / batch.unit_price
+                            batch.save()
+                            remaining_to_restore -= restore
 
 
 def _next_sales_journal_number() -> str:

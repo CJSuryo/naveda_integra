@@ -18,6 +18,7 @@
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:16px;">
     <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <input type="hidden" name="tab" id="activeTabInput" value="{{ active_tab }}">
       <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
         <label class="ni-form-label">Dari Tanggal</label>
         <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -52,52 +53,148 @@
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead>
-        <tr>
-          <th>Inventory Number</th>
-          <th>Item</th>
-          <th>Entitas Bisnis</th>
-          <th>Tanggal</th>
-          <th class="ni-text-right">Qty</th>
-          <th class="ni-text-right">Harga Satuan</th>
-          <th class="ni-text-right">Total</th>
-          <th>Lead Time</th>
-          <th>Metode Alokasi</th>
-          <th>Kadaluarsa</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for record in records %}
-        <tr>
-          <td><a href="{% url 'inventory:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.inventory_number }}</a></td>
-          <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
-          <td>{{ record.entitas_bisnis.nama }}</td>
-          <td>{{ record.tanggal }}</td>
-          <td class="ni-text-right">{{ record.quantity|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ record.unit_price|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right"><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></td>
-          <td>{{ record.lead_time_days|default:'-' }}</td>
-          <td>{{ record.get_metode_alokasi_display|default:'-' }}</td>
-          <td>{{ record.tanggal_kadaluarsa|default:'-' }}</td>
-          <td>
-            <div class="ni-btn-row">
-              <a href="{% url 'inventory:detail' record.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
-              <a href="{% url 'inventory:update' record.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="openDeleteModal('{% url 'inventory:delete' record.pk %}', '{{ record.inventory_number|escapejs }}')">Hapus</button>
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="11" class="ni-text-center ni-text-muted">Belum ada data inventory.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<!-- Tabs -->
+<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--ni-border);">
+  <button type="button" class="ni-tab{% if active_tab == 'satuan' %} ni-tab--active{% endif %}" data-tab="satuan" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:500;color:var(--ni-text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+    <i data-lucide="package" style="width:14px;height:14px;vertical-align:text-bottom;"></i> Inventory Satuan
+  </button>
+  <button type="button" class="ni-tab{% if active_tab == 'bulk' %} ni-tab--active{% endif %}" data-tab="bulk" style="padding:10px 20px;border:none;background:none;cursor:pointer;font-weight:500;color:var(--ni-text-muted);border-bottom:2px solid transparent;margin-bottom:-2px;">
+    <i data-lucide="boxes" style="width:14px;height:14px;vertical-align:text-bottom;"></i> Inventory Bulk
+  </button>
+</div>
+
+<!-- Inventory Satuan Tab -->
+<div id="tab-satuan" class="ni-tab-panel" {% if active_tab != 'satuan' %}style="display:none"{% endif %}>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Inventory Number</th>
+            <th>Item</th>
+            <th>Entitas Bisnis</th>
+            <th>Tanggal</th>
+            <th class="ni-text-right">Qty</th>
+            <th class="ni-text-right">Harga Satuan</th>
+            <th class="ni-text-right">Total</th>
+            <th>Lead Time</th>
+            <th>Metode Alokasi</th>
+            <th>Kadaluarsa</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records_satuan %}
+          <tr>
+            <td><a href="{% url 'inventory:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.inventory_number }}</a></td>
+            <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
+            <td>{{ record.entitas_bisnis.nama }}</td>
+            <td>{{ record.tanggal }}</td>
+            <td class="ni-text-right">{{ record.quantity|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ record.unit_price|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right"><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></td>
+            <td>{{ record.lead_time_days|default:'-' }}</td>
+            <td>{{ record.get_metode_alokasi_display|default:'-' }}</td>
+            <td>{{ record.tanggal_kadaluarsa|default:'-' }}</td>
+            <td>
+              <div class="ni-btn-row">
+                <a href="{% url 'inventory:detail' record.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
+                <a href="{% url 'inventory:update' record.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+                <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="openDeleteModal('{% url 'inventory:delete' record.pk %}', '{{ record.inventory_number|escapejs }}')">Hapus</button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="11" class="ni-text-center ni-text-muted">Belum ada data inventory satuan.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Inventory Bulk Tab -->
+<div id="tab-bulk" class="ni-tab-panel" {% if active_tab != 'bulk' %}style="display:none"{% endif %}>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Inventory Number</th>
+            <th>Item</th>
+            <th>Tipe</th>
+            <th>Entitas Bisnis</th>
+            <th>Tanggal</th>
+            <th class="ni-text-right">Nilai Barang</th>
+            <th>Metode Alokasi</th>
+            <th>Kadaluarsa</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in records_bulk %}
+          <tr>
+            <td><a href="{% url 'inventory:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.inventory_number }}</a></td>
+            <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
+            <td><span class="ni-badge ni-badge--secondary">{{ record.item.get_tipe_item_display }}</span></td>
+            <td>{{ record.entitas_bisnis.nama }}</td>
+            <td>{{ record.tanggal }}</td>
+            <td class="ni-text-right"><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></td>
+            <td>{{ record.get_metode_alokasi_display|default:'-' }}</td>
+            <td>{{ record.tanggal_kadaluarsa|default:'-' }}</td>
+            <td>
+              <div class="ni-btn-row">
+                <a href="{% url 'inventory:detail' record.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
+                <a href="{% url 'inventory:update' record.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+                <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="openDeleteModal('{% url 'inventory:delete' record.pk %}', '{{ record.inventory_number|escapejs }}')">Hapus</button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada data inventory bulk.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 {% include 'components/delete_modal.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var tabs = document.querySelectorAll('.ni-tab');
+  var panels = document.querySelectorAll('.ni-tab-panel');
+  var tabInput = document.getElementById('activeTabInput');
+
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      var target = this.dataset.tab;
+      tabs.forEach(function (t) {
+        t.classList.remove('ni-tab--active');
+        t.style.borderBottomColor = 'transparent';
+        t.style.color = 'var(--ni-text-muted)';
+      });
+      this.classList.add('ni-tab--active');
+      this.style.borderBottomColor = 'var(--ni-primary)';
+      this.style.color = 'var(--ni-primary)';
+      panels.forEach(function (p) {
+        p.style.display = p.id === 'tab-' + target ? '' : 'none';
+      });
+      if (tabInput) tabInput.value = target;
+    });
+  });
+
+  // Style active tab on load
+  tabs.forEach(function (tab) {
+    if (tab.classList.contains('ni-tab--active')) {
+      tab.style.borderBottomColor = 'var(--ni-primary)';
+      tab.style.color = 'var(--ni-primary)';
+    }
+  });
+})();
+</script>
 {% endblock %}

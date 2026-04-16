@@ -215,6 +215,19 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'ekuitas' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="landmark" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Ekuitas</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'ekuitas:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Modal Disetor</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'jurnal' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="book-open" class="ni-nav-link__icon"></i>

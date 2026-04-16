@@ -451,9 +451,10 @@
       '<td><select class="ni-purchase-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
       '<td><input type="text" id="' + rid + '_coa" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.coa_account_id || '') : '') + '"></td>' +
       '<td><input type="text" id="' + rid + '_offset" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.offset_coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.offset_coa_account_id || '') : '') + '"></td>' +
-      '<td><input type="number" id="' + rid + '_qty" class="ni-purchase-input" min="0.0001" step="0.0001" value="' + (prefill ? prefill.quantity : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
-      '<td><input type="number" id="' + rid + '_price" class="ni-purchase-input" min="0.01" step="0.01" value="' + (prefill ? prefill.unit_price : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
-      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input" readonly value="' + (prefill ? formatNum(parseFloat(prefill.quantity || 0) * parseFloat(prefill.unit_price || 0)) : '0') + '"></td>' +
+      '<td><input type="number" id="' + rid + '_qty" class="ni-purchase-input qty-field" min="0.0001" step="0.0001" value="' + (prefill ? prefill.quantity : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="number" id="' + rid + '_price" class="ni-purchase-input price-field" min="0.01" step="0.01" value="' + (prefill ? prefill.unit_price : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input total-field" readonly value="' + (prefill ? formatNum(parseFloat(prefill.quantity || 0) * parseFloat(prefill.unit_price || 0)) : '0') + '"></td>' +
+      '<td><input type="number" id="' + rid + '_bulk_value" class="ni-purchase-input bulk-value-field" min="0.01" step="0.01" value="' + (prefill ? (prefill.bulk_value || '') : '') + '" style="display:none;" placeholder="Jumlah Nilai Barang"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
 
     // Advanced fields (hidden row)
@@ -512,6 +513,8 @@
         if (metodeEl && opt && opt.metode_biaya_persediaan) {
           metodeEl.value = opt.metode_biaya_persediaan;
         }
+        // Toggle bulk vs unit fields
+        toggleBulkFields(rid, opt ? opt.tipe_item : '');
       },
       create: function (input, callback) {
         // Open the full item master modal instead of inline create
@@ -565,6 +568,34 @@
     var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
     var total = qty * price;
     document.getElementById(rid + '_total').value = formatNum(total);
+  };
+
+  var BULK_TYPES = ['RMB', 'FGB', 'ITMB'];
+
+  window.toggleBulkFields = function (rid, tipeItem) {
+    var isBulk = BULK_TYPES.indexOf(tipeItem) !== -1;
+    var tr = document.getElementById(rid);
+    if (!tr) return;
+    var qtyFields = tr.querySelectorAll('.qty-field');
+    var priceFields = tr.querySelectorAll('.price-field');
+    var totalFields = tr.querySelectorAll('.total-field');
+    var bulkFields = tr.querySelectorAll('.bulk-value-field');
+    qtyFields.forEach(function (el) {
+      el.parentElement.style.display = isBulk ? 'none' : '';
+    });
+    priceFields.forEach(function (el) {
+      el.parentElement.style.display = isBulk ? 'none' : '';
+    });
+    totalFields.forEach(function (el) {
+      el.parentElement.style.display = isBulk ? 'none' : '';
+    });
+    bulkFields.forEach(function (el) {
+      el.style.display = isBulk ? '' : 'none';
+      if (isBulk) el.parentElement.colSpan = 3;
+      else el.parentElement.colSpan = 1;
+    });
+    // Store tipe_item on the row for data collection
+    tr.dataset.tipeItem = tipeItem || '';
   };
 
   window.toggleExpMode = function (rid) {
@@ -965,8 +996,9 @@
           coa_account_text: document.getElementById(rid + '_coa').value || '',
           offset_coa_account_id: document.getElementById(rid + '_offset').dataset.id || '',
           offset_coa_account_text: document.getElementById(rid + '_offset').value || '',
-          quantity: document.getElementById(rid + '_qty').value || '0',
-          unit_price: document.getElementById(rid + '_price').value || '0',
+          quantity: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? '1' : (document.getElementById(rid + '_qty').value || '0'),
+          unit_price: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? (document.getElementById(rid + '_bulk_value').value || '0') : (document.getElementById(rid + '_price').value || '0'),
+          is_bulk: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? '1' : '0',
           metode_alokasi_biaya: document.getElementById(rid + '_metode') ? document.getElementById(rid + '_metode').value : '',
           tanggal_kadaluarsa: document.getElementById(rid + '_exp_date') ? document.getElementById(rid + '_exp_date').value : '',
           lead_time_days: document.getElementById(rid + '_lead').value || '',

@@ -74,18 +74,20 @@ def create_fifo_batches(purchase_header: PurchaseHeader) -> list[FIFOBatch]:
         items = eb_group.items.select_related('item', 'sub_transaction_type').all()
         for pi in items:
             # Only create FIFO batches for inventory items (not assets)
-            if pi.item.tipe_item not in ('RM', 'FG', 'ITM'):
+            if pi.item.tipe_item not in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'):
                 continue
             # Only create FIFO batches for inflow transactions
             if pi.sub_transaction_type.direction != 'inflow':
                 continue
+            # Bulk items: qty=1, unit_price=total_value (value-based tracking)
+            is_bulk = pi.item.tipe_item in ('RMB', 'FGB', 'ITMB')
             batch = FIFOBatch.objects.create(
                 purchase_item=pi,
                 item=pi.item,
                 tanggal=purchase_header.tanggal,
-                quantity_in=pi.quantity,
-                unit_price=pi.unit_price,
-                remaining_qty=pi.quantity,
+                quantity_in=Decimal('1') if is_bulk else pi.quantity,
+                unit_price=pi.total_value if is_bulk else pi.unit_price,
+                remaining_qty=Decimal('1') if is_bulk else pi.quantity,
             )
             batches.append(batch)
 
@@ -120,8 +122,8 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
     for eb_group in purchase_header.entitas_groups.select_related('entitas_bisnis').all():
         items = eb_group.items.select_related('item', 'sub_transaction_type').all()
         for pi in items:
-            # Only create inventory records for inflow inventory items (RM/FG/ITM)
-            if pi.item.tipe_item not in ('RM', 'FG', 'ITM'):
+            # Only create inventory records for inflow inventory items (RM/FG/ITM/RMB/FGB/ITMB)
+            if pi.item.tipe_item not in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'):
                 continue
             if pi.sub_transaction_type.direction != 'inflow':
                 continue
@@ -135,12 +137,15 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
                 tanggal_base = purchase_header.tanggal if isinstance(purchase_header.tanggal, date) else date.fromisoformat(str(purchase_header.tanggal))
                 tanggal_kadaluarsa = tanggal_base + timedelta(days=pi.item.lama_kadaluarsa)
 
+            # Bulk items: quantity=1, unit_price=total_value (value-based tracking)
+            is_bulk = pi.item.tipe_item in ('RMB', 'FGB', 'ITMB')
+
             record = InventoryRecord(
                 item=pi.item,
                 purchase_item=pi,
                 entitas_bisnis=eb_group.entitas_bisnis,
-                quantity=pi.quantity,
-                unit_price=pi.unit_price,
+                quantity=Decimal('1') if is_bulk else pi.quantity,
+                unit_price=pi.total_value if is_bulk else pi.unit_price,
                 tanggal=purchase_header.tanggal,
                 lead_time_days=pi.lead_time_days,
                 ordering_cost=pi.ordering_cost,

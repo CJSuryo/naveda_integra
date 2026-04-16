@@ -10,4 +10,5 @@ urlpatterns = [
     path('<int:pk>/', views.aset_lainnya_detail, name='detail'),
     path('<int:pk>/edit/', views.aset_lainnya_update, name='update'),
     path('<int:pk>/delete/', views.aset_lainnya_delete, name='delete'),
+    path('<int:pk>/proses-amortisasi/', views.aset_lainnya_process_amortization, name='process_amortization'),
 ]

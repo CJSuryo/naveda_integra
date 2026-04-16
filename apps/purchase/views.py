@@ -422,7 +422,7 @@ def journal_preview(request: HttpRequest) -> JsonResponse:
 
 # Mapping of page slug → (title, subtitle, tipe_item filter values)
 _ITEM_PAGE_MAP = {
-    'persediaan': ('Persediaan (Inventory)', 'Raw Material, Finished Good, Item Lainnya', ['RM', 'FG', 'ITM']),
+    'persediaan': ('Persediaan (Inventory)', 'Raw Material, Finished Good, Item Lainnya', ['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']),
     'aset-tetap': ('Aset Tetap', 'Daftar aset tetap', ['ATP']),
     'aset-lainnya': ('Aset Lainnya', 'Daftar aset lainnya', ['ALL']),
 }
@@ -436,7 +436,7 @@ _ITEM_PAGE_LIST_URL = {
 
 def _get_item_page(tipe_item: str) -> str:
     """Return the page slug for an item based on its tipe_item."""
-    if tipe_item in ('RM', 'FG', 'ITM'):
+    if tipe_item in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'):
         return 'persediaan'
     if tipe_item == 'ATP':
         return 'aset-tetap'
