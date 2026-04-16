@@ -108,14 +108,14 @@
 </div>
 
 <!-- ── Persediaan Detail Modal ──────────────────────────────────────────── -->
-<div id="saModalPersediaan" class="ni-modal">
-  <div class="ni-modal__dialog ni-modal__dialog--lg">
+<div class="ni-modal-backdrop" id="saModalPersediaanBackdrop">
+  <div class="ni-modal ni-modal--lg">
     <div class="ni-modal__header">
       <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
         <i data-lucide="package" style="width:18px;height:18px;color:var(--ni-primary);"></i>
         Detail Persediaan &mdash; <span id="saModalAkunNama" style="color:var(--ni-primary);"></span>
       </h3>
-      <button type="button" class="ni-modal__close" data-modal-close>&times;</button>
+      <button type="button" class="ni-modal__close" onclick="saCloseDetailModal()">&times;</button>
     </div>
     <div class="ni-modal__body">
       <div class="ni-table-wrapper">
@@ -143,7 +143,40 @@
       <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmDetail()">
         <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
       </button>
-      <button type="button" class="ni-btn ni-btn--secondary" data-modal-close>Batal</button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseDetailModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Item Create Sub-modal ─────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saItemCreateBackdrop" style="z-index:2100;">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tambah Item Baru</h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseItemCreateModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Item <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="saItemCreateNama" class="ni-input" placeholder="Nama item">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Tipe Item</label>
+        <select id="saItemCreateTipe" class="ni-input">
+          <option value="RM">Raw Material</option>
+          <option value="FG">Finished Good</option>
+          <option value="ITM">Item Lainnya</option>
+          <option value="ATP">Aset Tetap</option>
+          <option value="ALL">Aset Lainnya</option>
+        </select>
+      </div>
+      <div id="saItemCreateError" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseItemCreateModal()">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saSubmitItemCreate()">
+        <i data-lucide="save" style="width:15px;height:15px"></i> Simpan
+      </button>
     </div>
   </div>
 </div>
@@ -161,6 +194,8 @@
   var rowCount = 0;
   var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
   var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var itemCreateUrl = '{% url "purchase:api_item_create" %}';
+  var csrfToken = '{{ csrf_token }}';
   var _tomSelectInstances = [];
   // rid → {type, detail_rows[]}
   var _rowDetailMap = {};
@@ -369,7 +404,7 @@
     } else {
       saModalAddRow();
     }
-    window.niModal.open(document.getElementById('saModalPersediaan'));
+    document.getElementById('saModalPersediaanBackdrop').classList.add('ni-modal-backdrop--visible');
   };
 
   function _clearModalRows() {
@@ -414,7 +449,26 @@
           .catch(function () { callback(); });
       },
       onChange: function () { saModalUpdateRow(currentMrid); },
-      create: false,
+      create: function (input, callback) {
+        // Open the item create sub-modal; on success, add option to THIS TomSelect
+        saOpenItemCreateModal(input, function (newOpt) {
+          var selEl = document.getElementById('modal_item_' + currentMrid);
+          if (selEl && selEl.tomselect) {
+            selEl.tomselect.addOption(newOpt);
+            selEl.tomselect.setValue(newOpt.id, true);
+          }
+        });
+        // Call callback() with no arg so TomSelect doesn't create a blank option
+        callback();
+      },
+      createFilter: function (input) {
+        return input.trim().length >= 2;
+      },
+      render: {
+        option_create: function (data, escape) {
+          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong></div>';
+        },
+      },
       dropdownParent: 'body',
     });
     _modalTomSelects.push(ts);
@@ -505,7 +559,7 @@
     }
     _updateDetailBadge(rid);
     saUpdateTotals();
-    window.niModal.close(document.getElementById('saModalPersediaan'));
+    document.getElementById('saModalPersediaanBackdrop').classList.remove('ni-modal-backdrop--visible');
     lucide.createIcons();
   };
 
@@ -533,6 +587,65 @@
     });
     document.getElementById('saRowsData').value = JSON.stringify(data);
   });
+
+  // ── Item Create Sub-modal ─────────────────────────────────────────────────
+  var _itemCreateCallback = null;
+
+  window.saOpenItemCreateModal = function (prefillNama, callback) {
+    _itemCreateCallback = callback || null;
+    document.getElementById('saItemCreateNama').value = prefillNama || '';
+    document.getElementById('saItemCreateTipe').value = 'RM';
+    document.getElementById('saItemCreateError').style.display = 'none';
+    document.getElementById('saItemCreateBackdrop').classList.add('ni-modal-backdrop--visible');
+    lucide.createIcons();
+  };
+
+  window.saCloseItemCreateModal = function () {
+    document.getElementById('saItemCreateBackdrop').classList.remove('ni-modal-backdrop--visible');
+    _itemCreateCallback = null;
+  };
+
+  window.saSubmitItemCreate = function () {
+    var nama = document.getElementById('saItemCreateNama').value.trim();
+    var errEl = document.getElementById('saItemCreateError');
+    if (!nama) {
+      errEl.textContent = 'Nama item wajib diisi.';
+      errEl.style.display = '';
+      return;
+    }
+    var tipe = document.getElementById('saItemCreateTipe').value;
+    var ebLv1 = getEBLv1Id();
+    var payload = {
+      nama: nama,
+      tipe_item: tipe,
+      entitas_bisnis_ids: ebLv1 ? [parseInt(ebLv1)] : [],
+    };
+    fetch(itemCreateUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.error) {
+        errEl.textContent = data.error;
+        errEl.style.display = '';
+        return;
+      }
+      if (_itemCreateCallback) {
+        _itemCreateCallback({ id: String(data.id), text: data.text || data.nama });
+      }
+      saCloseItemCreateModal();
+    })
+    .catch(function () {
+      errEl.textContent = 'Gagal menyimpan item. Silakan coba lagi.';
+      errEl.style.display = '';
+    });
+  };
+
+  window.saCloseDetailModal = function () {
+    document.getElementById('saModalPersediaanBackdrop').classList.remove('ni-modal-backdrop--visible');
+  };
 
   saAddRow();
   saAddRow();

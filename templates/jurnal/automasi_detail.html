@@ -50,11 +50,13 @@
   <div class="ni-card__body">
     <form method="post" action="{% url 'jurnal:automasi_add_akun' object.pk %}">
       {% csrf_token %}
-      <div class="ni-form-group" style="max-width:400px;display:inline-block;vertical-align:bottom;">
-        <label class="ni-form-label">Akun</label>
-        {{ add_form.akun }}
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:200px;">
+          <label class="ni-form-label">Akun</label>
+          {{ add_form.akun }}
+        </div>
+        <button type="submit" class="ni-btn ni-btn--success"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah</button>
       </div>
-      <button type="submit" class="ni-btn ni-btn--success" style="vertical-align:bottom;"><i data-lucide="plus" style="width:16px;height:16px"></i> Tambah</button>
     </form>
   </div>
 </div>

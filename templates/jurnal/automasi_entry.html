@@ -11,9 +11,9 @@
 <form method="post">{% csrf_token %}
   <div class="ni-card ni-animate-fade-in">
     <div class="ni-card__body">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+      <div class="ni-form-row">
         {% for field in form %}
-        <div class="ni-form-group">
+        <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">{{ field.label }}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}

@@ -69,7 +69,8 @@
 
       <!-- Rows table -->
       <div style="margin-bottom:12px;overflow:visible;">
-        <table class="ni-jm-table">
+        <div class="ni-table-wrapper">
+          <table class="ni-jm-table">
           <thead>
             <tr>
               <th style="width:30%">Kode Akun</th>
@@ -83,13 +84,14 @@
             <!-- rows inserted by JS -->
           </tbody>
         </table>
+        </div>
       </div>
       <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="jmAddRow()">
         <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
       </button>
 
       <!-- Totals -->
-      <div style="margin-top:20px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;">
+      <div style="margin-top:20px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
         <span>Total Debit: <strong id="jmTotalDebit" class="ni-jm-balance">0</strong></span>
         <span>Total Kredit: <strong id="jmTotalKredit" class="ni-jm-balance">0</strong></span>
         <span id="jmBalanceStatus" class="ni-jm-balance ni-jm-unbalanced">Tidak Seimbang</span>
