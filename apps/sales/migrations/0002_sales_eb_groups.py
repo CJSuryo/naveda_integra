@@ -10,14 +10,17 @@ def create_sales_eb_from_headers(apps, schema_editor):
     SalesHeader = apps.get_model('sales', 'SalesHeader')
     SalesEntitasBisnis = apps.get_model('sales', 'SalesEntitasBisnis')
 
-    for header in SalesHeader.objects.all():
-        SalesEntitasBisnis.objects.create(
+    records = [
+        SalesEntitasBisnis(
             sales_header=header,
             entitas_bisnis_id=header.entitas_bisnis_id,
             entitas_bisnis_lv2_id=None,
             entitas_bisnis_lv3_id=None,
             payment_account_id=header.payment_account_id,
         )
+        for header in SalesHeader.objects.all()
+    ]
+    SalesEntitasBisnis.objects.bulk_create(records)
 
 
 def set_sales_item_eb(apps, schema_editor):
@@ -28,7 +31,12 @@ def set_sales_item_eb(apps, schema_editor):
     eb_by_header = {seb.sales_header_id: seb for seb in SalesEntitasBisnis.objects.all()}
     items_to_update = []
     for item in SalesItem.objects.all():
-        item.sales_eb = eb_by_header[item.sales_header_id]
+        eb = eb_by_header.get(item.sales_header_id)
+        if eb is None:
+            # Orphaned item — skip; it will have a null sales_eb which is caught
+            # when the NOT NULL constraint is applied in the next step.
+            continue
+        item.sales_eb = eb
         items_to_update.append(item)
     if items_to_update:
         SalesItem.objects.bulk_update(items_to_update, ['sales_eb'])

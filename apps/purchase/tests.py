@@ -7,8 +7,12 @@ from django.urls import reverse
 
 from apps.accounts.models import User, Role
 from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
-from apps.master_data.models import Akun, AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
+from apps.master_data.models import (
+    Akun, AsetLv1, AsetLv2, KewajibanLv1, KewajibanLv2, EkuitasLv1, EkuitasLv2,
+    PendapatanLv1, PendapatanLv2,
+)
 from apps.jurnal.models import JurnalHeader, JurnalDetail
+from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
 
 from .models import (
     KategoriItem, ItemMasterPurchase, SubTransactionType,
@@ -410,10 +414,6 @@ class PurchaseViewTests(TestCase):
         blocked (ProtectedError / non-2xx response) because SalesItem has a
         PROTECT FK to SubTransactionType.  The view must handle this gracefully.
         """
-        from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
-        from apps.master_data.models import PendapatanLv1, PendapatanLv2
-        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
-
         stt_sales = SubTransactionType.objects.create(
             nama='Penjualan Tunai', module='sales', direction='outflow',
             default_offset_account=self.akun_modal,

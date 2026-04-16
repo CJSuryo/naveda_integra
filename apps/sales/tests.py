@@ -223,8 +223,9 @@ class SalesViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(SalesHeader.objects.count(), 1)
         header = SalesHeader.objects.first()
-        # Header must NOT have entitas_bisnis field at all
-        self.assertFalse(hasattr(header, 'entitas_bisnis_id'))
+        # Header must NOT have entitas_bisnis as a model field
+        field_names = [f.name for f in header._meta.get_fields()]
+        self.assertNotIn('entitas_bisnis', field_names)
         # EB group must be linked via SalesEntitasBisnis
         self.assertEqual(header.entitas_groups.count(), 1)
         eb_group = header.entitas_groups.first()
