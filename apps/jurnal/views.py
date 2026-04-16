@@ -305,13 +305,6 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         )
         return {row['akun_id']: row for row in result}
 
-    # Saldo Awal: all entries BEFORE tanggal_dari
-    saldo_awal_map = {}
-    if tanggal_dari:
-        saldo_awal_map = _aggregate(
-            JurnalDetail.objects.filter(jurnal_header__tanggal__lt=tanggal_dari)
-        )
-
     # Period filter
     period_filter = {}
     if tanggal_dari:
@@ -319,17 +312,33 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
 
-    # Mutasi Modul: automated entries within period (is_penyesuaian=False)
+    # Saldo Awal: entries created via the Saldo Awal menu (is_saldo_awal=True)
+    # PLUS all entries (any type) that fall BEFORE tanggal_dari when a date range is active.
+    if tanggal_dari:
+        sa_qs = JurnalDetail.objects.filter(
+            jurnal_header__tanggal__lt=tanggal_dari
+        ) | JurnalDetail.objects.filter(
+            jurnal_header__is_saldo_awal=True, **period_filter
+        )
+    else:
+        sa_qs = JurnalDetail.objects.filter(jurnal_header__is_saldo_awal=True)
+    saldo_awal_map = _aggregate(sa_qs)
+
+    # Mutasi Modul: automated entries within period, excluding saldo awal entries
     modul_map = _aggregate(
         JurnalDetail.objects.filter(
-            jurnal_header__is_penyesuaian=False, **period_filter
+            jurnal_header__is_penyesuaian=False,
+            jurnal_header__is_saldo_awal=False,
+            **period_filter
         )
     )
 
-    # Penyesuaian: manual entries within period (is_penyesuaian=True)
+    # Penyesuaian: manual adjustment entries within period, excluding saldo awal
     penyesuaian_map = _aggregate(
         JurnalDetail.objects.filter(
-            jurnal_header__is_penyesuaian=True, **period_filter
+            jurnal_header__is_penyesuaian=True,
+            jurnal_header__is_saldo_awal=False,
+            **period_filter
         )
     )
 
