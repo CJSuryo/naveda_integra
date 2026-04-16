@@ -86,21 +86,20 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
             detail_lines: list[JurnalDetail] = []
 
             for si in items:
-                # 1. COGS entry: Debit HPP, Credit Persediaan
-                if si.cogs_amount > 0:
+                # 1. COGS entry: Debit HPP, Credit Persediaan — both or neither
+                if si.cogs_amount > 0 and si.inventory_account_id:
                     detail_lines.append(JurnalDetail(
                         jurnal_header=header,
                         akun=si.offset_coa_account,
                         debit=si.cogs_amount,
                         kredit=Decimal('0'),
                     ))
-                    if si.inventory_account:
-                        detail_lines.append(JurnalDetail(
-                            jurnal_header=header,
-                            akun=si.inventory_account,
-                            debit=Decimal('0'),
-                            kredit=si.cogs_amount,
-                        ))
+                    detail_lines.append(JurnalDetail(
+                        jurnal_header=header,
+                        akun=si.inventory_account,
+                        debit=Decimal('0'),
+                        kredit=si.cogs_amount,
+                    ))
 
                 # 2. Revenue entry: Debit Kas/Piutang, Credit Pendapatan
                 detail_lines.append(JurnalDetail(
@@ -154,33 +153,44 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
 
                 total_cogs, consumed = consume_fifo(si.item_id, si.quantity)
                 si.cogs_amount = total_cogs
-                si.inventory_account = si.item.coa_account
+                si.inventory_account_id = si.item.coa_account_id  # Use FK ID directly
                 si.save()
 
                 # Update InventoryRecord quantities based on FIFO consumption
                 records_to_update = []
                 allocations_to_create = []
                 for batch, qty_consumed in consumed:
+                    # Find matching InventoryRecord(s) for this batch
                     if batch.purchase_item_id:
+                        # Purchase-sourced batch — linked via purchase_item FK
                         inv_records = InventoryRecord.objects.filter(
                             purchase_item=batch.purchase_item,
                             item=si.item,
                         ).order_by('tanggal', 'created_at')
-                        remaining_to_reduce = qty_consumed
-                        for inv_rec in inv_records:
-                            if remaining_to_reduce <= 0:
-                                break
-                            reduce = min(inv_rec.quantity, remaining_to_reduce)
-                            if reduce > 0:
-                                inv_rec.quantity -= reduce
-                                records_to_update.append(inv_rec)
-                                allocations_to_create.append(SalesItemFIFOAllocation(
-                                    sales_item=si,
-                                    inventory_record=inv_rec,
-                                    quantity_consumed=reduce,
-                                    cogs_amount=reduce * batch.unit_price,
-                                ))
-                                remaining_to_reduce -= reduce
+                    else:
+                        # Saldo-awal batch — match by item + tanggal + unit_price
+                        inv_records = InventoryRecord.objects.filter(
+                            purchase_item__isnull=True,
+                            item=si.item,
+                            tanggal=batch.tanggal,
+                            unit_price=batch.unit_price,
+                        ).order_by('tanggal', 'created_at')
+
+                    remaining_to_reduce = qty_consumed
+                    for inv_rec in inv_records:
+                        if remaining_to_reduce <= 0:
+                            break
+                        reduce = min(inv_rec.quantity, remaining_to_reduce)
+                        if reduce > 0:
+                            inv_rec.quantity -= reduce
+                            records_to_update.append(inv_rec)
+                            allocations_to_create.append(SalesItemFIFOAllocation(
+                                sales_item=si,
+                                inventory_record=inv_rec,
+                                quantity_consumed=reduce,
+                                cogs_amount=reduce * batch.unit_price,
+                            ))
+                            remaining_to_reduce -= reduce
                 if records_to_update:
                     InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
                 if allocations_to_create:
@@ -200,10 +210,14 @@ def reverse_sales_fifo(sales_header: SalesHeader) -> None:
     """Reverse FIFO consumption for a sales transaction.
 
     Restores remaining_qty on FIFO batches and InventoryRecord quantities.
+    Uses SalesItemFIFOAllocation records to precisely restore inventory,
+    handling both purchase-sourced and saldo-awal-sourced batches.
     """
     with transaction.atomic():
         for eb_group in sales_header.entitas_groups.all():
-            for si in eb_group.items.select_related('item').all():
+            for si in eb_group.items.select_related('item').prefetch_related(
+                'fifo_allocations__inventory_record',
+            ).all():
                 if si.item.tipe_item not in ('RM', 'FG', 'ITM'):
                     continue
                 if si.cogs_amount <= 0:
@@ -227,18 +241,15 @@ def reverse_sales_fifo(sales_header: SalesHeader) -> None:
                         batch.save()
                         remaining_to_restore -= restore
 
-                        # Also restore the corresponding InventoryRecord
-                        if batch.purchase_item_id:
-                            inv_records = InventoryRecord.objects.filter(
-                                purchase_item=batch.purchase_item,
-                                item=si.item,
-                            )
-                            records_to_restore = []
-                            for inv_rec in inv_records:
-                                inv_rec.quantity += restore
-                                records_to_restore.append(inv_rec)
-                            if records_to_restore:
-                                InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
+                # Restore InventoryRecord quantities using per-allocation data
+                # (works for both purchase-sourced and saldo-awal-sourced batches)
+                records_to_restore = []
+                for alloc in si.fifo_allocations.select_related('inventory_record').all():
+                    inv_rec = alloc.inventory_record
+                    inv_rec.quantity += alloc.quantity_consumed
+                    records_to_restore.append(inv_rec)
+                if records_to_restore:
+                    InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
 
 
 def _next_sales_journal_number() -> str:

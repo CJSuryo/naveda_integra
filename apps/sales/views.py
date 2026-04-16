@@ -447,6 +447,17 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             if not item_data.get('revenue_account_id'):
                 errors[f'group_{g_idx}_item_{i}_revenue'] = f'Grup {g_idx + 1}, Item {i + 1}: Revenue Account wajib diisi.'
 
+            # Validate item has coa_account set (required for balanced COGS journal entry)
+            try:
+                item_obj = ItemMasterPurchase.objects.only('tipe_item', 'coa_account_id', 'nama').get(pk=int(item_id))
+                if item_obj.tipe_item in ('RM', 'FG', 'ITM') and not item_obj.coa_account_id:
+                    errors[f'group_{g_idx}_item_{i}_coa'] = (
+                        f'Grup {g_idx + 1}, Item {i + 1}: Item "{item_obj.nama}" belum memiliki '
+                        'CoA Account (Persediaan). Harap set CoA Account di Item Master terlebih dahulu.'
+                    )
+            except (ItemMasterPurchase.DoesNotExist, ValueError, TypeError):
+                pass
+
             all_items_flat.append(item_data)
 
     # Check stock availability

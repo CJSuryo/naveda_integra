@@ -51,7 +51,7 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
     # Build mutation history for this inventory record
-    # Purchase inflow (the purchase that created this record)
+    # Purchase or saldo-awal inflow (the transaction that created this record)
     mutations = []
     if record.purchase_item:
         mutations.append({
@@ -62,28 +62,47 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'quantity': record.purchase_item.quantity,
             'keterangan': f'Pembelian via {record.purchase_item.purchase_eb.purchase_header.transaction_id}',
         })
-
-        # Sales outflows — via SalesItemFIFOAllocation for accurate per-batch quantities
-        from apps.sales.models import SalesItemFIFOAllocation
-        alloc_qs = (
-            SalesItemFIFOAllocation.objects
+    else:
+        # Saldo awal — compute original quantity from remaining + all consumed allocations
+        from decimal import Decimal
+        from django.db.models import Sum
+        from apps.sales.models import SalesItemFIFOAllocation as _SIFA
+        consumed_total = (
+            _SIFA.objects
             .filter(inventory_record=record)
-            .select_related(
-                'sales_item__sales_eb__sales_header',
-                'sales_item__sales_eb__entitas_bisnis',
-            )
-            .order_by('sales_item__sales_eb__sales_header__tanggal')
+            .aggregate(total=Sum('quantity_consumed'))['total'] or Decimal('0')
         )
-        for alloc in alloc_qs:
-            sh = alloc.sales_item.sales_eb.sales_header
-            mutations.append({
-                'tanggal': sh.tanggal,
-                'tipe': 'Keluar (Sales)',
-                'referensi': sh.transaction_id,
-                'url': f'/sales/{sh.pk}/',
-                'quantity': alloc.quantity_consumed,
-                'keterangan': f'Penjualan via {sh.transaction_id} ({alloc.sales_item.sales_eb.entitas_bisnis.nama})',
-            })
+        original_qty = record.quantity + consumed_total
+        mutations.append({
+            'tanggal': record.tanggal,
+            'tipe': 'Masuk (Saldo Awal)',
+            'referensi': f'Saldo Awal {record.tanggal}',
+            'url': None,
+            'quantity': original_qty,
+            'keterangan': 'Saldo awal persediaan',
+        })
+
+    # Sales outflows — via SalesItemFIFOAllocation for accurate per-batch quantities
+    from apps.sales.models import SalesItemFIFOAllocation
+    alloc_qs = (
+        SalesItemFIFOAllocation.objects
+        .filter(inventory_record=record)
+        .select_related(
+            'sales_item__sales_eb__sales_header',
+            'sales_item__sales_eb__entitas_bisnis',
+        )
+        .order_by('sales_item__sales_eb__sales_header__tanggal')
+    )
+    for alloc in alloc_qs:
+        sh = alloc.sales_item.sales_eb.sales_header
+        mutations.append({
+            'tanggal': sh.tanggal,
+            'tipe': 'Keluar (Sales)',
+            'referensi': sh.transaction_id,
+            'url': f'/sales/{sh.pk}/',
+            'quantity': alloc.quantity_consumed,
+            'keterangan': f'Penjualan via {sh.transaction_id} ({alloc.sales_item.sales_eb.entitas_bisnis.nama})',
+        })
 
     return render(request, 'inventory/inventory_detail.html', {
         'record': record,

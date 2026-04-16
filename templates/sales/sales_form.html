@@ -92,6 +92,10 @@
             <i data-lucide="x" style="width:14px;height:14px"></i> Tutup
           </button>
         </div>
+        <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-bottom:8px;padding:6px 8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);">
+          <i data-lucide="info" style="width:12px;height:12px;vertical-align:text-bottom;"></i>
+          Preview ini menampilkan entri Pendapatan saja. Entri HPP &amp; Persediaan dihitung otomatis dari FIFO saat disimpan.
+        </div>
         <table>
           <thead>
             <tr><th>No</th><th>Entitas Bisnis</th><th>Akun</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
@@ -581,6 +585,17 @@
   window.closeJournalPreview = function () {
     document.getElementById('journalPreview').style.display = 'none';
   };
+
+  // ── Auto-update journal preview when visible ──────────────────────────────
+  var _previewDebounce = null;
+  function schedulePreviewUpdate() {
+    if (document.getElementById('journalPreview').style.display === 'none') return;
+    clearTimeout(_previewDebounce);
+    _previewDebounce = setTimeout(showJournalPreview, 400);
+  }
+  // Listen to all form input/change events (covers native inputs + TomSelect)
+  document.getElementById('salesForm').addEventListener('input', schedulePreviewUpdate);
+  document.getElementById('salesForm').addEventListener('change', schedulePreviewUpdate);
 
   // ── Form Submission ───────────────────────────────────────────────────────
   function collectFormData() {

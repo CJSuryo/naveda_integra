@@ -920,7 +920,16 @@
     document.getElementById('journalPreview').style.display = 'none';
   };
 
-  // ── Form Submission ───────────────────────────────────────────────────────
+  // ── Auto-update journal preview when visible ──────────────────────────────
+  var _previewDebounce = null;
+  function schedulePreviewUpdate() {
+    if (document.getElementById('journalPreview').style.display === 'none') return;
+    clearTimeout(_previewDebounce);
+    _previewDebounce = setTimeout(showJournalPreview, 800);
+  }
+  // Listen to all form input/change events (covers native inputs + TomSelect)
+  document.getElementById('purchaseForm').addEventListener('input', schedulePreviewUpdate);
+  document.getElementById('purchaseForm').addEventListener('change', schedulePreviewUpdate);
   function collectFormData() {
     var groups = [];
     document.querySelectorAll('.ni-purchase-eb-card').forEach(function (card) {
