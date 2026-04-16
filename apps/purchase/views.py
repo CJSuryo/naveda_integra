@@ -707,7 +707,7 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         })
 
     tipe_item = data.get('tipe_item', 'RM')
-    if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
+    if tipe_item not in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB', 'ATP', 'ALL'):
         tipe_item = 'RM'
 
     kategori_id = data.get('kategori_id') or None
@@ -721,8 +721,8 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         'coa_account_id': coa_account_id,
     }
 
-    # Fields for inventory items (RM/FG/ITM)
-    if tipe_item in ('RM', 'FG', 'ITM'):
+    # Fields for inventory items (RM/FG/ITM and bulk variants)
+    if tipe_item in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'):
         create_kwargs['velocity_category'] = data.get('velocity_category', '')
         create_kwargs['lama_kadaluarsa'] = data.get('lama_kadaluarsa') or None
         create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None

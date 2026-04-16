@@ -167,9 +167,12 @@
         <div class="ni-form-group">
           <label class="ni-form-label">Tipe Item</label>
           <select id="modal_tipe_item" class="ni-input" onchange="saOnModalTipeItemChange()">
-            <option value="RM">Raw Material</option>
-            <option value="FG">Finished Good</option>
-            <option value="ITM">Item Lainnya</option>
+            <option value="RM">Raw Material (Satuan)</option>
+            <option value="FG">Finished Good (Satuan)</option>
+            <option value="ITM">Item Lainnya (Satuan)</option>
+            <option value="RMB">Raw Material (Bulk)</option>
+            <option value="FGB">Finished Good (Bulk)</option>
+            <option value="ITMB">Item Lainnya (Bulk)</option>
             <option value="ATP">Aset Tetap</option>
             <option value="ALL">Aset Lainnya</option>
           </select>
@@ -898,10 +901,15 @@
 
   window.saOnModalTipeItemChange = function () {
     var tipe = document.getElementById('modal_tipe_item').value;
-    document.getElementById('modal_inventory_fields').style.display = (tipe === 'RM' || tipe === 'FG' || tipe === 'ITM') ? '' : 'none';
+    var isInventory = (tipe === 'RM' || tipe === 'FG' || tipe === 'ITM' || tipe === 'RMB' || tipe === 'FGB' || tipe === 'ITMB');
+    document.getElementById('modal_inventory_fields').style.display = isInventory ? '' : 'none';
     document.getElementById('modal_atp_fields').style.display = tipe === 'ATP' ? '' : 'none';
     document.getElementById('modal_all_fields').style.display = tipe === 'ALL' ? '' : 'none';
-    var titles = { RM: 'Tambah Raw Material', FG: 'Tambah Finished Good', ITM: 'Tambah Item Lainnya', ATP: 'Tambah Aset Tetap', ALL: 'Tambah Aset Lainnya' };
+    var titles = {
+      RM: 'Tambah Raw Material', FG: 'Tambah Finished Good', ITM: 'Tambah Item Lainnya',
+      RMB: 'Tambah Raw Material Bulk', FGB: 'Tambah Finished Good Bulk', ITMB: 'Tambah Item Lainnya Bulk',
+      ATP: 'Tambah Aset Tetap', ALL: 'Tambah Aset Lainnya',
+    };
     document.getElementById('saItemModalTitle').textContent = titles[tipe] || 'Tambah Item Baru';
     loadModalKategori(tipe, getEBLv1Id());
   };
@@ -963,7 +971,7 @@
       kategori_id: document.getElementById('modal_kategori').value || null,
       entitas_bisnis_ids: ebLv1 ? [parseInt(ebLv1)] : [],
     };
-    if (tipeItem === 'RM' || tipeItem === 'FG' || tipeItem === 'ITM') {
+    if (tipeItem === 'RM' || tipeItem === 'FG' || tipeItem === 'ITM' || tipeItem === 'RMB' || tipeItem === 'FGB' || tipeItem === 'ITMB') {
       payload.velocity_category = document.getElementById('modal_velocity').value;
       payload.coa_account_id = _modalCoaTomSelect ? _modalCoaTomSelect.getValue() : null;
       payload.lama_kadaluarsa = document.getElementById('modal_lama_kadaluarsa').value || null;
@@ -1008,7 +1016,7 @@
     document.getElementById('kat_modal_nama').value = '';
     document.getElementById('kat_modal_error').style.display = 'none';
     var tipeItem = document.getElementById('modal_tipe_item').value;
-    var tipeLabels = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
+    var tipeLabels = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', RMB: 'Raw Material Bulk', FGB: 'Finished Good Bulk', ITMB: 'Item Lainnya Bulk', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
     document.getElementById('kat_modal_tipe_display').value = tipeLabels[tipeItem] || tipeItem;
     var ebSel = document.getElementById('saEntitasBisnis');
     var ebText = ebSel ? ebSel.options[ebSel.selectedIndex].text : '';
