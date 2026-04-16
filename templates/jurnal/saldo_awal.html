@@ -30,21 +30,6 @@
   </div>
 </div>
 
-<!-- ── Shortcut cards for specialised opening balance forms ── -->
-<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
-  <a href="{% url 'jurnal:saldo_awal_persediaan' %}" class="ni-card ni-card--hover ni-animate-fade-in" style="flex:1;min-width:220px;max-width:320px;text-decoration:none;cursor:pointer;">
-    <div class="ni-card__body" style="display:flex;align-items:center;gap:14px;padding:18px 20px;">
-      <div style="width:44px;height:44px;border-radius:12px;background:var(--ni-primary-light);color:var(--ni-primary);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
-        <i data-lucide="package" style="width:22px;height:22px"></i>
-      </div>
-      <div>
-        <div style="font-weight:700;color:var(--ni-text);font-size:0.95rem;">Saldo Awal Persediaan</div>
-        <div style="font-size:0.78rem;color:var(--ni-text-muted);margin-top:2px;">Input stok riil + HPP → FIFO Engine &amp; InventoryRecord</div>
-      </div>
-      <i data-lucide="chevron-right" style="width:16px;height:16px;color:var(--ni-text-muted);margin-left:auto;flex-shrink:0;"></i>
-    </div>
-  </a>
-</div>
 
 {% if errors %}
 <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
@@ -121,6 +106,47 @@
     </form>
   </div>
 </div>
+
+<!-- ── Persediaan Detail Modal ──────────────────────────────────────────── -->
+<div id="saModalPersediaan" class="ni-modal">
+  <div class="ni-modal__dialog ni-modal__dialog--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="package" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Persediaan &mdash; <span id="saModalAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" data-modal-close>&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:520px;">
+          <thead>
+            <tr>
+              <th style="width:42%">Item Persediaan</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:20%">HPP/Unit (Rp)</th>
+              <th style="width:16%">Total</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Item
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" data-modal-close>Batal</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -129,9 +155,21 @@
 (function () {
   'use strict';
 
+  // Map of akun-kode prefix → detail type, injected from the view.
+  var AKUN_DETAIL_MAP = {{ akun_detail_prefixes_json|safe }};
+
   var rowCount = 0;
   var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
   var _tomSelectInstances = [];
+  // rid → {type, detail_rows[]}
+  var _rowDetailMap = {};
+  // rid → {type, kode, nama}
+  var _rowAkunInfo = {};
+  // which journal row the modal is editing
+  var _modalCurrentRid = null;
+  var _modalRowCount = 0;
+  var _modalTomSelects = [];
 
   function formatNum(n) {
     return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
@@ -141,6 +179,13 @@
     return document.getElementById('saEntitasBisnis').value || '';
   }
 
+  function getEBLv1Id() {
+    var val = getEBId();
+    if (!val) return '';
+    var parts = val.split(':');
+    return (parts[0] === 'lv1') ? (parts[1] || '') : '';
+  }
+
   function buildAutocompleteUrl(query) {
     var url = autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1';
     var ebId = getEBId();
@@ -148,41 +193,91 @@
     return url;
   }
 
-  function isEBSelected() {
-    return !!getEBId();
+  function isEBSelected() { return !!getEBId(); }
+
+  function _getDetailTypeForAkun(kode) {
+    for (var prefix in AKUN_DETAIL_MAP) {
+      if (kode === prefix || kode.indexOf(prefix + '.') === 0) {
+        return AKUN_DETAIL_MAP[prefix];
+      }
+    }
+    return null;
   }
 
+  // ── EB change ─────────────────────────────────────────────────────────────
   window.saOnEBChange = function () {
     var ebSelected = isEBSelected();
     _tomSelectInstances.forEach(function (ts) {
       ts.clearOptions();
       ts.clear();
-      if (ebSelected) {
-        ts.enable();
-        ts.load('');
-      } else {
-        ts.disable();
-      }
+      if (ebSelected) { ts.enable(); ts.load(''); } else { ts.disable(); }
+    });
+    // Clear all stored detail since EB context changed
+    Object.keys(_rowDetailMap).forEach(function (rid) {
+      if (_rowDetailMap[rid]) { _rowDetailMap[rid] = null; _updateDetailBadge(rid); }
     });
   };
 
+  // ── Per-row akun change reaction ──────────────────────────────────────────
+  function _onAkunChange(rid, kode, akunNama) {
+    var detailType = _getDetailTypeForAkun(kode);
+    var wrapEl = document.getElementById('detail_wrap_' + rid);
+    if (detailType) {
+      wrapEl.style.display = 'flex';
+      _rowAkunInfo[rid] = { type: detailType, kode: kode, nama: akunNama };
+      if (_rowDetailMap[rid] && _rowDetailMap[rid].type !== detailType) {
+        _rowDetailMap[rid] = null;
+        _updateDetailBadge(rid);
+      }
+    } else {
+      wrapEl.style.display = 'none';
+      _rowDetailMap[rid] = null;
+      _rowAkunInfo[rid] = null;
+      _updateDetailBadge(rid);
+    }
+    saUpdateTotals();
+  }
+
+  function _updateDetailBadge(rid) {
+    var badgeEl = document.getElementById('detail_badge_' + rid);
+    if (!badgeEl) return;
+    var d = _rowDetailMap[rid];
+    if (d && d.detail_rows && d.detail_rows.length) {
+      var n = d.detail_rows.length;
+      var total = d.detail_rows.reduce(function (s, r) { return s + (r.total || 0); }, 0);
+      badgeEl.textContent = n + ' item — Rp ' + formatNum(total);
+    } else {
+      badgeEl.textContent = '';
+    }
+  }
+
+  // ── Add / remove journal rows ─────────────────────────────────────────────
   window.saAddRow = function () {
     rowCount++;
-    var id = 'row_' + rowCount;
+    var rid = rowCount;
+    var id = 'row_' + rid;
     var tbody = document.getElementById('saRows');
     var tr = document.createElement('tr');
     tr.id = id;
     tr.innerHTML =
-      '<td><select id="akun_sel_' + rowCount + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select></td>' +
-      '<td><input type="text" id="akun_nama_' + rowCount + '" class="ni-jm-input" readonly placeholder="Nama akun" style="background:var(--ni-bg);"></td>' +
-      '<td><input type="number" id="debit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
-      '<td><input type="number" id="kredit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
+      '<td>' +
+        '<select id="akun_sel_' + rid + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select>' +
+        '<div id="detail_wrap_' + rid + '" style="display:none;align-items:center;gap:6px;margin-top:4px;">' +
+          '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="padding:3px 8px;font-size:0.78rem;" onclick="saOpenDetailModal(' + rid + ')">' +
+            '<i data-lucide="plus-circle" style="width:12px;height:12px"></i> Detail' +
+          '</button>' +
+          '<span id="detail_badge_' + rid + '" style="font-size:0.75rem;color:var(--ni-success);font-weight:600;"></span>' +
+        '</div>' +
+      '</td>' +
+      '<td><input type="text" id="akun_nama_' + rid + '" class="ni-jm-input" readonly placeholder="Nama akun" style="background:var(--ni-bg);"></td>' +
+      '<td><input type="number" id="debit_' + rid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
+      '<td><input type="number" id="kredit_' + rid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saUpdateTotals()"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saRemoveRow(\'' + id + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
     tbody.appendChild(tr);
 
-    var currentRowNum = rowCount;
+    var currentRid = rid;
     var ebSelected = isEBSelected();
-    var ts = new TomSelect('#akun_sel_' + rowCount, {
+    var ts = new TomSelect('#akun_sel_' + rid, {
       valueField: 'id',
       labelField: 'text',
       searchField: 'text',
@@ -200,22 +295,21 @@
       },
       onChange: function (val) {
         if (!val) {
-          document.getElementById('akun_nama_' + currentRowNum).value = '';
+          document.getElementById('akun_nama_' + currentRid).value = '';
+          _onAkunChange(currentRid, '', '');
           return;
         }
         var opt = this.options[val];
         if (opt) {
-          document.getElementById('akun_nama_' + currentRowNum).value = opt.nama || opt.text;
+          document.getElementById('akun_nama_' + currentRid).value = opt.nama || opt.text;
+          _onAkunChange(currentRid, opt.kode || '', opt.nama || opt.text || '');
         }
         saUpdateTotals();
       },
       create: false,
     });
 
-    if (!ebSelected) {
-      ts.disable();
-    }
-
+    if (!ebSelected) { ts.disable(); }
     _tomSelectInstances.push(ts);
     lucide.createIcons();
     saUpdateTotals();
@@ -224,12 +318,15 @@
   window.saRemoveRow = function (id) {
     var tr = document.getElementById(id);
     if (tr) {
+      var rid = id.replace('row_', '');
       var selEl = tr.querySelector('select');
       if (selEl && selEl.tomselect) {
         var idx = _tomSelectInstances.indexOf(selEl.tomselect);
         if (idx !== -1) _tomSelectInstances.splice(idx, 1);
         selEl.tomselect.destroy();
       }
+      delete _rowDetailMap[rid];
+      delete _rowAkunInfo[rid];
       tr.remove();
     }
     saUpdateTotals();
@@ -260,19 +357,179 @@
     }
   };
 
+  // ── Persediaan Detail Modal ────────────────────────────────────────────────
+  window.saOpenDetailModal = function (rid) {
+    _modalCurrentRid = rid;
+    var info = _rowAkunInfo[rid] || {};
+    document.getElementById('saModalAkunNama').textContent = info.nama || '';
+    _clearModalRows();
+    var existing = _rowDetailMap[rid];
+    if (existing && existing.detail_rows && existing.detail_rows.length) {
+      existing.detail_rows.forEach(function (d) { saModalAddRow(d); });
+    } else {
+      saModalAddRow();
+    }
+    window.niModal.open(document.getElementById('saModalPersediaan'));
+  };
+
+  function _clearModalRows() {
+    _modalTomSelects.forEach(function (ts) { try { ts.destroy(); } catch (e) {} });
+    _modalTomSelects = [];
+    document.getElementById('saModalRows').innerHTML = '';
+    _modalRowCount = 0;
+    _saModalUpdateTotals();
+  }
+
+  window.saModalAddRow = function (prefillData) {
+    _modalRowCount++;
+    var mrid = _modalRowCount;
+    var tbody = document.getElementById('saModalRows');
+    var tr = document.createElement('tr');
+    tr.id = 'modal_row_' + mrid;
+    tr.innerHTML =
+      '<td><select id="modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
+      '<td><input type="number" id="modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saModalUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="number" id="modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saModalUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="text" id="modal_total_' + mrid + '" class="ni-jm-input" readonly value="0" style="background:var(--ni-bg);text-align:right;"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var currentMrid = mrid;
+    var ebLv1 = getEBLv1Id();
+    var ts = new TomSelect('#modal_item_' + mrid, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      maxOptions: false,
+      placeholder: 'Ketik kode/nama item…',
+      preload: false,
+      shouldLoad: function (q) { return q.length >= 1; },
+      load: function (query, callback) {
+        var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
+        if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function () { saModalUpdateRow(currentMrid); },
+      create: false,
+      dropdownParent: 'body',
+    });
+    _modalTomSelects.push(ts);
+
+    if (prefillData) {
+      if (prefillData.item_id) {
+        var opt = { id: String(prefillData.item_id), text: prefillData.item_text || String(prefillData.item_id) };
+        ts.addOption(opt);
+        ts.setValue(String(prefillData.item_id), true);
+      }
+      if (prefillData.qty) { document.getElementById('modal_qty_' + mrid).value = prefillData.qty; }
+      if (prefillData.unit_price) { document.getElementById('modal_hpp_' + mrid).value = prefillData.unit_price; }
+      saModalUpdateRow(mrid);
+    }
+
+    lucide.createIcons();
+    _saModalUpdateTotals();
+  };
+
+  window.saModalRemoveRow = function (mrid) {
+    var tr = document.getElementById('modal_row_' + mrid);
+    if (!tr) return;
+    var sel = document.getElementById('modal_item_' + mrid);
+    if (sel && sel.tomselect) {
+      var idx = _modalTomSelects.indexOf(sel.tomselect);
+      if (idx !== -1) _modalTomSelects.splice(idx, 1);
+      sel.tomselect.destroy();
+    }
+    tr.remove();
+    _saModalUpdateTotals();
+  };
+
+  window.saModalUpdateRow = function (mrid) {
+    var qty = parseFloat(document.getElementById('modal_qty_' + mrid).value || 0);
+    var hpp = parseFloat(document.getElementById('modal_hpp_' + mrid).value || 0);
+    document.getElementById('modal_total_' + mrid).value = formatNum(qty * hpp);
+    _saModalUpdateTotals();
+  };
+
+  function _saModalUpdateTotals() {
+    var grand = 0;
+    document.querySelectorAll('#saModalRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('modal_row_', '');
+      var qty = parseFloat(document.getElementById('modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('modal_hpp_' + mrid).value || 0);
+      grand += qty * hpp;
+    });
+    document.getElementById('saModalTotal').textContent = 'Rp ' + formatNum(grand);
+  }
+
+  function _collectModalRows() {
+    var results = [];
+    document.querySelectorAll('#saModalRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('modal_row_', '');
+      var selEl = document.getElementById('modal_item_' + mrid);
+      var qty = parseFloat(document.getElementById('modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('modal_hpp_' + mrid).value || 0);
+      if (!selEl || !selEl.value || qty <= 0) return;
+      var ts = selEl.tomselect;
+      var opt = ts ? ts.options[selEl.value] : null;
+      results.push({
+        item_id: selEl.value,
+        item_text: opt ? opt.text : String(selEl.value),
+        qty: qty,
+        unit_price: hpp,
+        total: qty * hpp,
+      });
+    });
+    return results;
+  }
+
+  window.saConfirmDetail = function () {
+    var rid = _modalCurrentRid;
+    if (!rid) return;
+    var detailRows = _collectModalRows();
+    if (!detailRows.length) {
+      alert('Minimal 1 item harus diisi dengan item, qty > 0, dan HPP valid.');
+      return;
+    }
+    var grandTotal = detailRows.reduce(function (s, r) { return s + r.total; }, 0);
+    _rowDetailMap[rid] = { type: 'persediaan', detail_rows: detailRows };
+    // Auto-fill debit and tint it to indicate it is driven by the modal
+    var debitEl = document.getElementById('debit_' + rid);
+    if (debitEl) {
+      debitEl.value = grandTotal;
+      debitEl.setAttribute('data-detail-locked', '1');
+      debitEl.style.background = 'var(--ni-primary-light)';
+    }
+    _updateDetailBadge(rid);
+    saUpdateTotals();
+    window.niModal.close(document.getElementById('saModalPersediaan'));
+    lucide.createIcons();
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
   document.getElementById('saForm').addEventListener('submit', function () {
     var rows = document.querySelectorAll('#saRows tr');
     var data = [];
     rows.forEach(function (tr) {
+      var rid = tr.id.replace('row_', '');
       var selEl = tr.querySelector('select');
       var dInp = tr.querySelector('input[id^="debit_"]');
       var kInp = tr.querySelector('input[id^="kredit_"]');
       if (!selEl || !selEl.value) return;
-      data.push({
+      var rowData = {
         akun_id: selEl.value,
         debit: parseFloat(dInp ? dInp.value : 0) || 0,
         kredit: parseFloat(kInp ? kInp.value : 0) || 0,
-      });
+      };
+      var detail = _rowDetailMap[rid];
+      if (detail && detail.detail_rows && detail.detail_rows.length) {
+        rowData.detail_type = detail.type;
+        rowData.detail_rows = detail.detail_rows;
+      }
+      data.push(rowData);
     });
     document.getElementById('saRowsData').value = JSON.stringify(data);
   });
