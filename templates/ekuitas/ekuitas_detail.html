@@ -1,19 +1,16 @@
 {% extends 'base.html' %}
 {% load humanize %}
-{% block title %}Detail Modal Disetor — {{ record.nama_pemilik }}{% endblock %}
+{% block title %}Detail Modal Disetor — {{ record.pemilik.nama }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">{{ record.nama_pemilik }}</h1>
+    <h1 class="ni-page-header__title">{{ record.pemilik.nama }}</h1>
     <p class="ni-page-header__subtitle">Detail modal disetor</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'ekuitas:update' record.pk %}" class="ni-btn ni-btn--warning">
-      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
-    </a>
-    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="openDeleteModal('{% url 'ekuitas:delete' record.pk %}', '{{ record.nama_pemilik }}')">
+    <a href="{% url 'ekuitas:delete' record.pk %}" class="ni-btn ni-btn--outline-danger">
       <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
-    </button>
+    </a>
     <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">
       <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
     </a>
@@ -23,17 +20,60 @@
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
     <dl class="ni-detail-grid">
-      <dt>Nama Pemilik</dt><dd>{{ record.nama_pemilik }}</dd>
+      <dt>Pemilik</dt><dd><strong>{{ record.pemilik.nama }}</strong></dd>
       <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
       <dt>Jumlah Modal Disetor</dt><dd><strong>Rp {{ record.jumlah_modal|floatformat:0|intcomma }}</strong></dd>
-      <dt>Persentase Kepemilikan</dt><dd>{{ record.persentase_kepemilikan|floatformat:2 }}%</dd>
+      <dt>Persentase Kepemilikan</dt><dd><span class="ni-badge ni-badge--success">{{ persentase }}%</span></dd>
       <dt>Tanggal Setor</dt><dd>{{ record.tanggal_setor }}</dd>
       <dt>Keterangan</dt><dd>{{ record.keterangan|default:'-' }}</dd>
+      <dt>Jurnal</dt>
+      <dd>
+        {% if record.jurnal_header %}
+          <a href="{% url 'jurnal:header_detail' record.jurnal_header.pk %}" style="color:var(--ni-primary);">
+            {{ record.jurnal_header.nomor_transaksi }}
+          </a>
+          {% if record.jurnal_header.is_saldo_awal %}
+            <span class="ni-badge ni-badge--secondary" style="margin-left:6px;">Saldo Awal</span>
+          {% endif %}
+        {% else %}—{% endif %}
+      </dd>
       <dt>Dibuat</dt><dd>{{ record.created_at }}</dd>
-      <dt>Diperbarui</dt><dd>{{ record.updated_at }}</dd>
     </dl>
   </div>
 </div>
 
-{% include 'components/delete_modal.html' %}
+{% if record.debit_lines.all %}
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="credit-card" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Akun Debit (Penempatan Modal)
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Kode Akun</th>
+            <th>Nama Akun</th>
+            <th class="ni-text-right">Jumlah (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for line in record.debit_lines.all %}
+          <tr>
+            <td><code>{{ line.akun.kode_akun }}</code></td>
+            <td>{{ line.akun.nama_akun }}</td>
+            <td class="ni-text-right">{{ line.jumlah|floatformat:0|intcomma }}</td>
+          </tr>
+          {% endfor %}
+          <tr style="background:var(--ni-bg);font-weight:600;">
+            <td colspan="2" class="ni-text-right">Total</td>
+            <td class="ni-text-right">Rp {{ record.jumlah_modal|floatformat:0|intcomma }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

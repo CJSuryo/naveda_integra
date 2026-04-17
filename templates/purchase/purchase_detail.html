@@ -12,7 +12,7 @@
     <a href="{% url 'purchase:update' purchase.pk %}" class="ni-btn ni-btn--warning">
       <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
     </a>
-    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="openDeleteModal('{% url 'purchase:delete' purchase.pk %}', '{{ purchase.transaction_id }}')">
+    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="location.href='{% url 'purchase:delete' purchase.pk %}'">
       <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
     </button>
     {% else %}
@@ -119,5 +119,4 @@
 </div>
 {% endif %}
 
-{% include 'components/delete_modal.html' with delete_extra_warning="Jurnal otomatis dan FIFO batch terkait juga akan dihapus." %}
 {% endblock %}

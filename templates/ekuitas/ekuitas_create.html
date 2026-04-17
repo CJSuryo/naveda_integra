@@ -1,0 +1,312 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Tambah Modal Disetor{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<style>
+  .md-table { width:100%; border-collapse:collapse; }
+  .md-table th { background:var(--ni-bg); font-size:0.8rem; color:var(--ni-text-muted); padding:8px 10px; text-align:left; border-bottom:1px solid var(--ni-border); }
+  .md-table td { padding:6px 10px; border-bottom:1px solid var(--ni-border); vertical-align:middle; }
+  .md-table tr:last-child td { border-bottom:none; }
+  .md-input { width:100%; padding:6px 10px; border:1px solid var(--ni-border); border-radius:var(--ni-radius-sm); font-size:0.875rem; background:var(--ni-bg-card); color:var(--ni-text); }
+  .md-input:focus { outline:none; border-color:var(--ni-primary); }
+  .ts-wrapper.single .ts-control { border:1px solid var(--ni-border); border-radius:var(--ni-radius-sm); padding:6px 10px; font-size:0.875rem; min-height:unset; }
+  .ts-wrapper .ts-dropdown { z-index:2500; position:absolute; }
+  body > .ts-dropdown { z-index:3000; }
+  .md-total { font-weight:600; color:var(--ni-primary); }
+  .md-balanced { color:var(--ni-success); }
+  .md-unbalanced { color:var(--ni-danger); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Tambah Modal Disetor</h1>
+    <p class="ni-page-header__subtitle">Catat setoran modal baru dan buat jurnal otomatis</p>
+  </div>
+</div>
+
+{% if errors %}
+<div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+  <ul style="margin:0;padding-left:16px;">
+    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in" style="overflow:visible;">
+  <div class="ni-card__body" style="overflow:visible;">
+    <form id="mdForm" method="post">
+      {% csrf_token %}
+
+      <!-- Header fields -->
+      <div class="ni-form-row" style="margin-bottom:20px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
+          <select name="entitas_bisnis" class="ni-input" required>
+            <option value="">— Pilih —</option>
+            {% for eb in eb_list %}
+            <option value="{{ eb.pk }}"{% if posted_eb == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group" style="margin:0;overflow:visible;">
+          <label class="ni-form-label">Pemilik <span style="color:var(--ni-danger)">*</span></label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div style="flex:1;min-width:0;">
+              <select id="mdPemilikSel" name="pemilik" required>
+                <option value="">— Cari / Pilih Pemilik —</option>
+                {% for p in pemilik_list %}
+                <option value="{{ p.pk }}"{% if posted_pemilik == p.pk|stringformat:'d' %} selected{% endif %}>{{ p.nama }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdOpenPemilikModal()" title="Tambah pemilik baru">
+              <i data-lucide="user-plus" style="width:14px;height:14px"></i>
+            </button>
+          </div>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal Setor <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" name="tanggal" class="ni-input" value="{{ posted_tanggal }}" required>
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Keterangan</label>
+        <textarea name="keterangan" class="ni-input" rows="2">{{ posted_keterangan }}</textarea>
+      </div>
+
+      <!-- Debit rows -->
+      <div style="margin-bottom:8px;">
+        <strong style="font-size:0.875rem;">Akun Debit (Penempatan Modal)</strong>
+        <small style="color:var(--ni-text-muted);margin-left:8px;">Pilih akun aset tempat modal ditempatkan. Total harus = Jumlah Modal.</small>
+      </div>
+      <div style="margin-bottom:12px;overflow:visible;">
+        <div class="ni-table-wrapper">
+          <table class="md-table">
+            <thead>
+              <tr>
+                <th style="width:55%">Kode / Nama Akun</th>
+                <th style="width:35%">Jumlah (Rp)</th>
+                <th style="width:10%"></th>
+              </tr>
+            </thead>
+            <tbody id="mdRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdAddRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+      </button>
+
+      <!-- Totals -->
+      <div style="margin-top:16px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+        <span>Total Debit: <strong id="mdTotal" class="md-total">Rp 0</strong></span>
+        <span id="mdStatus" class="md-unbalanced" style="font-weight:600;">Isi baris debit untuk melanjutkan</span>
+      </div>
+
+      <input type="hidden" name="debit_lines_json" id="mdDebitJson">
+
+      <div class="ni-btn-row" style="margin-top:20px;">
+        <button type="submit" class="ni-btn ni-btn--primary" id="mdSubmit" disabled>
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan & Buat Jurnal
+        </button>
+        <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Pemilik Create Modal -->
+<div class="ni-modal-backdrop" id="mdPemilikBackdrop">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tambah Pemilik Baru</h3>
+      <button type="button" class="ni-modal__close" onclick="mdClosePemilikModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Pemilik <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="mdNewPemilikNama" class="ni-input" placeholder="Nama lengkap pemilik">
+      </div>
+      <div id="mdPemilikError" style="color:var(--ni-danger);font-size:0.8rem;display:none;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="mdSubmitPemilik()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Simpan
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="mdClosePemilikModal()">Batal</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var rowCount = 0;
+  var autocompleteUrl = '{{ akun_autocomplete_url }}';
+  var pemilikSearchUrl = '{% url "ekuitas:api_pemilik_search" %}';
+  var pemilikCreateUrl = '{% url "ekuitas:api_pemilik_create" %}';
+  var csrfToken = '{{ csrf_token }}';
+  var _tsRows = {};   // rid → TomSelect instance
+  var _pemilikTs = null;
+
+  // ── Pemilik TomSelect ────────────────────────────────────────────────────
+  _pemilikTs = new TomSelect('#mdPemilikSel', {
+    valueField: 'id',
+    labelField: 'text',
+    searchField: 'text',
+    preload: 'focus',
+    load: function (query, callback) {
+      fetch(pemilikSearchUrl + '?term=' + encodeURIComponent(query))
+        .then(function (r) { return r.json(); })
+        .then(function (data) { callback(data); })
+        .catch(function () { callback(); });
+    },
+    create: false,
+    placeholder: 'Cari nama pemilik...',
+  });
+
+  // ── Pemilik Modal ────────────────────────────────────────────────────────
+  window.mdOpenPemilikModal = function () {
+    document.getElementById('mdNewPemilikNama').value = '';
+    document.getElementById('mdPemilikError').style.display = 'none';
+    document.getElementById('mdPemilikBackdrop').classList.add('ni-modal-backdrop--visible');
+    setTimeout(function () { document.getElementById('mdNewPemilikNama').focus(); }, 100);
+  };
+  window.mdClosePemilikModal = function () {
+    document.getElementById('mdPemilikBackdrop').classList.remove('ni-modal-backdrop--visible');
+  };
+  window.mdSubmitPemilik = function () {
+    var nama = document.getElementById('mdNewPemilikNama').value.trim();
+    if (!nama) {
+      var errEl = document.getElementById('mdPemilikError');
+      errEl.textContent = 'Nama wajib diisi.';
+      errEl.style.display = 'block';
+      return;
+    }
+    var fd = new FormData();
+    fd.append('nama', nama);
+    fd.append('csrfmiddlewaretoken', csrfToken);
+    fetch(pemilikCreateUrl, { method: 'POST', body: fd })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.error) {
+          var errEl = document.getElementById('mdPemilikError');
+          errEl.textContent = data.error;
+          errEl.style.display = 'block';
+          return;
+        }
+        _pemilikTs.addOption({ id: data.id, text: data.text });
+        _pemilikTs.setValue(String(data.id));
+        mdClosePemilikModal();
+      })
+      .catch(function () {
+        document.getElementById('mdPemilikError').textContent = 'Gagal menyimpan pemilik.';
+        document.getElementById('mdPemilikError').style.display = 'block';
+      });
+  };
+
+  // ── Debit rows ───────────────────────────────────────────────────────────
+  function formatNum(n) {
+    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+  }
+
+  window.mdAddRow = function (prefill) {
+    rowCount++;
+    var rid = rowCount;
+    var tbody = document.getElementById('mdRows');
+    var tr = document.createElement('tr');
+    tr.id = 'md_row_' + rid;
+    tr.innerHTML =
+      '<td><select id="md_akun_' + rid + '" placeholder="Ketik kode/nama akun..."></select>' +
+        '<input type="hidden" id="md_akun_id_' + rid + '">' +
+      '</td>' +
+      '<td><input type="number" id="md_jumlah_' + rid + '" class="md-input" min="0" step="1" value="0" oninput="mdUpdateTotals()"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="mdRemoveRow(' + rid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var ts = new TomSelect('#md_akun_' + rid, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      maxOptions: false,
+      placeholder: 'Ketik kode/nama akun...',
+      preload: 'focus',
+      load: function (query, callback) {
+        fetch(autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        var hiddenEl = document.getElementById('md_akun_id_' + rid);
+        if (!val) { hiddenEl.value = ''; return; }
+        hiddenEl.value = val;
+      },
+      create: false,
+    });
+    _tsRows[rid] = ts;
+    lucide.createIcons();
+    mdUpdateTotals();
+  };
+
+  window.mdRemoveRow = function (rid) {
+    var tr = document.getElementById('md_row_' + rid);
+    if (!tr) return;
+    if (_tsRows[rid]) { try { _tsRows[rid].destroy(); } catch (e) {} delete _tsRows[rid]; }
+    tr.remove();
+    mdUpdateTotals();
+  };
+
+  window.mdUpdateTotals = function () {
+    var total = 0;
+    document.querySelectorAll('#mdRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('md_row_', '');
+      var inp = document.getElementById('md_jumlah_' + rid);
+      if (inp) total += parseFloat(inp.value || 0);
+    });
+    document.getElementById('mdTotal').textContent = 'Rp ' + formatNum(total);
+    var hasRows = document.querySelectorAll('#mdRows tr').length > 0;
+    var statusEl = document.getElementById('mdStatus');
+    var submitBtn = document.getElementById('mdSubmit');
+    if (hasRows && total > 0) {
+      statusEl.textContent = 'Siap disimpan (Rp ' + formatNum(total) + ')';
+      statusEl.className = 'md-balanced';
+      submitBtn.disabled = false;
+    } else {
+      statusEl.textContent = 'Isi baris debit untuk melanjutkan';
+      statusEl.className = 'md-unbalanced';
+      submitBtn.disabled = true;
+    }
+  };
+
+  // ── Submit ───────────────────────────────────────────────────────────────
+  document.getElementById('mdForm').addEventListener('submit', function () {
+    var lines = [];
+    document.querySelectorAll('#mdRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('md_row_', '');
+      var akunId = document.getElementById('md_akun_id_' + rid);
+      var jumlahEl = document.getElementById('md_jumlah_' + rid);
+      if (akunId && akunId.value && jumlahEl) {
+        lines.push({ akun_id: parseInt(akunId.value), jumlah: parseFloat(jumlahEl.value || 0) });
+      }
+    });
+    document.getElementById('mdDebitJson').value = JSON.stringify(lines);
+  });
+
+  // Init two rows
+  mdAddRow();
+  mdAddRow();
+})();
+</script>
+{% endblock %}
+</content>
+</invoke>

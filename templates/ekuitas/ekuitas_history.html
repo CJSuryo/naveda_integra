@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}History Modal Disetor{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">History Modal Disetor</h1>
+    <p class="ni-page-header__subtitle">
+      {% if selected_eb %}{{ selected_eb.nama }}{% else %}Pilih entitas bisnis{% endif %}
+    </p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<!-- Filter -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:200px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input" required>
+          <option value="">— Pilih —</option>
+          {% for eb in entitas_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm" style="align-self:flex-end;">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if eb_filter %}
+<!-- Summary Cards -->
+{% if records %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:16px;">
+  <div class="ni-stat-card ni-animate-fade-in">
+    <div class="ni-stat-card__icon" style="background:#e8f0fe;color:var(--ni-primary);">
+      <i data-lucide="users" style="width:22px;height:22px"></i>
+    </div>
+    <div class="ni-stat-card__body">
+      <div class="ni-stat-card__label">Jumlah Pemilik</div>
+      <div class="ni-stat-card__value">{{ records|length }}</div>
+    </div>
+  </div>
+  <div class="ni-stat-card ni-animate-fade-in">
+    <div class="ni-stat-card__icon" style="background:#d1fae5;color:var(--ni-success);">
+      <i data-lucide="wallet" style="width:22px;height:22px"></i>
+    </div>
+    <div class="ni-stat-card__body">
+      <div class="ni-stat-card__label">Total Modal</div>
+      <div class="ni-stat-card__value" style="font-size:1.1rem;">Rp {{ total_modal|floatformat:0|intcomma }}</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Pemilik</th>
+          <th class="ni-text-right">Jumlah Modal</th>
+          <th class="ni-text-right">Kepemilikan (%)</th>
+          <th>Tanggal Setor</th>
+          <th>Keterangan</th>
+          <th>Jurnal</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in records %}
+        <tr>
+          <td><strong>{{ record.pemilik.nama }}</strong></td>
+          <td class="ni-text-right">Rp {{ record.jumlah_modal|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">
+            <span class="ni-badge ni-badge--success">{{ record.persentase|default:'-' }}%</span>
+          </td>
+          <td>{{ record.tanggal_setor }}</td>
+          <td>{{ record.keterangan|default:'—' }}</td>
+          <td>
+            {% if record.jurnal_header %}
+            <a href="{% url 'jurnal:header_detail' record.jurnal_header.pk %}" style="color:var(--ni-primary);font-size:0.8rem;">
+              {{ record.jurnal_header.nomor_transaksi }}
+            </a>
+            {% else %}—{% endif %}
+          </td>
+          <td>
+            <a href="{% url 'ekuitas:detail' record.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada data untuk entitas dan tanggal ini.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+</content>

@@ -78,9 +78,20 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
     # Depreciation journal history
     from apps.jurnal.models import JurnalHeader
+    from datetime import date as date_cls, timedelta
     dep_journals = JurnalHeader.objects.filter(
         uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
     ).order_by('-tanggal')
+
+    last_dep = dep_journals.first()
+    last_dep_date = last_dep.tanggal if last_dep else None
+    if last_dep_date:
+        suggested_start_date = last_dep_date + timedelta(days=1)
+    else:
+        suggested_start_date = record.tanggal_perolehan
+
+    today = date_cls.today()
+    suggested_days = (today - suggested_start_date).days + 1 if today >= suggested_start_date else 0
 
     return render(request, 'aset_tetap/aset_tetap_detail.html', {
         'record': record,
@@ -91,6 +102,10 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'can_depreciate': record.nilai_buku > record.nilai_residu,
         'dep_journals': dep_journals,
         'default_days': DEFAULT_DAYS,
+        'last_dep_date': last_dep_date,
+        'suggested_start_date': suggested_start_date,
+        'suggested_days': suggested_days,
+        'today': today,
     })
 
 
@@ -177,28 +192,36 @@ def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpRespon
             return redirect('aset_tetap:detail', pk=pk)
         depreciation = calculate_depreciation(record, unit_aktual=unit_aktual)
     else:
-        # Allow manual override; otherwise auto-calculate for given days
-        manual_amount = request.POST.get('amount', '')
-        if manual_amount:
-            try:
-                depreciation = Decimal(manual_amount)
-            except InvalidOperation:
-                messages.error(request, 'Jumlah penyusutan harus berupa angka.')
-                return redirect('aset_tetap:detail', pk=pk)
+        # Auto-calculate days from the appropriate start date to tanggal_jurnal
+        from apps.jurnal.models import JurnalHeader as _JH
+        from datetime import timedelta as _td
+        last_dep = _JH.objects.filter(
+            uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
+        ).order_by('-tanggal').first()
+        if last_dep:
+            start_date = last_dep.tanggal + _td(days=1)
         else:
-            try:
-                hari = int(request.POST.get('hari', str(DEFAULT_DAYS)))
-                hari = max(1, hari)
-            except (ValueError, TypeError):
-                hari = DEFAULT_DAYS
-            masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
-            if masa > 0 and record.tanggal_perolehan:
-                from datetime import date as d
-                years_elapsed = (d.today() - record.tanggal_perolehan).days / Decimal('365.25')
-                tahun_ke = min(int(years_elapsed) + 1, masa)
-            else:
-                tahun_ke = 1
-            depreciation = calculate_depreciation(record, tahun_ke=tahun_ke, days=hari)
+            start_date = record.tanggal_perolehan
+
+        if tanggal is None:
+            messages.error(request, 'Tanggal jurnal wajib diisi.')
+            return redirect('aset_tetap:detail', pk=pk)
+        if tanggal < start_date:
+            messages.error(
+                request,
+                f'Tanggal jurnal ({tanggal}) tidak boleh sebelum tanggal mulai perhitungan ({start_date}).',
+            )
+            return redirect('aset_tetap:detail', pk=pk)
+
+        hari = (tanggal - start_date).days + 1
+        masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+        if masa > 0 and record.tanggal_perolehan:
+            from datetime import date as d
+            years_elapsed = (tanggal - record.tanggal_perolehan).days / Decimal('365.25')
+            tahun_ke = min(int(years_elapsed) + 1, masa)
+        else:
+            tahun_ke = 1
+        depreciation = calculate_depreciation(record, tahun_ke=tahun_ke, days=hari)
 
     try:
         header = process_depreciation(record, depreciation, tanggal)

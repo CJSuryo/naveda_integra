@@ -286,7 +286,8 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
 
     return render(request, 'purchase/purchase_form.html', {
         'title': 'Edit Purchase',
-        'today': purchase.tanggal,
+        'today': timezone.now().date(),
+        'initial_tanggal': purchase.tanggal,
         'purchase': purchase,
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'items_master': ItemMasterPurchase.objects.all().order_by('nama'),
@@ -354,22 +355,50 @@ def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete a purchase and its associated journals/FIFO batches."""
-    purchase = get_object_or_404(PurchaseHeader, pk=pk)
+    """Delete a purchase and its associated journals/FIFO batches/asset records."""
+    from apps.inventory.models import InventoryRecord
+    from apps.aset_tetap.models import AsetTetapRecord
+    from apps.aset_lainnya.models import AsetLainnyaRecord
+
+    purchase = get_object_or_404(
+        PurchaseHeader.objects.prefetch_related(
+            'entitas_groups__items__item',
+        ),
+        pk=pk,
+    )
     if purchase.is_locked:
         dj_messages.error(request, 'Transaksi ini sudah terkunci (periode tutup buku).')
         return redirect('purchase:detail', pk=pk)
 
     if request.method == 'POST':
+        trx_id = purchase.transaction_id
         with transaction.atomic():
+            reverse_aset_tetap_records(purchase)
+            reverse_aset_lainnya_records(purchase)
             reverse_inventory_records(purchase)
             reverse_fifo_batches(purchase)
             reverse_automated_journals(purchase)
             purchase.delete()
-        dj_messages.success(request, f'Purchase {purchase.transaction_id} berhasil dihapus.')
+        dj_messages.success(request, f'Purchase {trx_id} berhasil dihapus.')
         return redirect('purchase:list')
 
-    return redirect('purchase:list')
+    # GET: render confirmation page with related records
+    inventory_records = InventoryRecord.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase,
+    ).select_related('item', 'entitas_bisnis')
+    aset_tetap_records = AsetTetapRecord.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase,
+    ).select_related('item', 'entitas_bisnis')
+    aset_lainnya_records = AsetLainnyaRecord.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase,
+    ).select_related('item', 'entitas_bisnis')
+
+    return render(request, 'purchase/purchase_delete.html', {
+        'purchase': purchase,
+        'inventory_records': inventory_records,
+        'aset_tetap_records': aset_tetap_records,
+        'aset_lainnya_records': aset_lainnya_records,
+    })
 
 
 # ── Journal Preview API ──────────────────────────────────────────────────────

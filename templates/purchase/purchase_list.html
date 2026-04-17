@@ -95,7 +95,7 @@
               <a href="{% url 'purchase:detail' row.purchase_header.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
               {% if not row.purchase_header.is_locked %}
               <a href="{% url 'purchase:update' row.purchase_header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="openDeleteModal('{% url 'purchase:delete' row.purchase_header.pk %}', '{{ row.purchase_header.transaction_id }}')">Hapus</button>
+              <a href="{% url 'purchase:delete' row.purchase_header.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
               {% else %}
               <span class="ni-badge ni-badge--secondary">Locked</span>
               {% endif %}
@@ -110,5 +110,4 @@
   </div>
 </div>
 
-{% include 'components/delete_modal.html' %}
 {% endblock %}

@@ -847,6 +847,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         '1.1.10': 'persediaan',
         '1.2': 'aset_tetap',
         '1.3': 'aset_lainnya',
+        '3.1.1': 'modal_disetor',
     }
 
     if request.method == 'POST':
@@ -1040,6 +1041,34 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             masa_manfaat=masa_manfaat or item.masa_manfaat,
                             metode_amortisasi=metode_amortisasi or item.metode_amortisasi,
                         )
+
+            # ── Modal Disetor detail: ModalDisetor + Pemilik ─────────────
+            from apps.ekuitas.models import ModalDisetor as ModalDisetorModel, Pemilik as PemilikModel
+            from apps.ekuitas.services import get_or_create_pemilik
+            modal_disetor_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'modal_disetor' and r.get('detail_rows')
+            ]
+            for row in modal_disetor_rows:
+                for d in row.get('detail_rows', []):
+                    nama_pemilik = str(d.get('nama_pemilik', '')).strip()
+                    if not nama_pemilik:
+                        continue
+                    try:
+                        jumlah = Decimal(str(d.get('jumlah', 0)))
+                    except Exception:
+                        continue
+                    if jumlah <= 0:
+                        continue
+                    pemilik = get_or_create_pemilik(nama_pemilik)
+                    ModalDisetorModel.objects.create(
+                        entitas_bisnis_id=eb_id,
+                        pemilik=pemilik,
+                        jumlah_modal=jumlah,
+                        tanggal_setor=tanggal,
+                        keterangan=str(d.get('keterangan', '')).strip(),
+                        jurnal_header=header,
+                    )
 
         dj_messages.success(request, f'Saldo Awal {nomor} berhasil disimpan.')
         return redirect('jurnal:header_detail', pk=header.pk)

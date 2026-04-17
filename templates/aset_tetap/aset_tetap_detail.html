@@ -86,7 +86,14 @@
       <div class="ni-form-row">
         <div class="ni-form-group">
           <label class="ni-form-label">Tanggal Jurnal</label>
-          <input type="date" name="tanggal" class="ni-input" value="{{ today }}">
+          <input type="date" name="tanggal" class="ni-input" value="{{ today|date:'Y-m-d' }}" min="{{ suggested_start_date|date:'Y-m-d' }}" required>
+          <small style="color:var(--ni-text-muted);">
+            Dihitung dari
+            <strong>{{ suggested_start_date }}</strong>
+            {% if last_dep_date %}(setelah jurnal terakhir tgl {{ last_dep_date }}){% else %}(tanggal perolehan){% endif %}
+            sampai tanggal jurnal yang dipilih (inklusif).
+            {% if suggested_days > 0 %}Estimasi hari: <strong>{{ suggested_days }}</strong>.{% endif %}
+          </small>
         </div>
         {% if needs_activity_input %}
           {% if metode == 'service_hours' %}
@@ -102,13 +109,9 @@
           {% endif %}
         {% else %}
         <div class="ni-form-group">
-          <label class="ni-form-label">Jumlah Penyusutan</label>
-          <input type="number" name="amount" class="ni-input" step="0.01" value="{{ preview_amount|floatformat:2 }}" placeholder="Auto-calculated">
-          <small style="color:var(--ni-text-muted);">Tahun ke-{{ tahun_ke }}, {{ default_days }} hari — preview: Rp {{ preview_amount|floatformat:0|intcomma }}</small>
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Jumlah Hari</label>
-          <input type="number" name="hari" class="ni-input" value="{{ default_days }}" min="1" max="366">
+          <label class="ni-form-label">Estimasi Penyusutan</label>
+          <input type="text" class="ni-input" value="Rp {{ preview_amount|floatformat:0|intcomma }}" readonly style="background:var(--ni-bg);color:var(--ni-text-muted);">
+          <small style="color:var(--ni-text-muted);">Tahun ke-{{ tahun_ke }}, {{ suggested_days }} hari — dihitung otomatis saat submit.</small>
         </div>
         {% endif %}
       </div>
