@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
+from apps.inventory.models import InventoryRecord
 from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
@@ -160,7 +161,7 @@ def sales_list(request: HttpRequest) -> HttpResponse:
             row['trx_rowspan'] = 0
 
     inventory_items = ItemMasterPurchase.objects.filter(
-        tipe_item__in=['RM', 'FG', 'ITM']
+        tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
     ).order_by('nama')
 
     return render(request, 'sales/sales_list.html', {
@@ -185,7 +186,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         return _handle_sales_save(request)
 
     inventory_items = ItemMasterPurchase.objects.filter(
-        tipe_item__in=['RM', 'FG', 'ITM']
+        tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
     ).select_related('coa_account').order_by('nama')
 
     return render(request, 'sales/sales_form.html', {
@@ -231,9 +232,12 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         ).all():
             items_data.append({
                 'item_id': si.item_id,
+                'item_name': f'{si.item.item_id} - {si.item.nama}',
+                'tipe_item': si.item.tipe_item,
                 'sub_transaction_type_id': si.sub_transaction_type_id,
                 'quantity': str(si.quantity),
                 'selling_price': str(si.selling_price),
+                'hpp_terpakai': str(si.hpp_terpakai) if si.hpp_terpakai else '',
                 'offset_coa_account_id': si.offset_coa_account_id,
                 'revenue_account_id': si.revenue_account_id,
                 'tax': str(si.tax) if si.tax else '',
@@ -250,7 +254,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         })
 
     inventory_items = ItemMasterPurchase.objects.filter(
-        tipe_item__in=['RM', 'FG', 'ITM']
+        tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
     ).select_related('coa_account').order_by('nama')
 
     return render(request, 'sales/sales_form.html', {
@@ -338,12 +342,27 @@ def api_stock_check(request: HttpRequest) -> JsonResponse:
     """Check available stock for an item."""
     item_id = request.GET.get('item_id', '')
     if not item_id:
-        return JsonResponse({'available_stock': '0'})
+        return JsonResponse({'available_stock': '0', 'is_bulk': False})
     try:
-        stock = get_available_stock(int(item_id))
-        return JsonResponse({'available_stock': str(stock)})
-    except (ValueError, TypeError):
-        return JsonResponse({'available_stock': '0'})
+        item = ItemMasterPurchase.objects.only('tipe_item').get(pk=int(item_id))
+        is_bulk = item.tipe_item in ('RMB', 'FGB', 'ITMB')
+        if is_bulk:
+            # For bulk items, return total inventory value
+            from django.db.models import Sum
+            total_value = (
+                InventoryRecord.objects
+                .filter(item_id=int(item_id), total_value__gt=0)
+                .aggregate(total=Sum('total_value'))['total'] or 0
+            )
+            return JsonResponse({
+                'available_stock': str(total_value),
+                'is_bulk': True,
+            })
+        else:
+            stock = get_available_stock(int(item_id))
+            return JsonResponse({'available_stock': str(stock), 'is_bulk': False})
+    except (ValueError, TypeError, ItemMasterPurchase.DoesNotExist):
+        return JsonResponse({'available_stock': '0', 'is_bulk': False})
 
 
 @login_required
@@ -431,7 +450,11 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     if hpp <= 0:
                         errors[f'group_{g_idx}_item_{i}_hpp'] = f'Grup {g_idx + 1}, Item {i + 1}: HPP Terpakai harus > 0.'
                     qty = Decimal('0')
-                    price = Decimal('0')
+                    # Bulk: selling_price is optional (for revenue entry)
+                    try:
+                        price = Decimal(str(item_data.get('selling_price', 0)))
+                    except (InvalidOperation, ValueError):
+                        price = Decimal('0')
                 else:
                     qty = Decimal(str(item_data.get('quantity', 0)))
                     if qty <= 0:
@@ -537,7 +560,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     item_id=item_data['item_id'],
                     sub_transaction_type_id=item_data['sub_transaction_type_id'],
                     quantity=Decimal('0') if is_bulk else Decimal(str(item_data['quantity'])),
-                    selling_price=Decimal('0') if is_bulk else Decimal(str(item_data['selling_price'])),
+                    selling_price=Decimal(str(item_data.get('selling_price') or '0')),
                     hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
                     offset_coa_account_id=item_data['offset_coa_account_id'],
                     revenue_account_id=item_data['revenue_account_id'],

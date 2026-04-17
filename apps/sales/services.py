@@ -102,18 +102,19 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
                     ))
 
                 # 2. Revenue entry: Debit Kas/Piutang, Credit Pendapatan
-                detail_lines.append(JurnalDetail(
-                    jurnal_header=header,
-                    akun=eb_group.payment_account,
-                    debit=si.total_sales,
-                    kredit=Decimal('0'),
-                ))
-                detail_lines.append(JurnalDetail(
-                    jurnal_header=header,
-                    akun=si.revenue_account,
-                    debit=Decimal('0'),
-                    kredit=si.total_sales,
-                ))
+                if si.total_sales > 0:
+                    detail_lines.append(JurnalDetail(
+                        jurnal_header=header,
+                        akun=eb_group.payment_account,
+                        debit=si.total_sales,
+                        kredit=Decimal('0'),
+                    ))
+                    detail_lines.append(JurnalDetail(
+                        jurnal_header=header,
+                        akun=si.revenue_account,
+                        debit=Decimal('0'),
+                        kredit=si.total_sales,
+                    ))
 
                 # 3. Tax entry (if applicable)
                 if si.tax and si.tax > 0:
@@ -181,6 +182,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
                             reduce = min(inv_rec.quantity, remaining_to_reduce)
                             if reduce > 0:
                                 inv_rec.quantity -= reduce
+                                inv_rec.total_value = inv_rec.quantity * inv_rec.unit_price
                                 records_to_update.append(inv_rec)
                                 allocations_to_create.append(SalesItemFIFOAllocation(
                                     sales_item=si,
@@ -190,7 +192,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> None:
                                 ))
                                 remaining_to_reduce -= reduce
                     if records_to_update:
-                        InventoryRecord.objects.bulk_update(records_to_update, ['quantity'])
+                        InventoryRecord.objects.bulk_update(records_to_update, ['quantity', 'total_value'])
                     if allocations_to_create:
                         SalesItemFIFOAllocation.objects.bulk_create(allocations_to_create)
 
@@ -305,9 +307,10 @@ def reverse_sales_fifo(sales_header: SalesHeader) -> None:
                     for alloc in si.fifo_allocations.select_related('inventory_record').all():
                         inv_rec = alloc.inventory_record
                         inv_rec.quantity += alloc.quantity_consumed
+                        inv_rec.total_value = inv_rec.quantity * inv_rec.unit_price
                         records_to_restore.append(inv_rec)
                     if records_to_restore:
-                        InventoryRecord.objects.bulk_update(records_to_restore, ['quantity'])
+                        InventoryRecord.objects.bulk_update(records_to_restore, ['quantity', 'total_value'])
 
                 elif si.item.tipe_item in BULK_TYPES:
                     if si.cogs_amount <= 0:

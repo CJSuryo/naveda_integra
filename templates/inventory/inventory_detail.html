@@ -33,9 +33,13 @@
       <dt>Tipe Item</dt><dd>{{ record.item.get_tipe_item_display }}</dd>
       <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
       <dt>Tanggal</dt><dd>{{ record.tanggal }}</dd>
+      {% if is_bulk %}
+      <dt>Nilai Persediaan</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
+      {% else %}
       <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}</dd>
       <dt>Unit Price</dt><dd>{{ record.unit_price|floatformat:0|intcomma }}</dd>
       <dt>Total Value</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
+      {% endif %}
       <dt>Lead Time (Days)</dt><dd>{{ record.lead_time_days|default:'-' }}</dd>
       <dt>Ordering Cost</dt><dd>{% if record.ordering_cost %}{{ record.ordering_cost|floatformat:0|intcomma }}{% else %}-{% endif %}</dd>
       <dt>Holding Cost %</dt><dd>{% if record.holding_cost_pct %}{{ record.holding_cost_pct|floatformat:4 }}{% else %}-{% endif %}</dd>
@@ -65,7 +69,7 @@
             <th>Tanggal</th>
             <th>Tipe</th>
             <th>Referensi</th>
-            <th class="ni-text-right">Quantity</th>
+            <th class="ni-text-right">{% if is_bulk %}Nilai Persediaan{% else %}Quantity{% endif %}</th>
             <th>Keterangan</th>
           </tr>
         </thead>
@@ -87,7 +91,7 @@
               {{ m.referensi }}
               {% endif %}
             </td>
-            <td class="ni-text-right">{{ m.quantity|floatformat:4|intcomma }}</td>
+            <td class="ni-text-right">{% if is_bulk %}{{ m.quantity|floatformat:0|intcomma }}{% else %}{{ m.quantity|floatformat:4|intcomma }}{% endif %}</td>
             <td>{{ m.keterangan }}</td>
           </tr>
           {% empty %}

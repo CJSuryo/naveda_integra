@@ -249,7 +249,12 @@ class SalesItem(models.Model):
         return f'{self.item.item_id} × {self.quantity}'
 
     def save(self, *args, **kwargs):
-        self.total_sales = self.quantity * self.selling_price
+        BULK_TYPES = ('RMB', 'FGB', 'ITMB')
+        if self.item.tipe_item in BULK_TYPES:
+            # Bulk: selling_price is the total selling amount (not per-unit)
+            self.total_sales = self.selling_price
+        else:
+            self.total_sales = self.quantity * self.selling_price
         super().save(*args, **kwargs)
 
 
