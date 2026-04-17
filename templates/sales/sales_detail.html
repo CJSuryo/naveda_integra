@@ -53,7 +53,7 @@
       {% if eg.entitas_bisnis_lv3 %} / {{ eg.entitas_bisnis_lv3.nama }}{% endif %}
     </h3>
     <p style="font-size:0.85rem;color:var(--ni-text-muted);margin:0 0 12px;">
-      Payment Account: <strong>{{ eg.payment_account }}</strong>
+      Payment Account: <strong>{{ eg.payment_account|default:'-' }}</strong>
     </p>
     <div class="ni-table-wrapper">
       <table class="ni-table">
@@ -67,6 +67,7 @@
             <th class="ni-text-right">HPP (COGS)</th>
             <th>Revenue Account</th>
             <th>Offset CoA (HPP)</th>
+            <th>Payment Account</th>
           </tr>
         </thead>
         <tbody>
@@ -74,12 +75,13 @@
           <tr>
             <td>{{ si.item }}</td>
             <td>{{ si.sub_transaction_type.nama }}</td>
-            <td class="ni-text-right">{{ si.quantity|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{% if si.item.tipe_item == 'RMB' or si.item.tipe_item == 'FGB' or si.item.tipe_item == 'ITMB' %}-{% else %}{{ si.quantity|floatformat:0|intcomma }}{% endif %}</td>
             <td class="ni-text-right">{{ si.selling_price|floatformat:0|intcomma }}</td>
             <td class="ni-text-right"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
             <td class="ni-text-right">{{ si.cogs_amount|floatformat:0|intcomma }}</td>
             <td>{{ si.revenue_account }}</td>
             <td>{{ si.offset_coa_account }}</td>
+            <td>{{ si.payment_account|default:eg.payment_account|default:'-' }}</td>
           </tr>
           {% if si.tax %}
           <tr style="background:var(--ni-bg);font-size:0.85rem;">
@@ -91,10 +93,11 @@
             <td class="ni-text-right">{{ si.tax|floatformat:0|intcomma }}</td>
             <td>{{ si.tax_account|default:'-' }}</td>
             <td>{{ si.tax_payment_account|default:'-' }}</td>
+            <td></td>
           </tr>
           {% endif %}
           {% empty %}
-          <tr><td colspan="8" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>
+          <tr><td colspan="9" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>
           {% endfor %}
         </tbody>
       </table>
@@ -127,7 +130,7 @@
             <th>Inventory Number</th>
             <th>Item</th>
             <th>Entitas Bisnis</th>
-            <th class="ni-text-right">Qty Terjual</th>
+            <th class="ni-text-right">Qty / Nilai Terjual</th>
             <th class="ni-text-right">COGS</th>
           </tr>
         </thead>
@@ -141,7 +144,13 @@
             </td>
             <td>{{ m.item }}</td>
             <td>{{ m.entitas_bisnis }}</td>
-            <td class="ni-text-right">{{ m.quantity_sold|floatformat:4 }}</td>
+            <td class="ni-text-right">
+              {% if m.is_bulk %}
+              <span class="ni-badge ni-badge--secondary" title="Nilai Persediaan">{{ m.cogs|floatformat:0 }}</span>
+              {% else %}
+              {{ m.quantity_sold|floatformat:4 }}
+              {% endif %}
+            </td>
             <td class="ni-text-right">{{ m.cogs|floatformat:0 }}</td>
           </tr>
           {% endfor %}

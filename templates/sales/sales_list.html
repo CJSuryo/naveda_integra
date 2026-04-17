@@ -90,7 +90,7 @@
           <td>{{ row.sales_header.tanggal }}</td>
           <td>{{ row.item.item }}</td>
           <td>{{ row.item.sub_transaction_type.nama }}</td>
-          <td class="ni-text-right">{{ row.item.quantity|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{% if row.item.item.tipe_item == 'RMB' or row.item.item.tipe_item == 'FGB' or row.item.item.tipe_item == 'ITMB' %}-{% else %}{{ row.item.quantity|floatformat:0|intcomma }}{% endif %}</td>
           <td class="ni-text-right">{{ row.item.selling_price|floatformat:0|intcomma }}</td>
           <td class="ni-text-right"><strong>{{ row.item.total_sales|floatformat:0|intcomma }}</strong></td>
           <td>{{ row.entitas_group.entitas_bisnis.nama }}</td>

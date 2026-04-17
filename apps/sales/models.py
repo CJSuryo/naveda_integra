@@ -94,7 +94,9 @@ class SalesEntitasBisnis(models.Model):
         on_delete=models.PROTECT,
         related_name='sales_eb_payment',
         verbose_name='Payment Account',
-        help_text='Kas Tunai, Kas di Bank, dll.',
+        help_text='Kas Tunai, Kas di Bank, dll. (Legacy — per-item payment_account di SalesItem lebih diutamakan).',
+        null=True,
+        blank=True,
     )
 
     class Meta:
@@ -179,6 +181,14 @@ class SalesItem(models.Model):
         related_name='sales_item_revenue',
         verbose_name='Revenue Account',
         help_text='Pendapatan terkait item/tipe transaksi.',
+    )
+    payment_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='sales_item_payment',
+        verbose_name='Payment Account',
+        null=True,
+        blank=True,
     )
     # COGS computed from FIFO
     cogs_amount = models.DecimalField(

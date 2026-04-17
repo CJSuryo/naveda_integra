@@ -86,6 +86,8 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
             detail_lines: list[JurnalDetail] = []
 
             for si in items:
+                _payment_akun = si.payment_account or eb_group.payment_account
+
                 # 1. COGS entry: Debit HPP, Credit Persediaan — both or neither
                 if si.cogs_amount > 0 and si.inventory_account_id:
                     detail_lines.append(JurnalDetail(
@@ -102,10 +104,10 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
                     ))
 
                 # 2. Revenue entry: Debit Kas/Piutang, Credit Pendapatan
-                if si.total_sales > 0:
+                if si.total_sales > 0 and _payment_akun:
                     detail_lines.append(JurnalDetail(
                         jurnal_header=header,
-                        akun=eb_group.payment_account,
+                        akun=_payment_akun,
                         debit=si.total_sales,
                         kredit=Decimal('0'),
                     ))
@@ -122,7 +124,7 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
                     if tax_liability_account:
                         detail_lines.append(JurnalDetail(
                             jurnal_header=header,
-                            akun=eb_group.payment_account,
+                            akun=_payment_akun or eb_group.payment_account,
                             debit=si.tax,
                             kredit=Decimal('0'),
                         ))

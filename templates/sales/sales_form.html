@@ -153,7 +153,7 @@
   // All akun list for static dropdowns
   var akunList = [
     {% for akun in akun_list %}
-    { id: {{ akun.pk }}, text: '{{ akun|escapejs }}' },
+    { id: {{ akun.pk }}, text: '{{ akun|escapejs }}', kat: '{{ akun.kategori_id }}' },
     {% endfor %}
   ];
 
@@ -203,9 +203,6 @@
       '<div class="ni-sales-eb-card__header">' +
         '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);"></i>' +
         '<select class="ni-input eb-select" data-gid="' + gid + '" onchange="onEBChange(\'' + gid + '\')">' + ebSelectOptions + '</select>' +
-        '<div class="ni-form-group" style="margin:0;flex:1;min-width:200px;">' +
-          '<select id="' + gid + '_payment_account" class="ni-sales-input payment-account-select" placeholder="Payment Account..."></select>' +
-        '</div>' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
           '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
         '</button>' +
@@ -213,15 +210,16 @@
       '<div class="ni-sales-item-table-wrapper">' +
         '<table class="ni-sales-item-table">' +
           '<thead><tr>' +
-            '<th style="width:20%">Item</th>' +
-            '<th style="width:12%">Sub-Trx Type</th>' +
-            '<th class="col-satuan" style="width:7%">Qty</th>' +
-            '<th style="width:10%">Harga Jual</th>' +
-            '<th class="col-satuan" style="width:8%">Total Penjualan</th>' +
-            '<th class="col-bulk" style="width:10%;display:none;">HPP (Nilai Persediaan)</th>' +
-            '<th style="width:13%">Offset CoA (HPP)</th>' +
-            '<th style="width:13%">Revenue Account</th>' +
-            '<th style="width:5%"></th>' +
+            '<th style="width:17%">Item</th>' +
+            '<th style="width:10%">Sub-Trx Type</th>' +
+            '<th class="col-satuan" style="width:6%">Qty</th>' +
+            '<th style="width:9%">Harga Jual</th>' +
+            '<th class="col-satuan" style="width:7%">Total</th>' +
+            '<th class="col-bulk" style="width:9%">HPP (Nilai Persediaan)</th>' +
+            '<th style="width:9%">Offset CoA</th>' +
+            '<th style="width:9%">Revenue Akun</th>' +
+            '<th style="width:9%">Payment Akun</th>' +
+            '<th style="width:4%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
         '</table>' +
@@ -243,9 +241,6 @@
     container.appendChild(card);
     lucide.createIcons();
 
-    // Init TomSelect for Payment Account
-    initPaymentAccountSelect(gid, prefill ? prefill.payment_account_id : null);
-
     // Pre-fill items if editing
     if (prefill && prefill.items) {
       prefill.items.forEach(function (itemData) {
@@ -255,41 +250,6 @@
       addItemRow(gid);
     }
   };
-
-  function initPaymentAccountSelect(gid, prefillId) {
-    var el = document.getElementById(gid + '_payment_account');
-    if (!el) return;
-
-    var ts = new TomSelect(el, {
-      valueField: 'id',
-      labelField: 'text',
-      searchField: 'text',
-      placeholder: 'Ketik kode/nama akun...',
-      dropdownParent: 'body',
-      maxOptions: false,
-      preload: 'focus',
-      load: function (query, callback) {
-        var ebSelect = document.querySelector('#' + gid + ' .eb-select');
-        var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
-        var url = akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1';
-        if (ebLv1Id) url += '&eb_id=' + encodeURIComponent(ebLv1Id);
-        fetch(url)
-          .then(function (r) { return r.json(); })
-          .then(function (data) { callback(data); })
-          .catch(function () { callback(); });
-      },
-      shouldLoad: function () { return true; },
-    });
-
-    // Pre-select if editing
-    if (prefillId) {
-      var match = akunList.find(function (a) { return a.id == prefillId; });
-      if (match) {
-        ts.addOption({ id: match.id, text: match.text });
-        ts.setValue(match.id, true);
-      }
-    }
-  }
 
   window.removeEBGroup = function (gid) {
     var el = document.getElementById(gid);
@@ -311,12 +271,6 @@
         sel.tomselect.clear();
       }
     });
-    // Refresh payment account select
-    var paymentSel = document.getElementById(gid + '_payment_account');
-    if (paymentSel && paymentSel.tomselect) {
-      paymentSel.tomselect.clearOptions();
-      paymentSel.tomselect.clear();
-    }
   };
 
   // ── Add Item Row ──────────────────────────────────────────────────────────
@@ -331,18 +285,25 @@
       sttSelectOptions += '<option value="' + stt.id + '"' + sel + '>' + esc(stt.nama) + '</option>';
     });
 
-    // Build offset CoA options from static akun list
-    var offsetOptions = '<option value="">— HPP Account —</option>';
-    akunList.forEach(function (a) {
+    // Build offset CoA options (only Beban/5 accounts)
+    var offsetOptions = '<option value="">\u2014 HPP Account \u2014</option>';
+    akunList.filter(function(a) { return a.kat === 'beban'; }).forEach(function (a) {
       var sel = (prefill && prefill.offset_coa_account_id == a.id) ? ' selected' : '';
       offsetOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
     });
 
-    // Build revenue account options from static akun list
-    var revenueOptions = '<option value="">— Revenue Account —</option>';
-    akunList.forEach(function (a) {
+    // Build revenue account options (only Pendapatan/4 accounts)
+    var revenueOptions = '<option value="">\u2014 Revenue Account \u2014</option>';
+    akunList.filter(function(a) { return a.kat === 'pendapatan'; }).forEach(function (a) {
       var sel = (prefill && prefill.revenue_account_id == a.id) ? ' selected' : '';
       revenueOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    // Build payment account options (all accounts)
+    var paymentOptions = '<option value="">\u2014 Payment Account \u2014</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.payment_account_id == a.id) ? ' selected' : '';
+      paymentOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
     });
 
     var prefillQty = prefill ? prefill.quantity : '';
@@ -353,6 +314,10 @@
       : '0';
     var prefillIsBulk = prefill && prefill.tipe_item && BULK_TYPES.indexOf(prefill.tipe_item) !== -1;
     var hasItem = prefill && prefill.item_id;
+    // TD visibility helpers
+    var fieldTdStyle = hasItem ? '' : ' style="display:none;"';
+    var satuanTdStyle = (hasItem && !prefillIsBulk) ? '' : ' style="display:none;"';
+    var bulkTdStyle = (hasItem && prefillIsBulk) ? '' : ' style="display:none;"';
 
     var tr = document.createElement('tr');
     tr.id = rid;
@@ -361,13 +326,14 @@
         '<select id="' + rid + '_item" class="ni-sales-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select>' +
         '<div class="ni-stock-info" id="' + rid + '_stock"></div>' +
       '</td>' +
-      '<td><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')"' + (!hasItem ? ' style="display:none;"' : '') + '>' + sttSelectOptions + '</select></td>' +
-      '<td class="col-satuan"><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')"' + (!hasItem ? ' style="display:none;"' : '') + '></td>' +
-      '<td><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')"' + (!hasItem ? ' style="display:none;"' : '') + ' placeholder="Harga Jual"></td>' +
-      '<td class="col-satuan"><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"' + (!hasItem ? ' style="display:none;"' : '') + '></td>' +
-      '<td class="col-bulk" style="display:none;"><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"' + (!hasItem ? ' style="display:none;"' : '') + '></td>' +
-      '<td><select id="' + rid + '_offset" class="ni-sales-input"' + (!hasItem ? ' style="display:none;"' : '') + '>' + offsetOptions + '</select></td>' +
-      '<td><select id="' + rid + '_revenue" class="ni-sales-input"' + (!hasItem ? ' style="display:none;"' : '') + '>' + revenueOptions + '</select></td>' +
+      '<td class="item-field-td"' + fieldTdStyle + '><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
+      '<td class="item-field-td col-satuan"' + satuanTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"></td>' +
+      '<td class="item-field-td"' + fieldTdStyle + '><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Harga Jual"></td>' +
+      '<td class="item-field-td col-satuan"' + satuanTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"></td>' +
+      '<td class="item-field-td col-bulk"' + bulkTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"></td>' +
+      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
+      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
+      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
       '<td>' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
@@ -525,58 +491,32 @@
   var BULK_TYPES = ['RMB', 'FGB', 'ITMB'];
 
   /**
-   * Show/hide fields after item is selected.
+   * Show all item-field TDs for a row, then toggle bulk/satuan visibility.
    */
   function showItemFields(rid, tipeItem) {
     var tr = document.getElementById(rid);
     if (!tr) return;
-    var fields = tr.querySelectorAll('.stt-select, .qty-field, .price-field, .total-field, .hpp-field, #' + rid + '_offset, #' + rid + '_revenue');
-    fields.forEach(function (el) { el.style.display = ''; });
+    tr.querySelectorAll('td.item-field-td').forEach(function (td) { td.style.display = ''; });
+    toggleBulkSalesFields(rid, tipeItem);
   }
 
   function hideItemFields(rid) {
     var tr = document.getElementById(rid);
     if (!tr) return;
-    var fields = tr.querySelectorAll('.stt-select, .qty-field, .price-field, .total-field, .hpp-field, #' + rid + '_offset, #' + rid + '_revenue');
-    fields.forEach(function (el) { el.style.display = 'none'; });
+    tr.querySelectorAll('td.item-field-td').forEach(function (td) { td.style.display = 'none'; });
   }
 
   window.toggleBulkSalesFields = function (rid, tipeItem) {
     var isBulk = BULK_TYPES.indexOf(tipeItem) !== -1;
     var tr = document.getElementById(rid);
     if (!tr) return;
-    // Find the parent table to toggle column headers
-    var table = tr.closest('table');
-    if (table) {
-      var satuanCols = table.querySelectorAll('.col-satuan');
-      var bulkCols = table.querySelectorAll('.col-bulk');
-      // Check if there are any satuan items in this table
-      var hasSatuan = false;
-      var hasBulk = false;
-      var tbody = tr.parentElement;
-      if (tbody) {
-        tbody.querySelectorAll('tr:not(.advanced-row)').forEach(function (row) {
-          var ti = row.dataset.tipeItem || '';
-          if (BULK_TYPES.indexOf(ti) !== -1) hasBulk = true;
-          else if (ti) hasSatuan = true;
-        });
-      }
-    }
-    // Toggle row-level fields
-    var qtyField = tr.querySelector('.qty-field');
-    var totalField = tr.querySelector('.total-field');
-    var hppField = tr.querySelector('.hpp-field');
-    if (isBulk) {
-      // Hide qty and total for this row (keep price visible for selling price input)
-      if (qtyField) qtyField.parentElement.style.display = 'none';
-      if (totalField) totalField.parentElement.style.display = 'none';
-      if (hppField) hppField.parentElement.style.display = '';
-    } else {
-      if (qtyField) qtyField.parentElement.style.display = '';
-      if (totalField) totalField.parentElement.style.display = '';
-      if (hppField) hppField.parentElement.style.display = 'none';
-    }
     tr.dataset.tipeItem = tipeItem || '';
+    tr.querySelectorAll('td.col-satuan').forEach(function (td) {
+      td.style.display = isBulk ? 'none' : '';
+    });
+    tr.querySelectorAll('td.col-bulk').forEach(function (td) {
+      td.style.display = isBulk ? '' : 'none';
+    });
   };
 
   /**
@@ -670,8 +610,8 @@
           // Debit: Payment Account (cash/bank received)
           rowNum++;
           var paymentText = 'Payment Account';
-          if (g.payment_account_id) {
-            var match = akunList.find(function (a) { return a.id == g.payment_account_id; });
+          if (item.payment_account_id) {
+            var match = akunList.find(function (a) { return a.id == item.payment_account_id; });
             if (match) paymentText = match.text;
           }
           tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(paymentText) + '</td><td style="text-align:right;">' + formatNum(total) + '</td><td></td></tr>';
@@ -754,9 +694,6 @@
       var ebName = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
       if (!ebSelection) return;
 
-      var paymentAccountEl = document.getElementById(gid + '_payment_account');
-      var paymentAccountId = paymentAccountEl ? paymentAccountEl.value : '';
-
       var items = [];
       var tbody = document.getElementById(gid + '_items');
       var itemRows = tbody.querySelectorAll('tr:not(.advanced-row)');
@@ -784,6 +721,7 @@
           is_bulk: isBulk ? '1' : '0',
           offset_coa_account_id: document.getElementById(rid + '_offset').value || '',
           revenue_account_id: document.getElementById(rid + '_revenue').value || '',
+          payment_account_id: document.getElementById(rid + '_payment') ? document.getElementById(rid + '_payment').value : '',
           tax: document.getElementById(rid + '_tax') ? document.getElementById(rid + '_tax').value : '',
           tax_type: document.getElementById(rid + '_tax_type') ? document.getElementById(rid + '_tax_type').value : '',
           tax_account_id: document.getElementById(rid + '_tax_account') ? document.getElementById(rid + '_tax_account').value : '',
@@ -795,7 +733,6 @@
       groups.push({
         eb_selection: ebSelection,
         eb_name: ebName,
-        payment_account_id: paymentAccountId,
         items: items,
       });
     });
@@ -811,9 +748,6 @@
     }
     var errorMsgs = [];
     payload.eb_groups.forEach(function (g, gi) {
-      if (!g.payment_account_id) {
-        errorMsgs.push('Group ' + (gi + 1) + ': Payment Account wajib dipilih.');
-      }
       if (g.items.length === 0) {
         errorMsgs.push('Group ' + (gi + 1) + ': Tambahkan minimal satu item.');
       }
@@ -823,6 +757,9 @@
         }
         if (!item.revenue_account_id) {
           errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Revenue Account wajib diisi.');
+        }
+        if (!item.payment_account_id) {
+          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Payment Account wajib diisi.');
         }
       });
     });

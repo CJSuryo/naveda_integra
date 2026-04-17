@@ -228,7 +228,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         items_data = []
         for si in eg.items.select_related(
             'item', 'sub_transaction_type', 'offset_coa_account',
-            'revenue_account', 'tax_account', 'tax_payment_account',
+            'revenue_account', 'payment_account', 'tax_account', 'tax_payment_account',
         ).all():
             items_data.append({
                 'item_id': si.item_id,
@@ -240,6 +240,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'hpp_terpakai': str(si.hpp_terpakai) if si.hpp_terpakai else '',
                 'offset_coa_account_id': si.offset_coa_account_id,
                 'revenue_account_id': si.revenue_account_id,
+                'payment_account_id': si.payment_account_id or eg.payment_account_id or '',
                 'tax': str(si.tax) if si.tax else '',
                 'tax_type': si.tax_type or '',
                 'tax_account_id': si.tax_account_id or '',
@@ -280,6 +281,7 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
     ).prefetch_related(
         'items__item', 'items__sub_transaction_type',
         'items__offset_coa_account', 'items__revenue_account',
+        'items__payment_account',
         'items__tax_account', 'items__tax_payment_account',
     ).all()
 
@@ -292,11 +294,13 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'inventory_record__item',
             'inventory_record__entitas_bisnis',
             'sales_item__sales_eb__entitas_bisnis',
+            'sales_item__item',
         )
         .order_by('inventory_record__tanggal', 'inventory_record__inventory_number')
     )
     for alloc in allocations:
         inv_rec = alloc.inventory_record
+        is_bulk_alloc = alloc.sales_item.item.tipe_item in ('RMB', 'FGB', 'ITMB')
         inventory_mutations.append({
             'inventory_number': inv_rec.inventory_number,
             'inventory_pk': inv_rec.pk,
@@ -304,6 +308,7 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'entitas_bisnis': alloc.sales_item.sales_eb.entitas_bisnis.nama,
             'quantity_sold': alloc.quantity_consumed,
             'cogs': alloc.cogs_amount,
+            'is_bulk': is_bulk_alloc,
         })
 
     return render(request, 'sales/sales_detail.html', {
@@ -427,10 +432,6 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             errors[f'group_{g_idx}_eb'] = f'Grup {g_idx + 1}: Entitas Bisnis tidak valid.'
             continue
 
-        payment_account_id = group.get('payment_account_id', '')
-        if not payment_account_id:
-            errors[f'group_{g_idx}_payment'] = f'Grup {g_idx + 1}: Payment Account wajib dipilih.'
-
         items = group.get('items', [])
         if not items:
             errors[f'group_{g_idx}_items'] = f'Grup {g_idx + 1}: Minimal satu item harus ditambahkan.'
@@ -443,6 +444,9 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                 continue
 
             is_bulk = item_data.get('is_bulk') == '1'
+
+            if not item_data.get('payment_account_id'):
+                errors[f'group_{g_idx}_item_{i}_payment'] = f'Grup {g_idx + 1}, Item {i + 1}: Payment Account wajib diisi.'
 
             try:
                 if is_bulk:
@@ -475,6 +479,30 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             if not is_bulk:
                 iid = int(item_id)
                 item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
+
+            # Bulk inventory value validation
+            if is_bulk:
+                try:
+                    hpp_val = Decimal(str(item_data.get('hpp_terpakai', 0)))
+                    iid_bulk = int(item_id)
+                    from django.db.models import Sum as DjSum
+                    avail_val = InventoryRecord.objects.filter(
+                        item_id=iid_bulk,
+                        entitas_bisnis_id=eb_resolved['lv1_id'],
+                    ).aggregate(total=DjSum('total_value'))['total'] or Decimal('0')
+                    if existing:
+                        for eg_old in existing.entitas_groups.all():
+                            for si_old in eg_old.items.filter(item_id=iid_bulk):
+                                if si_old.hpp_terpakai:
+                                    avail_val += si_old.hpp_terpakai
+                    if hpp_val > avail_val:
+                        errors[f'group_{g_idx}_item_{i}_bulk_stock'] = (
+                            f'Grup {g_idx + 1}, Item {i + 1}: '
+                            f'Nilai yang dijual (Rp {hpp_val:,.0f}) melebihi '
+                            f'Nilai Persediaan tersedia (Rp {avail_val:,.0f}).'
+                        )
+                except (InvalidOperation, ValueError, TypeError):
+                    pass
 
             if not item_data.get('offset_coa_account_id'):
                 errors[f'group_{g_idx}_item_{i}_offset'] = f'Grup {g_idx + 1}, Item {i + 1}: Offset CoA (HPP) wajib diisi.'
@@ -547,7 +575,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                 entitas_bisnis_id=eb_resolved['lv1_id'],
                 entitas_bisnis_lv2_id=eb_resolved.get('lv2_id'),
                 entitas_bisnis_lv3_id=eb_resolved.get('lv3_id'),
-                payment_account_id=group['payment_account_id'],
+                payment_account_id=None,  # now per-item on SalesItem
             )
 
             for item_data in group.get('items', []):
@@ -564,6 +592,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
                     offset_coa_account_id=item_data['offset_coa_account_id'],
                     revenue_account_id=item_data['revenue_account_id'],
+                    payment_account_id=item_data.get('payment_account_id') or None,
                     tax=tax_amount,
                     tax_type=item_data.get('tax_type', ''),
                     tax_account_id=item_data.get('tax_account_id') or None,
