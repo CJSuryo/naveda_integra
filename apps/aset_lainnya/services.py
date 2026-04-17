@@ -11,54 +11,74 @@ from .models import AsetLainnyaRecord
 
 
 # ---------------------------------------------------------------------------
-# Amortization Calculation Engine — 4 methods
+# Amortization Calculation Engine — 4 methods (daily basis, 1 year = 365 days)
 # ---------------------------------------------------------------------------
 
 def calc_straight_line(total_value: Decimal, nilai_residu: Decimal, masa_manfaat: int) -> Decimal:
-    if masa_manfaat <= 0:
+    """Garis Lurus: (HP - NR) / (UmurTahun × 365) — returns daily rate."""
+    total_hari = masa_manfaat * 365
+    if total_hari <= 0:
         return Decimal('0')
-    return (total_value - nilai_residu) / Decimal(masa_manfaat)
+    return (total_value - nilai_residu) / Decimal(total_hari)
 
 
 def calc_declining_balance(total_value: Decimal, nilai_residu: Decimal,
                            masa_manfaat: int, akumulasi: Decimal) -> Decimal:
+    """Saldo Menurun: (nilai_buku × 2/umur) / 365 — returns daily rate. Validates against residu."""
     if masa_manfaat <= 0:
         return Decimal('0')
     nilai_buku = total_value - akumulasi
     if nilai_buku <= nilai_residu:
         return Decimal('0')
-    rate = Decimal('2') / Decimal(masa_manfaat)
-    amortization = nilai_buku * rate
-    if (nilai_buku - amortization) < nilai_residu:
-        amortization = nilai_buku - nilai_residu
-    return max(amortization, Decimal('0'))
+    tarif_tahunan = Decimal('2') / Decimal(masa_manfaat)
+    beban_tahunan = nilai_buku * tarif_tahunan
+    daily = beban_tahunan / Decimal('365')
+    if (nilai_buku - daily) < nilai_residu:
+        daily = nilai_buku - nilai_residu
+    return max(daily, Decimal('0'))
 
 
 def calc_units_of_production(total_value: Decimal, nilai_residu: Decimal,
                              estimasi_unit: Decimal, unit_aktual: Decimal) -> Decimal:
+    """Satuan Hasil Produksi: tarif_per_unit × unit_aktual."""
     if not estimasi_unit or estimasi_unit <= 0:
         return Decimal('0')
-    return (unit_aktual / estimasi_unit) * (total_value - nilai_residu)
+    tarif_per_unit = (total_value - nilai_residu) / estimasi_unit
+    return tarif_per_unit * unit_aktual
 
 
 def calc_revenue_based(total_value: Decimal, nilai_residu: Decimal,
                        estimasi_pendapatan: Decimal, pendapatan_aktual: Decimal) -> Decimal:
+    """Basis Pendapatan: tarif × pendapatan_aktual."""
     if not estimasi_pendapatan or estimasi_pendapatan <= 0:
         return Decimal('0')
-    return (pendapatan_aktual / estimasi_pendapatan) * (total_value - nilai_residu)
+    tarif = (total_value - nilai_residu) / estimasi_pendapatan
+    return tarif * pendapatan_aktual
 
 
 def calculate_amortization(record: AsetLainnyaRecord,
                            unit_aktual: Decimal = Decimal('0'),
-                           pendapatan_aktual: Decimal = Decimal('0')) -> Decimal:
+                           pendapatan_aktual: Decimal = Decimal('0'),
+                           days: int = 30) -> Decimal:
+    """Calculate amortization for a given record and period.
+
+    For time-based methods (straight_line, declining_balance), returns daily rate × days.
+    For activity-based methods (units_of_production, revenue_based), ignores days.
+
+    Args:
+        record: The AsetLainnyaRecord to amortize.
+        unit_aktual: Actual units produced (for units_of_production method).
+        pendapatan_aktual: Actual revenue (for revenue_based method).
+        days: Number of days in the period (default 30 ≈ monthly).
+    """
     metode = record.metode_amortisasi or (record.item.metode_amortisasi if record.item else '')
     masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
     residu = record.nilai_residu
 
     if metode == 'straight_line':
-        return calc_straight_line(record.total_value, residu, masa)
+        return calc_straight_line(record.total_value, residu, masa) * Decimal(days)
     elif metode == 'declining_balance':
-        return calc_declining_balance(record.total_value, residu, masa, record.akumulasi_amortisasi)
+        return calc_declining_balance(record.total_value, residu, masa, record.akumulasi_amortisasi) * Decimal(days)
     elif metode == 'units_of_production':
         return calc_units_of_production(record.total_value, residu,
                                         record.estimasi_unit_produksi or Decimal('0'), unit_aktual)

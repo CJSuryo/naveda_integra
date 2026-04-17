@@ -25,6 +25,7 @@ from .services import (
     create_automated_journals, create_fifo_batches,
     reverse_automated_journals, reverse_fifo_batches,
     create_inventory_records, reverse_inventory_records,
+    reverse_aset_tetap_records, reverse_aset_lainnya_records,
     create_aset_tetap_records, create_aset_lainnya_records,
 )
 
@@ -927,6 +928,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
         if existing:
             # Reverse old journals, FIFO, and inventory records before updating
             reverse_inventory_records(existing)
+            reverse_aset_tetap_records(existing)
+            reverse_aset_lainnya_records(existing)
             reverse_fifo_batches(existing)
             reverse_automated_journals(existing)
             existing.entitas_groups.all().delete()
@@ -979,6 +982,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             create_automated_journals(purchase)
             create_fifo_batches(purchase)
             create_inventory_records(purchase)
+            create_aset_tetap_records(purchase)
+            create_aset_lainnya_records(purchase)
             created_purchases.append(purchase)
         else:
             # Delete existing if it exists (we're splitting into multiple)

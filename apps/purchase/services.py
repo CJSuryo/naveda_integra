@@ -167,6 +167,20 @@ def reverse_inventory_records(purchase_header: PurchaseHeader) -> None:
     ).delete()
 
 
+def reverse_aset_tetap_records(purchase_header: PurchaseHeader) -> None:
+    """Delete AsetTetapRecord entries created by this purchase."""
+    AsetTetapRecord.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase_header,
+    ).delete()
+
+
+def reverse_aset_lainnya_records(purchase_header: PurchaseHeader) -> None:
+    """Delete AsetLainnyaRecord entries created by this purchase."""
+    AsetLainnyaRecord.objects.filter(
+        purchase_item__purchase_eb__purchase_header=purchase_header,
+    ).delete()
+
+
 def create_aset_tetap_records(purchase_header: PurchaseHeader) -> list[AsetTetapRecord]:
     """Create AsetTetapRecord for each ATP purchase item (inflow only)."""
     records: list[AsetTetapRecord] = []

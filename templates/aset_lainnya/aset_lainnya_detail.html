@@ -91,7 +91,11 @@
         <div class="ni-form-group">
           <label class="ni-form-label">Jumlah Amortisasi</label>
           <input type="number" name="amount" class="ni-input" step="0.01" value="{{ preview_amount|floatformat:2 }}" placeholder="Auto-calculated">
-          <small style="color:var(--ni-text-muted);">Preview: Rp {{ preview_amount|floatformat:0|intcomma }}</small>
+          <small style="color:var(--ni-text-muted);">30 hari — preview: Rp {{ preview_amount|floatformat:0|intcomma }}</small>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Jumlah Hari</label>
+          <input type="number" name="hari" class="ni-input" value="30" min="1" max="366">
         </div>
         {% endif %}
       </div>
@@ -126,7 +130,7 @@
           {% for j in amort_journals %}
           <tr>
             <td>{{ j.tanggal }}</td>
-            <td><a href="{% url 'jurnal:detail' j.pk %}" style="color:var(--ni-primary);">{{ j.nomor_transaksi }}</a></td>
+            <td><a href="{% url 'jurnal:header_detail' j.pk %}" style="color:var(--ni-primary);">{{ j.nomor_transaksi }}</a></td>
             <td>{{ j.uraian_transaksi }}</td>
           </tr>
           {% endfor %}

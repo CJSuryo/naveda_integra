@@ -11,6 +11,37 @@
     <a href="{% url 'aset_lainnya:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
     </a>
+    <button type="button" class="ni-btn ni-btn--primary" onclick="document.getElementById('bulk-amort-modal').style.display='flex'">
+      <i data-lucide="zap" style="width:16px;height:16px"></i> Proses Semua Amortisasi
+    </button>
+  </div>
+</div>
+
+<!-- Bulk Amortization Modal -->
+<div id="bulk-amort-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
+  <div class="ni-card" style="max-width:480px;width:90%;border-radius:var(--ni-radius-lg);padding:0;">
+    <div class="ni-card__body" style="padding:32px;">
+      <h3 style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Proses Semua Amortisasi</h3>
+      <p style="margin:0 0 20px;font-size:0.875rem;color:var(--ni-text-muted);">Proses amortisasi untuk semua aset lainnya aktif (metode garis lurus, saldo menurun). Aset berbasis aktivitas/pendapatan dilewati.</p>
+      <form method="post" action="{% url 'aset_lainnya:bulk_amortization' %}"
+            onsubmit="return confirm('Yakin ingin memproses semua amortisasi sekaligus?')">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tanggal Jurnal</label>
+          <input type="date" name="tanggal" class="ni-input" required>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Jumlah Hari</label>
+          <input type="number" name="hari" class="ni-input" value="30" min="1" max="366">
+        </div>
+        <div class="ni-btn-row" style="margin-top:24px;">
+          <button type="submit" class="ni-btn ni-btn--primary">
+            <i data-lucide="zap" style="width:16px;height:16px"></i> Proses
+          </button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="document.getElementById('bulk-amort-modal').style.display='none'">Batal</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 

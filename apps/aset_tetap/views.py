@@ -11,6 +11,8 @@ from .forms import AsetTetapRecordForm
 from .models import AsetTetapRecord
 from .services import calculate_depreciation, process_depreciation
 
+DEFAULT_DAYS = 30  # monthly processing default
+
 
 @login_required
 def aset_tetap_list(request: HttpRequest) -> HttpResponse:
@@ -69,10 +71,10 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         tahun_ke = 1
 
-    # Preview amount (for time-based methods)
+    # Preview amount (for time-based methods), default 30 days
     preview_amount = Decimal('0')
     if not needs_activity_input:
-        preview_amount = calculate_depreciation(record, tahun_ke=tahun_ke)
+        preview_amount = calculate_depreciation(record, tahun_ke=tahun_ke, days=DEFAULT_DAYS)
 
     # Depreciation journal history
     from apps.jurnal.models import JurnalHeader
@@ -88,6 +90,7 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'metode': metode,
         'can_depreciate': record.nilai_buku > record.nilai_residu,
         'dep_journals': dep_journals,
+        'default_days': DEFAULT_DAYS,
     })
 
 
@@ -174,7 +177,7 @@ def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpRespon
             return redirect('aset_tetap:detail', pk=pk)
         depreciation = calculate_depreciation(record, unit_aktual=unit_aktual)
     else:
-        # Allow manual override
+        # Allow manual override; otherwise auto-calculate for given days
         manual_amount = request.POST.get('amount', '')
         if manual_amount:
             try:
@@ -183,14 +186,19 @@ def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpRespon
                 messages.error(request, 'Jumlah penyusutan harus berupa angka.')
                 return redirect('aset_tetap:detail', pk=pk)
         else:
+            try:
+                hari = int(request.POST.get('hari', str(DEFAULT_DAYS)))
+                hari = max(1, hari)
+            except (ValueError, TypeError):
+                hari = DEFAULT_DAYS
             masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
             if masa > 0 and record.tanggal_perolehan:
                 from datetime import date as d
                 years_elapsed = (d.today() - record.tanggal_perolehan).days / Decimal('365.25')
-                tahun_ke = int(years_elapsed) + 1
+                tahun_ke = min(int(years_elapsed) + 1, masa)
             else:
                 tahun_ke = 1
-            depreciation = calculate_depreciation(record, tahun_ke=tahun_ke)
+            depreciation = calculate_depreciation(record, tahun_ke=tahun_ke, days=hari)
 
     try:
         header = process_depreciation(record, depreciation, tanggal)
@@ -203,3 +211,71 @@ def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpRespon
         messages.error(request, str(e))
 
     return redirect('aset_tetap:detail', pk=pk)
+
+
+@login_required
+def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
+    """Process depreciation for all eligible fixed assets in one batch."""
+    from decimal import Decimal
+    from datetime import date as date_cls
+
+    if request.method != 'POST':
+        return redirect('aset_tetap:list')
+
+    tanggal_str = request.POST.get('tanggal', '')
+    try:
+        tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else date_cls.today()
+    except ValueError:
+        tanggal = date_cls.today()
+
+    try:
+        hari = max(1, int(request.POST.get('hari', str(DEFAULT_DAYS))))
+    except (ValueError, TypeError):
+        hari = DEFAULT_DAYS
+
+    records = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis').all()
+    success_count = 0
+    skip_count = 0
+    error_msgs = []
+
+    for record in records:
+        if record.nilai_buku <= record.nilai_residu:
+            skip_count += 1
+            continue
+
+        metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
+        # Skip activity-based methods — require manual input per record
+        if metode in ('service_hours', 'units_of_production'):
+            skip_count += 1
+            continue
+
+        masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+        tahun_ke = 1
+        if masa > 0 and record.tanggal_perolehan:
+            years_elapsed = (tanggal - record.tanggal_perolehan).days / Decimal('365.25')
+            tahun_ke = min(int(years_elapsed) + 1, masa)
+
+        depreciation = calculate_depreciation(record, tahun_ke=tahun_ke, days=hari)
+        if depreciation <= 0:
+            skip_count += 1
+            continue
+
+        try:
+            process_depreciation(record, depreciation, tanggal)
+            success_count += 1
+        except ValueError as e:
+            error_msgs.append(f'{record.aset_number}: {e}')
+
+    if success_count:
+        messages.success(
+            request,
+            f'Bulk penyusutan selesai: {success_count} aset diproses ({hari} hari), '
+            f'{skip_count} dilewati.',
+        )
+    else:
+        messages.warning(request, f'Tidak ada aset yang diproses. {skip_count} dilewati.')
+
+    for msg in error_msgs[:5]:
+        messages.error(request, msg)
+
+    return redirect('aset_tetap:list')

@@ -11,6 +11,8 @@ from .forms import AsetLainnyaRecordForm
 from .models import AsetLainnyaRecord
 from .services import calculate_amortization, process_amortization
 
+DEFAULT_DAYS = 30  # monthly processing default
+
 
 @login_required
 def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
@@ -56,7 +58,7 @@ def aset_lainnya_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
     preview_amount = Decimal('0')
     if not needs_activity_input:
-        preview_amount = calculate_amortization(record)
+        preview_amount = calculate_amortization(record, days=DEFAULT_DAYS)
 
     from apps.jurnal.models import JurnalHeader
     amort_journals = JurnalHeader.objects.filter(
@@ -163,7 +165,11 @@ def aset_lainnya_process_amortization(request: HttpRequest, pk: int) -> HttpResp
                 messages.error(request, 'Jumlah amortisasi harus berupa angka.')
                 return redirect('aset_lainnya:detail', pk=pk)
         else:
-            amortization = calculate_amortization(record)
+            try:
+                hari = max(1, int(request.POST.get('hari', str(DEFAULT_DAYS))))
+            except (ValueError, TypeError):
+                hari = DEFAULT_DAYS
+            amortization = calculate_amortization(record, days=hari)
 
     try:
         header = process_amortization(record, amortization, tanggal)
@@ -176,3 +182,65 @@ def aset_lainnya_process_amortization(request: HttpRequest, pk: int) -> HttpResp
         messages.error(request, str(e))
 
     return redirect('aset_lainnya:detail', pk=pk)
+
+
+@login_required
+def aset_lainnya_bulk_amortization(request: HttpRequest) -> HttpResponse:
+    """Process amortization for all eligible other assets in one batch."""
+    from decimal import Decimal
+    from datetime import date as date_cls
+
+    if request.method != 'POST':
+        return redirect('aset_lainnya:list')
+
+    tanggal_str = request.POST.get('tanggal', '')
+    try:
+        tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else date_cls.today()
+    except ValueError:
+        tanggal = date_cls.today()
+
+    try:
+        hari = max(1, int(request.POST.get('hari', str(DEFAULT_DAYS))))
+    except (ValueError, TypeError):
+        hari = DEFAULT_DAYS
+
+    records = AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis').all()
+    success_count = 0
+    skip_count = 0
+    error_msgs = []
+
+    for record in records:
+        if record.nilai_buku <= record.nilai_residu:
+            skip_count += 1
+            continue
+
+        metode = record.metode_amortisasi or (record.item.metode_amortisasi if record.item else '')
+        # Skip activity-based methods — require manual input per record
+        if metode in ('units_of_production', 'revenue_based'):
+            skip_count += 1
+            continue
+
+        amortization = calculate_amortization(record, days=hari)
+        if amortization <= 0:
+            skip_count += 1
+            continue
+
+        try:
+            process_amortization(record, amortization, tanggal)
+            success_count += 1
+        except ValueError as e:
+            error_msgs.append(f'{record.aset_number}: {e}')
+
+    if success_count:
+        messages.success(
+            request,
+            f'Bulk amortisasi selesai: {success_count} aset diproses ({hari} hari), '
+            f'{skip_count} dilewati.',
+        )
+    else:
+        messages.warning(request, f'Tidak ada aset yang diproses. {skip_count} dilewati.')
+
+    for msg in error_msgs[:5]:
+        messages.error(request, msg)
+
+    return redirect('aset_lainnya:list')
