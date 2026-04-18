@@ -799,10 +799,12 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
     elif tipe_item == 'ATP':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
         create_kwargs['metode_penyusutan'] = data.get('metode_penyusutan', '')
+        create_kwargs['nilai_residu'] = data.get('nilai_residu') or 0
     # Fields for Aset Lainnya (ALL)
     elif tipe_item == 'ALL':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
         create_kwargs['metode_amortisasi'] = data.get('metode_amortisasi', '')
+        create_kwargs['nilai_residu'] = data.get('nilai_residu') or 0
 
     item = ItemMasterPurchase.objects.create(**create_kwargs)
     if eb_ids:

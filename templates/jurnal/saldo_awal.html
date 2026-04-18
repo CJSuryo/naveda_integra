@@ -256,16 +256,22 @@
             <input type="number" id="modal_masa_manfaat_atp" class="ni-input" min="1">
           </div>
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Metode Penyusutan</label>
-          <select id="modal_metode_penyusutan" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="straight_line">Garis Lurus (Straight Line)</option>
-            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
-            <option value="double_declining">Saldo Menurun Ganda (Double Declining Balance)</option>
-            <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years Digits)</option>
-            <option value="units_of_production">Unit Produksi (Units of Production)</option>
-          </select>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Metode Penyusutan</label>
+            <select id="modal_metode_penyusutan" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="double_declining">Saldo Menurun Ganda (Double Declining Balance)</option>
+              <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years Digits)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Nilai Residu</label>
+            <input type="number" id="modal_nilai_residu_atp" class="ni-input" min="0" step="1" placeholder="0">
+          </div>
         </div>
       </div>
       <!-- Aset Lainnya fields (ALL) -->
@@ -280,15 +286,21 @@
             <input type="number" id="modal_masa_manfaat_all" class="ni-input" min="1">
           </div>
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Metode Amortisasi</label>
-          <select id="modal_metode_amortisasi" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="straight_line">Garis Lurus (Straight Line)</option>
-            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
-            <option value="units_of_production">Unit Produksi (Units of Production)</option>
-            <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
-          </select>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Metode Amortisasi</label>
+            <select id="modal_metode_amortisasi" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+              <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Nilai Residu</label>
+            <input type="number" id="modal_nilai_residu_all" class="ni-input" min="0" step="1" placeholder="0">
+          </div>
         </div>
       </div>
       <div class="ni-form-group">
@@ -356,15 +368,13 @@
     </div>
     <div class="ni-modal__body">
       <div class="ni-table-wrapper">
-        <table class="ni-jm-table" style="min-width:520px;">
+        <table class="ni-jm-table" style="min-width:420px;">
           <thead>
             <tr>
-              <th style="width:40%">Item Aset Tetap</th>
-              <th style="width:12%">Qty</th>
-              <th style="width:18%">Nilai Perolehan/Unit (Rp)</th>
-              <th style="width:14%">Masa Manfaat</th>
-              <th style="width:16%">Metode Penyusutan</th>
-              <th style="width:8%"></th>
+              <th style="width:48%">Item Aset Tetap</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:28%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:10%"></th>
             </tr>
           </thead>
           <tbody id="saModalAsetTetapRows"></tbody>
@@ -398,15 +408,13 @@
     </div>
     <div class="ni-modal__body">
       <div class="ni-table-wrapper">
-        <table class="ni-jm-table" style="min-width:520px;">
+        <table class="ni-jm-table" style="min-width:420px;">
           <thead>
             <tr>
-              <th style="width:40%">Item Aset Lainnya</th>
-              <th style="width:12%">Qty</th>
-              <th style="width:18%">Nilai Perolehan/Unit (Rp)</th>
-              <th style="width:14%">Masa Manfaat</th>
-              <th style="width:16%">Metode Amortisasi</th>
-              <th style="width:8%"></th>
+              <th style="width:48%">Item Aset Lainnya</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:28%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:10%"></th>
             </tr>
           </thead>
           <tbody id="saModalAsetLainnyaRows"></tbody>
@@ -977,10 +985,10 @@
     loadModalKategori(tipe, getEBLv1Id());
   };
 
-  window.saOpenItemModal = function (prefillNama, callback) {
+  window.saOpenItemModal = function (prefillNama, callback, tipeHint) {
     _itemCreateCallback = callback || null;
     document.getElementById('modal_nama').value = prefillNama || '';
-    document.getElementById('modal_tipe_item').value = 'RM';
+    document.getElementById('modal_tipe_item').value = tipeHint || 'RM';
     document.getElementById('modal_error').style.display = 'none';
     initModalCoaTomSelects();
     _modalCoaTomSelect.clear();
@@ -992,8 +1000,10 @@
     document.getElementById('modal_metode_biaya').value = '';
     document.getElementById('modal_masa_manfaat_atp').value = '';
     document.getElementById('modal_metode_penyusutan').value = '';
+    document.getElementById('modal_nilai_residu_atp').value = '';
     document.getElementById('modal_masa_manfaat_all').value = '';
     document.getElementById('modal_metode_amortisasi').value = '';
+    document.getElementById('modal_nilai_residu_all').value = '';
     // Show EB name
     var ebSel = document.getElementById('saEntitasBisnis');
     var ebText = ebSel ? ebSel.options[ebSel.selectedIndex].text : '';
@@ -1044,10 +1054,12 @@
       payload.coa_account_id = _modalCoaAtpTomSelect ? _modalCoaAtpTomSelect.getValue() : null;
       payload.masa_manfaat = document.getElementById('modal_masa_manfaat_atp').value || null;
       payload.metode_penyusutan = document.getElementById('modal_metode_penyusutan').value || '';
+      payload.nilai_residu = parseFloat(document.getElementById('modal_nilai_residu_atp').value || 0);
     } else if (tipeItem === 'ALL') {
       payload.coa_account_id = _modalCoaAllTomSelect ? _modalCoaAllTomSelect.getValue() : null;
       payload.masa_manfaat = document.getElementById('modal_masa_manfaat_all').value || null;
       payload.metode_amortisasi = document.getElementById('modal_metode_amortisasi').value || '';
+      payload.nilai_residu = parseFloat(document.getElementById('modal_nilai_residu_all').value || 0);
     }
     fetch(itemCreateUrl, {
       method: 'POST',
@@ -1187,8 +1199,6 @@
       '<td><select id="at_modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
       '<td><input type="number" id="at_modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saAsetTetapUpdateRow(' + mrid + ')"></td>' +
       '<td><input type="number" id="at_modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saAsetTetapUpdateRow(' + mrid + ')"></td>' +
-      '<td><input type="text" id="at_modal_masa_' + mrid + '" class="ni-jm-input" placeholder="Bulan" value=""></td>' +
-      '<td><input type="text" id="at_modal_metode_' + mrid + '" class="ni-jm-input" placeholder="Metode" value=""></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalAsetTetapRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
     tbody.appendChild(tr);
 
@@ -1219,7 +1229,7 @@
             selEl.tomselect.addOption(newOpt);
             selEl.tomselect.setValue(newOpt.id, true);
           }
-        });
+        }, 'ATP');
         callback();
       },
       createFilter: function (input) { return input.trim().length >= 2; },
@@ -1240,8 +1250,6 @@
       }
       if (prefill.qty) { document.getElementById('at_modal_qty_' + mrid).value = prefill.qty; }
       if (prefill.unit_price) { document.getElementById('at_modal_hpp_' + mrid).value = prefill.unit_price; }
-      if (prefill.masa_manfaat) { document.getElementById('at_modal_masa_' + mrid).value = prefill.masa_manfaat; }
-      if (prefill.metode_penyusutan) { document.getElementById('at_modal_metode_' + mrid).value = prefill.metode_penyusutan; }
       saAsetTetapUpdateRow(mrid);
     }
     lucide.createIcons();
@@ -1283,8 +1291,6 @@
       var selEl = document.getElementById('at_modal_item_' + mrid);
       var qty = parseFloat(document.getElementById('at_modal_qty_' + mrid).value || 0);
       var hpp = parseFloat(document.getElementById('at_modal_hpp_' + mrid).value || 0);
-      var masa = (document.getElementById('at_modal_masa_' + mrid) || {}).value || '';
-      var metode = (document.getElementById('at_modal_metode_' + mrid) || {}).value || '';
       if (!selEl || !selEl.value || qty <= 0 || hpp < 0) return;
       var ts = selEl.tomselect;
       var opt = ts ? ts.options[selEl.value] : null;
@@ -1293,8 +1299,6 @@
         item_text: opt ? opt.text : String(selEl.value),
         qty: qty,
         unit_price: hpp,
-        masa_manfaat: masa.trim(),
-        metode_penyusutan: metode.trim(),
         total: qty * hpp,
       });
     });
@@ -1364,8 +1368,6 @@
       '<td><select id="al_modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
       '<td><input type="number" id="al_modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saAsetLainnyaUpdateRow(' + mrid + ')"></td>' +
       '<td><input type="number" id="al_modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saAsetLainnyaUpdateRow(' + mrid + ')"></td>' +
-      '<td><input type="text" id="al_modal_masa_' + mrid + '" class="ni-jm-input" placeholder="Bulan" value=""></td>' +
-      '<td><input type="text" id="al_modal_metode_' + mrid + '" class="ni-jm-input" placeholder="Metode" value=""></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalAsetLainnyaRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
     tbody.appendChild(tr);
 
@@ -1396,7 +1398,7 @@
             selEl.tomselect.addOption(newOpt);
             selEl.tomselect.setValue(newOpt.id, true);
           }
-        });
+        }, 'ALL');
         callback();
       },
       createFilter: function (input) { return input.trim().length >= 2; },
@@ -1417,8 +1419,6 @@
       }
       if (prefill.qty) { document.getElementById('al_modal_qty_' + mrid).value = prefill.qty; }
       if (prefill.unit_price) { document.getElementById('al_modal_hpp_' + mrid).value = prefill.unit_price; }
-      if (prefill.masa_manfaat) { document.getElementById('al_modal_masa_' + mrid).value = prefill.masa_manfaat; }
-      if (prefill.metode_amortisasi) { document.getElementById('al_modal_metode_' + mrid).value = prefill.metode_amortisasi; }
       saAsetLainnyaUpdateRow(mrid);
     }
     lucide.createIcons();
@@ -1460,8 +1460,6 @@
       var selEl = document.getElementById('al_modal_item_' + mrid);
       var qty = parseFloat(document.getElementById('al_modal_qty_' + mrid).value || 0);
       var hpp = parseFloat(document.getElementById('al_modal_hpp_' + mrid).value || 0);
-      var masa = (document.getElementById('al_modal_masa_' + mrid) || {}).value || '';
-      var metode = (document.getElementById('al_modal_metode_' + mrid) || {}).value || '';
       if (!selEl || !selEl.value || qty <= 0 || hpp < 0) return;
       var ts = selEl.tomselect;
       var opt = ts ? ts.options[selEl.value] : null;
@@ -1470,8 +1468,6 @@
         item_text: opt ? opt.text : String(selEl.value),
         qty: qty,
         unit_price: hpp,
-        masa_manfaat: masa.trim(),
-        metode_amortisasi: metode.trim(),
         total: qty * hpp,
       });
     });

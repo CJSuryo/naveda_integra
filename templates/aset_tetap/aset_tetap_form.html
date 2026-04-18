@@ -60,6 +60,13 @@
           {% if form.akumulasi_penyusutan.errors %}<div class="ni-form-error">{{ form.akumulasi_penyusutan.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.nilai_residu.label }}</label>
+          {{ form.nilai_residu }}
+          {% if form.nilai_residu.errors %}<div class="ni-form-error">{{ form.nilai_residu.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
           <label class="ni-form-label">{{ form.lokasi.label }}</label>
           {{ form.lokasi }}
           {% if form.lokasi.errors %}<div class="ni-form-error">{{ form.lokasi.errors }}</div>{% endif %}

@@ -1101,8 +1101,6 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             item_pk = int(str(d.get('item_id', '')))
                             qty = Decimal(str(d.get('qty') or 0))
                             unit_price = Decimal(str(d.get('unit_price') or 0))
-                            masa_manfaat = d.get('masa_manfaat')
-                            metode_penyusutan = d.get('metode_penyusutan')
                         except (ValueError, TypeError):
                             continue
                         if qty <= 0 or unit_price < 0:
@@ -1117,8 +1115,8 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             quantity=qty,
                             harga_perolehan=unit_price,
                             tanggal_perolehan=tanggal,
-                            masa_manfaat=masa_manfaat or item.masa_manfaat,
-                            metode_penyusutan=metode_penyusutan or item.metode_penyusutan,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_penyusutan=item.metode_penyusutan,
                         )
 
             # ── Aset Lainnya detail: AsetLainnyaRecord ─────────────
@@ -1143,8 +1141,6 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             item_pk = int(str(d.get('item_id', '')))
                             qty = Decimal(str(d.get('qty') or 0))
                             unit_price = Decimal(str(d.get('unit_price') or 0))
-                            masa_manfaat = d.get('masa_manfaat')
-                            metode_amortisasi = d.get('metode_amortisasi')
                         except (ValueError, TypeError):
                             continue
                         if qty <= 0 or unit_price < 0:
@@ -1159,8 +1155,8 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                             quantity=qty,
                             harga_perolehan=unit_price,
                             tanggal_perolehan=tanggal,
-                            masa_manfaat=masa_manfaat or item.masa_manfaat,
-                            metode_amortisasi=metode_amortisasi or item.metode_amortisasi,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_amortisasi=item.metode_amortisasi,
                         )
 
             # ── Modal Disetor detail: ModalDisetor + Pemilik ─────────────
@@ -1363,8 +1359,6 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             item_pk = int(str(d.get('item_id', '')))
                             qty = Decimal(str(d.get('qty') or 0))
                             unit_price = Decimal(str(d.get('unit_price') or 0))
-                            masa_manfaat = d.get('masa_manfaat')
-                            metode_penyusutan = d.get('metode_penyusutan')
                         except (ValueError, TypeError):
                             continue
                         if qty <= 0 or unit_price < 0:
@@ -1380,8 +1374,8 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             quantity=qty,
                             harga_perolehan=unit_price,
                             tanggal_perolehan=tanggal,
-                            masa_manfaat=masa_manfaat or item.masa_manfaat,
-                            metode_penyusutan=metode_penyusutan or item.metode_penyusutan,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_penyusutan=item.metode_penyusutan,
                         )
 
             # ── Aset Lainnya ───────────────────────────────────────────────
@@ -1406,8 +1400,6 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             item_pk = int(str(d.get('item_id', '')))
                             qty = Decimal(str(d.get('qty') or 0))
                             unit_price = Decimal(str(d.get('unit_price') or 0))
-                            masa_manfaat = d.get('masa_manfaat')
-                            metode_amortisasi = d.get('metode_amortisasi')
                         except (ValueError, TypeError):
                             continue
                         if qty <= 0 or unit_price < 0:
@@ -1423,8 +1415,8 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             quantity=qty,
                             harga_perolehan=unit_price,
                             tanggal_perolehan=tanggal,
-                            masa_manfaat=masa_manfaat or item.masa_manfaat,
-                            metode_amortisasi=metode_amortisasi or item.metode_amortisasi,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_amortisasi=item.metode_amortisasi,
                         )
 
             # ── Modal Disetor ──────────────────────────────────────────────

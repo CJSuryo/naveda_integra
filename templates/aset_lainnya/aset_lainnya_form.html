@@ -53,6 +53,13 @@
           {% if form.akumulasi_amortisasi.errors %}<div class="ni-form-error">{{ form.akumulasi_amortisasi.errors }}</div>{% endif %}
         </div>
       </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.nilai_residu.label }}</label>
+          {{ form.nilai_residu }}
+          {% if form.nilai_residu.errors %}<div class="ni-form-error">{{ form.nilai_residu.errors }}</div>{% endif %}
+        </div>
+      </div>
       <hr style="margin:16px 0;border:none;border-top:1px solid var(--ni-border);">
       <p style="font-size:0.8125rem;color:var(--ni-text-muted);margin:0 0 12px;">Override Parameter (opsional — kosongkan untuk pakai nilai item master)</p>
       <div class="ni-form-row">

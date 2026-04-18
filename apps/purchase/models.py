@@ -145,6 +145,13 @@ class ItemMasterPurchase(models.Model):
         verbose_name='Metode Amortisasi',
         help_text='Metode amortisasi untuk Aset Lainnya.',
     )
+    nilai_residu = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        default=0,
+        verbose_name='Nilai Residu',
+        help_text='Nilai sisa aset di akhir masa manfaat (untuk ATP/ALL).',
+    )
     metode_biaya_persediaan = models.CharField(
         max_length=30,
         choices=METODE_BIAYA_PERSEDIAAN_CHOICES,
