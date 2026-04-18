@@ -966,6 +966,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         '1.1.9': 'persediaan',
         '1.1.10': 'persediaan',
         '1.2': 'aset_tetap',
+        '1.2.3': 'aset_tetap',
         '1.3': 'aset_lainnya',
         '3.1.1': 'modal_disetor',
     }
@@ -1225,6 +1226,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
         '1.1.9': 'persediaan',
         '1.1.10': 'persediaan',
         '1.2': 'aset_tetap',
+        '1.2.3': 'aset_tetap',
         '1.3': 'aset_lainnya',
         '3.1.1': 'modal_disetor',
     }

@@ -1145,6 +1145,360 @@
     document.getElementById('saModalPersediaanBackdrop').classList.remove('ni-modal-backdrop--visible');
   };
 
+  // ── Aset Tetap Detail Modal ───────────────────────────────────────────────
+  var _atActiveRid = null;
+  var _atRowCount = 0;
+  var _atTomSelects = [];
+
+  window.saOpenAsetTetapModal = function (rid) {
+    _atActiveRid = rid;
+    var info = _rowAkunInfo[rid] || {};
+    document.getElementById('saModalAsetTetapAkunNama').textContent = info.nama || '';
+    _clearAsetTetapRows();
+    var existing = _rowDetailMap[rid];
+    if (existing && existing.detail_rows && existing.detail_rows.length) {
+      existing.detail_rows.forEach(function (d) { saModalAsetTetapAddRow(d); });
+    } else {
+      saModalAsetTetapAddRow();
+    }
+    document.getElementById('saModalAsetTetapBackdrop').classList.add('ni-modal-backdrop--visible');
+  };
+
+  window.saCloseAsetTetapModal = function () {
+    document.getElementById('saModalAsetTetapBackdrop').classList.remove('ni-modal-backdrop--visible');
+    _atActiveRid = null;
+  };
+
+  function _clearAsetTetapRows() {
+    _atTomSelects.forEach(function (ts) { try { ts.destroy(); } catch (e) {} });
+    _atTomSelects = [];
+    document.getElementById('saModalAsetTetapRows').innerHTML = '';
+    _atRowCount = 0;
+    saUpdateAsetTetapTotal();
+  }
+
+  window.saModalAsetTetapAddRow = function (prefill) {
+    _atRowCount++;
+    var mrid = _atRowCount;
+    var tbody = document.getElementById('saModalAsetTetapRows');
+    var tr = document.createElement('tr');
+    tr.id = 'at_modal_row_' + mrid;
+    tr.innerHTML =
+      '<td><select id="at_modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
+      '<td><input type="number" id="at_modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saAsetTetapUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="number" id="at_modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saAsetTetapUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="text" id="at_modal_masa_' + mrid + '" class="ni-jm-input" placeholder="Bulan" value=""></td>' +
+      '<td><input type="text" id="at_modal_metode_' + mrid + '" class="ni-jm-input" placeholder="Metode" value=""></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalAsetTetapRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var currentMrid = mrid;
+    var ebLv1 = getEBLv1Id();
+    var ts = new TomSelect('#at_modal_item_' + mrid, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      maxOptions: false,
+      placeholder: 'Ketik kode/nama item…',
+      preload: 'focus',
+      shouldLoad: function () { return false; },
+      load: function (query, callback) {
+        var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
+        if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function () { saAsetTetapUpdateRow(currentMrid); },
+      create: function (input, callback) {
+        saOpenItemModal(input, function (newOpt) {
+          var selEl = document.getElementById('at_modal_item_' + currentMrid);
+          if (selEl && selEl.tomselect) {
+            selEl.tomselect.addOption(newOpt);
+            selEl.tomselect.setValue(newOpt.id, true);
+          }
+        });
+        callback();
+      },
+      createFilter: function (input) { return input.trim().length >= 2; },
+      render: {
+        option_create: function (data, escape) {
+          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong></div>';
+        },
+      },
+      dropdownParent: 'body',
+    });
+    _atTomSelects.push(ts);
+
+    if (prefill) {
+      if (prefill.item_id) {
+        var opt = { id: String(prefill.item_id), text: prefill.item_text || String(prefill.item_id) };
+        ts.addOption(opt);
+        ts.setValue(String(prefill.item_id), true);
+      }
+      if (prefill.qty) { document.getElementById('at_modal_qty_' + mrid).value = prefill.qty; }
+      if (prefill.unit_price) { document.getElementById('at_modal_hpp_' + mrid).value = prefill.unit_price; }
+      if (prefill.masa_manfaat) { document.getElementById('at_modal_masa_' + mrid).value = prefill.masa_manfaat; }
+      if (prefill.metode_penyusutan) { document.getElementById('at_modal_metode_' + mrid).value = prefill.metode_penyusutan; }
+      saAsetTetapUpdateRow(mrid);
+    }
+    lucide.createIcons();
+    saUpdateAsetTetapTotal();
+  };
+
+  window.saModalAsetTetapRemoveRow = function (mrid) {
+    var tr = document.getElementById('at_modal_row_' + mrid);
+    if (!tr) return;
+    var sel = document.getElementById('at_modal_item_' + mrid);
+    if (sel && sel.tomselect) {
+      var idx = _atTomSelects.indexOf(sel.tomselect);
+      if (idx !== -1) _atTomSelects.splice(idx, 1);
+      sel.tomselect.destroy();
+    }
+    tr.remove();
+    saUpdateAsetTetapTotal();
+  };
+
+  window.saAsetTetapUpdateRow = function (mrid) {
+    saUpdateAsetTetapTotal();
+  };
+
+  function saUpdateAsetTetapTotal() {
+    var total = 0;
+    document.querySelectorAll('#saModalAsetTetapRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('at_modal_row_', '');
+      var qty = parseFloat(document.getElementById('at_modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('at_modal_hpp_' + mrid).value || 0);
+      total += qty * hpp;
+    });
+    document.getElementById('saModalAsetTetapTotal').textContent = 'Rp ' + formatNum(total);
+  }
+
+  function _collectAsetTetapRows() {
+    var results = [];
+    document.querySelectorAll('#saModalAsetTetapRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('at_modal_row_', '');
+      var selEl = document.getElementById('at_modal_item_' + mrid);
+      var qty = parseFloat(document.getElementById('at_modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('at_modal_hpp_' + mrid).value || 0);
+      var masa = (document.getElementById('at_modal_masa_' + mrid) || {}).value || '';
+      var metode = (document.getElementById('at_modal_metode_' + mrid) || {}).value || '';
+      if (!selEl || !selEl.value || qty <= 0 || hpp < 0) return;
+      var ts = selEl.tomselect;
+      var opt = ts ? ts.options[selEl.value] : null;
+      results.push({
+        item_id: selEl.value,
+        item_text: opt ? opt.text : String(selEl.value),
+        qty: qty,
+        unit_price: hpp,
+        masa_manfaat: masa.trim(),
+        metode_penyusutan: metode.trim(),
+        total: qty * hpp,
+      });
+    });
+    return results;
+  }
+
+  window.saConfirmAsetTetapDetail = function () {
+    var rid = _atActiveRid;
+    if (!rid) return;
+    var detailRows = _collectAsetTetapRows();
+    if (!detailRows.length) {
+      alert('Minimal 1 aset tetap harus diisi dengan item, qty > 0, dan nilai perolehan valid.');
+      return;
+    }
+    var grandTotal = detailRows.reduce(function (s, r) { return s + r.total; }, 0);
+    _rowDetailMap[rid] = { type: 'aset_tetap', detail_rows: detailRows };
+    var debitEl = document.getElementById('debit_' + rid);
+    if (debitEl) {
+      debitEl.value = grandTotal;
+      debitEl.setAttribute('data-detail-locked', '1');
+      debitEl.style.background = 'var(--ni-primary-light)';
+    }
+    _updateDetailBadge(rid);
+    saUpdateTotals();
+    saCloseAsetTetapModal();
+  };
+
+  // ── Aset Lainnya Detail Modal ───────────────────────────────────────────
+  var _alActiveRid = null;
+  var _alRowCount = 0;
+  var _alTomSelects = [];
+
+  window.saOpenAsetLainnyaModal = function (rid) {
+    _alActiveRid = rid;
+    var info = _rowAkunInfo[rid] || {};
+    document.getElementById('saModalAsetLainnyaAkunNama').textContent = info.nama || '';
+    _clearAsetLainnyaRows();
+    var existing = _rowDetailMap[rid];
+    if (existing && existing.detail_rows && existing.detail_rows.length) {
+      existing.detail_rows.forEach(function (d) { saModalAsetLainnyaAddRow(d); });
+    } else {
+      saModalAsetLainnyaAddRow();
+    }
+    document.getElementById('saModalAsetLainnyaBackdrop').classList.add('ni-modal-backdrop--visible');
+  };
+
+  window.saCloseAsetLainnyaModal = function () {
+    document.getElementById('saModalAsetLainnyaBackdrop').classList.remove('ni-modal-backdrop--visible');
+    _alActiveRid = null;
+  };
+
+  function _clearAsetLainnyaRows() {
+    _alTomSelects.forEach(function (ts) { try { ts.destroy(); } catch (e) {} });
+    _alTomSelects = [];
+    document.getElementById('saModalAsetLainnyaRows').innerHTML = '';
+    _alRowCount = 0;
+    saUpdateAsetLainnyaTotal();
+  }
+
+  window.saModalAsetLainnyaAddRow = function (prefill) {
+    _alRowCount++;
+    var mrid = _alRowCount;
+    var tbody = document.getElementById('saModalAsetLainnyaRows');
+    var tr = document.createElement('tr');
+    tr.id = 'al_modal_row_' + mrid;
+    tr.innerHTML =
+      '<td><select id="al_modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
+      '<td><input type="number" id="al_modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saAsetLainnyaUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="number" id="al_modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saAsetLainnyaUpdateRow(' + mrid + ')"></td>' +
+      '<td><input type="text" id="al_modal_masa_' + mrid + '" class="ni-jm-input" placeholder="Bulan" value=""></td>' +
+      '<td><input type="text" id="al_modal_metode_' + mrid + '" class="ni-jm-input" placeholder="Metode" value=""></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalAsetLainnyaRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var currentMrid = mrid;
+    var ebLv1 = getEBLv1Id();
+    var ts = new TomSelect('#al_modal_item_' + mrid, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: 'text',
+      options: [],
+      maxOptions: false,
+      placeholder: 'Ketik kode/nama item…',
+      preload: 'focus',
+      shouldLoad: function () { return false; },
+      load: function (query, callback) {
+        var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
+        if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
+        fetch(url)
+          .then(function (r) { return r.json(); })
+          .then(function (data) { callback(data); })
+          .catch(function () { callback(); });
+      },
+      onChange: function () { saAsetLainnyaUpdateRow(currentMrid); },
+      create: function (input, callback) {
+        saOpenItemModal(input, function (newOpt) {
+          var selEl = document.getElementById('al_modal_item_' + currentMrid);
+          if (selEl && selEl.tomselect) {
+            selEl.tomselect.addOption(newOpt);
+            selEl.tomselect.setValue(newOpt.id, true);
+          }
+        });
+        callback();
+      },
+      createFilter: function (input) { return input.trim().length >= 2; },
+      render: {
+        option_create: function (data, escape) {
+          return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong></div>';
+        },
+      },
+      dropdownParent: 'body',
+    });
+    _alTomSelects.push(ts);
+
+    if (prefill) {
+      if (prefill.item_id) {
+        var opt = { id: String(prefill.item_id), text: prefill.item_text || String(prefill.item_id) };
+        ts.addOption(opt);
+        ts.setValue(String(prefill.item_id), true);
+      }
+      if (prefill.qty) { document.getElementById('al_modal_qty_' + mrid).value = prefill.qty; }
+      if (prefill.unit_price) { document.getElementById('al_modal_hpp_' + mrid).value = prefill.unit_price; }
+      if (prefill.masa_manfaat) { document.getElementById('al_modal_masa_' + mrid).value = prefill.masa_manfaat; }
+      if (prefill.metode_amortisasi) { document.getElementById('al_modal_metode_' + mrid).value = prefill.metode_amortisasi; }
+      saAsetLainnyaUpdateRow(mrid);
+    }
+    lucide.createIcons();
+    saUpdateAsetLainnyaTotal();
+  };
+
+  window.saModalAsetLainnyaRemoveRow = function (mrid) {
+    var tr = document.getElementById('al_modal_row_' + mrid);
+    if (!tr) return;
+    var sel = document.getElementById('al_modal_item_' + mrid);
+    if (sel && sel.tomselect) {
+      var idx = _alTomSelects.indexOf(sel.tomselect);
+      if (idx !== -1) _alTomSelects.splice(idx, 1);
+      sel.tomselect.destroy();
+    }
+    tr.remove();
+    saUpdateAsetLainnyaTotal();
+  };
+
+  window.saAsetLainnyaUpdateRow = function (mrid) {
+    saUpdateAsetLainnyaTotal();
+  };
+
+  function saUpdateAsetLainnyaTotal() {
+    var total = 0;
+    document.querySelectorAll('#saModalAsetLainnyaRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('al_modal_row_', '');
+      var qty = parseFloat(document.getElementById('al_modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('al_modal_hpp_' + mrid).value || 0);
+      total += qty * hpp;
+    });
+    document.getElementById('saModalAsetLainnyaTotal').textContent = 'Rp ' + formatNum(total);
+  }
+
+  function _collectAsetLainnyaRows() {
+    var results = [];
+    document.querySelectorAll('#saModalAsetLainnyaRows tr').forEach(function (tr) {
+      var mrid = tr.id.replace('al_modal_row_', '');
+      var selEl = document.getElementById('al_modal_item_' + mrid);
+      var qty = parseFloat(document.getElementById('al_modal_qty_' + mrid).value || 0);
+      var hpp = parseFloat(document.getElementById('al_modal_hpp_' + mrid).value || 0);
+      var masa = (document.getElementById('al_modal_masa_' + mrid) || {}).value || '';
+      var metode = (document.getElementById('al_modal_metode_' + mrid) || {}).value || '';
+      if (!selEl || !selEl.value || qty <= 0 || hpp < 0) return;
+      var ts = selEl.tomselect;
+      var opt = ts ? ts.options[selEl.value] : null;
+      results.push({
+        item_id: selEl.value,
+        item_text: opt ? opt.text : String(selEl.value),
+        qty: qty,
+        unit_price: hpp,
+        masa_manfaat: masa.trim(),
+        metode_amortisasi: metode.trim(),
+        total: qty * hpp,
+      });
+    });
+    return results;
+  }
+
+  window.saConfirmAsetLainnyaDetail = function () {
+    var rid = _alActiveRid;
+    if (!rid) return;
+    var detailRows = _collectAsetLainnyaRows();
+    if (!detailRows.length) {
+      alert('Minimal 1 aset lainnya harus diisi dengan item, qty > 0, dan nilai perolehan valid.');
+      return;
+    }
+    var grandTotal = detailRows.reduce(function (s, r) { return s + r.total; }, 0);
+    _rowDetailMap[rid] = { type: 'aset_lainnya', detail_rows: detailRows };
+    var debitEl = document.getElementById('debit_' + rid);
+    if (debitEl) {
+      debitEl.value = grandTotal;
+      debitEl.setAttribute('data-detail-locked', '1');
+      debitEl.style.background = 'var(--ni-primary-light)';
+    }
+    _updateDetailBadge(rid);
+    saUpdateTotals();
+    saCloseAsetLainnyaModal();
+  };
+
   // ── Modal Disetor modal ───────────────────────────────────────────────────
   var _mdActiveRid = null;
   var _mdRowCount = 0;
