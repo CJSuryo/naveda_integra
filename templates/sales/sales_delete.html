@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Sales {{ sales.transaction_id }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Transaksi Sales</h1>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
+  <div class="ni-card__body" style="padding:32px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <h3 style="margin:0 0 4px;font-size:1rem;color:var(--ni-text);">Hapus <strong>{{ sales.transaction_id }}</strong>?</h3>
+      <p style="margin:0;color:var(--ni-text-muted);font-size:0.875rem;">{{ sales.tanggal }} — {{ sales.deskripsi|default:"—" }}</p>
+    </div>
+
+    {% if related_journals %}
+    <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+      <strong>{{ related_journals|length }} jurnal akan ikut dihapus:</strong>
+    </div>
+    <div class="ni-table-wrapper" style="margin-bottom:20px;">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor Jurnal</th>
+            <th>Tanggal</th>
+            <th>Uraian</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in related_journals %}
+          <tr>
+            <td><code style="font-size:0.8rem;">{{ j.nomor_transaksi }}</code></td>
+            <td>{{ j.tanggal }}</td>
+            <td>{{ j.uraian_transaksi }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;text-align:center;">
+      Tidak ada jurnal otomatis terkait.
+    </p>
+    {% endif %}
+
+    <p style="font-size:0.875rem;color:var(--ni-danger);margin-bottom:20px;text-align:center;">
+      <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:middle;"></i>
+      Alokasi FIFO akan dikembalikan dan stok inventory akan dipulihkan.
+    </p>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'sales:detail' sales.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

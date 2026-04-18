@@ -1,4 +1,5 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Hapus Modal Disetor{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -6,31 +7,62 @@
     <h1 class="ni-page-header__title">Hapus Modal Disetor</h1>
   </div>
 </div>
-<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
-  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
-    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
-      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
+  <div class="ni-card__body" style="padding:32px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <h3 style="margin:0;font-size:1rem;color:var(--ni-text);">Konfirmasi Hapus</h3>
     </div>
-    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
-      Hapus modal disetor <strong>{{ record.pemilik.nama }}</strong>?
-    </p>
-    {% if record.jurnal_header and not record.jurnal_header.is_saldo_awal %}
-    <p style="font-size:0.875rem;color:var(--ni-danger);margin-bottom:20px;">
-      Jurnal terkait ({{ record.jurnal_header.nomor_transaksi }}) juga akan dihapus.
-    </p>
-    {% else %}
-    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
-      Rekaman akan dihapus. Jurnal saldo awal tidak terpengaruh.
+
+    {% if record.jurnal_header %}
+    <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+      <strong>Jurnal {{ record.jurnal_header.nomor_transaksi }} akan dihapus bersama data berikut:</strong>
+    </div>
+    {% endif %}
+
+    <div class="ni-table-wrapper" style="margin-bottom:20px;">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Pemilik</th>
+            <th class="ni-text-right">Jumlah Modal</th>
+            <th>Tanggal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in siblings %}
+          <tr{% if s.pk == record.pk %} style="background:var(--ni-primary-light);"{% endif %}>
+            <td><strong>{{ s.pemilik.nama }}</strong></td>
+            <td class="ni-text-right">Rp {{ s.jumlah_modal|floatformat:0|intcomma }}</td>
+            <td>{{ s.tanggal_setor }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if siblings|length > 1 %}
+    <p style="font-size:0.875rem;color:var(--ni-danger);margin-bottom:16px;">
+      <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:middle;"></i>
+      Menghapus salah satu data akan menghapus <strong>semua {{ siblings|length }} baris</strong> dalam transaksi ini beserta jurnalnya.
     </p>
     {% endif %}
+
+    {% if record.jurnal_header and record.jurnal_header.is_saldo_awal %}
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:16px;">
+      Jurnal merupakan saldo awal dan tidak akan dihapus dari buku besar.
+    </p>
+    {% endif %}
+
     <form method="post">
       {% csrf_token %}
       <div class="ni-btn-row" style="justify-content:center;">
-        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus Semua</button>
         <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
 </div>
 {% endblock %}
-</content>

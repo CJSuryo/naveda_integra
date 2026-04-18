@@ -139,3 +139,50 @@ class JurnalAutomasiAkun(models.Model):
 
     def __str__(self) -> str:
         return f'{self.automasi.nama} → {self.akun}'
+
+
+# ── Jurnal Terhapus ──────────────────────────────────────────────────────────
+
+class JurnalTerhapus(models.Model):
+    MODULE_CHOICES = [
+        ('ekuitas', 'Modal Disetor'),
+        ('purchase', 'Purchase'),
+        ('sales', 'Sales'),
+        ('inventory', 'Inventory'),
+        ('aset_tetap', 'Aset Tetap'),
+        ('aset_lainnya', 'Aset Lainnya'),
+        ('manual', 'Jurnal Manual'),
+        ('saldo_awal', 'Saldo Awal'),
+        ('lainnya', 'Lainnya'),
+    ]
+
+    nomor_transaksi = models.CharField(max_length=100, db_index=True, verbose_name='Nomor Transaksi')
+    uraian_transaksi = models.CharField(max_length=512, verbose_name='Uraian')
+    entitas_bisnis_nama = models.CharField(max_length=255, blank=True, verbose_name='Entitas Bisnis')
+    tanggal = models.DateField(null=True, blank=True, verbose_name='Tanggal Transaksi')
+    module = models.CharField(max_length=50, choices=MODULE_CHOICES, default='lainnya', verbose_name='Modul')
+    deleted_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Dihapus Pada')
+    deleted_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='jurnal_terhapus',
+        verbose_name='Dihapus Oleh',
+    )
+    detail_snapshot = models.JSONField(
+        default=list,
+        verbose_name='Detail Jurnal (Snapshot)',
+        help_text='Snapshot baris debit/kredit sebelum jurnal dihapus.',
+    )
+
+    class Meta:
+        verbose_name = 'Jurnal Terhapus'
+        verbose_name_plural = 'Jurnal Terhapus'
+        ordering = ['-deleted_at']
+        indexes = [
+            models.Index(fields=['module', 'deleted_at'], name='idx_jt_module_deleted'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.nomor_transaksi} (dihapus {self.deleted_at.date()})'

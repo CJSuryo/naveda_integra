@@ -1276,3 +1276,43 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
         'prive': prive,
         'saldo_akhir_ekuitas': saldo_akhir_ekuitas,
     })
+
+
+# ── History Jurnal Terhapus ──────────────────────────────────────────────────
+
+@login_required
+def jurnal_terhapus_list(request: HttpRequest) -> HttpResponse:
+    """List all deleted journal records with filters."""
+    from .models import JurnalTerhapus
+
+    qs = JurnalTerhapus.objects.select_related('deleted_by').order_by('-deleted_at')
+
+    # Filters
+    module_filter = request.GET.get('module', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    search = request.GET.get('q', '')
+
+    if module_filter:
+        qs = qs.filter(module=module_filter)
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if search:
+        qs = qs.filter(
+            Q(nomor_transaksi__icontains=search) |
+            Q(uraian_transaksi__icontains=search) |
+            Q(entitas_bisnis_nama__icontains=search)
+        )
+
+    module_choices = JurnalTerhapus.MODULE_CHOICES
+
+    return render(request, 'jurnal/jurnal_terhapus.html', {
+        'records': qs,
+        'module_filter': module_filter,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'search': search,
+        'module_choices': module_choices,
+    })

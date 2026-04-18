@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Aset Lainnya — {{ record.aset_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Aset Lainnya</h1>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
+  <div class="ni-card__body" style="padding:32px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <h3 style="margin:0 0 4px;font-size:1rem;color:var(--ni-text);">Hapus <strong>{{ record.aset_number }}</strong>?</h3>
+      <p style="margin:0;color:var(--ni-text-muted);font-size:0.875rem;">{{ record.item.nama }} — {{ record.entitas_bisnis.nama }}</p>
+    </div>
+
+    {% if amor_journals %}
+    <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+      <strong>{{ amor_journals|length }} jurnal amortisasi akan ikut dihapus:</strong>
+    </div>
+    <div class="ni-table-wrapper" style="margin-bottom:20px;">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor Jurnal</th>
+            <th>Tanggal</th>
+            <th>Uraian</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for j in amor_journals %}
+          <tr>
+            <td><code style="font-size:0.8rem;">{{ j.nomor_transaksi }}</code></td>
+            <td>{{ j.tanggal }}</td>
+            <td>{{ j.uraian_transaksi }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;text-align:center;">
+      Tidak ada jurnal amortisasi yang terkait dengan aset ini.
+    </p>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'aset_lainnya:detail' record.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% load static %}
 {% block title %}Tambah Modal Disetor{% endblock %}
 
@@ -14,9 +14,7 @@
   .ts-wrapper.single .ts-control { border:1px solid var(--ni-border); border-radius:var(--ni-radius-sm); padding:6px 10px; font-size:0.875rem; min-height:unset; }
   .ts-wrapper .ts-dropdown { z-index:2500; position:absolute; }
   body > .ts-dropdown { z-index:3000; }
-  .md-total { font-weight:600; color:var(--ni-primary); }
-  .md-balanced { color:var(--ni-success); }
-  .md-unbalanced { color:var(--ni-danger); }
+  .md-section-title { font-size:0.875rem; font-weight:600; color:var(--ni-text); margin:20px 0 8px; border-bottom:1px solid var(--ni-border); padding-bottom:6px; }
 </style>
 {% endblock %}
 
@@ -24,7 +22,7 @@
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Tambah Modal Disetor</h1>
-    <p class="ni-page-header__subtitle">Catat setoran modal baru dan buat jurnal otomatis</p>
+    <p class="ni-page-header__subtitle">Catat setoran modal satu atau banyak pemilik dalam satu jurnal</p>
   </div>
 </div>
 
@@ -41,7 +39,7 @@
     <form id="mdForm" method="post">
       {% csrf_token %}
 
-      <!-- Header fields -->
+      <!-- Header -->
       <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
@@ -52,66 +50,82 @@
             {% endfor %}
           </select>
         </div>
-        <div class="ni-form-group" style="margin:0;overflow:visible;">
-          <label class="ni-form-label">Pemilik <span style="color:var(--ni-danger)">*</span></label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <div style="flex:1;min-width:0;">
-              <select id="mdPemilikSel" name="pemilik" required>
-                <option value="">— Cari / Pilih Pemilik —</option>
-                {% for p in pemilik_list %}
-                <option value="{{ p.pk }}"{% if posted_pemilik == p.pk|stringformat:'d' %} selected{% endif %}>{{ p.nama }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdOpenPemilikModal()" title="Tambah pemilik baru">
-              <i data-lucide="user-plus" style="width:14px;height:14px"></i>
-            </button>
-          </div>
-        </div>
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tanggal Setor <span style="color:var(--ni-danger)">*</span></label>
           <input type="date" name="tanggal" class="ni-input" value="{{ posted_tanggal }}" required>
         </div>
       </div>
-      <div class="ni-form-group">
-        <label class="ni-form-label">Keterangan</label>
-        <textarea name="keterangan" class="ni-input" rows="2">{{ posted_keterangan }}</textarea>
+
+      <!-- Pemilik rows -->
+      <div class="md-section-title">
+        <i data-lucide="users" style="width:15px;height:15px;vertical-align:middle;margin-right:4px;"></i>
+        Daftar Pemilik &amp; Jumlah Modal
+      </div>
+      <div style="margin-bottom:12px;overflow:visible;">
+        <div class="ni-table-wrapper">
+          <table class="md-table" style="min-width:680px;">
+            <thead>
+              <tr>
+                <th style="width:30%">Pemilik</th>
+                <th style="width:22%">Jumlah Modal (Rp)</th>
+                <th style="width:16%">Kepemilikan (%)</th>
+                <th style="width:24%">Keterangan</th>
+                <th style="width:8%">
+                  <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdOpenPemilikModal()" title="Tambah pemilik baru">
+                    <i data-lucide="user-plus" style="width:13px;height:13px"></i>
+                  </button>
+                </th>
+              </tr>
+            </thead>
+            <tbody id="mdOwnerRows"></tbody>
+          </table>
+        </div>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdAddOwnerRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Pemilik
+      </button>
+
+      <!-- Summary -->
+      <div style="margin:12px 0 20px;padding:10px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);font-size:0.875rem;">
+        Total Modal Pemilik: <strong id="mdOwnerTotal" style="color:var(--ni-primary);">Rp 0</strong>
       </div>
 
-      <!-- Debit rows -->
-      <div style="margin-bottom:8px;">
-        <strong style="font-size:0.875rem;">Akun Debit (Penempatan Modal)</strong>
-        <small style="color:var(--ni-text-muted);margin-left:8px;">Pilih akun aset tempat modal ditempatkan. Total harus = Jumlah Modal.</small>
+      <!-- Akun Debit rows -->
+      <div class="md-section-title">
+        <i data-lucide="credit-card" style="width:15px;height:15px;vertical-align:middle;margin-right:4px;"></i>
+        Akun Debit (Penempatan Modal)
+        <small style="color:var(--ni-text-muted);font-weight:400;margin-left:6px;">Total harus = Total Modal Pemilik</small>
       </div>
       <div style="margin-bottom:12px;overflow:visible;">
         <div class="ni-table-wrapper">
           <table class="md-table">
             <thead>
               <tr>
-                <th style="width:55%">Kode / Nama Akun</th>
-                <th style="width:35%">Jumlah (Rp)</th>
-                <th style="width:10%"></th>
+                <th style="width:60%">Kode / Nama Akun</th>
+                <th style="width:32%">Jumlah (Rp)</th>
+                <th style="width:8%"></th>
               </tr>
             </thead>
-            <tbody id="mdRows"></tbody>
+            <tbody id="mdDebitRows"></tbody>
           </table>
         </div>
       </div>
-      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdAddRow()">
-        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="mdAddDebitRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris Debit
       </button>
 
-      <!-- Totals -->
+      <!-- Balance status -->
       <div style="margin-top:16px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
-        <span>Total Debit: <strong id="mdTotal" class="md-total">Rp 0</strong></span>
-        <span id="mdStatus" class="md-unbalanced" style="font-weight:600;">Isi baris debit untuk melanjutkan</span>
+        <span>Total Debit: <strong id="mdDebitTotal" style="font-weight:600;color:var(--ni-primary);">Rp 0</strong></span>
+        <span id="mdStatus" style="font-weight:600;color:var(--ni-danger);">Isi data untuk melanjutkan</span>
       </div>
 
+      <input type="hidden" name="owners_json" id="mdOwnersJson">
       <input type="hidden" name="debit_lines_json" id="mdDebitJson">
 
       <div class="ni-btn-row" style="margin-top:20px;">
         <button type="submit" class="ni-btn ni-btn--primary" id="mdSubmit" disabled>
-          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan & Buat Jurnal
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan &amp; Buat Jurnal
         </button>
         <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
@@ -149,32 +163,147 @@
 (function () {
   'use strict';
 
-  var rowCount = 0;
+  var ownerRowCount = 0, debitRowCount = 0;
   var autocompleteUrl = '{{ akun_autocomplete_url }}';
   var pemilikSearchUrl = '{% url "ekuitas:api_pemilik_search" %}';
   var pemilikCreateUrl = '{% url "ekuitas:api_pemilik_create" %}';
   var csrfToken = '{{ csrf_token }}';
-  var _tsRows = {};   // rid → TomSelect instance
-  var _pemilikTs = null;
+  var _ownerTs = {};   // rid → TomSelect
+  var _debitTs = {};   // rid → TomSelect
+  var _newPemilikCallback = null;  // called after inline pemilik creation
 
-  // ── Pemilik TomSelect ────────────────────────────────────────────────────
-  _pemilikTs = new TomSelect('#mdPemilikSel', {
-    valueField: 'id',
-    labelField: 'text',
-    searchField: 'text',
-    preload: 'focus',
-    load: function (query, callback) {
-      fetch(pemilikSearchUrl + '?term=' + encodeURIComponent(query))
-        .then(function (r) { return r.json(); })
-        .then(function (data) { callback(data); })
-        .catch(function () { callback(); });
-    },
-    create: false,
-    placeholder: 'Cari nama pemilik...',
-  });
+  function fmt(n) {
+    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
+  }
+
+  // ── Owner rows ───────────────────────────────────────────────────────────
+  window.mdAddOwnerRow = function (prefill) {
+    ownerRowCount++;
+    var rid = ownerRowCount;
+    var tbody = document.getElementById('mdOwnerRows');
+    var tr = document.createElement('tr');
+    tr.id = 'mdo_row_' + rid;
+    tr.innerHTML =
+      '<td style="overflow:visible;position:relative;">' +
+        '<select id="mdo_pemilik_' + rid + '" placeholder="Cari pemilik..."></select>' +
+        '<input type="hidden" id="mdo_pemilik_id_' + rid + '">' +
+      '</td>' +
+      '<td><input type="number" id="mdo_jumlah_' + rid + '" class="md-input" min="0" step="1" value="0" oninput="mdRecalc()"></td>' +
+      '<td><input type="number" id="mdo_pct_' + rid + '" class="md-input" min="0" max="100" step="0.01" placeholder="Opsional"></td>' +
+      '<td><input type="text" id="mdo_ket_' + rid + '" class="md-input" placeholder="Keterangan..."></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="mdRemoveOwnerRow(' + rid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var ts = new TomSelect('#mdo_pemilik_' + rid, {
+      valueField: 'id', labelField: 'text', searchField: 'text',
+      options: [], maxOptions: false,
+      placeholder: 'Cari nama pemilik...',
+      preload: 'focus',
+      load: function (q, cb) {
+        fetch(pemilikSearchUrl + '?term=' + encodeURIComponent(q))
+          .then(function (r) { return r.json(); }).then(cb).catch(function () { cb(); });
+      },
+      onChange: function (val) {
+        document.getElementById('mdo_pemilik_id_' + rid).value = val || '';
+      },
+      create: false,
+    });
+    _ownerTs[rid] = ts;
+    lucide.createIcons();
+    mdRecalc();
+  };
+
+  window.mdRemoveOwnerRow = function (rid) {
+    var tr = document.getElementById('mdo_row_' + rid);
+    if (!tr) return;
+    if (_ownerTs[rid]) { try { _ownerTs[rid].destroy(); } catch(e) {} delete _ownerTs[rid]; }
+    tr.remove();
+    mdRecalc();
+  };
+
+  // ── Debit rows ───────────────────────────────────────────────────────────
+  window.mdAddDebitRow = function () {
+    debitRowCount++;
+    var rid = debitRowCount;
+    var tbody = document.getElementById('mdDebitRows');
+    var tr = document.createElement('tr');
+    tr.id = 'mdd_row_' + rid;
+    tr.innerHTML =
+      '<td><select id="mdd_akun_' + rid + '" placeholder="Ketik kode/nama akun..."></select>' +
+        '<input type="hidden" id="mdd_akun_id_' + rid + '">' +
+      '</td>' +
+      '<td><input type="number" id="mdd_jumlah_' + rid + '" class="md-input" min="0" step="1" value="0" oninput="mdRecalc()"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="mdRemoveDebitRow(' + rid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var ts = new TomSelect('#mdd_akun_' + rid, {
+      valueField: 'id', labelField: 'text', searchField: 'text',
+      options: [], maxOptions: false,
+      placeholder: 'Ketik kode/nama akun...',
+      preload: 'focus',
+      load: function (q, cb) {
+        fetch(autocompleteUrl + '?term=' + encodeURIComponent(q) + '&all=1')
+          .then(function (r) { return r.json(); }).then(cb).catch(function () { cb(); });
+      },
+      onChange: function (val) {
+        document.getElementById('mdd_akun_id_' + rid).value = val || '';
+      },
+      create: false,
+    });
+    _debitTs[rid] = ts;
+    lucide.createIcons();
+    mdRecalc();
+  };
+
+  window.mdRemoveDebitRow = function (rid) {
+    var tr = document.getElementById('mdd_row_' + rid);
+    if (!tr) return;
+    if (_debitTs[rid]) { try { _debitTs[rid].destroy(); } catch(e) {} delete _debitTs[rid]; }
+    tr.remove();
+    mdRecalc();
+  };
+
+  // ── Totals & validation ──────────────────────────────────────────────────
+  window.mdRecalc = function () {
+    var ownerTotal = 0;
+    document.querySelectorAll('#mdOwnerRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('mdo_row_', '');
+      var inp = document.getElementById('mdo_jumlah_' + rid);
+      if (inp) ownerTotal += parseFloat(inp.value || 0);
+    });
+    document.getElementById('mdOwnerTotal').textContent = 'Rp ' + fmt(ownerTotal);
+
+    var debitTotal = 0;
+    document.querySelectorAll('#mdDebitRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('mdd_row_', '');
+      var inp = document.getElementById('mdd_jumlah_' + rid);
+      if (inp) debitTotal += parseFloat(inp.value || 0);
+    });
+    document.getElementById('mdDebitTotal').textContent = 'Rp ' + fmt(debitTotal);
+
+    var hasOwners = document.querySelectorAll('#mdOwnerRows tr').length > 0;
+    var hasDebits = document.querySelectorAll('#mdDebitRows tr').length > 0;
+    var balanced = hasOwners && hasDebits && Math.abs(ownerTotal - debitTotal) < 0.01 && ownerTotal > 0;
+    var statusEl = document.getElementById('mdStatus');
+    var submitBtn = document.getElementById('mdSubmit');
+    if (balanced) {
+      statusEl.textContent = 'Seimbang \u2714';
+      statusEl.style.color = 'var(--ni-success)';
+      submitBtn.disabled = false;
+    } else if (!hasOwners || !hasDebits) {
+      statusEl.textContent = 'Isi data pemilik dan akun debit';
+      statusEl.style.color = 'var(--ni-danger)';
+      submitBtn.disabled = true;
+    } else {
+      statusEl.textContent = 'Tidak seimbang (Debit: Rp ' + fmt(debitTotal) + ' / Pemilik: Rp ' + fmt(ownerTotal) + ')';
+      statusEl.style.color = 'var(--ni-danger)';
+      submitBtn.disabled = true;
+    }
+  };
 
   // ── Pemilik Modal ────────────────────────────────────────────────────────
-  window.mdOpenPemilikModal = function () {
+  window.mdOpenPemilikModal = function (callback) {
+    _newPemilikCallback = callback || null;
     document.getElementById('mdNewPemilikNama').value = '';
     document.getElementById('mdPemilikError').style.display = 'none';
     document.getElementById('mdPemilikBackdrop').classList.add('ni-modal-backdrop--visible');
@@ -203,8 +332,12 @@
           errEl.style.display = 'block';
           return;
         }
-        _pemilikTs.addOption({ id: data.id, text: data.text });
-        _pemilikTs.setValue(String(data.id));
+        // Add to all owner TomSelect instances
+        Object.values(_ownerTs).forEach(function (ts) {
+          ts.addOption({ id: data.id, text: data.text });
+          ts.refreshOptions(false);
+        });
+        if (_newPemilikCallback) { _newPemilikCallback(data); }
         mdClosePemilikModal();
       })
       .catch(function () {
@@ -213,100 +346,41 @@
       });
   };
 
-  // ── Debit rows ───────────────────────────────────────────────────────────
-  function formatNum(n) {
-    return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
-  }
-
-  window.mdAddRow = function (prefill) {
-    rowCount++;
-    var rid = rowCount;
-    var tbody = document.getElementById('mdRows');
-    var tr = document.createElement('tr');
-    tr.id = 'md_row_' + rid;
-    tr.innerHTML =
-      '<td><select id="md_akun_' + rid + '" placeholder="Ketik kode/nama akun..."></select>' +
-        '<input type="hidden" id="md_akun_id_' + rid + '">' +
-      '</td>' +
-      '<td><input type="number" id="md_jumlah_' + rid + '" class="md-input" min="0" step="1" value="0" oninput="mdUpdateTotals()"></td>' +
-      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="mdRemoveRow(' + rid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
-    tbody.appendChild(tr);
-
-    var ts = new TomSelect('#md_akun_' + rid, {
-      valueField: 'id',
-      labelField: 'text',
-      searchField: 'text',
-      options: [],
-      maxOptions: false,
-      placeholder: 'Ketik kode/nama akun...',
-      preload: 'focus',
-      load: function (query, callback) {
-        fetch(autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
-          .then(function (r) { return r.json(); })
-          .then(function (data) { callback(data); })
-          .catch(function () { callback(); });
-      },
-      onChange: function (val) {
-        var hiddenEl = document.getElementById('md_akun_id_' + rid);
-        if (!val) { hiddenEl.value = ''; return; }
-        hiddenEl.value = val;
-      },
-      create: false,
-    });
-    _tsRows[rid] = ts;
-    lucide.createIcons();
-    mdUpdateTotals();
-  };
-
-  window.mdRemoveRow = function (rid) {
-    var tr = document.getElementById('md_row_' + rid);
-    if (!tr) return;
-    if (_tsRows[rid]) { try { _tsRows[rid].destroy(); } catch (e) {} delete _tsRows[rid]; }
-    tr.remove();
-    mdUpdateTotals();
-  };
-
-  window.mdUpdateTotals = function () {
-    var total = 0;
-    document.querySelectorAll('#mdRows tr').forEach(function (tr) {
-      var rid = tr.id.replace('md_row_', '');
-      var inp = document.getElementById('md_jumlah_' + rid);
-      if (inp) total += parseFloat(inp.value || 0);
-    });
-    document.getElementById('mdTotal').textContent = 'Rp ' + formatNum(total);
-    var hasRows = document.querySelectorAll('#mdRows tr').length > 0;
-    var statusEl = document.getElementById('mdStatus');
-    var submitBtn = document.getElementById('mdSubmit');
-    if (hasRows && total > 0) {
-      statusEl.textContent = 'Siap disimpan (Rp ' + formatNum(total) + ')';
-      statusEl.className = 'md-balanced';
-      submitBtn.disabled = false;
-    } else {
-      statusEl.textContent = 'Isi baris debit untuk melanjutkan';
-      statusEl.className = 'md-unbalanced';
-      submitBtn.disabled = true;
-    }
-  };
-
   // ── Submit ───────────────────────────────────────────────────────────────
   document.getElementById('mdForm').addEventListener('submit', function () {
-    var lines = [];
-    document.querySelectorAll('#mdRows tr').forEach(function (tr) {
-      var rid = tr.id.replace('md_row_', '');
-      var akunId = document.getElementById('md_akun_id_' + rid);
-      var jumlahEl = document.getElementById('md_jumlah_' + rid);
-      if (akunId && akunId.value && jumlahEl) {
-        lines.push({ akun_id: parseInt(akunId.value), jumlah: parseFloat(jumlahEl.value || 0) });
+    var owners = [];
+    document.querySelectorAll('#mdOwnerRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('mdo_row_', '');
+      var pid = document.getElementById('mdo_pemilik_id_' + rid);
+      var jm = document.getElementById('mdo_jumlah_' + rid);
+      var pct = document.getElementById('mdo_pct_' + rid);
+      var ket = document.getElementById('mdo_ket_' + rid);
+      if (pid && pid.value && jm) {
+        owners.push({
+          pemilik_id: parseInt(pid.value),
+          jumlah_modal: parseFloat(jm.value || 0),
+          persentase_kepemilikan: pct && pct.value ? parseFloat(pct.value) : null,
+          keterangan: ket ? ket.value.trim() : '',
+        });
       }
     });
-    document.getElementById('mdDebitJson').value = JSON.stringify(lines);
+    document.getElementById('mdOwnersJson').value = JSON.stringify(owners);
+
+    var debits = [];
+    document.querySelectorAll('#mdDebitRows tr').forEach(function (tr) {
+      var rid = tr.id.replace('mdd_row_', '');
+      var aid = document.getElementById('mdd_akun_id_' + rid);
+      var jm = document.getElementById('mdd_jumlah_' + rid);
+      if (aid && aid.value && jm) {
+        debits.push({ akun_id: parseInt(aid.value), jumlah: parseFloat(jm.value || 0) });
+      }
+    });
+    document.getElementById('mdDebitJson').value = JSON.stringify(debits);
   });
 
-  // Init two rows
-  mdAddRow();
-  mdAddRow();
+  // Init
+  mdAddOwnerRow();
+  mdAddDebitRow();
 })();
 </script>
 {% endblock %}
-</content>
-</invoke>

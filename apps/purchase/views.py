@@ -359,6 +359,8 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.inventory.models import InventoryRecord
     from apps.aset_tetap.models import AsetTetapRecord
     from apps.aset_lainnya.models import AsetLainnyaRecord
+    from apps.jurnal.models import JurnalHeader
+    from apps.jurnal.utils import log_jurnal_terhapus
 
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
@@ -372,7 +374,18 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
     if request.method == 'POST':
         trx_id = purchase.transaction_id
+        # Log journals before deletion
+        nomor_prefix = f'Pembelian {trx_id}'
+        journals_to_delete = list(
+            JurnalHeader.objects.filter(
+                nomor_transaksi__startswith='TRX-PUR-',
+                uraian_transaksi__startswith=nomor_prefix,
+                is_penyesuaian=False,
+            )
+        )
         with transaction.atomic():
+            for journal in journals_to_delete:
+                log_jurnal_terhapus(journal, 'purchase', request)
             reverse_aset_tetap_records(purchase)
             reverse_aset_lainnya_records(purchase)
             reverse_inventory_records(purchase)
@@ -393,11 +406,21 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
         purchase_item__purchase_eb__purchase_header=purchase,
     ).select_related('item', 'entitas_bisnis')
 
+    nomor_prefix = f'Pembelian {purchase.transaction_id}'
+    related_journals = list(
+        JurnalHeader.objects.filter(
+            nomor_transaksi__startswith='TRX-PUR-',
+            uraian_transaksi__startswith=nomor_prefix,
+            is_penyesuaian=False,
+        ).order_by('nomor_transaksi')
+    )
+
     return render(request, 'purchase/purchase_delete.html', {
         'purchase': purchase,
         'inventory_records': inventory_records,
         'aset_tetap_records': aset_tetap_records,
         'aset_lainnya_records': aset_lainnya_records,
+        'related_journals': related_journals,
     })
 
 

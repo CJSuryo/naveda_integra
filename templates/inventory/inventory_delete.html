@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Inventory Record{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Inventory Record</h1>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:4px;">
+      Hapus <strong>{{ record.inventory_number }}</strong>?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      {{ record.item.nama }} — {{ record.entitas_bisnis.nama }}<br>
+      Qty: {{ record.quantity }} | Tanggal: {{ record.tanggal }}
+    </p>
+    {% if record.purchase_item %}
+    <p style="font-size:0.8rem;color:var(--ni-warning);margin-bottom:16px;">
+      <i data-lucide="alert-triangle" style="width:13px;height:13px;vertical-align:middle;"></i>
+      Record ini berasal dari purchase. Hapus dari halaman Purchase untuk menghapus jurnal terkait.
+    </p>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'inventory:detail' record.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -323,21 +323,38 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def sales_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Delete a sales transaction, reversing journals and FIFO."""
+    from apps.jurnal.models import JurnalHeader
+    from apps.jurnal.utils import log_jurnal_terhapus
+
     sales = get_object_or_404(SalesHeader, pk=pk)
     if sales.is_locked:
         dj_messages.error(request, 'Transaksi ini sudah di-lock dan tidak bisa dihapus.')
         return redirect('sales:detail', pk=pk)
 
+    # Find journals that will be deleted
+    uraian_match = f'Penjualan {sales.transaction_id} \u2014'
+    related_journals = list(
+        JurnalHeader.objects.filter(
+            uraian_transaksi__startswith=uraian_match,
+            is_penyesuaian=False,
+        ).order_by('nomor_transaksi')
+    )
+
     if request.method == 'POST':
         tid = sales.transaction_id
         with transaction.atomic():
+            for journal in related_journals:
+                log_jurnal_terhapus(journal, 'sales', request)
             reverse_sales_automated_journals(sales)
             reverse_sales_fifo(sales)
             sales.delete()
         dj_messages.success(request, f'Sales {tid} berhasil dihapus.')
         return redirect('sales:list')
 
-    return redirect('sales:list')
+    return render(request, 'sales/sales_delete.html', {
+        'sales': sales,
+        'related_journals': related_journals,
+    })
 
 
 # ── API Endpoints ────────────────────────────────────────────────────────────

@@ -188,14 +188,17 @@ def inventory_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def inventory_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete an InventoryRecord."""
-    record = get_object_or_404(InventoryRecord, pk=pk)
+    """Delete an InventoryRecord with confirmation page."""
+    record = get_object_or_404(
+        InventoryRecord.objects.select_related('item', 'entitas_bisnis', 'purchase_item'),
+        pk=pk,
+    )
     if request.method == 'POST':
         number = record.inventory_number
         record.delete()
         messages.success(request, f'Inventory record {number} berhasil dihapus.')
         return redirect('inventory:list')
-    return redirect('inventory:list')
+    return render(request, 'inventory/inventory_delete.html', {'record': record})
 
 
 @login_required

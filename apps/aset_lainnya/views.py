@@ -110,14 +110,35 @@ def aset_lainnya_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def aset_lainnya_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete an other asset record."""
-    record = get_object_or_404(AsetLainnyaRecord, pk=pk)
+    """Delete an other asset record, removing all associated amortization journals."""
+    from apps.jurnal.models import JurnalHeader
+    from apps.jurnal.utils import log_jurnal_terhapus
+
+    record = get_object_or_404(AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis'), pk=pk)
+
+    # Find all amortization journals for this asset
+    amor_journals = list(
+        JurnalHeader.objects.filter(
+            uraian_transaksi__startswith=f'Amortisasi {record.aset_number}'
+        ).order_by('tanggal')
+    )
+
     if request.method == 'POST':
+        from django.db import transaction as db_transaction
         number = record.aset_number
-        record.delete()
-        messages.success(request, f'Aset lainnya {number} berhasil dihapus.')
+        with db_transaction.atomic():
+            for journal in amor_journals:
+                log_jurnal_terhapus(journal, 'aset_lainnya', request)
+                journal.details.all().delete()
+                journal.delete()
+            record.delete()
+        messages.success(request, f'Aset lainnya {number} dan {len(amor_journals)} jurnal amortisasi berhasil dihapus.')
         return redirect('aset_lainnya:list')
-    return redirect('aset_lainnya:list')
+
+    return render(request, 'aset_lainnya/aset_lainnya_delete.html', {
+        'record': record,
+        'amor_journals': amor_journals,
+    })
 
 
 @login_required

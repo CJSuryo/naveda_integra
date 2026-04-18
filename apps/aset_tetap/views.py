@@ -144,14 +144,35 @@ def aset_tetap_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def aset_tetap_delete(request: HttpRequest, pk: int) -> HttpResponse:
-    """Delete a fixed asset record."""
-    record = get_object_or_404(AsetTetapRecord, pk=pk)
+    """Delete a fixed asset record, removing all associated depreciation journals."""
+    from apps.jurnal.models import JurnalHeader
+    from apps.jurnal.utils import log_jurnal_terhapus
+
+    record = get_object_or_404(AsetTetapRecord.objects.select_related('item', 'entitas_bisnis'), pk=pk)
+
+    # Find all depreciation journals for this asset
+    dep_journals = list(
+        JurnalHeader.objects.filter(
+            uraian_transaksi__startswith=f'Penyusutan {record.aset_number}'
+        ).order_by('tanggal')
+    )
+
     if request.method == 'POST':
+        from django.db import transaction as db_transaction
         number = record.aset_number
-        record.delete()
-        messages.success(request, f'Aset tetap {number} berhasil dihapus.')
+        with db_transaction.atomic():
+            for journal in dep_journals:
+                log_jurnal_terhapus(journal, 'aset_tetap', request)
+                journal.details.all().delete()
+                journal.delete()
+            record.delete()
+        messages.success(request, f'Aset tetap {number} dan {len(dep_journals)} jurnal penyusutan berhasil dihapus.')
         return redirect('aset_tetap:list')
-    return redirect('aset_tetap:list')
+
+    return render(request, 'aset_tetap/aset_tetap_delete.html', {
+        'record': record,
+        'dep_journals': dep_journals,
+    })
 
 
 @login_required

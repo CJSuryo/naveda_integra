@@ -139,6 +139,34 @@
 </div>
 {% endif %}
 
+{% if related_journals %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__header" style="background:var(--ni-danger);color:#fff;padding:12px 20px;border-radius:var(--ni-radius) var(--ni-radius) 0 0;">
+    <strong>{{ related_journals|length }} Jurnal Otomatis Akan Dihapus</strong>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor Jurnal</th>
+          <th>Tanggal</th>
+          <th>Uraian</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in related_journals %}
+        <tr>
+          <td><code style="font-size:0.8rem;">{{ j.nomor_transaksi }}</code></td>
+          <td>{{ j.tanggal }}</td>
+          <td>{{ j.uraian_transaksi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
     <form method="post">

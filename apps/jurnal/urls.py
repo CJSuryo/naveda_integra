@@ -39,6 +39,9 @@ urlpatterns = [
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),
 
+    # History Jurnal Terhapus
+    path('jurnal-terhapus/', views.jurnal_terhapus_list, name='jurnal_terhapus'),
+
     # Rekap Jurnal CRUD API
     path('api/rekap/<int:pk>/', views.rekap_jurnal_get, name='rekap_jurnal_get'),
     path('api/rekap/<int:pk>/update/', views.rekap_jurnal_update, name='rekap_jurnal_update'),

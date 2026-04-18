@@ -37,6 +37,14 @@ class ModalDisetor(models.Model):
         decimal_places=4,
         verbose_name='Jumlah Modal Disetor',
     )
+    persentase_kepemilikan = models.DecimalField(
+        max_digits=8,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Persentase Kepemilikan (%)',
+        help_text='Opsional. Jika kosong, dihitung otomatis dari total modal entitas.',
+    )
     tanggal_setor = models.DateField(
         db_index=True,
         default=timezone.now,
