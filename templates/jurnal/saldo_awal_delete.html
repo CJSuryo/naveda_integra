@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Saldo Awal — {{ header.nomor_transaksi }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Saldo Awal</h1>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in" style="max-width:680px;">
+  <div class="ni-card__body" style="padding:32px;">
+    <div style="text-align:center;margin-bottom:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <h3 style="margin:0 0 4px;font-size:1rem;color:var(--ni-text);">Hapus <strong>{{ header.nomor_transaksi }}</strong>?</h3>
+      <p style="margin:0;color:var(--ni-text-muted);font-size:0.875rem;">
+        {{ header.tanggal }} &mdash; {{ header.entitas_bisnis.nama|default:"—" }}
+      </p>
+    </div>
+
+    <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+      <strong>Tindakan ini tidak dapat dibatalkan.</strong>
+      Semua baris jurnal, record persediaan, aset tetap, aset lainnya, dan modal disetor yang terkait dengan saldo awal ini akan dihapus.
+    </div>
+
+    {% if details %}
+    <p style="font-size:0.8rem;font-weight:600;color:var(--ni-text-muted);margin:0 0 8px;">Baris jurnal yang akan dihapus:</p>
+    <div class="ni-table-wrapper" style="margin-bottom:20px;">
+      <table class="ni-table" style="font-size:0.8rem;">
+        <thead>
+          <tr>
+            <th>Kode Akun</th>
+            <th>Nama Akun</th>
+            <th style="text-align:right;">Debit (Rp)</th>
+            <th style="text-align:right;">Kredit (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in details %}
+          <tr>
+            <td><code>{{ d.akun.kode_akun }}</code></td>
+            <td>{{ d.akun.nama }}</td>
+            <td style="text-align:right;">{% if d.debit %}{{ d.debit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+            <td style="text-align:right;">{% if d.kredit %}{{ d.kredit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'jurnal:saldo_awal_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

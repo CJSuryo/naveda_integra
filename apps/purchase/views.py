@@ -587,7 +587,14 @@ def item_master_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
     if request.method == 'POST':
         if obj.purchase_items.exists():
-            dj_messages.error(request, 'Item tidak bisa dihapus karena sudah ada transaksi.')
+            dj_messages.error(request, 'Item tidak bisa dihapus karena sudah ada transaksi purchase terkait. Hapus transaksi purchase terlebih dahulu.')
+            return redirect(list_url)
+        if obj.fifo_batches.exists() or obj.inventory_records.exists():
+            dj_messages.error(
+                request,
+                'Item tidak bisa dihapus karena masih ada data saldo awal terkait. '
+                'Hapus saldo awal terkait di menu Jurnal → Saldo Awal terlebih dahulu.',
+            )
             return redirect(list_url)
         obj.delete()
         dj_messages.success(request, 'Item berhasil dihapus.')
@@ -686,6 +693,14 @@ def kategori_update(request: HttpRequest, pk: int) -> HttpResponse:
 def kategori_delete(request: HttpRequest, pk: int) -> HttpResponse:
     obj = get_object_or_404(KategoriItem, pk=pk)
     if request.method == 'POST':
+        if obj.items.exists():
+            item_names = ', '.join(obj.items.values_list('nama', flat=True)[:5])
+            dj_messages.error(
+                request,
+                f'Kategori tidak bisa dihapus karena masih digunakan oleh item: {item_names}. '
+                'Hapus atau pindahkan item terkait terlebih dahulu.',
+            )
+            return redirect('purchase:kategori_list')
         obj.delete()
         dj_messages.success(request, 'Kategori berhasil dihapus.')
         return redirect('purchase:kategori_list')

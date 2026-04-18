@@ -529,7 +529,16 @@ def rekap_jurnal_delete(request: HttpRequest, pk: int) -> JsonResponse:
         return JsonResponse({'error': 'POST required'}, status=405)
 
     header = get_object_or_404(JurnalHeader, pk=pk)
-    header.delete()
+    try:
+        header.delete()
+    except Exception as e:
+        from django.db.models import ProtectedError
+        if isinstance(e, ProtectedError):
+            return JsonResponse(
+                {'error': 'Jurnal tidak bisa dihapus karena ada data lain yang terkait (modal disetor, dll). Hapus data terkait terlebih dahulu.'},
+                status=400,
+            )
+        raise
     return JsonResponse({'ok': True})
 
 
@@ -825,6 +834,117 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
 
 # ── Saldo Awal (Opening Balance) ────────────────────────────────────────────
 
+def _reverse_saldo_awal_records(header) -> None:
+    """Reverse all sub-records created by a saldo awal journal (excluding JurnalDetails).
+
+    Matches records by purchase_item=None + entitas_bisnis + tanggal, which is
+    the identifying footprint of saldo-awal-created sub-records.
+    """
+    from apps.inventory.models import InventoryRecord
+    from apps.aset_tetap.models import AsetTetapRecord
+    from apps.aset_lainnya.models import AsetLainnyaRecord
+    from apps.ekuitas.models import ModalDisetor
+    from apps.purchase.models import FIFOBatch
+
+    eb_id = header.entitas_bisnis_id
+    tanggal = header.tanggal
+
+    # ModalDisetor — exact FK match
+    ModalDisetor.objects.filter(jurnal_header=header).delete()
+
+    # InventoryRecord + FIFOBatch — matched by purchase_item=None + entity + date
+    inv_qs = InventoryRecord.objects.filter(
+        purchase_item=None,
+        entitas_bisnis_id=eb_id,
+        tanggal=tanggal,
+    )
+    item_ids = list(inv_qs.values_list('item_id', flat=True))
+    FIFOBatch.objects.filter(
+        purchase_item=None,
+        item_id__in=item_ids,
+        tanggal=tanggal,
+    ).delete()
+    inv_qs.delete()
+
+    # AsetTetapRecord
+    AsetTetapRecord.objects.filter(
+        purchase_item=None,
+        entitas_bisnis_id=eb_id,
+        tanggal_perolehan=tanggal,
+    ).delete()
+
+    # AsetLainnyaRecord
+    AsetLainnyaRecord.objects.filter(
+        purchase_item=None,
+        entitas_bisnis_id=eb_id,
+        tanggal_perolehan=tanggal,
+    ).delete()
+
+
+@login_required
+def saldo_awal_list(request: HttpRequest) -> HttpResponse:
+    """List all saldo awal journal headers."""
+    qs = (
+        JurnalHeader.objects
+        .filter(is_saldo_awal=True)
+        .select_related('entitas_bisnis')
+        .order_by('-tanggal', '-nomor_transaksi')
+    )
+
+    # RBAC: business users see only their linked entities
+    if request.user.is_business_user:
+        from apps.accounts.models import UserEntitasBisnis
+        allowed_eb_ids = UserEntitasBisnis.objects.filter(
+            user=request.user
+        ).values_list('entitas_bisnis_id', flat=True)
+        qs = qs.filter(entitas_bisnis_id__in=allowed_eb_ids)
+
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    if eb_filter:
+        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+
+    eb_list = EBModel.objects.order_by('nama')
+    return render(request, 'jurnal/saldo_awal_list.html', {
+        'headers': qs,
+        'eb_filter': eb_filter,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'eb_list': eb_list,
+    })
+
+
+@login_required
+def saldo_awal_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Confirm and delete a saldo awal journal, reversing all related records."""
+    from apps.jurnal.utils import log_jurnal_terhapus
+
+    header = get_object_or_404(JurnalHeader, pk=pk, is_saldo_awal=True)
+
+    if request.method == 'POST':
+        nomor = header.nomor_transaksi
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            log_jurnal_terhapus(header, 'saldo_awal', request)
+            _reverse_saldo_awal_records(header)
+            header.details.all().delete()
+            header.delete()
+        dj_messages.success(request, f'Saldo Awal {nomor} berhasil dihapus.')
+        return redirect('jurnal:saldo_awal_list')
+
+    # GET: load detail lines for the confirmation page
+    details = header.details.select_related('akun').order_by('pk')
+    return render(request, 'jurnal/saldo_awal_delete.html', {
+        'header': header,
+        'details': details,
+    })
+
+
 @login_required
 def saldo_awal(request: HttpRequest) -> HttpResponse:
     """Spreadsheet-style opening balance form.
@@ -1071,7 +1191,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                     )
 
         dj_messages.success(request, f'Saldo Awal {nomor} berhasil disimpan.')
-        return redirect('jurnal:header_detail', pk=header.pk)
+        return redirect('jurnal:saldo_awal_list')
 
     eb_list = _get_entitas_bisnis_dropdown_options()
     return render(request, 'jurnal/saldo_awal.html', {
@@ -1079,7 +1199,293 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         'eb_list': eb_list,
         'errors': {},
         'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'initial_rows_json': '[]',
     })
+
+
+@login_required
+def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    """Edit an existing saldo awal journal.
+
+    On GET: load existing rows into the spreadsheet form.
+    On POST: reverse old sub-records, re-create everything from submitted data.
+
+    Note: detail sub-records (persediaan, aset_tetap, dll) cannot be automatically
+    reconstructed in the form, so the user must re-enter them if applicable.
+    """
+    from django.db import transaction as db_transaction
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.inventory.models import InventoryRecord
+
+    header = get_object_or_404(JurnalHeader, pk=pk, is_saldo_awal=True)
+
+    AKUN_DETAIL_PREFIXES: dict[str, str] = {
+        '1.1.7': 'persediaan',
+        '1.1.8': 'persediaan',
+        '1.1.9': 'persediaan',
+        '1.1.10': 'persediaan',
+        '1.2': 'aset_tetap',
+        '1.3': 'aset_lainnya',
+        '3.1.1': 'modal_disetor',
+    }
+
+    if request.method == 'POST':
+        tanggal = request.POST.get('tanggal')
+        eb_selection = request.POST.get('entitas_bisnis') or ''
+        eb_id = _resolve_entitas_bisnis_id(eb_selection)
+        rows_json = request.POST.get('rows_data', '[]')
+
+        errors: dict = {}
+        if not tanggal:
+            errors['tanggal'] = 'Tanggal wajib diisi.'
+        if not eb_selection:
+            errors['entitas_bisnis'] = 'Entitas Bisnis wajib dipilih.'
+        elif eb_id is None:
+            errors['entitas_bisnis'] = 'Pilihan entitas bisnis tidak valid.'
+
+        try:
+            rows = json.loads(rows_json)
+        except (ValueError, TypeError):
+            rows = []
+
+        rows = [r for r in rows if r.get('akun_id')]
+        if not rows:
+            errors['rows'] = 'Minimal 1 baris akun wajib diisi.'
+
+        total_debit = sum(Decimal(str(r.get('debit') or 0)) for r in rows)
+        total_kredit = sum(Decimal(str(r.get('kredit') or 0)) for r in rows)
+
+        if not errors and total_debit != total_kredit:
+            errors['balance'] = (
+                f'Total Debit ({total_debit}) harus sama dengan Total Kredit ({total_kredit}).'
+            )
+
+        if errors:
+            eb_list = _get_entitas_bisnis_dropdown_options()
+            initial_rows = _build_initial_rows_json(header)
+            return render(request, 'jurnal/saldo_awal.html', {
+                'today': tanggal or header.tanggal,
+                'eb_list': eb_list,
+                'errors': errors,
+                'posted': True,
+                'selected_entitas_bisnis': eb_selection,
+                'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+                'edit_header': header,
+                'initial_rows_json': initial_rows,
+            })
+
+        with db_transaction.atomic():
+            # Reverse old sub-records and delete the journal
+            _reverse_saldo_awal_records(header)
+            header.details.all().delete()
+            header.tanggal = tanggal
+            header.entitas_bisnis_id = eb_id
+            header.uraian_transaksi = f'Saldo Awal — {tanggal}'
+            header.save()
+
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(
+                    jurnal_header=header,
+                    akun_id=row['akun_id'],
+                    debit=Decimal(str(row.get('debit') or 0)),
+                    kredit=Decimal(str(row.get('kredit') or 0)),
+                )
+                for row in rows
+            ])
+
+            # ── Persediaan ─────────────────────────────────────────────────
+            persediaan_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'persediaan' and r.get('detail_rows')
+            ]
+            if persediaan_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in persediaan_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in persediaan_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        InventoryRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            unit_price=unit_price,
+                            tanggal=tanggal,
+                        )
+                        FIFOBatch.objects.create(
+                            purchase_item=None,
+                            item=item,
+                            tanggal=tanggal,
+                            quantity_in=qty,
+                            unit_price=unit_price,
+                            remaining_qty=qty,
+                        )
+
+            # ── Aset Tetap ─────────────────────────────────────────────────
+            aset_tetap_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_tetap' and r.get('detail_rows')
+            ]
+            if aset_tetap_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_tetap_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_tetap_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                            masa_manfaat = d.get('masa_manfaat')
+                            metode_penyusutan = d.get('metode_penyusutan')
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        from apps.aset_tetap.models import AsetTetapRecord
+                        AsetTetapRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=masa_manfaat or item.masa_manfaat,
+                            metode_penyusutan=metode_penyusutan or item.metode_penyusutan,
+                        )
+
+            # ── Aset Lainnya ───────────────────────────────────────────────
+            aset_lainnya_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_lainnya' and r.get('detail_rows')
+            ]
+            if aset_lainnya_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_lainnya_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_lainnya_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                            masa_manfaat = d.get('masa_manfaat')
+                            metode_amortisasi = d.get('metode_amortisasi')
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        from apps.aset_lainnya.models import AsetLainnyaRecord
+                        AsetLainnyaRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=masa_manfaat or item.masa_manfaat,
+                            metode_amortisasi=metode_amortisasi or item.metode_amortisasi,
+                        )
+
+            # ── Modal Disetor ──────────────────────────────────────────────
+            from apps.ekuitas.models import ModalDisetor as ModalDisetorModel
+            from apps.ekuitas.services import get_or_create_pemilik
+            modal_disetor_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'modal_disetor' and r.get('detail_rows')
+            ]
+            for row in modal_disetor_rows:
+                for d in row.get('detail_rows', []):
+                    nama_pemilik = str(d.get('nama_pemilik', '')).strip()
+                    if not nama_pemilik:
+                        continue
+                    try:
+                        jumlah = Decimal(str(d.get('jumlah', 0)))
+                    except Exception:
+                        continue
+                    if jumlah <= 0:
+                        continue
+                    pemilik = get_or_create_pemilik(nama_pemilik)
+                    ModalDisetorModel.objects.create(
+                        entitas_bisnis_id=eb_id,
+                        pemilik=pemilik,
+                        jumlah_modal=jumlah,
+                        tanggal_setor=tanggal,
+                        keterangan=str(d.get('keterangan', '')).strip(),
+                        jurnal_header=header,
+                    )
+
+        dj_messages.success(request, f'Saldo Awal {header.nomor_transaksi} berhasil diperbarui.')
+        return redirect('jurnal:saldo_awal_list')
+
+    # GET: pre-populate form with existing rows
+    eb_list = _get_entitas_bisnis_dropdown_options()
+    initial_rows = _build_initial_rows_json(header)
+
+    # Build selected_entitas_bisnis value string to match the dropdown format
+    selected_eb = f'lv1:{header.entitas_bisnis_id}' if header.entitas_bisnis_id else ''
+
+    return render(request, 'jurnal/saldo_awal.html', {
+        'today': header.tanggal,
+        'eb_list': eb_list,
+        'errors': {},
+        'selected_entitas_bisnis': selected_eb,
+        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'edit_header': header,
+        'initial_rows_json': initial_rows,
+    })
+
+
+def _build_initial_rows_json(header) -> str:
+    """Serialise existing JurnalDetail rows to JSON for pre-populating the saldo awal form."""
+    rows = []
+    for detail in header.details.select_related('akun').order_by('pk'):
+        rows.append({
+            'akun_id': str(detail.akun_id),
+            'kode_akun': detail.akun.kode_akun,
+            'nama_akun': detail.akun.nama,
+            'debit': str(detail.debit),
+            'kredit': str(detail.kredit),
+        })
+    return json.dumps(rows)
 
 
 # ── Neraca (Balance Sheet) ──────────────────────────────────────────────────

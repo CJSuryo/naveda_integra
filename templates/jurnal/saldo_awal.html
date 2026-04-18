@@ -26,9 +26,18 @@
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Setting Saldo Awal</h1>
-    <p class="ni-page-header__subtitle">Masukkan saldo awal per akun untuk entitas bisnis</p>
+    <h1 class="ni-page-header__title">{% if edit_header %}Edit Saldo Awal{% else %}Tambah Saldo Awal{% endif %}</h1>
+    <p class="ni-page-header__subtitle">
+      {% if edit_header %}Ubah baris jurnal saldo awal {{ edit_header.nomor_transaksi }}{% else %}Masukkan saldo awal per akun untuk entitas bisnis{% endif %}
+    </p>
   </div>
+  {% if edit_header %}
+  <div class="ni-page-header__actions">
+    <a href="{% url 'jurnal:saldo_awal_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+  {% endif %}
 </div>
 
 
@@ -42,18 +51,24 @@
 
 <div class="ni-card ni-animate-fade-in" style="overflow:visible;">
   <div class="ni-card__body" style="overflow:visible;">
-    <form id="saForm" method="post">
+    {% if edit_header %}
+    <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
+      <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:middle;"></i>
+      <strong>Mode Edit:</strong> Menyimpan akan menghapus semua record terkait (persediaan, aset tetap, aset lainnya, modal disetor) dan membuatnya ulang. Pastikan mengisi kembali semua detail jika diperlukan.
+    </div>
+    {% endif %}
+    <form id="saForm" method="post" action="{% if edit_header %}{% url 'jurnal:saldo_awal_edit' edit_header.pk %}{% else %}{% url 'jurnal:saldo_awal' %}{% endif %}">
       {% csrf_token %}
       <!-- Header fields -->
       <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
-          <input type="date" name="tanggal" id="saTanggal" class="ni-input" value="{{ today|date:'Y-m-d' }}" required>
+          <input type="date" name="tanggal" id="saTanggal" class="ni-input" value="{% if edit_header %}{{ edit_header.tanggal|date:'Y-m-d' }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}" required>
         </div>
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">ID Transaksi</label>
-          <input type="text" class="ni-input" value="SA-###" readonly style="opacity:0.6;cursor:default;">
-          <small style="color:var(--ni-text-muted);">Auto-generated saat disimpan</small>
+          <input type="text" class="ni-input" value="{% if edit_header %}{{ edit_header.nomor_transaksi }}{% else %}SA-###{% endif %}" readonly style="opacity:0.6;cursor:default;">
+          <small style="color:var(--ni-text-muted);">{% if edit_header %}Nomor tidak berubah saat diedit{% else %}Auto-generated saat disimpan{% endif %}</small>
         </div>
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Entitas Bisnis <span style="color:var(--ni-danger)">*</span></label>
@@ -100,9 +115,10 @@
 
       <div class="ni-btn-row" style="margin-top:20px;">
         <button type="submit" class="ni-btn ni-btn--primary" id="saSubmit" disabled>
-          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Saldo Awal
+          <i data-lucide="save" style="width:16px;height:16px"></i>
+          {% if edit_header %}Simpan Perubahan{% else %}Simpan Saldo Awal{% endif %}
         </button>
-        <a href="{% url 'master_data:chart_of_accounts' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <a href="{% if edit_header %}{% url 'jurnal:saldo_awal_list' %}{% else %}{% url 'jurnal:saldo_awal_list' %}{% endif %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
@@ -1219,8 +1235,33 @@
     saCloseModalDisetorModal();
   };
 
-  saAddRow();
-  saAddRow();
+  // ── Load pre-existing rows (edit mode) ────────────────────────────────────
+  function saLoadInitialRows(initialRows) {
+    initialRows.forEach(function (row) {
+      saAddRow();
+      var rid = rowCount;  // saAddRow already incremented this
+      var ts = _tomSelectInstances[_tomSelectInstances.length - 1];
+      // Add option and select it silently so onChange doesn't fire twice
+      var optText = (row.kode_akun || '') + (row.nama_akun ? ' — ' + row.nama_akun : '');
+      ts.addOption({ id: String(row.akun_id), text: optText, kode: row.kode_akun || '', nama: row.nama_akun || '' });
+      ts.setValue(String(row.akun_id), true);
+      var namaEl = document.getElementById('akun_nama_' + rid);
+      if (namaEl) namaEl.value = row.nama_akun || '';
+      var debitEl = document.getElementById('debit_' + rid);
+      if (debitEl) { debitEl.value = parseFloat(row.debit || 0); }
+      var kreditEl = document.getElementById('kredit_' + rid);
+      if (kreditEl) { kreditEl.value = parseFloat(row.kredit || 0); }
+      _onAkunChange(rid, row.kode_akun || '', row.nama_akun || '');
+    });
+  }
+
+  var _initialRows = {{ initial_rows_json|default:'[]' }};
+  if (_initialRows.length > 0) {
+    saLoadInitialRows(_initialRows);
+  } else {
+    saAddRow();
+    saAddRow();
+  }
 })();
 </script>
 {% endblock %}

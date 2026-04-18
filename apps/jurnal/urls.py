@@ -33,8 +33,11 @@ urlpatterns = [
     # Laporan Perubahan Ekuitas
     path('laporan-perubahan-ekuitas/', views.laporan_perubahan_ekuitas, name='laporan_perubahan_ekuitas'),
 
-    # Saldo Awal (Opening Balance)
-    path('saldo-awal/', views.saldo_awal, name='saldo_awal'),
+    # Saldo Awal (Opening Balance) — CRUD
+    path('saldo-awal/', views.saldo_awal_list, name='saldo_awal_list'),
+    path('saldo-awal/create/', views.saldo_awal, name='saldo_awal'),
+    path('saldo-awal/<int:pk>/edit/', views.saldo_awal_edit, name='saldo_awal_edit'),
+    path('saldo-awal/<int:pk>/delete/', views.saldo_awal_delete, name='saldo_awal_delete'),
 
     # Manual Jurnal (direct spreadsheet-style entry)
     path('manual-jurnal/', views.manual_jurnal_create, name='manual_jurnal'),

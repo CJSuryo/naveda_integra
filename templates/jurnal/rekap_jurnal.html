@@ -496,8 +496,17 @@
     })
     .then(function(r) { return r.json(); })
     .then(function(data) {
+      if (data.error) {
+        hideModal(deleteBackdrop);
+        alert('Gagal menghapus: ' + data.error);
+        return;
+      }
       hideModal(deleteBackdrop);
       location.reload();
+    })
+    .catch(function() {
+      hideModal(deleteBackdrop);
+      alert('Terjadi kesalahan saat menghapus. Coba lagi.');
     });
   };
 })();

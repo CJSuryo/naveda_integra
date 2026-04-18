@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daftar Saldo Awal{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Saldo Awal</h1>
+    <p class="ni-page-header__subtitle">Daftar semua jurnal saldo awal per entitas bisnis</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'jurnal:saldo_awal' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Saldo Awal
+    </a>
+  </div>
+</div>
+
+{# ── Filters ──────────────────────────────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px 20px;">
+    <form method="get" class="ni-form-row" style="gap:12px;align-items:flex-end;">
+      <div class="ni-form-group" style="margin-bottom:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">Semua Entitas</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}" {% if eb_filter == eb.pk|stringformat:"s" %}selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;flex:0 0 140px;">
+        <label class="ni-form-label">Tanggal Dari</label>
+        <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;flex:0 0 140px;">
+        <label class="ni-form-label">Sampai</label>
+        <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Filter</button>
+        <a href="{% url 'jurnal:saldo_awal_list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── Table ────────────────────────────────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor Transaksi</th>
+          <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
+          <th>Uraian</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for header in headers %}
+        <tr>
+          <td><code style="font-size:0.8rem;">{{ header.nomor_transaksi }}</code></td>
+          <td>{{ header.tanggal }}</td>
+          <td>{{ header.entitas_bisnis.nama|default:"—" }}</td>
+          <td style="max-width:240px;white-space:normal;">{{ header.uraian_transaksi }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'jurnal:header_detail' header.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
+                <i data-lucide="eye" style="width:13px;height:13px"></i> Detail
+              </a>
+              <a href="{% url 'jurnal:saldo_awal_edit' header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">
+                <i data-lucide="pencil" style="width:13px;height:13px"></i> Edit
+              </a>
+              <a href="{% url 'jurnal:saldo_awal_delete' header.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:13px;height:13px"></i> Hapus
+              </a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="ni-text-center ni-text-muted" style="padding:40px 16px;">
+            <i data-lucide="inbox" style="width:32px;height:32px;display:block;margin:0 auto 8px;opacity:0.4;"></i>
+            Belum ada saldo awal.
+            <a href="{% url 'jurnal:saldo_awal' %}" style="display:block;margin-top:8px;">Tambah sekarang &rarr;</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
