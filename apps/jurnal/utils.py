@@ -13,7 +13,7 @@ def log_jurnal_terhapus(header, module: str, request: HttpRequest | None = None)
 
     details = list(
         header.details.select_related('akun').values(
-            'akun__kode_akun', 'akun__nama_akun', 'debit', 'kredit',
+            'akun__kode_akun', 'akun__nama', 'debit', 'kredit',
         )
     )
     # Decimal is not JSON-serialisable — convert to str

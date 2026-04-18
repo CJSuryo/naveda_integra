@@ -93,7 +93,7 @@
                     {% for row in record.detail_snapshot %}
                     <tr>
                       <td><code style="font-size:0.75rem;">{{ row.akun__kode_akun|default:"—" }}</code></td>
-                      <td>{{ row.akun__nama_akun|default:"—" }}</td>
+                      <td>{{ row.akun__nama|default:"—" }}</td>
                       <td style="text-align:right;">{{ row.debit|default:"0" }}</td>
                       <td style="text-align:right;">{{ row.kredit|default:"0" }}</td>
                     </tr>
