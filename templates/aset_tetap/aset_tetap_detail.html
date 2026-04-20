@@ -125,7 +125,7 @@
 </div>
 {% endif %}
 
-{% if dep_journals %}
+{% if dep_journal_data %}
 <!-- Riwayat Penyusutan -->
 <div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
   <div class="ni-card__body">
@@ -140,14 +140,24 @@
             <th>Tanggal</th>
             <th>Nomor Jurnal</th>
             <th>Uraian</th>
+            <th class="ni-text-right">Nilai Penyusutan</th>
+            <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
-          {% for j in dep_journals %}
+          {% for item in dep_journal_data %}
           <tr>
-            <td>{{ j.tanggal }}</td>
-            <td><a href="{% url 'jurnal:header_detail' j.pk %}" style="color:var(--ni-primary);">{{ j.nomor_transaksi }}</a></td>
-            <td>{{ j.uraian_transaksi }}</td>
+            <td>{{ item.journal.tanggal }}</td>
+            <td><a href="{% url 'jurnal:header_detail' item.journal.pk %}" style="color:var(--ni-primary);">{{ item.journal.nomor_transaksi }}</a></td>
+            <td>{{ item.journal.uraian_transaksi }}</td>
+            <td class="ni-text-right" style="font-weight:500;color:var(--ni-danger);">
+              {% if item.amount %}Rp {{ item.amount|floatformat:0|intcomma }}{% else %}—{% endif %}
+            </td>
+            <td>
+              <a href="{% url 'aset_tetap:delete_dep_journal' record.pk item.journal.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i> Hapus
+              </a>
+            </td>
           </tr>
           {% endfor %}
         </tbody>

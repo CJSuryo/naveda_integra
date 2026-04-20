@@ -139,7 +139,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">{{ item.net|floatformat:0|intcomma }}</div>
         </div>
         {% empty %}
         <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
@@ -147,7 +147,7 @@
       {% endif %}
       <div class="lr-subtotal">
         <span>Total HPP</span>
-        <span>({{ total_hpp|floatformat:0|intcomma }})</span>
+        <span>{{ total_hpp|floatformat:0|intcomma }}</span>
       </div>
     </div>
 
@@ -169,7 +169,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">{{ item.net|floatformat:0|intcomma }}</div>
         </div>
         {% empty %}
         <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
@@ -177,7 +177,7 @@
       {% endif %}
       <div class="lr-subtotal">
         <span>Total Beban Operasional</span>
-        <span>({{ total_beban_op|floatformat:0|intcomma }})</span>
+        <span>{{ total_beban_op|floatformat:0|intcomma }}</span>
       </div>
     </div>
 
@@ -207,7 +207,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">{{ item.net|floatformat:0|intcomma }}</div>
         </div>
         {% endfor %}
         {% if not pendapatan_non_op_items and not beban_non_op_items %}

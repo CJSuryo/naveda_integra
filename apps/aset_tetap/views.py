@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -45,6 +46,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
         'items': ItemMasterPurchase.objects.filter(tipe_item='ATP').order_by('item_id'),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'kondisi_choices': AsetTetapRecord.KONDISI_CHOICES,
+        'metode_choices': AsetTetapRecord.METODE_PENYUSUTAN_CHOICES,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
@@ -81,14 +83,35 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         preview_amount = calculate_depreciation(record, tahun_ke=tahun_ke, days=DEFAULT_DAYS)
 
     # Depreciation journal history
-    from apps.jurnal.models import JurnalHeader
+    from apps.jurnal.models import JurnalHeader, JurnalDetail
+    from django.db.models import Sum as _Sum
     from datetime import date as date_cls, timedelta
-    dep_journals = JurnalHeader.objects.filter(
-        uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
-    ).order_by('-tanggal')
+    dep_journals = list(
+        JurnalHeader.objects.filter(
+            uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
+        ).order_by('-tanggal')
+    )
 
-    last_dep = dep_journals.first()
+    # Build a map of journal pk -> depreciation amount (debit on akun 5.1.19.xx)
+    dep_amounts = {}
+    if dep_journals:
+        journal_pks = [j.pk for j in dep_journals]
+        amounts_qs = (
+            JurnalDetail.objects
+            .filter(jurnal_header_id__in=journal_pks, akun__kode_akun__startswith='5.1.19')
+            .values('jurnal_header_id')
+            .annotate(total=_Sum('debit'))
+        )
+        dep_amounts = {row['jurnal_header_id']: row['total'] for row in amounts_qs}
+
+    last_dep = dep_journals[0] if dep_journals else None
     last_dep_date = last_dep.tanggal if last_dep else None
+
+    # Build combined list for template: [{journal, amount}]
+    dep_journal_data = [
+        {'journal': j, 'amount': dep_amounts.get(j.pk, Decimal('0'))}
+        for j in dep_journals
+    ]
     if last_dep_date:
         suggested_start_date = last_dep_date + timedelta(days=1)
     else:
@@ -104,7 +127,7 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'needs_activity_input': needs_activity_input,
         'metode': metode,
         'can_depreciate': record.nilai_buku > record.nilai_residu,
-        'dep_journals': dep_journals,
+        'dep_journal_data': dep_journal_data,
         'default_days': DEFAULT_DAYS,
         'last_dep_date': last_dep_date,
         'suggested_start_date': suggested_start_date,
@@ -275,6 +298,9 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
     except ValueError:
         tanggal = date_cls.today()
 
+    # Entitas bisnis filter (required in UI but handled gracefully here)
+    eb_id = request.POST.get('entitas_bisnis', '')
+
     # Selected asset IDs from checkboxes
     selected_ids = request.POST.getlist('record_ids')
 
@@ -283,6 +309,8 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
         records = records.filter(pk__in=selected_ids)
     else:
         records = records.all()
+    if eb_id:
+        records = records.filter(entitas_bisnis_id=eb_id)
 
     success_count = 0
     skip_count = 0
@@ -362,9 +390,21 @@ def aset_tetap_bulk_preview(request: HttpRequest) -> JsonResponse:
     if not tanggal:
         return JsonResponse({'error': 'Tanggal wajib diisi.'}, status=400)
 
+    eb_id = request.GET.get('entitas_bisnis', '')
+    metode_filter = request.GET.getlist('metode')  # optional list of metode codes
+
     from apps.jurnal.models import JurnalHeader
 
     records = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis').all()
+    if eb_id:
+        records = records.filter(entitas_bisnis_id=eb_id)
+    if metode_filter:
+        # Filter by records whose effective metode is in the list
+        records = records.filter(
+            models.Q(metode_penyusutan__in=metode_filter) |
+            models.Q(metode_penyusutan='', item__metode_penyusutan__in=metode_filter) |
+            models.Q(metode_penyusutan__isnull=True, item__metode_penyusutan__in=metode_filter)
+        )
     preview = []
 
     for record in records:
@@ -409,6 +449,58 @@ def aset_tetap_bulk_preview(request: HttpRequest) -> JsonResponse:
             'hari': hari,
             'depreciation': float(depreciation),
             'new_book_value': float(new_book_value),
+            'entitas_bisnis': record.entitas_bisnis.nama if record.entitas_bisnis else '-',
         })
 
     return JsonResponse({'records': preview})
+
+
+@login_required
+def delete_depreciation_journal(request: HttpRequest, pk: int, jurnal_pk: int) -> HttpResponse:
+    """Delete a single depreciation journal and reverse its akumulasi_penyusutan."""
+    from apps.jurnal.models import JurnalHeader, JurnalDetail
+    from apps.jurnal.utils import log_jurnal_terhapus
+    from django.db import transaction as db_transaction
+    from django.db.models import Sum as _Sum
+
+    record = get_object_or_404(
+        AsetTetapRecord.objects.select_related('item', 'entitas_bisnis'),
+        pk=pk,
+    )
+    journal = get_object_or_404(
+        JurnalHeader,
+        pk=jurnal_pk,
+        uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
+    )
+
+    # Get the depreciation amount from the beban penyusutan (debit on 5.1.19.xx)
+    agg = (
+        JurnalDetail.objects
+        .filter(jurnal_header=journal, akun__kode_akun__startswith='5.1.19')
+        .aggregate(total=_Sum('debit'))
+    )
+    dep_amount = agg['total'] or Decimal('0')
+
+    if request.method == 'POST':
+        with db_transaction.atomic():
+            log_jurnal_terhapus(journal, 'aset_tetap', request)
+            journal.details.all().delete()
+            journal.delete()
+            # Reverse accumulated depreciation
+            record.akumulasi_penyusutan = max(
+                Decimal('0'),
+                record.akumulasi_penyusutan - dep_amount,
+            )
+            record.save(update_fields=['akumulasi_penyusutan'])
+        messages.success(
+            request,
+            f'Jurnal {journal.nomor_transaksi} dihapus. '
+            f'Akumulasi penyusutan dikurangi Rp {dep_amount:,.0f}.',
+        )
+        return redirect('aset_tetap:detail', pk=pk)
+
+    return render(request, 'aset_tetap/delete_dep_journal_confirm.html', {
+        'record': record,
+        'journal': journal,
+        'dep_amount': dep_amount,
+    })

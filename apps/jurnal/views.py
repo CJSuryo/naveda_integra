@@ -462,6 +462,11 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         )
     )
 
+    # Akun prefixes whose entries (regardless of is_penyesuaian flag) belong
+    # in Mutasi Modul because they represent periodic operating activity, not
+    # manual adjustments (e.g. Beban Penyusutan 5.1.19.xx).
+    MODUL_OVERRIDE_PREFIXES = ('5.1.19',)
+
     def _get(m, akun_id, field):
         return m.get(akun_id, {}).get(field, Decimal('0'))
 
@@ -473,6 +478,13 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         modul_k = _get(modul_map, akun.pk, 'total_kredit')
         peny_d = _get(penyesuaian_map, akun.pk, 'total_debit')
         peny_k = _get(penyesuaian_map, akun.pk, 'total_kredit')
+
+        # For overridden prefixes, move penyesuaian amounts into mutasi modul
+        if any(akun.kode_akun.startswith(p) for p in MODUL_OVERRIDE_PREFIXES):
+            modul_d += peny_d
+            modul_k += peny_k
+            peny_d = Decimal('0')
+            peny_k = Decimal('0')
 
         # Sebelum penyesuaian = saldo awal + mutasi modul
         sblm_d = sa_d + modul_d

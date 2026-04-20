@@ -11,6 +11,7 @@ urlpatterns = [
     path('<int:pk>/edit/', views.aset_tetap_update, name='update'),
     path('<int:pk>/delete/', views.aset_tetap_delete, name='delete'),
     path('<int:pk>/proses-penyusutan/', views.aset_tetap_process_depreciation, name='process_depreciation'),
+    path('<int:pk>/jurnal-penyusutan/<int:jurnal_pk>/hapus/', views.delete_depreciation_journal, name='delete_dep_journal'),
     path('bulk-penyusutan/', views.aset_tetap_bulk_depreciation, name='bulk_depreciation'),
     path('bulk-penyusutan/preview/', views.aset_tetap_bulk_preview, name='bulk_preview'),
 ]
