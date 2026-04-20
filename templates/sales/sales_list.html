@@ -11,6 +11,9 @@
     <a id="exportXlsxBtn" href="{% url 'sales:export' %}" class="ni-btn ni-btn--secondary">
       <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
     </a>
+    <a id="exportPdfBtn" href="{% url 'sales:export_pdf' %}" target="_blank" class="ni-btn ni-btn--secondary">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
     <a href="{% url 'sales:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Penjualan
     </a>
@@ -128,9 +131,12 @@
 <script>
 (function() {
   'use strict';
-  var exportBtn = document.getElementById('exportXlsxBtn');
-  if (exportBtn && window.location.search) {
-    exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
+  var qs = window.location.search;
+  var exportXlsx = document.getElementById('exportXlsxBtn');
+  var exportPdf = document.getElementById('exportPdfBtn');
+  if (qs) {
+    if (exportXlsx) exportXlsx.href = exportXlsx.href.split('?')[0] + qs;
+    if (exportPdf) exportPdf.href = exportPdf.href.split('?')[0] + qs;
   }
 })();
 </script>

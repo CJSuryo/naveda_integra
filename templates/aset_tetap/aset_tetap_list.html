@@ -158,49 +158,7 @@ function loadBulkPreview() {
           '<td><input type="checkbox" class="bulk-dep-cb" value="' + rec.id + '" checked></td>' +
           '<td>' + rec.aset_number + '</td>' +
           '<td>' + rec.item_nama + '</td>' +
-          '<td style="font-size:0.78rem;color:var(--color-text-muted);">' + (rec.entitas_bisnis || '-') + '</td>' +
-          '<td>' + rec.metode + '</td>' +
-          '<td class="ni-text-right">' + fmtNum(rec.nilai_buku) + '</td>' +
-          '<td class="ni-text-right">' + rec.hari + '</td>' +
-          '<td class="ni-text-right" style="color:var(--ni-danger);font-weight:500;">' + fmtNum(rec.depreciation) + '</td>' +
-          '<td class="ni-text-right">' + fmtNum(rec.new_book_value) + '</td>';
-        tbody.appendChild(tr);
-      });
-      document.getElementById('bulk-dep-total').textContent = fmtNum(totalDep);
-      document.getElementById('bulk-dep-select-all').checked = true;
-    })
-    .catch(function(e) { alert('Gagal memuat preview: ' + e.message); });
-}
-function fmtNum(n) {
-  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n));
-}
-function toggleAllBulk(master) {
-  document.querySelectorAll('.bulk-dep-cb').forEach(function(cb) { cb.checked = master.checked; });
-}
-function prepareBulkSubmit() {
-  var tanggal = document.getElementById('bulk-dep-tanggal').value;
-  var eb = document.getElementById('bulk-dep-eb').value;
-  if (!tanggal) { alert('Tanggal wajib diisi.'); return false; }
-  if (!eb) { alert('Entitas bisnis wajib dipilih.'); return false; }
-  document.getElementById('bulk-dep-tanggal-hidden').value = tanggal;
-  document.getElementById('bulk-dep-eb-hidden').value = eb'none';
-        document.getElementById('bulk-dep-empty').style.display = '';
-        document.getElementById('bulk-dep-initial').style.display = 'none';
-        return;
-      }
-      document.getElementById('bulk-dep-preview').style.display = '';
-      document.getElementById('bulk-dep-empty').style.display = 'none';
-      document.getElementById('bulk-dep-initial').style.display = 'none';
-      document.getElementById('bulk-dep-close-row').style.display = 'none';
-      var totalDep = 0;
-      _bulkPreviewData.forEach(function(rec) {
-        totalDep += rec.depreciation;
-        var tr = document.createElement('tr');
-        tr.innerHTML =
-          '<td><input type="checkbox" class="bulk-dep-cb" value="' + rec.id + '" checked></td>' +
-          '<td>' + rec.aset_number + '</td>' +
-          '<td>' + rec.item_nama + '</td>' +
-          '<td style="font-size:0.78rem;color:var(--color-text-muted);">' + (rec.entitas_bisnis || '-') + '</td>' +
+          '<td style="font-size:0.78rem;color:var(--ni-text-muted);">' + (rec.entitas_bisnis || '-') + '</td>' +
           '<td>' + rec.metode + '</td>' +
           '<td class="ni-text-right">' + fmtNum(rec.nilai_buku) + '</td>' +
           '<td class="ni-text-right">' + rec.hari + '</td>' +
@@ -266,6 +224,24 @@ function prepareBulkSubmit() {
           <option value="">— Semua —</option>
           {% for eb in entitas_list %}
           <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Kategori</label>
+        <select name="kategori" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for kat in kategori_list %}
+          <option value="{{ kat.pk }}"{% if kategori_filter == kat.pk|stringformat:'d' %} selected{% endif %}>{{ kat.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Kode Akun</label>
+        <select name="coa_account" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for akun in akun_atp_list %}
+          <option value="{{ akun.pk }}"{% if akun_filter == akun.pk|stringformat:'d' %} selected{% endif %}>{{ akun.kode_akun }} — {{ akun.nama }}</option>
           {% endfor %}
         </select>
       </div>

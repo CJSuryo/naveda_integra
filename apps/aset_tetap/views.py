@@ -8,7 +8,8 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.entitas_bisnis.models import EntitasBisnis
-from apps.purchase.models import ItemMasterPurchase
+from apps.master_data.models import Akun
+from apps.purchase.models import ItemMasterPurchase, KategoriItem
 
 from .forms import AsetTetapRecordForm
 from .models import AsetTetapRecord
@@ -29,6 +30,8 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     item_filter = request.GET.get('item', '')
     eb_filter = request.GET.get('entitas_bisnis', '')
     kondisi_filter = request.GET.get('kondisi', '')
+    kategori_filter = request.GET.get('kategori', '')
+    akun_filter = request.GET.get('coa_account', '')
 
     if tanggal_dari:
         qs = qs.filter(tanggal_perolehan__gte=tanggal_dari)
@@ -40,6 +43,18 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(entitas_bisnis_id=eb_filter)
     if kondisi_filter:
         qs = qs.filter(kondisi=kondisi_filter)
+    if kategori_filter:
+        qs = qs.filter(item__kategori_id=kategori_filter)
+    if akun_filter:
+        qs = qs.filter(item__coa_account_id=akun_filter)
+
+    # Build dropdown lists scoped to ATP items
+    kategori_list = KategoriItem.objects.filter(
+        items__tipe_item='ATP'
+    ).distinct().order_by('nama')
+    akun_atp_list = Akun.objects.filter(
+        item_masters__tipe_item='ATP'
+    ).distinct().order_by('kode_akun')
 
     return render(request, 'aset_tetap/aset_tetap_list.html', {
         'records': qs,
@@ -47,11 +62,15 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'kondisi_choices': AsetTetapRecord.KONDISI_CHOICES,
         'metode_choices': AsetTetapRecord.METODE_PENYUSUTAN_CHOICES,
+        'kategori_list': kategori_list,
+        'akun_atp_list': akun_atp_list,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
         'eb_filter': eb_filter,
         'kondisi_filter': kondisi_filter,
+        'kategori_filter': kategori_filter,
+        'akun_filter': akun_filter,
     })
 
 

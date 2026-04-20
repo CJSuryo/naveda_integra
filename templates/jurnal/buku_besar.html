@@ -12,23 +12,32 @@
 <!-- Filters -->
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:16px;">
-    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
-      <div class="ni-form-group" style="margin:0;flex:2;min-width:200px;">
+    <form method="get" id="bb-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <!-- Akun search -->
+      <div class="ni-form-group" style="margin:0;flex:2;min-width:220px;position:relative;">
         <label class="ni-form-label">Akun</label>
-        <select name="akun" class="ni-input" required>
-          <option value="">— Pilih Akun —</option>
-          {% for akun in akun_list %}
-          <option value="{{ akun.pk }}"{% if akun_id == akun.pk|stringformat:'d' %} selected{% endif %}>{{ akun.kode_akun }} — {{ akun.nama }}</option>
-          {% endfor %}
+        <input type="text" id="akun-search-input" class="ni-input" autocomplete="off"
+               placeholder="Ketik kode atau nama akun..."
+               value="{% if selected_akun %}{{ selected_akun.kode_akun }} — {{ selected_akun.nama }}{% endif %}">
+        <input type="hidden" name="akun" id="akun-hidden" value="{{ akun_id }}">
+        <div id="akun-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:200;background:#fff;border:1px solid var(--ni-border);border-radius:var(--ni-radius-sm);box-shadow:var(--ni-shadow-md);max-height:260px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- Periode bulanan shortcut -->
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Periode Bulanan</label>
+        <select id="periode-bulanan" class="ni-input" onchange="applyPeriode(this.value)">
+          <option value="">— Pilih Bulan —</option>
         </select>
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:130px;">
         <label class="ni-form-label">Dari Tanggal</label>
-        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+        <input type="date" name="tanggal_dari" id="bb-dari" class="ni-input" value="{{ tanggal_dari }}">
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:130px;">
         <label class="ni-form-label">Sampai Tanggal</label>
-        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+        <input type="date" name="tanggal_sampai" id="bb-sampai" class="ni-input" value="{{ tanggal_sampai }}">
       </div>
       <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
         <label class="ni-form-label">Entitas Bisnis</label>
@@ -114,4 +123,109 @@
   </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  /* ── Periode bulanan dropdown ── */
+  (function buildPeriode() {
+    var sel = document.getElementById('periode-bulanan');
+    var today = new Date();
+    for (var i = 0; i < 36; i++) {
+      var d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      var val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+      var label = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+      var opt = document.createElement('option');
+      opt.value = val;
+      opt.textContent = label;
+      // Pre-select if current tanggal_dari matches this month
+      var dari = document.getElementById('bb-dari').value;
+      if (dari && dari.substring(0, 7) === val) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  })();
+
+  window.applyPeriode = function (val) {
+    if (!val) return;
+    var parts = val.split('-');
+    var year = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10);
+    var dari = year + '-' + String(month).padStart(2, '0') + '-01';
+    var lastDay = new Date(year, month, 0).getDate();
+    var sampai = year + '-' + String(month).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
+    document.getElementById('bb-dari').value = dari;
+    document.getElementById('bb-sampai').value = sampai;
+  };
+
+  /* ── Akun typeahead ── */
+  var searchInput = document.getElementById('akun-search-input');
+  var hiddenInput = document.getElementById('akun-hidden');
+  var dropdown = document.getElementById('akun-dropdown');
+  var debounceTimer = null;
+  var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+
+  function renderDropdown(items) {
+    dropdown.innerHTML = '';
+    if (!items.length) {
+      dropdown.innerHTML = '<div style="padding:10px;font-size:0.85rem;color:var(--ni-text-muted);">Tidak ada hasil.</div>';
+      dropdown.style.display = 'block';
+      return;
+    }
+    items.forEach(function (item) {
+      var div = document.createElement('div');
+      div.style.cssText = 'padding:8px 12px;cursor:pointer;font-size:0.85rem;border-bottom:1px solid var(--ni-border);';
+      div.textContent = item.text;
+      div.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        searchInput.value = item.text;
+        hiddenInput.value = item.id;
+        dropdown.style.display = 'none';
+      });
+      div.addEventListener('mouseover', function () { div.style.background = 'var(--ni-primary-light)'; });
+      div.addEventListener('mouseout', function () { div.style.background = ''; });
+      dropdown.appendChild(div);
+    });
+    dropdown.style.display = 'block';
+  }
+
+  searchInput.addEventListener('input', function () {
+    var term = this.value.trim();
+    hiddenInput.value = '';
+    clearTimeout(debounceTimer);
+    if (term.length < 1) { dropdown.style.display = 'none'; return; }
+    debounceTimer = setTimeout(function () {
+      fetch(autocompleteUrl + '?term=' + encodeURIComponent(term))
+        .then(function (r) { return r.json(); })
+        .then(function (data) { renderDropdown(data.slice(0, 20)); })
+        .catch(function () { dropdown.style.display = 'none'; });
+    }, 200);
+  });
+
+  searchInput.addEventListener('focus', function () {
+    if (this.value.trim().length >= 1 && !hiddenInput.value) {
+      this.dispatchEvent(new Event('input'));
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!dropdown.contains(e.target) && e.target !== searchInput) {
+      dropdown.style.display = 'none';
+      // If user cleared or changed text without picking, clear hidden value
+      if (!hiddenInput.value) searchInput.value = '';
+    }
+  });
+
+  // Validate: prevent submit without a selection
+  document.getElementById('bb-form').addEventListener('submit', function (e) {
+    if (searchInput.value && !hiddenInput.value) {
+      e.preventDefault();
+      alert('Pilih akun dari daftar saran.');
+      searchInput.focus();
+    }
+  });
+})();
+</script>
 {% endblock %}
