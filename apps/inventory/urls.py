@@ -6,6 +6,8 @@ app_name = 'inventory'
 
 urlpatterns = [
     path('', views.inventory_list, name='list'),
+    path('export/', views.inventory_export, name='export'),
+    path('export/pdf/', views.inventory_export_pdf, name='export_pdf'),
     path('laporan/', views.laporan_persediaan, name='laporan_persediaan'),
     path('create/', views.inventory_create, name='create'),
     path('<int:pk>/', views.inventory_detail, name='detail'),

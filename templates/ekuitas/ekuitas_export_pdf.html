@@ -1,0 +1,85 @@
+{% load humanize %}<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Laporan Modal Disetor (Ekuitas)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1e293b; background: #fff; padding: 20px; }
+    h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+    .subtitle { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+    .meta { font-size: 10px; color: #64748b; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    thead th { background: #1e3a5f; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
+    thead th.r { text-align: right; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+    tbody td.r { text-align: right; }
+    tfoot td { padding: 6px 8px; font-weight: 700; border-top: 2px solid #1e3a5f; background: #f1f5f9; }
+    tfoot td.r { text-align: right; }
+    .print-btn { margin-bottom: 16px; }
+    .print-btn button { padding: 8px 20px; background: #0054a6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+    @media print {
+      .print-btn { display: none; }
+      body { padding: 10px; }
+      @page { margin: 15mm; size: A4 portrait; }
+    }
+  </style>
+</head>
+<body>
+  <div class="print-btn">
+    <button onclick="window.print()">🖨️ Cetak / Simpan PDF</button>
+    <button onclick="window.close()" style="background:#64748b;margin-left:8px;">✕ Tutup</button>
+  </div>
+
+  <h1>Laporan Modal Disetor (Ekuitas)</h1>
+  <p class="subtitle">
+    {% if tanggal_dari or tanggal_sampai %}
+      Periode:
+      {% if tanggal_dari %}{{ tanggal_dari }}{% else %}—{% endif %}
+      s/d
+      {% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}—{% endif %}
+    {% else %}
+      Semua Periode
+    {% endif %}
+    &nbsp;·&nbsp; {{ total_records }} data
+  </p>
+  <p class="meta">Dicetak: {{ generated_at|date:"d M Y H:i" }}</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Pemilik</th>
+        <th>Entitas Bisnis</th>
+        <th class="r">Jumlah Modal (Rp)</th>
+        <th>Tanggal Setor</th>
+        <th>No. Jurnal</th>
+        <th>Keterangan</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td>{{ r.pemilik.nama }}</td>
+        <td>{{ r.entitas_bisnis.nama }}</td>
+        <td class="r"><strong>{{ r.jumlah_modal|floatformat:0|intcomma }}</strong></td>
+        <td>{{ r.tanggal_setor }}</td>
+        <td>{{ r.jurnal_header.nomor_transaksi|default:'-' }}</td>
+        <td>{{ r.keterangan|default:'-' }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b;">Tidak ada data modal disetor.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if records %}
+    <tfoot>
+      <tr>
+        <td colspan="2" class="r">Total Modal</td>
+        <td class="r"><strong>{{ total_modal|floatformat:0|intcomma }}</strong></td>
+        <td colspan="3"></td>
+      </tr>
+    </tfoot>
+    {% endif %}
+  </table>
+</body>
+</html>

@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Jurnal Amortisasi{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Jurnal Amortisasi</h1>
+    <p class="ni-page-header__subtitle">{{ record.aset_number }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
+      Hapus jurnal <strong>{{ journal.nomor_transaksi }}</strong>?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:4px;">Tanggal: {{ journal.tanggal }}</p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      Akumulasi amortisasi <strong>{{ record.aset_number }}</strong> akan dikurangi
+      <strong style="color:var(--ni-danger);">Rp {{ amort_amount|floatformat:0|intcomma }}</strong>.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus Jurnal</button>
+        <a href="{% url 'aset_lainnya:detail' record.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

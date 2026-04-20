@@ -202,3 +202,96 @@ def api_pemilik_create(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'id': p.pk, 'text': p.nama})
     p = Pemilik.objects.create(nama=nama)
     return JsonResponse({'id': p.pk, 'text': p.nama})
+
+
+# ── Export views ─────────────────────────────────────────────────────────────
+
+def _ekuitas_export_qs(request):
+    """Return filtered ModalDisetor queryset based on GET params."""
+    qs = ModalDisetor.objects.select_related(
+        'entitas_bisnis', 'pemilik', 'jurnal_header',
+    ).order_by('-tanggal_setor', '-created_at')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    if eb_filter:
+        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if tanggal_dari:
+        qs = qs.filter(tanggal_setor__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal_setor__lte=tanggal_sampai)
+    return qs
+
+
+@login_required
+def ekuitas_export(request: HttpRequest) -> HttpResponse:
+    """Export modal disetor list as XLSX with same filters as list page."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    records = list(_ekuitas_export_qs(request))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Modal Disetor'
+
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin = Side(style='thin')
+    thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    right_align = Alignment(horizontal='right')
+
+    headers = [
+        'Pemilik', 'Entitas Bisnis', 'Jumlah Modal (Rp)',
+        'Tanggal Setor', 'No. Jurnal', 'Keterangan',
+    ]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = thin_border
+        c.alignment = Alignment(horizontal='center')
+
+    for row_num, r in enumerate(records, 2):
+        vals = [
+            r.pemilik.nama,
+            r.entitas_bisnis.nama,
+            float(r.jumlah_modal or 0),
+            str(r.tanggal_setor),
+            r.jurnal_header.nomor_transaksi if r.jurnal_header else '',
+            r.keterangan or '',
+        ]
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=row_num, column=col, value=val)
+            c.border = thin_border
+            if col == 3:
+                c.alignment = right_align
+                c.number_format = '#,##0'
+
+    col_widths = [28, 28, 22, 14, 20, 40]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="ekuitas.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def ekuitas_export_pdf(request: HttpRequest) -> HttpResponse:
+    """Render print-friendly modal disetor list for browser PDF printing."""
+    import datetime
+    records = list(_ekuitas_export_qs(request))
+    total_modal = sum(r.jumlah_modal for r in records)
+    return render(request, 'ekuitas/ekuitas_export_pdf.html', {
+        'records': records,
+        'tanggal_dari': request.GET.get('tanggal_dari', ''),
+        'tanggal_sampai': request.GET.get('tanggal_sampai', ''),
+        'generated_at': datetime.datetime.now(),
+        'total_modal': total_modal,
+        'total_records': len(records),
+    })

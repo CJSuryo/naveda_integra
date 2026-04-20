@@ -147,6 +147,7 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'metode': metode,
         'can_depreciate': record.nilai_buku > record.nilai_residu,
         'dep_journal_data': dep_journal_data,
+        'latest_dep_journal_pk': dep_journals[0].pk if dep_journals else None,
         'default_days': DEFAULT_DAYS,
         'last_dep_date': last_dep_date,
         'suggested_start_date': suggested_start_date,
@@ -492,6 +493,17 @@ def delete_depreciation_journal(request: HttpRequest, pk: int, jurnal_pk: int) -
         uraian_transaksi__startswith=f'Penyusutan {record.aset_number}',
     )
 
+    # Validate that this is the latest depreciation journal for this asset
+    latest_journal = (
+        JurnalHeader.objects
+        .filter(uraian_transaksi__startswith=f'Penyusutan {record.aset_number}')
+        .order_by('-tanggal', '-pk')
+        .first()
+    )
+    if not latest_journal or latest_journal.pk != journal.pk:
+        messages.error(request, 'Hanya jurnal penyusutan terbaru yang dapat dihapus.')
+        return redirect('aset_tetap:detail', pk=pk)
+
     # Get the depreciation amount from the beban penyusutan (debit on 5.1.19.xx)
     agg = (
         JurnalDetail.objects
@@ -522,4 +534,116 @@ def delete_depreciation_journal(request: HttpRequest, pk: int, jurnal_pk: int) -
         'record': record,
         'journal': journal,
         'dep_amount': dep_amount,
+    })
+
+
+# ── Export views ─────────────────────────────────────────────────────────────
+
+def _aset_tetap_export_qs(request):
+    """Return filtered AsetTetapRecord queryset based on GET params."""
+    qs = AsetTetapRecord.objects.select_related(
+        'item', 'item__kategori', 'entitas_bisnis',
+    ).order_by('-tanggal_perolehan', '-created_at')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    item_filter = request.GET.get('item', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    kondisi_filter = request.GET.get('kondisi', '')
+    kategori_filter = request.GET.get('kategori', '')
+    if tanggal_dari:
+        qs = qs.filter(tanggal_perolehan__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal_perolehan__lte=tanggal_sampai)
+    if item_filter:
+        qs = qs.filter(item_id=item_filter)
+    if eb_filter:
+        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if kondisi_filter:
+        qs = qs.filter(kondisi=kondisi_filter)
+    if kategori_filter:
+        qs = qs.filter(item__kategori_id=kategori_filter)
+    return qs
+
+
+@login_required
+def aset_tetap_export(request: HttpRequest) -> HttpResponse:
+    """Export aset tetap list as XLSX with same filters as list page."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    records = list(_aset_tetap_export_qs(request))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Aset Tetap'
+
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin = Side(style='thin')
+    thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    right_align = Alignment(horizontal='right')
+
+    headers = [
+        'No. Aset', 'Item', 'Kategori', 'Entitas Bisnis', 'Tanggal Perolehan',
+        'Qty', 'Harga Perolehan (Rp)', 'Total Nilai (Rp)',
+        'Akum. Penyusutan (Rp)', 'Nilai Buku (Rp)', 'Kondisi', 'Metode Penyusutan',
+    ]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = thin_border
+        c.alignment = Alignment(horizontal='center')
+
+    for row_num, r in enumerate(records, 2):
+        vals = [
+            r.aset_number,
+            f'{r.item.item_id} - {r.item.nama}',
+            r.item.kategori.nama if r.item.kategori else '',
+            r.entitas_bisnis.nama,
+            str(r.tanggal_perolehan),
+            float(r.quantity or 1),
+            float(r.harga_perolehan or 0),
+            float(r.total_value or 0),
+            float(r.akumulasi_penyusutan or 0),
+            float(r.nilai_buku),
+            r.get_kondisi_display() if hasattr(r, 'get_kondisi_display') else r.kondisi,
+            r.metode_penyusutan or '',
+        ]
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=row_num, column=col, value=val)
+            c.border = thin_border
+            if col in (6, 7, 8, 9, 10):
+                c.alignment = right_align
+                c.number_format = '#,##0'
+
+    col_widths = [18, 32, 18, 26, 16, 8, 20, 20, 22, 18, 12, 20]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="aset_tetap.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def aset_tetap_export_pdf(request: HttpRequest) -> HttpResponse:
+    """Render print-friendly aset tetap list for browser PDF printing."""
+    records = list(_aset_tetap_export_qs(request))
+    total_nilai = sum(r.total_value for r in records)
+    total_akum = sum(r.akumulasi_penyusutan for r in records)
+    total_buku = sum(r.nilai_buku for r in records)
+    return render(request, 'aset_tetap/aset_tetap_export_pdf.html', {
+        'records': records,
+        'tanggal_dari': request.GET.get('tanggal_dari', ''),
+        'tanggal_sampai': request.GET.get('tanggal_sampai', ''),
+        'generated_at': __import__('datetime').datetime.now(),
+        'total_nilai': total_nilai,
+        'total_akum': total_akum,
+        'total_buku': total_buku,
+        'total_records': len(records),
     })

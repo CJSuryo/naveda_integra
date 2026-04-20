@@ -306,6 +306,75 @@ def purchase_export(request: HttpRequest) -> HttpResponse:
     return response
 
 
+@login_required
+def purchase_export_pdf(request: HttpRequest) -> HttpResponse:
+    """Render print-friendly purchase list for browser PDF printing."""
+    qs = (
+        PurchaseHeader.objects
+        .prefetch_related(
+            'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
+            'entitas_groups__items__item',
+            'entitas_groups__items__sub_transaction_type',
+        )
+        .order_by('-tanggal', '-created_at')
+    )
+
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    item_filter = request.GET.get('item', '')
+    stt_filter = request.GET.get('sub_transaction_type', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if item_filter:
+        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
+    if stt_filter:
+        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
+    if eb_filter:
+        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+
+    rows = []
+    total_nilai = Decimal('0')
+    for ph in qs:
+        for eg in ph.entitas_groups.all():
+            if eg.entitas_bisnis_lv3_id:
+                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama} / {eg.entitas_bisnis_lv3.nama}'
+            elif eg.entitas_bisnis_lv2_id:
+                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+            else:
+                eb_display = eg.entitas_bisnis.nama
+            for pi in eg.items.all():
+                if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
+                    continue
+                if item_filter and str(pi.item_id) != str(item_filter):
+                    continue
+                total_nilai += pi.total_value or Decimal('0')
+                rows.append({
+                    'transaction_id': ph.transaction_id,
+                    'tanggal': ph.tanggal,
+                    'eb_display': eb_display,
+                    'item': str(pi.item) if pi.item else '-',
+                    'stt': pi.sub_transaction_type.nama if pi.sub_transaction_type else '-',
+                    'qty': pi.quantity or 0,
+                    'unit_price': pi.unit_price or 0,
+                    'total': pi.total_value or 0,
+                })
+
+    return render(request, 'purchase/purchase_export_pdf.html', {
+        'rows': rows,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'generated_at': timezone.now(),
+        'total_nilai': total_nilai,
+        'total_rows': len(rows),
+    })
+
+
 # ── Purchase Create ──────────────────────────────────────────────────────────
 
 @login_required

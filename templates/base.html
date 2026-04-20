@@ -231,7 +231,7 @@
         </div>
       </div>
 
-      <div class="ni-nav-item {% if 'jurnal' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'jurnal' in request.path and 'neraca-saldo' not in request.path and 'buku-besar' not in request.path and 'laporan-laba-rugi' not in request.path and '/jurnal/neraca/' not in request.path and 'laporan-perubahan-ekuitas' not in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="book-open" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Jurnal</span>
@@ -244,6 +244,22 @@
           <a href="{% url 'jurnal:manual_jurnal' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Jurnal Manual</span>
           </a>
+          <a href="{% url 'jurnal:saldo_awal_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Saldo Awal</span>
+          </a>
+          <a href="{% url 'jurnal:jurnal_terhapus' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">History Jurnal Terhapus</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="ni-nav-item {% if 'neraca-saldo' in request.path or 'buku-besar' in request.path or 'laporan-laba-rugi' in request.path or '/jurnal/neraca/' in request.path or 'laporan-perubahan-ekuitas' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="bar-chart-2" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Laporan</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
           <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Neraca Saldo</span>
           </a>
@@ -258,9 +274,6 @@
           </a>
           <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Laporan Perubahan Ekuitas</span>
-          </a>
-          <a href="{% url 'jurnal:jurnal_terhapus' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">History Jurnal Terhapus</span>
           </a>
         </div>
       </div>

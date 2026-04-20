@@ -47,8 +47,9 @@
   .lp-wf__row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--ni-border); }
   .lp-wf__row:last-child { border-bottom: none; padding-top: 8px; }
   .lp-wf__label { font-size: 0.7rem; color: var(--ni-text-muted); width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .lp-wf__bar { flex: 1; height: 12px; background: var(--ni-bg); border-radius: 3px; overflow: hidden; }
-  .lp-wf__fill { height: 100%; border-radius: 3px; }
+  .lp-wf__bar { flex: 1; height: 14px; background: var(--ni-bg); border-radius: 3px; position: relative; overflow: hidden; }
+  .lp-wf__bar::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--ni-border); z-index: 1; pointer-events: none; }
+  .lp-wf__fill { height: 100%; position: absolute; border-radius: 2px; }
   .lp-wf__val { font-size: 0.7rem; font-weight: 500; width: 90px; text-align: right; flex-shrink: 0; }
   .lp-wf__row--total .lp-wf__label { color: var(--ni-text); font-weight: 600; font-size: 0.75rem; }
 
@@ -141,6 +142,17 @@
     .lp-wf__label { width: 80px; font-size: 0.6rem; }
     .lp-wf__val { width: 70px; font-size: 0.6rem; }
   }
+  .lp-tv { font-size: 0.7rem; color: var(--ni-text-muted); }
+  .lp-tv strong { color: var(--ni-text); }
+  .lp-tr-ratio { display: inline-block; min-width: 36px; text-align: center; font-size: 0.65rem; font-weight: 700; padding: 2px 6px; border-radius: 99px; }
+  .lp-tr-ratio--high { background: #dcfce7; color: #166534; }
+  .lp-tr-ratio--mid { background: #fef3c7; color: #92400e; }
+  .lp-tr-ratio--low { background: #f1f5f9; color: #64748b; }
+
+  /* ── Pagination Controls ─────────────────────────────────────────────── */
+  .lp-pg { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--ni-border); font-size: 0.8rem; min-height: 44px; }
+  .lp-pg:empty { display: none; }
+  .lp-pg--active { background: var(--ni-primary) !important; color: #fff !important; border-color: var(--ni-primary) !important; }
 </style>
 {% endblock %}
 
@@ -210,7 +222,7 @@
   <div class="lp-mc lp-mc--red">
     <div class="lp-mc__label">Item Butuh Aksi</div>
     <div class="lp-mc__value">{{ metrics.items_need_action }}</div>
-    <span class="lp-mc__tag lp-mc__tag--red">Exp + ROP alert</span>
+    <span class="lp-mc__tag lp-mc__tag--red">Exp + Reorder Point alert</span>
   </div>
   <div class="lp-mc lp-mc--purple">
     <div class="lp-mc__label">Slow / Dead Stock</div>
@@ -243,7 +255,7 @@
       <div class="lp-wf__row {% if w.type == 'total' %}lp-wf__row--total{% endif %}">
         <div class="lp-wf__label" title="{{ w.label }}">{{ w.label }}</div>
         <div class="lp-wf__bar">
-          <div class="lp-wf__fill" style="width:{{ w.width }}%;background:{% if w.type == 'in' %}var(--ni-success){% elif w.type == 'out' %}var(--ni-danger){% elif w.type == 'total' %}var(--ni-primary){% else %}var(--ni-border){% endif %};"></div>
+          <div class="lp-wf__fill" style="left:{{ w.bar_left }}%;width:{{ w.bar_width }}%;background:{% if w.type == 'in' %}var(--ni-success){% elif w.type == 'out' %}var(--ni-danger){% elif w.type == 'total' %}var(--ni-primary){% else %}transparent{% endif %};"></div>
         </div>
         <div class="lp-wf__val" style="color:{% if w.type == 'in' %}var(--ni-success){% elif w.type == 'out' %}var(--ni-danger){% elif w.type == 'total' %}var(--ni-primary){% else %}var(--ni-text-muted){% endif %};">
           {% if w.type == 'in' %}+{% elif w.type == 'out' %}-{% endif %}{{ w.display }}
@@ -347,9 +359,9 @@
     <div class="lp-alert__list">
       {% for r, current, rop in rop_alerts %}
       <div class="lp-alert__item">
-        <span class="lp-pill lp-pill--info">ROP: {{ rop|floatformat:0 }}</span>
+        <span class="lp-pill lp-pill--info">Reorder Point: {{ rop|floatformat:0 }}</span>
         <span style="font-size:0.7rem;color:var(--ni-text-muted);">{{ r.inventory_number }}</span>
-        <span>{{ r.item.nama }} · stok saat ini <strong>{{ current|floatformat:0|intcomma }}</strong>, di bawah ROP {{ rop|floatformat:0 }}{% if r.lead_time_days %} · Lead time {{ r.lead_time_days }} hari{% endif %}</span>
+        <span>{{ r.item.nama }} · stok saat ini <strong>{{ current|floatformat:0|intcomma }}</strong>, di bawah Reorder Point {{ rop|floatformat:0 }}{% if r.lead_time_days %} · Lead time {{ r.lead_time_days }} hari{% endif %}</span>
       </div>
       {% endfor %}
     </div>
@@ -499,7 +511,7 @@
           <th>Metode</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="lpPosisiBody">
         {% for p in positions %}
         <tr {% if p.exp_info and p.exp_info.class == 'danger' %}style="background:#fef2f2;"{% elif p.exp_info and p.exp_info.class == 'warning' %}style="background:#fffdf7;"{% endif %}>
           <td><code style="font-size:0.7rem;color:var(--ni-text-muted);">{{ p.record.inventory_number }}</code></td>
@@ -520,7 +532,7 @@
           <td class="ni-text-right">{% if p.eoq %}<span style="font-weight:500;color:var(--ni-primary);">{{ p.eoq }}</span>{% else %}<span class="lp-param-empty">Isi parameter</span>{% endif %}</td>
           <td class="ni-text-right">
             {% if p.rop %}<span style="font-weight:500;color:var(--ni-primary);">{{ p.rop }}</span>{% else %}<span class="lp-param-empty">Isi parameter</span>{% endif %}
-            {% if p.below_rop %}<span class="lp-rop-flag">▼ ROP</span>{% endif %}
+            {% if p.below_rop %}<span class="lp-rop-flag">▼ Reorder Point</span>{% endif %}
           </td>
           <td>
             {% if p.exp_info %}
@@ -539,6 +551,7 @@
       </tbody>
     </table>
   </div>
+  <div id="lpPosisiPagerCtrl" class="lp-pg"></div>
   {% if positions %}
   <div style="padding:10px 16px;border-top:1px solid var(--ni-border);display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;">
     <span style="color:var(--ni-text-muted);">
@@ -594,14 +607,15 @@
       </tbody>
     </table>
   </div>
+  <div id="lpMutasiPagerCtrl" class="lp-pg"></div>
 </div>
 
-{# ── ⑪ FIFO Cost Layer ──────────────────────────────────────────────── #}
+{# ── ⑪ Stok Yang Akan Dipakai Lebih Dulu ────────────────────────────── #}
 {% if fifo_layers %}
-<div class="lp-sh"><h3>FIFO Cost Layer</h3><div class="lp-sh__line"></div>
-  <span class="lp-mc__tag lp-mc__tag--green">{{ fifo_layers|length }} layer aktif</span>
+<div class="lp-sh"><h3>Stok Yang Akan Dipakai Lebih Dulu</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag lp-mc__tag--green">{{ fifo_layers|length }} item</span>
 </div>
-<div class="lp-fifo ni-animate-fade-in">
+<div class="lp-fifo ni-animate-fade-in" id="lpFifoContainer">
   <div class="lp-fifo__row lp-fifo__row--header">
     <div></div>
     <div>Inventaris</div>
@@ -623,6 +637,88 @@
     </div>
   </div>
   {% endfor %}
+  <div id="lpFifoPagerCtrl" class="lp-pg" style="border-top:1px solid var(--ni-border);"></div>
+</div>
+{% endif %}
+
+{# ── ⑫ Inventory Turnover ────────────────────────────────────────────── #}
+<div class="lp-sh"><h3>Inventory Turnover</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag" style="background:var(--ni-bg);color:var(--ni-text-muted);">Top 10</span>
+</div>
+<div class="lp-cr lp-cr--2b ni-animate-fade-in" style="margin-bottom:20px;">
+  <div class="ni-card">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--ni-border);">
+      <div style="font-size:0.8rem;font-weight:600;">Top 10 — Nilai Penjualan (COGS) Terbesar</div>
+      <div style="font-size:0.7rem;color:var(--ni-text-muted);">Item dengan total nilai keluar terbesar</div>
+    </div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="min-width:400px;">
+        <thead><tr>
+          <th>Item</th><th>Kategori</th><th class="ni-text-right">COGS (Rp)</th><th class="ni-text-right">Turnover</th>
+        </tr></thead>
+        <tbody>
+          {% for t in turnover_data.top_by_sales %}
+          <tr>
+            <td><div style="font-weight:500;font-size:0.8rem;">{{ t.item_id_str }} - {{ t.nama }}</div><div style="font-size:0.65rem;color:var(--ni-text-muted);">{{ t.tipe_label }}</div></td>
+            <td style="font-size:0.75rem;color:var(--ni-text-muted);">{{ t.kategori }}</td>
+            <td class="ni-text-right" style="font-weight:600;color:var(--ni-success);">{{ t.cogs|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right"><span class="lp-tr-ratio {% if t.turnover_ratio >= 1 %}lp-tr-ratio--high{% elif t.turnover_ratio >= 0.3 %}lp-tr-ratio--mid{% else %}lp-tr-ratio--low{% endif %}">{{ t.turnover_ratio }}×</span></td>
+          </tr>
+          {% empty %}<tr><td colspan="4" class="ni-text-center ni-text-muted" style="padding:16px;">Belum ada data penjualan.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="ni-card">
+    <div style="padding:12px 16px;border-bottom:1px solid var(--ni-border);">
+      <div style="font-size:0.8rem;font-weight:600;">Top 10 — Frekuensi Mutasi Terbanyak</div>
+      <div style="font-size:0.7rem;color:var(--ni-text-muted);">Item dengan jumlah transaksi keluar terbanyak</div>
+    </div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="min-width:400px;">
+        <thead><tr>
+          <th>Item</th><th>Kategori</th><th class="ni-text-right">Jml Transaksi</th><th class="ni-text-right">Turnover</th>
+        </tr></thead>
+        <tbody>
+          {% for t in turnover_data.top_by_count %}
+          <tr>
+            <td><div style="font-weight:500;font-size:0.8rem;">{{ t.item_id_str }} - {{ t.nama }}</div><div style="font-size:0.65rem;color:var(--ni-text-muted);">{{ t.tipe_label }}</div></td>
+            <td style="font-size:0.75rem;color:var(--ni-text-muted);">{{ t.kategori }}</td>
+            <td class="ni-text-right" style="font-weight:600;color:var(--ni-primary);">{{ t.sell_count }}</td>
+            <td class="ni-text-right"><span class="lp-tr-ratio {% if t.turnover_ratio >= 1 %}lp-tr-ratio--high{% elif t.turnover_ratio >= 0.3 %}lp-tr-ratio--mid{% else %}lp-tr-ratio--low{% endif %}">{{ t.turnover_ratio }}×</span></td>
+          </tr>
+          {% empty %}<tr><td colspan="4" class="ni-text-center ni-text-muted" style="padding:16px;">Belum ada data mutasi.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% if turnover_data.top_by_kategori %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+  <div style="padding:12px 16px;border-bottom:1px solid var(--ni-border);">
+    <div style="font-size:0.8rem;font-weight:600;">Turnover per Kategori</div>
+    <div style="font-size:0.7rem;color:var(--ni-text-muted);">Ringkasan perputaran stok per kategori item</div>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr>
+        <th>Kategori</th><th class="ni-text-right">Jml Item</th><th class="ni-text-right">COGS (Rp)</th><th class="ni-text-right">Nilai Persediaan (Rp)</th><th class="ni-text-right">Transaksi</th><th class="ni-text-right">Turnover</th>
+      </tr></thead>
+      <tbody>
+        {% for k in turnover_data.top_by_kategori %}
+        <tr>
+          <td style="font-weight:500;">{{ k.kategori }}</td>
+          <td class="ni-text-right">{{ k.item_count }}</td>
+          <td class="ni-text-right" style="color:var(--ni-success);font-weight:500;">{{ k.cogs|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="color:var(--ni-primary);">{{ k.orig_value|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ k.sell_count }}</td>
+          <td class="ni-text-right"><span class="lp-tr-ratio {% if k.turnover_ratio >= 1 %}lp-tr-ratio--high{% elif k.turnover_ratio >= 0.3 %}lp-tr-ratio--mid{% else %}lp-tr-ratio--low{% endif %}">{{ k.turnover_ratio }}×</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endif %}
 
@@ -731,19 +827,101 @@
     });
   }
 
-  // ── ⑩ Mutasi tab switching ────────────────────────────────────────
+  // ── Pagination helper ─────────────────────────────────────────────
+  function _niPager(config) {
+    var state = { page: 1, perPage: config.defaultPerPage || 20 };
+    var id = config.id;
+
+    function allRows() {
+      var c = document.getElementById(config.containerId);
+      if (!c) return [];
+      return Array.from(c.querySelectorAll(config.rowSel || 'tr'));
+    }
+
+    function render() {
+      var all = allRows();
+      var filtered = config.filterFn ? all.filter(config.filterFn) : all;
+      var total = filtered.length;
+      var totalPages = Math.max(1, Math.ceil(total / state.perPage));
+      if (state.page > totalPages) state.page = totalPages;
+      var start = (state.page - 1) * state.perPage;
+      var end = start + state.perPage;
+
+      all.forEach(function (r) { r.style.display = 'none'; });
+      filtered.slice(start, end).forEach(function (r) { r.style.display = ''; });
+
+      var ctrl = document.getElementById(config.ctrlId);
+      if (!ctrl) return;
+      if (total === 0) { ctrl.innerHTML = ''; return; }
+      var from = start + 1, to = Math.min(end, total);
+      ctrl.innerHTML =
+        '<span style="color:var(--ni-text-muted);font-size:0.8rem;">' + from + '\u2013' + to + ' dari ' + total + '</span>' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+        '<span style="font-size:0.75rem;color:var(--ni-text-muted);">Tampilkan:</span>' +
+        [20, 50, 100].map(function (n) {
+          return '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm' + (n === state.perPage ? ' lp-pg--active' : '') + '" onclick="window[\'' + id + '\'].setPerPage(' + n + ')">' + n + '</button>';
+        }).join('') +
+        '</div>' +
+        '<div style="display:flex;gap:4px;align-items:center;">' +
+        '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="window[\'' + id + '\'].prevPage()" ' + (state.page <= 1 ? 'disabled' : '') + '>&#8249;</button>' +
+        (totalPages > 1 ? '<span style="font-size:0.75rem;color:var(--ni-text-muted);white-space:nowrap;padding:0 4px;">Hal ' + state.page + '/' + totalPages + '</span>' : '') +
+        '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="window[\'' + id + '\'].nextPage()" ' + (state.page >= totalPages ? 'disabled' : '') + '>&#8250;</button>' +
+        '</div>';
+    }
+
+    var pager = {
+      render: render,
+      prevPage: function () { if (state.page > 1) { state.page--; render(); } },
+      nextPage: function () {
+        var filtered = config.filterFn ? allRows().filter(config.filterFn) : allRows();
+        var tp = Math.max(1, Math.ceil(filtered.length / state.perPage));
+        if (state.page < tp) { state.page++; render(); }
+      },
+      setPerPage: function (pp) { state.perPage = pp; state.page = 1; render(); },
+      reset: function () { state.page = 1; render(); },
+    };
+    window[id] = pager;
+    render();
+    return pager;
+  }
+
+  // ── ⑨ Posisi Persediaan pagination ───────────────────────────────
+  _niPager({ id: 'lpPosisiPager', containerId: 'lpPosisiBody', ctrlId: 'lpPosisiPagerCtrl', defaultPerPage: 20 });
+
+  // ── ⑩ Mutasi tab switching (pagination-aware) ────────────────────
+  var _mutasiTabType = 'all';
+  _niPager({
+    id: 'lpMutasiPager',
+    containerId: 'lpMutasiBody',
+    ctrlId: 'lpMutasiPagerCtrl',
+    rowSel: 'tr[data-mutasi-type]',
+    defaultPerPage: 20,
+    filterFn: function (r) {
+      if (_mutasiTabType === 'all') return true;
+      return r.getAttribute('data-mutasi-type') === _mutasiTabType;
+    },
+  });
+
   var tabs = document.querySelectorAll('[data-mutasi-tab]');
   tabs.forEach(function (tab) {
     tab.addEventListener('click', function () {
       tabs.forEach(function (t) { t.classList.remove('lp-tab--active'); });
       tab.classList.add('lp-tab--active');
-      var type = tab.getAttribute('data-mutasi-tab');
-      var rows = document.querySelectorAll('#lpMutasiBody tr[data-mutasi-type]');
-      rows.forEach(function (r) {
-        r.style.display = (type === 'all' || r.getAttribute('data-mutasi-type') === type) ? '' : 'none';
-      });
+      _mutasiTabType = tab.getAttribute('data-mutasi-tab');
+      window.lpMutasiPager.reset();
     });
   });
+
+  // ── ⑪ FIFO pagination ────────────────────────────────────────────
+  if (document.getElementById('lpFifoContainer')) {
+    _niPager({
+      id: 'lpFifoPager',
+      containerId: 'lpFifoContainer',
+      ctrlId: 'lpFifoPagerCtrl',
+      rowSel: '.lp-fifo__row:not(.lp-fifo__row--header)',
+      defaultPerPage: 20,
+    });
+  }
 })();
 </script>
 {% endblock %}

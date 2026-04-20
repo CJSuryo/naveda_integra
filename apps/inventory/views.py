@@ -388,6 +388,13 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
 
     records = list(ir_qs)
 
+    # ── Compute as_of_date for aging/slow-dead/expiry (default: today) ──
+    from datetime import date as _isodate
+    try:
+        as_of_date = _isodate.fromisoformat(tanggal_sampai) if tanggal_sampai else today
+    except ValueError:
+        as_of_date = today
+
     # FIFOBatch base queryset (active)
     fb_qs = FIFOBatch.objects.filter(
         remaining_qty__gt=0, item__tipe_item__in=INVENTORY_TIPE_ITEMS,
@@ -407,18 +414,24 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
             sales_item__sales_eb__entitas_bisnis_id=eb_filter,
         )
 
+    # Pre-build allocation lookup by inventory record (used throughout)
+    alloc_by_ir: dict = defaultdict(list)
+    for _a in alloc_qs:
+        alloc_by_ir[_a.inventory_record_id].append(_a)
+
     # ── ① Metric Cards ──────────────────────────────────────────────────
     total_nilai = sum(r.total_value for r in records)
-    total_masuk = total_nilai  # All records are inflows
+    # total_masuk = ORIGINAL purchase value (not current remaining; items consumed show 0 otherwise)
+    total_masuk = sum(_original_masuk_value(r, alloc_by_ir) for r in records)
     total_keluar = sum(a.cogs_amount for a in alloc_qs)
     active_items = len({r.item_id for r in records if r.total_value > 0})
 
-    # Expiry alerts
+    # Expiry alerts (evaluated as of as_of_date)
     expiry_soon = []  # items expiring within 30 days
     expiry_past = []  # already expired
     for r in records:
         if r.tanggal_kadaluarsa:
-            days_left = (r.tanggal_kadaluarsa - today).days
+            days_left = (r.tanggal_kadaluarsa - as_of_date).days
             if days_left < 0:
                 expiry_past.append((r, days_left))
             elif days_left <= 7:
@@ -426,11 +439,10 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
             elif days_left <= 30:
                 expiry_soon.append((r, days_left, 'warning'))
 
-    # ROP alerts
+    # Reorder Point alerts (evaluated as of as_of_date)
     rop_alerts = []
     for r in records:
         if r.lead_time_days and r.total_value > 0:
-            # Calculate simple ROP from lead_time and historical daily usage
             daily_usage = _calc_daily_usage(r, alloc_qs)
             rop = Decimal(r.lead_time_days) * daily_usage
             if rop > 0:
@@ -441,8 +453,8 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
 
     items_need_action = len(expiry_past) + len([e for e in expiry_soon if e[2] == 'danger']) + len(rop_alerts)
 
-    # Slow/Dead stock
-    slow_dead = _calc_slow_dead(records, alloc_qs, today)
+    # Slow/Dead stock (evaluated as of as_of_date)
+    slow_dead = _calc_slow_dead(records, alloc_qs, as_of_date)
     dead_count = sum(1 for s in slow_dead if s['status'] == 'dead')
     slow_count = sum(1 for s in slow_dead if s['status'] == 'slow')
 
@@ -500,7 +512,7 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
     for r in records:
         key = r.tanggal.strftime('%b')
         if key in months_labels:
-            masuk_monthly[key] += float(r.total_value)
+            masuk_monthly[key] += float(_original_masuk_value(r, alloc_by_ir))
     for a in alloc_qs:
         key = a.sales_item.sales_eb.sales_header.tanggal.strftime('%b')
         if key in months_labels:
@@ -559,7 +571,7 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
         })
 
     # ── ⑦ Aging analysis ────────────────────────────────────────────────
-    aging_buckets = _calc_aging(records, today)
+    aging_buckets = _calc_aging(records, as_of_date)
 
     # ── ⑧ Cost accounting ───────────────────────────────────────────────
     fifo_batches = list(fb_qs)
@@ -585,10 +597,10 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
     }
 
     # ── ⑨ Posisi Persediaan ─────────────────────────────────────────────
-    positions = _calc_positions(records, alloc_qs, today)
+    positions = _calc_positions(records, alloc_qs, as_of_date)
 
     # ── ⑩ Mutasi Persediaan ─────────────────────────────────────────────
-    mutasi_list = _build_mutasi(records, alloc_qs)
+    mutasi_list = _build_mutasi(records, alloc_qs, alloc_by_ir)
 
     # ── ⑪ FIFO Layers ───────────────────────────────────────────────────
     fifo_layers = []
@@ -636,6 +648,9 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
             'status_class': status_class,
         })
 
+    # ── ⑱ Inventory Turnover ────────────────────────────────────────────
+    turnover_data = _calc_inventory_turnover(records, alloc_qs, alloc_by_ir)
+
     context = {
         'metrics': metrics,
         'chart_data_json': json.dumps(chart_data, default=str),
@@ -651,6 +666,7 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
         'positions': positions,
         'mutasi_list': mutasi_list,
         'fifo_layers': fifo_layers,
+        'turnover_data': turnover_data,
         'today': today,
         # Filters
         'eb_list': eb_list,
@@ -686,8 +702,8 @@ def _calc_daily_usage(record, alloc_qs) -> Decimal:
     return total_consumed / Decimal(span)
 
 
-def _calc_slow_dead(records, alloc_qs, today):
-    """Calculate slow-moving and dead stock items."""
+def _calc_slow_dead(records, alloc_qs, as_of_date):
+    """Calculate slow-moving and dead stock items as of as_of_date."""
     result = []
     # Group allocations by inventory record
     alloc_by_ir = defaultdict(list)
@@ -698,13 +714,18 @@ def _calc_slow_dead(records, alloc_qs, today):
         if r.total_value <= 0:
             continue
         ir_allocs = alloc_by_ir.get(r.pk, [])
-        if ir_allocs:
+        # Only consider allocations on or before as_of_date
+        relevant_allocs = [
+            a for a in ir_allocs
+            if a.sales_item.sales_eb.sales_header.tanggal <= as_of_date
+        ]
+        if relevant_allocs:
             last_sale_date = max(
-                a.sales_item.sales_eb.sales_header.tanggal for a in ir_allocs
+                a.sales_item.sales_eb.sales_header.tanggal for a in relevant_allocs
             )
-            days_idle = (today - last_sale_date).days
+            days_idle = (as_of_date - last_sale_date).days
         else:
-            days_idle = (today - r.tanggal).days
+            days_idle = (as_of_date - r.tanggal).days
 
         threshold = r.item.threshold_days_outstanding or 30
         if days_idle > threshold:
@@ -772,17 +793,42 @@ def _calc_waterfall(records, alloc_qs):
 
     items.append({'label': 'Saldo akhir', 'value': saldo_akhir, 'type': 'total'})
 
-    # Calculate bar widths
-    max_val = float(max((abs(i['value']) for i in items), default=1)) or 1
+    # Calculate bidirectional bar positions (center = 50%)
+    all_abs = [abs(float(i['value'])) for i in items if i['value'] != 0]
+    max_val = float(max(all_abs, default=1)) or 1
     for item in items:
-        item['width'] = int(abs(float(item['value'])) / max_val * 100)
-        item['display'] = _format_rp(item['value'])
+        v = float(item['value'])
+        half_pct = int(abs(v) / max_val * 48)  # max 48% each side, leaves 2% gap
+        if item['type'] == 'in':
+            item['bar_left'] = 50
+            item['bar_width'] = half_pct
+        elif item['type'] == 'out':
+            item['bar_left'] = 50 - half_pct
+            item['bar_width'] = half_pct
+        elif item['type'] == 'total':
+            if v >= 0:
+                item['bar_left'] = 50
+                item['bar_width'] = half_pct
+            else:
+                item['bar_left'] = 50 - half_pct
+                item['bar_width'] = half_pct
+        else:  # neutral
+            item['bar_left'] = 50
+            item['bar_width'] = 0
+        item['display'] = _format_rp(v)
 
     return items
 
 
-def _calc_aging(records, today):
-    """Calculate aging buckets: 0-30, 31-60, 61-90, >90 days."""
+def _original_masuk_value(record, alloc_by_ir: dict) -> Decimal:
+    """Compute original intake value of a record (not current remaining)."""
+    ir_allocs = alloc_by_ir.get(record.pk, [])
+    consumed_cogs = sum(a.cogs_amount for a in ir_allocs)
+    return record.total_value + consumed_cogs
+
+
+def _calc_aging(records, as_of_date):
+    """Calculate aging buckets as of as_of_date: 0-30, 31-60, 61-90, >90 days."""
     buckets = [
         {'label': '0–30 hari', 'value': Decimal(0), 'count': 0, 'color': '#10b981'},
         {'label': '31–60 hari', 'value': Decimal(0), 'count': 0, 'color': '#0054a6'},
@@ -790,9 +836,10 @@ def _calc_aging(records, today):
         {'label': '> 90 hari', 'value': Decimal(0), 'count': 0, 'color': '#ef4444'},
     ]
     for r in records:
-        if r.total_value <= 0:
+        val = r.total_value
+        if val <= 0:
             continue
-        age = (today - r.tanggal).days
+        age = (as_of_date - r.tanggal).days
         if age <= 30:
             idx = 0
         elif age <= 60:
@@ -801,7 +848,7 @@ def _calc_aging(records, today):
             idx = 2
         else:
             idx = 3
-        buckets[idx]['value'] += r.total_value
+        buckets[idx]['value'] += val
         buckets[idx]['count'] += 1
 
     total = sum(b['value'] for b in buckets) or Decimal(1)
@@ -819,14 +866,14 @@ def _aging_chart_data(buckets):
     }
 
 
-def _calc_positions(records, alloc_qs, today):
+def _calc_positions(records, alloc_qs, as_of_date):
     """Build position table rows."""
     positions = []
     for r in records:
         if r.total_value <= 0:
             continue
         is_bulk = r.item.tipe_item in BULK_TYPES
-        # Calculate EOQ & ROP
+        # Calculate EOQ & Reorder Point
         daily_usage = _calc_daily_usage(r, alloc_qs)
         eoq = None
         rop = None
@@ -842,10 +889,10 @@ def _calc_positions(records, alloc_qs, today):
 
         current_qty = r.total_value if is_bulk else r.quantity
 
-        # Expiry info
+        # Expiry info (relative to as_of_date)
         exp_info = None
         if r.tanggal_kadaluarsa:
-            days_left = (r.tanggal_kadaluarsa - today).days
+            days_left = (r.tanggal_kadaluarsa - as_of_date).days
             if days_left < 0:
                 exp_info = {'date': r.tanggal_kadaluarsa, 'label': 'Sudah kadaluarsa', 'class': 'danger'}
             elif days_left <= 7:
@@ -855,12 +902,12 @@ def _calc_positions(records, alloc_qs, today):
             else:
                 exp_info = {'date': r.tanggal_kadaluarsa, 'label': '', 'class': ''}
 
-        # Below ROP?
+        # Below Reorder Point?
         below_rop = rop is not None and float(current_qty) < rop
 
         # Dead stock days
         dead_days = None
-        for s in _quick_idle_days(r, alloc_qs, today):
+        for s in _quick_idle_days(r, alloc_qs, as_of_date):
             dead_days = s
             break
 
@@ -883,24 +930,31 @@ def _calc_positions(records, alloc_qs, today):
     return positions
 
 
-def _quick_idle_days(record, alloc_qs, today):
+def _quick_idle_days(record, alloc_qs, as_of_date):
     """Yield idle days for a single record (generator for lazy eval)."""
     ir_allocs = [a for a in alloc_qs if a.inventory_record_id == record.pk]
-    if ir_allocs:
-        last_date = max(a.sales_item.sales_eb.sales_header.tanggal for a in ir_allocs)
-        yield (today - last_date).days
+    relevant = [
+        a for a in ir_allocs
+        if a.sales_item.sales_eb.sales_header.tanggal <= as_of_date
+    ]
+    if relevant:
+        last_date = max(a.sales_item.sales_eb.sales_header.tanggal for a in relevant)
+        yield (as_of_date - last_date).days
     else:
-        yield (today - record.tanggal).days
+        yield (as_of_date - record.tanggal).days
 
 
-def _build_mutasi(records, alloc_qs):
-    """Build combined mutation list (masuk + keluar)."""
+def _build_mutasi(records, alloc_qs, alloc_by_ir: dict):
+    """Build combined mutation list (masuk + keluar).
+    Masuk rows show ORIGINAL purchase value (not current remaining).
+    """
     mutasi = []
     for r in records:
         ref = ''
         if r.purchase_item:
             ref = r.purchase_item.purchase_eb.purchase_header.transaction_id
         is_bulk = r.item.tipe_item in BULK_TYPES
+        original_value = _original_masuk_value(r, alloc_by_ir)
         mutasi.append({
             'tanggal': r.tanggal,
             'inventory_number': r.inventory_number,
@@ -909,7 +963,7 @@ def _build_mutasi(records, alloc_qs):
             'tipe_label': 'Masuk',
             'ref': ref,
             'qty': None if is_bulk else r.quantity,
-            'value': r.total_value,
+            'value': original_value,
             'keterangan': f'Pembelian via {ref}' if ref else 'Saldo awal',
         })
     for a in alloc_qs:
@@ -929,3 +983,168 @@ def _build_mutasi(records, alloc_qs):
         })
     mutasi.sort(key=lambda x: x['tanggal'], reverse=True)
     return mutasi
+
+
+def _calc_inventory_turnover(records, alloc_qs, alloc_by_ir: dict) -> dict:
+    """Calculate inventory turnover metrics per item and per kategori.
+
+    Turnover ratio = COGS (sold value) / original inventory value.
+    Top-10 returned for: by sales value, by mutation count, per kategori.
+    """
+    item_data: dict = {}
+    for r in records:
+        iid = r.item_id
+        if iid not in item_data:
+            kat = r.item.kategori.nama if (hasattr(r.item, 'kategori') and r.item.kategori) else '—'
+            item_data[iid] = {
+                'item_id_str': r.item.item_id,
+                'nama': r.item.nama,
+                'tipe_label': _TIPE_LABEL.get(r.item.tipe_item, r.item.tipe_item),
+                'kategori': kat,
+                'orig_value': Decimal(0),
+                'cogs': Decimal(0),
+                'sell_count': 0,
+                'mutation_count': 0,
+            }
+        item_data[iid]['orig_value'] += _original_masuk_value(r, alloc_by_ir)
+
+    for a in alloc_qs:
+        iid = a.sales_item.item_id
+        if iid in item_data:
+            item_data[iid]['cogs'] += a.cogs_amount
+            item_data[iid]['sell_count'] += 1
+        item_data[iid]['mutation_count'] = item_data.get(iid, {}).get('mutation_count', 0) + 1
+
+    for d in item_data.values():
+        if d['orig_value'] > 0:
+            d['turnover_ratio'] = round(float(d['cogs']) / float(d['orig_value']), 2)
+        else:
+            d['turnover_ratio'] = 0.0
+
+    items_list = list(item_data.values())
+    top_by_sales = sorted(
+        [d for d in items_list if d['cogs'] > 0],
+        key=lambda x: x['cogs'], reverse=True,
+    )[:10]
+    top_by_count = sorted(
+        [d for d in items_list if d['sell_count'] > 0],
+        key=lambda x: x['sell_count'], reverse=True,
+    )[:10]
+
+    # Per kategori
+    kat_data: dict = {}
+    for d in items_list:
+        k = d['kategori']
+        if k not in kat_data:
+            kat_data[k] = {'kategori': k, 'cogs': Decimal(0), 'orig_value': Decimal(0), 'item_count': 0, 'sell_count': 0}
+        kat_data[k]['cogs'] += d['cogs']
+        kat_data[k]['orig_value'] += d['orig_value']
+        kat_data[k]['item_count'] += 1
+        kat_data[k]['sell_count'] += d['sell_count']
+    for kd in kat_data.values():
+        if kd['orig_value'] > 0:
+            kd['turnover_ratio'] = round(float(kd['cogs']) / float(kd['orig_value']), 2)
+        else:
+            kd['turnover_ratio'] = 0.0
+    top_by_kategori = sorted(kat_data.values(), key=lambda x: x['cogs'], reverse=True)[:10]
+
+    return {
+        'top_by_sales': top_by_sales,
+        'top_by_count': top_by_count,
+        'top_by_kategori': top_by_kategori,
+    }
+
+
+# ── Export views ─────────────────────────────────────────────────────────────
+
+def _inventory_export_qs(request):
+    """Return filtered InventoryRecord queryset based on GET params."""
+    qs = InventoryRecord.objects.select_related('item', 'entitas_bisnis').order_by('-tanggal', '-created_at')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    item_filter = request.GET.get('item', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if item_filter:
+        qs = qs.filter(item_id=item_filter)
+    if eb_filter:
+        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    return qs
+
+
+@login_required
+def inventory_export(request: HttpRequest) -> HttpResponse:
+    """Export inventory list as XLSX with same filters as list page."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    records = list(_inventory_export_qs(request))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Inventory'
+
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin = Side(style='thin')
+    thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    right_align = Alignment(horizontal='right')
+
+    headers = ['No. Inventory', 'Item ID', 'Item Nama', 'Tipe', 'Entitas Bisnis',
+               'Tanggal', 'Qty', 'Harga/Unit (Rp)', 'Total Nilai (Rp)', 'Metode']
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = thin_border
+        c.alignment = Alignment(horizontal='center')
+
+    for row_num, r in enumerate(records, 2):
+        vals = [
+            r.inventory_number,
+            r.item.item_id,
+            r.item.nama,
+            r.item.tipe_item,
+            r.entitas_bisnis.nama,
+            str(r.tanggal),
+            float(r.quantity or 0),
+            float(r.unit_price or 0),
+            float(r.total_value or 0),
+            r.get_metode_alokasi_display() or 'FIFO',
+        ]
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=row_num, column=col, value=val)
+            c.border = thin_border
+            if col in (7, 8, 9):
+                c.alignment = right_align
+                c.number_format = '#,##0'
+
+    col_widths = [20, 14, 30, 16, 28, 13, 10, 18, 18, 14]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="inventory.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def inventory_export_pdf(request: HttpRequest) -> HttpResponse:
+    """Render print-friendly inventory list for browser PDF printing."""
+    records = list(_inventory_export_qs(request))
+    total_nilai = sum(r.total_value for r in records)
+    return render(request, 'inventory/inventory_export_pdf.html', {
+        'records': records,
+        'tanggal_dari': request.GET.get('tanggal_dari', ''),
+        'tanggal_sampai': request.GET.get('tanggal_sampai', ''),
+        'generated_at': timezone.now(),
+        'total_nilai': total_nilai,
+        'total_records': len(records),
+    })

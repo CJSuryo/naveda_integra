@@ -52,6 +52,7 @@ def _rekap_jurnal_qs(request: HttpRequest):
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     prefix_filter = request.GET.get('prefix', '')
     akun_filter = request.GET.get('akun', '')
+    uraian_filter = request.GET.get('uraian', '')
     eb_lv1_ids = request.GET.getlist('eb_lv1')
     eb_lv2_ids = request.GET.getlist('eb_lv2')
     eb_lv3_ids = request.GET.getlist('eb_lv3')
@@ -64,6 +65,8 @@ def _rekap_jurnal_qs(request: HttpRequest):
         qs = qs.filter(nomor_transaksi__startswith=prefix_filter)
     if akun_filter:
         qs = qs.filter(details__akun_id=akun_filter).distinct()
+    if uraian_filter:
+        qs = qs.filter(uraian_transaksi__icontains=uraian_filter)
 
     eb_filter_ids = set()
     if eb_lv1_ids:
@@ -87,6 +90,7 @@ def _rekap_jurnal_qs(request: HttpRequest):
         'tanggal_sampai': tanggal_sampai,
         'prefix_filter': prefix_filter,
         'akun_filter': akun_filter,
+        'uraian_filter': uraian_filter,
         'eb_lv1_ids': eb_lv1_ids,
         'eb_lv2_ids': eb_lv2_ids,
         'eb_lv3_ids': eb_lv3_ids,
@@ -114,9 +118,15 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
     )
     prefix_set = sorted({trx.rsplit('-', 1)[0] for trx in prefix_choices if trx and '-' in trx})
 
-    # All akun for filter
+    # All akun for filter — only needed to resolve current_akun_label for TomSelect
     from apps.master_data.utils import get_akun_sorted
     akun_list = get_akun_sorted()
+    current_akun_label = ''
+    if filters['akun_filter']:
+        for _a in akun_list:
+            if str(_a.pk) == str(filters['akun_filter']):
+                current_akun_label = f"{_a.kode_akun} — {_a.nama}"
+                break
 
     return render(request, 'jurnal/rekap_jurnal.html', {
         'headers': headers,
@@ -125,7 +135,8 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
         'prefix_filter': filters['prefix_filter'],
         'prefix_choices': prefix_set,
         'akun_filter': filters['akun_filter'],
-        'akun_list': akun_list,
+        'uraian_filter': filters['uraian_filter'],
+        'current_akun_label': current_akun_label,
         'eb_lv1_all': eb_lv1_all,
         'eb_lv2_all': eb_lv2_all,
         'eb_lv3_all': eb_lv3_all,
@@ -1605,16 +1616,126 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 def _build_initial_rows_json(header) -> str:
-    """Serialise existing JurnalDetail rows to JSON for pre-populating the saldo awal form."""
+    """Serialise existing JurnalDetail rows to JSON for pre-populating the saldo awal form.
+
+    For saldo awal journals, also fetches sub-records (persediaan, aset_tetap,
+    aset_lainnya, modal_disetor) and attaches them as ``detail_rows`` so the edit
+    form can pre-populate the detail modals.
+    """
+    from collections import defaultdict
+    from apps.inventory.models import InventoryRecord
+    from apps.aset_tetap.models import AsetTetapRecord as ATRecord
+    from apps.aset_lainnya.models import AsetLainnyaRecord as ALRecord
+    from apps.ekuitas.models import ModalDisetor
+
+    AKUN_DETAIL_PREFIXES: dict[str, str] = {
+        '1.1.7': 'persediaan',
+        '1.1.8': 'persediaan',
+        '1.1.9': 'persediaan',
+        '1.1.10': 'persediaan',
+        '1.2': 'aset_tetap',
+        '1.2.3': 'aset_tetap',
+        '1.3': 'aset_lainnya',
+        '3.1.1': 'modal_disetor',
+    }
+
+    def _detail_type(kode: str) -> str | None:
+        for prefix, dtype in AKUN_DETAIL_PREFIXES.items():
+            if kode == prefix or kode.startswith(prefix + '.'):
+                return dtype
+        return None
+
+    eb_id = header.entitas_bisnis_id
+    tanggal = header.tanggal
+
+    # Build lookup maps: coa_account_id → list of sub-records
+    inv_by_coa: dict = defaultdict(list)
+    for inv in InventoryRecord.objects.filter(
+        purchase_item=None, entitas_bisnis_id=eb_id, tanggal=tanggal
+    ).select_related('item'):
+        inv_by_coa[inv.item.coa_account_id].append(inv)
+
+    at_by_coa: dict = defaultdict(list)
+    for at in ATRecord.objects.filter(
+        purchase_item=None, entitas_bisnis_id=eb_id, tanggal_perolehan=tanggal
+    ).select_related('item'):
+        at_by_coa[at.item.coa_account_id].append(at)
+
+    al_by_coa: dict = defaultdict(list)
+    for al in ALRecord.objects.filter(
+        purchase_item=None, entitas_bisnis_id=eb_id, tanggal_perolehan=tanggal
+    ).select_related('item'):
+        al_by_coa[al.item.coa_account_id].append(al)
+
+    modal_rows = [
+        {
+            'nama_pemilik': md.pemilik.nama,
+            'jumlah': float(md.jumlah_modal),
+            'keterangan': md.keterangan or '',
+        }
+        for md in ModalDisetor.objects.filter(jurnal_header=header).select_related('pemilik')
+    ]
+
+    # Track whether modal_disetor rows have been attached (attach to first matching row only)
+    modal_attached = False
+
     rows = []
     for detail in header.details.select_related('akun').order_by('pk'):
-        rows.append({
+        kode = detail.akun.kode_akun or ''
+        dtype = _detail_type(kode)
+        row: dict = {
             'akun_id': str(detail.akun_id),
-            'kode_akun': detail.akun.kode_akun,
+            'kode_akun': kode,
             'nama_akun': detail.akun.nama,
             'debit': str(detail.debit),
             'kredit': str(detail.kredit),
-        })
+        }
+
+        if dtype == 'persediaan' and inv_by_coa.get(detail.akun_id):
+            row['detail_type'] = 'persediaan'
+            row['detail_rows'] = [
+                {
+                    'item_id': str(inv.item.pk),
+                    'item_text': f'{inv.item.item_id} — {inv.item.nama}',
+                    'qty': float(inv.quantity),
+                    'unit_price': float(inv.unit_price),
+                    'total': float(inv.total_value),
+                }
+                for inv in inv_by_coa[detail.akun_id]
+            ]
+
+        elif dtype == 'aset_tetap' and at_by_coa.get(detail.akun_id):
+            row['detail_type'] = 'aset_tetap'
+            row['detail_rows'] = [
+                {
+                    'item_id': str(at.item.pk),
+                    'item_text': f'{at.item.item_id} — {at.item.nama}',
+                    'qty': float(at.quantity),
+                    'unit_price': float(at.harga_perolehan),
+                    'total': float(at.total_value),
+                }
+                for at in at_by_coa[detail.akun_id]
+            ]
+
+        elif dtype == 'aset_lainnya' and al_by_coa.get(detail.akun_id):
+            row['detail_type'] = 'aset_lainnya'
+            row['detail_rows'] = [
+                {
+                    'item_id': str(al.item.pk),
+                    'item_text': f'{al.item.item_id} — {al.item.nama}',
+                    'qty': float(al.quantity),
+                    'unit_price': float(al.harga_perolehan),
+                    'total': float(al.total_value),
+                }
+                for al in al_by_coa[detail.akun_id]
+            ]
+
+        elif dtype == 'modal_disetor' and modal_rows and not modal_attached:
+            row['detail_type'] = 'modal_disetor'
+            row['detail_rows'] = modal_rows
+            modal_attached = True
+
+        rows.append(row)
     return json.dumps(rows)
 
 

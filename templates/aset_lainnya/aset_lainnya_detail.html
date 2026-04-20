@@ -124,6 +124,7 @@
             <th>Tanggal</th>
             <th>Nomor Jurnal</th>
             <th>Uraian</th>
+            <th>Aksi</th>
           </tr>
         </thead>
         <tbody>
@@ -132,6 +133,15 @@
             <td>{{ j.tanggal }}</td>
             <td><a href="{% url 'jurnal:header_detail' j.pk %}" style="color:var(--ni-primary);">{{ j.nomor_transaksi }}</a></td>
             <td>{{ j.uraian_transaksi }}</td>
+            <td>
+              {% if j.pk == latest_amort_journal_pk %}
+              <a href="{% url 'aset_lainnya:delete_amort_journal' record.pk j.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i> Hapus
+              </a>
+              {% else %}
+              <span class="ni-text-muted" style="font-size:0.75rem;">—</span>
+              {% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>

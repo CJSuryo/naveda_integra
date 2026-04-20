@@ -1622,6 +1622,17 @@
       var kreditEl = document.getElementById('kredit_' + rid);
       if (kreditEl) { kreditEl.value = parseFloat(row.kredit || 0); }
       _onAkunChange(rid, row.kode_akun || '', row.nama_akun || '');
+      // Pre-populate detail map if sub-records are present
+      if (row.detail_type && row.detail_rows && row.detail_rows.length) {
+        _rowDetailMap[rid] = { type: row.detail_type, detail_rows: row.detail_rows };
+        _updateDetailBadge(rid);
+        // Lock the debit field for non-modal_disetor types (total computed from items)
+        if (debitEl && row.detail_type !== 'modal_disetor') {
+          debitEl.setAttribute('data-detail-locked', '1');
+          debitEl.style.background = 'var(--ni-primary-light)';
+          debitEl.readOnly = true;
+        }
+      }
     });
   }
 

@@ -63,7 +63,7 @@ def aset_lainnya_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.jurnal.models import JurnalHeader
     amort_journals = JurnalHeader.objects.filter(
         uraian_transaksi__startswith=f'Amortisasi {record.aset_number}',
-    ).order_by('-tanggal')
+    ).order_by('-tanggal', '-pk')
 
     return render(request, 'aset_lainnya/aset_lainnya_detail.html', {
         'record': record,
@@ -72,6 +72,72 @@ def aset_lainnya_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'metode': metode,
         'can_amortize': record.nilai_buku > record.nilai_residu,
         'amort_journals': amort_journals,
+        'latest_amort_journal_pk': amort_journals[0].pk if amort_journals else None,
+    })
+
+
+@login_required
+def delete_amortization_journal(request: HttpRequest, pk: int, jurnal_pk: int) -> HttpResponse:
+    """Delete a single amortization journal for an asset, reversing its accumulated amortization.
+
+    Only the latest (most recent) amortization journal may be deleted.
+    """
+    from decimal import Decimal
+    from apps.jurnal.models import JurnalHeader, JurnalDetail
+    from apps.jurnal.utils import log_jurnal_terhapus
+    from django.db import transaction as db_transaction
+    from django.db.models import Sum as _Sum
+
+    record = get_object_or_404(
+        AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis'),
+        pk=pk,
+    )
+    journal = get_object_or_404(
+        JurnalHeader,
+        pk=jurnal_pk,
+        uraian_transaksi__startswith=f'Amortisasi {record.aset_number}',
+    )
+
+    # Validate that this is the latest amortization journal for this asset
+    latest_journal = (
+        JurnalHeader.objects
+        .filter(uraian_transaksi__startswith=f'Amortisasi {record.aset_number}')
+        .order_by('-tanggal', '-pk')
+        .first()
+    )
+    if not latest_journal or latest_journal.pk != journal.pk:
+        messages.error(request, 'Hanya jurnal amortisasi terbaru yang dapat dihapus.')
+        return redirect('aset_lainnya:detail', pk=pk)
+
+    # Determine amortization amount from beban amortisasi debit entries
+    agg = (
+        JurnalDetail.objects
+        .filter(jurnal_header=journal, akun__kode_akun__startswith='5.1.31')
+        .aggregate(total=_Sum('debit'))
+    )
+    amort_amount = agg['total'] or Decimal('0')
+
+    if request.method == 'POST':
+        with db_transaction.atomic():
+            log_jurnal_terhapus(journal, 'aset_lainnya', request)
+            journal.details.all().delete()
+            journal.delete()
+            record.akumulasi_amortisasi = max(
+                Decimal('0'),
+                record.akumulasi_amortisasi - amort_amount,
+            )
+            record.save(update_fields=['akumulasi_amortisasi'])
+        messages.success(
+            request,
+            f'Jurnal {journal.nomor_transaksi} dihapus. '
+            f'Akumulasi amortisasi dikurangi Rp {amort_amount:,.0f}.',
+        )
+        return redirect('aset_lainnya:detail', pk=pk)
+
+    return render(request, 'aset_lainnya/delete_amort_journal_confirm.html', {
+        'record': record,
+        'journal': journal,
+        'amort_amount': amort_amount,
     })
 
 
@@ -265,3 +331,108 @@ def aset_lainnya_bulk_amortization(request: HttpRequest) -> HttpResponse:
         messages.error(request, msg)
 
     return redirect('aset_lainnya:list')
+
+
+# ── Export views ─────────────────────────────────────────────────────────────
+
+def _aset_lainnya_export_qs(request):
+    """Return filtered AsetLainnyaRecord queryset based on GET params."""
+    qs = AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis').order_by(
+        '-tanggal_perolehan', '-created_at',
+    )
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    item_filter = request.GET.get('item', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    if tanggal_dari:
+        qs = qs.filter(tanggal_perolehan__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal_perolehan__lte=tanggal_sampai)
+    if item_filter:
+        qs = qs.filter(item_id=item_filter)
+    if eb_filter:
+        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    return qs
+
+
+@login_required
+def aset_lainnya_export(request: HttpRequest) -> HttpResponse:
+    """Export aset lainnya list as XLSX with same filters as list page."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    records = list(_aset_lainnya_export_qs(request))
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Aset Lainnya'
+
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin = Side(style='thin')
+    thin_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    right_align = Alignment(horizontal='right')
+
+    headers = [
+        'No. Aset', 'Item', 'Entitas Bisnis', 'Tanggal Perolehan',
+        'Qty', 'Harga Perolehan (Rp)', 'Total Nilai (Rp)',
+        'Akum. Amortisasi (Rp)', 'Nilai Buku (Rp)', 'Metode Amortisasi',
+    ]
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = header_font
+        c.fill = header_fill
+        c.border = thin_border
+        c.alignment = Alignment(horizontal='center')
+
+    for row_num, r in enumerate(records, 2):
+        vals = [
+            r.aset_number,
+            f'{r.item.item_id} - {r.item.nama}',
+            r.entitas_bisnis.nama,
+            str(r.tanggal_perolehan),
+            float(r.quantity or 1),
+            float(r.harga_perolehan or 0),
+            float(r.total_value or 0),
+            float(r.akumulasi_amortisasi or 0),
+            float(r.nilai_buku),
+            r.metode_amortisasi or '',
+        ]
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=row_num, column=col, value=val)
+            c.border = thin_border
+            if col in (5, 6, 7, 8, 9):
+                c.alignment = right_align
+                c.number_format = '#,##0'
+
+    col_widths = [18, 34, 26, 16, 8, 20, 20, 22, 18, 20]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="aset_lainnya.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+def aset_lainnya_export_pdf(request: HttpRequest) -> HttpResponse:
+    """Render print-friendly aset lainnya list for browser PDF printing."""
+    import datetime
+    records = list(_aset_lainnya_export_qs(request))
+    total_nilai = sum(r.total_value for r in records)
+    total_akum = sum(r.akumulasi_amortisasi for r in records)
+    total_buku = sum(r.nilai_buku for r in records)
+    return render(request, 'aset_lainnya/aset_lainnya_export_pdf.html', {
+        'records': records,
+        'tanggal_dari': request.GET.get('tanggal_dari', ''),
+        'tanggal_sampai': request.GET.get('tanggal_sampai', ''),
+        'generated_at': datetime.datetime.now(),
+        'total_nilai': total_nilai,
+        'total_akum': total_akum,
+        'total_buku': total_buku,
+        'total_records': len(records),
+    })

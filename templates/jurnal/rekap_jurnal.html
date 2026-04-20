@@ -37,13 +37,17 @@
           {% endfor %}
         </select>
       </div>
-      <div class="ni-form-group" style="margin-bottom:0;min-width:200px;">
+      <div class="ni-form-group" style="margin-bottom:0;min-width:220px;">
+        <label class="ni-form-label">Uraian</label>
+        <input type="text" name="uraian" value="{{ uraian_filter }}" class="ni-input" placeholder="Cari uraian transaksi...">
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;min-width:220px;">
         <label class="ni-form-label">Akun</label>
-        <select name="akun" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for a in akun_list %}
-          <option value="{{ a.pk }}"{% if akun_filter == a.pk|stringformat:'d' %} selected{% endif %}>{{ a.kode_akun }} — {{ a.nama }}</option>
-          {% endfor %}
+        <select id="rekapAkunSelect" name="akun" class="ni-input">
+          <option value="">— Semua Akun —</option>
+          {% if akun_filter %}
+          <option value="{{ akun_filter }}" selected>{{ current_akun_label|default:akun_filter }}</option>
+          {% endif %}
         </select>
       </div>
       <!-- Hidden inputs for selected entitas bisnis (populated by modal JS) -->
@@ -62,7 +66,7 @@
       <button type="submit" class="ni-btn ni-btn--primary">
         <i data-lucide="search" style="width:16px;height:16px"></i> Filter
       </button>
-      {% if tanggal_dari or tanggal_sampai or prefix_filter or akun_filter or selected_lv1 or selected_lv2 or selected_lv3 %}
+      {% if tanggal_dari or tanggal_sampai or prefix_filter or akun_filter or uraian_filter or selected_lv1 or selected_lv2 or selected_lv3 %}
       <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary">Reset</a>
       {% endif %}
     </form>
@@ -297,6 +301,27 @@
   if (exportBtn && window.location.search) {
     exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
   }
+
+  // ── Akun filter: TomSelect autocomplete ──────────────────────────
+  var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var rekapAkunTs = new TomSelect('#rekapAkunSelect', {
+    valueField: 'id',
+    labelField: 'text',
+    searchField: 'text',
+    placeholder: 'Ketik kode/nama akun...',
+    maxOptions: false,
+    preload: 'focus',
+    shouldLoad: function() { return false; },
+    load: function(query, callback) {
+      fetch(autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
+        .then(function(r) { return r.json(); }).then(callback).catch(function() { callback(); });
+    },
+    create: false,
+    onChange: function(val) {
+      // Auto-submit form when akun changes
+      document.getElementById('rekapFilterForm').submit();
+    },
+  });
 })();
 </script>
 <script>

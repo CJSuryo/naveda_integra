@@ -8,6 +8,7 @@ urlpatterns = [
     # Purchase transactions
     path('', views.purchase_list, name='list'),
     path('export/', views.purchase_export, name='export'),
+    path('export/pdf/', views.purchase_export_pdf, name='export_pdf'),
     path('create/', views.purchase_create, name='create'),
     path('<int:pk>/', views.purchase_detail, name='detail'),
     path('<int:pk>/edit/', views.purchase_update, name='update'),

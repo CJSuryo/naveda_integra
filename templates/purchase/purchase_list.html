@@ -11,6 +11,9 @@
     <a id="exportXlsxBtn" href="{% url 'purchase:export' %}" class="ni-btn ni-btn--secondary">
       <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
     </a>
+    <a id="exportPdfBtn" href="{% url 'purchase:export_pdf' %}" class="ni-btn ni-btn--secondary" target="_blank">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
     <a href="{% url 'purchase:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Purchase
     </a>
@@ -121,6 +124,10 @@
   var exportBtn = document.getElementById('exportXlsxBtn');
   if (exportBtn && window.location.search) {
     exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
+  }
+  var pdfBtn = document.getElementById('exportPdfBtn');
+  if (pdfBtn && window.location.search) {
+    pdfBtn.href = pdfBtn.href.split('?')[0] + window.location.search;
   }
 })();
 </script>

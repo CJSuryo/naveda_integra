@@ -154,9 +154,13 @@
               {% if item.amount %}Rp {{ item.amount|floatformat:0|intcomma }}{% else %}—{% endif %}
             </td>
             <td>
+              {% if item.journal.pk == latest_dep_journal_pk %}
               <a href="{% url 'aset_tetap:delete_dep_journal' record.pk item.journal.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
                 <i data-lucide="trash-2" style="width:12px;height:12px"></i> Hapus
               </a>
+              {% else %}
+              <span class="ni-text-muted" style="font-size:0.75rem;">—</span>
+              {% endif %}
             </td>
           </tr>
           {% endfor %}

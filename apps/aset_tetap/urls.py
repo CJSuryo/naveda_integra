@@ -6,6 +6,8 @@ app_name = 'aset_tetap'
 
 urlpatterns = [
     path('', views.aset_tetap_list, name='list'),
+    path('export/', views.aset_tetap_export, name='export'),
+    path('export/pdf/', views.aset_tetap_export_pdf, name='export_pdf'),
     path('create/', views.aset_tetap_create, name='create'),
     path('<int:pk>/', views.aset_tetap_detail, name='detail'),
     path('<int:pk>/edit/', views.aset_tetap_update, name='update'),

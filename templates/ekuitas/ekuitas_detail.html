@@ -1,6 +1,9 @@
 {% extends 'base.html' %}
 {% load humanize %}
 {% block title %}Detail Modal Disetor — {{ record.pemilik.nama }}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
@@ -8,8 +11,16 @@
     <p class="ni-page-header__subtitle">Detail modal disetor</p>
   </div>
   <div class="ni-page-header__actions">
+    {% if record.jurnal_header %}
+    <button type="button" class="ni-btn ni-btn--warning" onclick="ekDetailOpenEdit({{ record.jurnal_header.pk }})">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit Jurnal
+    </button>
+    <button type="button" class="ni-btn ni-btn--outline-danger" onclick="ekDetailOpenDelete({{ record.jurnal_header.pk }}, '{{ record.jurnal_header.nomor_transaksi|escapejs }}')">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus Jurnal
+    </button>
+    {% endif %}
     <a href="{% url 'ekuitas:delete' record.pk %}" class="ni-btn ni-btn--outline-danger">
-      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus Modal Disetor
     </a>
     <a href="{% url 'ekuitas:list' %}" class="ni-btn ni-btn--secondary">
       <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
@@ -75,5 +86,239 @@
     </div>
   </div>
 </div>
+{% endif %}
+
+{% if record.jurnal_header %}
+<!-- Edit Jurnal Modal -->
+<div class="ni-modal-backdrop" id="ekEditJurnalBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Edit Jurnal</h3>
+      <button class="ni-modal__close" id="ekEditJurnalClose" type="button"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-row" style="margin-bottom:16px;">
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
+          <input type="date" id="ekEditTanggal" class="ni-input" required>
+        </div>
+        <div class="ni-form-group" style="margin:0;">
+          <label class="ni-form-label">No. Transaksi</label>
+          <input type="text" id="ekEditNomor" class="ni-input" readonly style="opacity:0.6;">
+        </div>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:16px;">
+        <label class="ni-form-label">Uraian Transaksi <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="ekEditUraian" class="ni-input" required>
+      </div>
+      <div class="ni-table-wrapper" style="margin-bottom:12px;">
+        <table class="ni-table" style="font-size:0.85rem;">
+          <thead>
+            <tr>
+              <th style="width:40%">Akun</th>
+              <th style="width:25%">Debit (Rp)</th>
+              <th style="width:25%">Kredit (Rp)</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody id="ekEditDetailRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="ekEditAddRow()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+      </button>
+      <div id="ekEditError" class="ni-form-error" style="display:none;margin-top:12px;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" id="ekEditJurnalCancel">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="ekSubmitEditJurnal()">
+        <i data-lucide="save" style="width:16px;height:16px"></i> Simpan
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Jurnal Modal -->
+<div class="ni-modal-backdrop" id="ekDeleteJurnalBackdrop">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Konfirmasi Hapus Jurnal</h3>
+      <button class="ni-modal__close" id="ekDeleteJurnalClose" type="button"><i data-lucide="x"></i></button>
+    </div>
+    <div class="ni-modal__body" style="text-align:center;padding:24px;">
+      <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+        <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+      </div>
+      <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">Hapus jurnal <strong id="ekDeleteJurnalName"></strong>?</p>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin-bottom:24px;">Jurnal akan dihapus permanen. Data modal disetor yang terkait tetap ada.</p>
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="button" class="ni-btn ni-btn--danger" onclick="ekConfirmDeleteJurnal()">Ya, Hapus Jurnal</button>
+        <button type="button" class="ni-btn ni-btn--secondary" id="ekDeleteJurnalCancel">Batal</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if record.jurnal_header %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function() {
+  'use strict';
+  var csrfToken = '{{ csrf_token }}';
+  var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var editBackdrop = document.getElementById('ekEditJurnalBackdrop');
+  var deleteBackdrop = document.getElementById('ekDeleteJurnalBackdrop');
+  var _editHeaderPk = null;
+  var _deleteHeaderPk = null;
+  var _editRowCount = 0;
+
+  function showModal(el) { el.classList.add('ni-modal-backdrop--visible'); document.body.style.overflow = 'hidden'; }
+  function hideModal(el) { el.classList.remove('ni-modal-backdrop--visible'); document.body.style.overflow = ''; }
+
+  document.getElementById('ekEditJurnalClose').addEventListener('click', function() { hideModal(editBackdrop); });
+  document.getElementById('ekEditJurnalCancel').addEventListener('click', function() { hideModal(editBackdrop); });
+  editBackdrop.addEventListener('click', function(e) { if (e.target === editBackdrop) hideModal(editBackdrop); });
+  document.getElementById('ekDeleteJurnalClose').addEventListener('click', function() { hideModal(deleteBackdrop); });
+  document.getElementById('ekDeleteJurnalCancel').addEventListener('click', function() { hideModal(deleteBackdrop); });
+  deleteBackdrop.addEventListener('click', function(e) { if (e.target === deleteBackdrop) hideModal(deleteBackdrop); });
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+      if (editBackdrop.classList.contains('ni-modal-backdrop--visible')) hideModal(editBackdrop);
+      if (deleteBackdrop.classList.contains('ni-modal-backdrop--visible')) hideModal(deleteBackdrop);
+    }
+  });
+
+  window.ekEditAddRow = function(prefill) {
+    _editRowCount++;
+    var rid = 'ekdr_' + _editRowCount;
+    var tbody = document.getElementById('ekEditDetailRows');
+    var tr = document.createElement('tr');
+    tr.id = rid;
+    tr.innerHTML =
+      '<td><select id="' + rid + '_akun" class="ni-input ek-edit-akun-sel"></select></td>' +
+      '<td><input type="number" id="' + rid + '_debit" class="ni-input" min="0" step="1" value="' + (prefill ? prefill.debit : '0') + '"></td>' +
+      '<td><input type="number" id="' + rid + '_kredit" class="ni-input" min="0" step="1" value="' + (prefill ? prefill.kredit : '0') + '"></td>' +
+      '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="ekEditRemoveRow(\'' + rid + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
+    tbody.appendChild(tr);
+
+    var selEl = document.getElementById(rid + '_akun');
+    var ts = new TomSelect(selEl, {
+      valueField: 'id', labelField: 'text', searchField: 'text',
+      placeholder: 'Ketik kode/nama akun...', maxOptions: false, preload: 'focus',
+      shouldLoad: function() { return false; },
+      load: function(query, callback) {
+        fetch(autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
+          .then(function(r) { return r.json(); }).then(callback).catch(function() { callback(); });
+      },
+      create: false,
+    });
+    if (prefill && prefill.akun_id) {
+      ts.addOption({ id: prefill.akun_id, text: prefill.akun_text });
+      ts.setValue(prefill.akun_id, true);
+    }
+    lucide.createIcons();
+  };
+
+  window.ekEditRemoveRow = function(rid) {
+    var tr = document.getElementById(rid);
+    if (tr) {
+      var sel = tr.querySelector('.ek-edit-akun-sel');
+      if (sel && sel.tomselect) sel.tomselect.destroy();
+      tr.remove();
+    }
+  };
+
+  window.ekDetailOpenEdit = function(pk) {
+    _editHeaderPk = pk;
+    document.getElementById('ekEditError').style.display = 'none';
+    document.querySelectorAll('#ekEditDetailRows .ek-edit-akun-sel').forEach(function(sel) {
+      if (sel.tomselect) sel.tomselect.destroy();
+    });
+    document.getElementById('ekEditDetailRows').innerHTML = '';
+    _editRowCount = 0;
+
+    fetch('{% url "jurnal:rekap_jurnal_get" 0 %}'.replace('/0/', '/' + pk + '/'))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        document.getElementById('ekEditTanggal').value = data.tanggal;
+        document.getElementById('ekEditNomor').value = data.nomor_transaksi;
+        document.getElementById('ekEditUraian').value = data.uraian_transaksi;
+        data.details.forEach(function(d) {
+          ekEditAddRow({ akun_id: d.akun_id, akun_text: d.akun_text, debit: d.debit, kredit: d.kredit });
+        });
+        if (data.details.length === 0) ekEditAddRow();
+        showModal(editBackdrop);
+        lucide.createIcons();
+      });
+  };
+
+  window.ekSubmitEditJurnal = function() {
+    var rows = [];
+    document.querySelectorAll('#ekEditDetailRows tr').forEach(function(tr) {
+      var sel = tr.querySelector('.ek-edit-akun-sel');
+      var akunId = sel ? sel.value : '';
+      if (!akunId) return;
+      rows.push({
+        akun_id: akunId,
+        debit: parseFloat(tr.querySelector('input[id$="_debit"]').value) || 0,
+        kredit: parseFloat(tr.querySelector('input[id$="_kredit"]').value) || 0,
+      });
+    });
+    var payload = {
+      tanggal: document.getElementById('ekEditTanggal').value,
+      uraian_transaksi: document.getElementById('ekEditUraian').value,
+      entitas_bisnis_id: null,
+      details: rows,
+    };
+    fetch('{% url "jurnal:rekap_jurnal_update" 0 %}'.replace('/0/', '/' + _editHeaderPk + '/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        var errEl = document.getElementById('ekEditError');
+        errEl.textContent = data.error;
+        errEl.style.display = '';
+        return;
+      }
+      hideModal(editBackdrop);
+      location.reload();
+    });
+  };
+
+  window.ekDetailOpenDelete = function(pk, name) {
+    _deleteHeaderPk = pk;
+    document.getElementById('ekDeleteJurnalName').textContent = name;
+    showModal(deleteBackdrop);
+    lucide.createIcons();
+  };
+
+  window.ekConfirmDeleteJurnal = function() {
+    fetch('{% url "jurnal:rekap_jurnal_delete" 0 %}'.replace('/0/', '/' + _deleteHeaderPk + '/'), {
+      method: 'POST',
+      headers: { 'X-CSRFToken': csrfToken },
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        hideModal(deleteBackdrop);
+        alert('Gagal menghapus: ' + data.error);
+        return;
+      }
+      hideModal(deleteBackdrop);
+      location.reload();
+    })
+    .catch(function() {
+      hideModal(deleteBackdrop);
+      alert('Terjadi kesalahan. Coba lagi.');
+    });
+  };
+})();
+</script>
 {% endif %}
 {% endblock %}

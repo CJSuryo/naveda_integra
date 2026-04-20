@@ -8,6 +8,12 @@
     <p class="ni-page-header__subtitle">Daftar semua persediaan dari transaksi pembelian</p>
   </div>
   <div class="ni-page-header__actions">
+    <a id="exportXlsxBtn" href="{% url 'inventory:export' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
+    <a id="exportPdfBtn" href="{% url 'inventory:export_pdf' %}" class="ni-btn ni-btn--secondary" target="_blank">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
     <a href="{% url 'inventory:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
     </a>
@@ -166,6 +172,13 @@
 <script>
 (function () {
   'use strict';
+  var xlsxBtn = document.getElementById('exportXlsxBtn');
+  var pdfBtn = document.getElementById('exportPdfBtn');
+  if (window.location.search) {
+    if (xlsxBtn) xlsxBtn.href = xlsxBtn.href.split('?')[0] + window.location.search;
+    if (pdfBtn) pdfBtn.href = pdfBtn.href.split('?')[0] + window.location.search;
+  }
+
   var tabs = document.querySelectorAll('.ni-tab');
   var panels = document.querySelectorAll('.ni-tab-panel');
   var tabInput = document.getElementById('activeTabInput');

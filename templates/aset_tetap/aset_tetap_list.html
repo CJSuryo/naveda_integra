@@ -8,6 +8,12 @@
     <p class="ni-page-header__subtitle">Daftar semua catatan aset tetap</p>
   </div>
   <div class="ni-page-header__actions">
+    <a id="exportXlsxBtn" href="{% url 'aset_tetap:export' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
+    <a id="exportPdfBtn" href="{% url 'aset_tetap:export_pdf' %}" class="ni-btn ni-btn--secondary" target="_blank">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
     <a href="{% url 'aset_tetap:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
     </a>
@@ -322,4 +328,18 @@ function prepareBulkSubmit() {
 </div>
 
 {% include 'components/delete_modal.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var xlsxBtn = document.getElementById('exportXlsxBtn');
+  var pdfBtn = document.getElementById('exportPdfBtn');
+  if (window.location.search) {
+    if (xlsxBtn) xlsxBtn.href = xlsxBtn.href.split('?')[0] + window.location.search;
+    if (pdfBtn) pdfBtn.href = pdfBtn.href.split('?')[0] + window.location.search;
+  }
+})();
+</script>
 {% endblock %}
