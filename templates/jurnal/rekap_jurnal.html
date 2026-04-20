@@ -10,6 +10,11 @@
     <h1 class="ni-page-header__title">Rekap Jurnal</h1>
     <p class="ni-page-header__subtitle">Daftar semua jurnal yang tercatat</p>
   </div>
+  <div class="ni-page-header__actions">
+    <a id="exportXlsxBtn" href="{% url 'jurnal:rekap_jurnal_export' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
+  </div>
 </div>
 
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
@@ -22,6 +27,24 @@
       <div class="ni-form-group" style="margin-bottom:0;">
         <label class="ni-form-label">Tanggal Sampai</label>
         <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;">
+        <label class="ni-form-label">Prefix Transaksi</label>
+        <select name="prefix" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for p in prefix_choices %}
+          <option value="{{ p }}"{% if prefix_filter == p %} selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;min-width:200px;">
+        <label class="ni-form-label">Akun</label>
+        <select name="akun" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for a in akun_list %}
+          <option value="{{ a.pk }}"{% if akun_filter == a.pk|stringformat:'d' %} selected{% endif %}>{{ a.kode_akun }} — {{ a.nama }}</option>
+          {% endfor %}
+        </select>
       </div>
       <!-- Hidden inputs for selected entitas bisnis (populated by modal JS) -->
       <div id="ebHiddenInputs">
@@ -39,7 +62,7 @@
       <button type="submit" class="ni-btn ni-btn--primary">
         <i data-lucide="search" style="width:16px;height:16px"></i> Filter
       </button>
-      {% if tanggal_dari or tanggal_sampai or selected_lv1 or selected_lv2 or selected_lv3 %}
+      {% if tanggal_dari or tanggal_sampai or prefix_filter or akun_filter or selected_lv1 or selected_lv2 or selected_lv3 %}
       <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary">Reset</a>
       {% endif %}
     </form>
@@ -266,6 +289,16 @@
 {% block extra_js %}
 <script src="{% static 'js/modal.js' %}"></script>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script>
+(function() {
+  'use strict';
+  // Sync export link with current filter query string
+  var exportBtn = document.getElementById('exportXlsxBtn');
+  if (exportBtn && window.location.search) {
+    exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
+  }
+})();
+</script>
 <script>
 (function() {
   'use strict';

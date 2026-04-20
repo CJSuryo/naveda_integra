@@ -187,7 +187,7 @@ def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
             nomor_transaksi=nomor,
             uraian_transaksi=f'Penyusutan {record.aset_number} — {record.item.nama}',
             entitas_bisnis=record.entitas_bisnis,
-            is_penyesuaian=True,
+            is_penyesuaian=False,
         )
 
         JurnalDetail.objects.bulk_create([

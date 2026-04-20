@@ -1,0 +1,749 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Laporan Persediaan{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── Metric Cards ──────────────────────────────────────────────────── */
+  .lp-metrics { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 20px; }
+  .lp-mc { background: var(--ni-bg-card); border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; position: relative; overflow: hidden; }
+  .lp-mc::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+  .lp-mc--green::before { background: var(--ni-success); }
+  .lp-mc--blue::before { background: var(--ni-primary); }
+  .lp-mc--amber::before { background: var(--ni-warning); }
+  .lp-mc--red::before { background: var(--ni-danger); }
+  .lp-mc--purple::before { background: var(--ni-accent); }
+  .lp-mc__label { font-size: 0.7rem; color: var(--ni-text-muted); font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 6px; }
+  .lp-mc__value { font-size: 1.25rem; font-weight: 600; color: var(--ni-text); line-height: 1; margin-bottom: 6px; }
+  .lp-mc__value small { font-size: 0.75rem; font-weight: 400; color: var(--ni-text-muted); }
+  .lp-mc__tag { display: inline-flex; align-items: center; gap: 3px; font-size: 0.65rem; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+  .lp-mc__tag--green { background: #dcfce7; color: #166534; }
+  .lp-mc__tag--blue { background: #dbeafe; color: #1e40af; }
+  .lp-mc__tag--amber { background: #fef3c7; color: #92400e; }
+  .lp-mc__tag--red { background: #fee2e2; color: #991b1b; }
+  .lp-mc__tag--purple { background: #ede9fe; color: #5b21b6; }
+
+  /* ── Section Heading ───────────────────────────────────────────────── */
+  .lp-sh { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; }
+  .lp-sh h3 { font-size: 0.85rem; font-weight: 600; white-space: nowrap; color: var(--ni-text); margin: 0; }
+  .lp-sh__line { flex: 1; height: 1px; background: var(--ni-border); }
+
+  /* ── Chart rows ────────────────────────────────────────────────────── */
+  .lp-cr { display: grid; gap: 12px; margin-bottom: 20px; }
+  .lp-cr--3 { grid-template-columns: 1fr 1.8fr 1fr; }
+  .lp-cr--2a { grid-template-columns: 1.3fr 1fr; }
+  .lp-cr--2b { grid-template-columns: 1fr 1fr; }
+  .lp-cc { background: var(--ni-bg-card); border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; }
+  .lp-cc__head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
+  .lp-cc__title { font-size: 0.8rem; font-weight: 500; color: var(--ni-text); }
+  .lp-cc__sub { font-size: 0.7rem; color: var(--ni-text-muted); margin-top: 2px; }
+  .lp-cc__badge { font-size: 0.65rem; padding: 2px 8px; border-radius: 99px; background: var(--ni-bg); color: var(--ni-text-muted); }
+  .lp-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+  .lp-legend__item { display: flex; align-items: center; gap: 4px; font-size: 0.65rem; color: var(--ni-text-muted); }
+  .lp-legend__dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── Waterfall ─────────────────────────────────────────────────────── */
+  .lp-wf { display: flex; flex-direction: column; }
+  .lp-wf__row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--ni-border); }
+  .lp-wf__row:last-child { border-bottom: none; padding-top: 8px; }
+  .lp-wf__label { font-size: 0.7rem; color: var(--ni-text-muted); width: 120px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lp-wf__bar { flex: 1; height: 12px; background: var(--ni-bg); border-radius: 3px; overflow: hidden; }
+  .lp-wf__fill { height: 100%; border-radius: 3px; }
+  .lp-wf__val { font-size: 0.7rem; font-weight: 500; width: 90px; text-align: right; flex-shrink: 0; }
+  .lp-wf__row--total .lp-wf__label { color: var(--ni-text); font-weight: 600; font-size: 0.75rem; }
+
+  /* ── Entity Cards ──────────────────────────────────────────────────── */
+  .lp-eg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .lp-ec { background: var(--ni-bg-card); border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 14px; }
+  .lp-ec__name { font-size: 0.8rem; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .lp-ec__dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .lp-ec__row { display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; padding: 4px 0; border-bottom: 1px solid var(--ni-border); }
+  .lp-ec__row:last-child { border-bottom: none; }
+  .lp-ec__row span:first-child { color: var(--ni-text-muted); }
+
+  /* ── Alerts ────────────────────────────────────────────────────────── */
+  .lp-alert { border-radius: var(--ni-radius); border: 1px solid; padding: 12px 16px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 10px; }
+  .lp-alert--danger { background: #fef2f2; border-color: #fecaca; }
+  .lp-alert--warning { background: #fffbeb; border-color: #fde68a; }
+  .lp-alert--info { background: #eff6ff; border-color: #bfdbfe; }
+  .lp-alert__title { font-size: 0.75rem; font-weight: 600; margin-bottom: 5px; }
+  .lp-alert--danger .lp-alert__title { color: var(--ni-danger); }
+  .lp-alert--warning .lp-alert__title { color: #92400e; }
+  .lp-alert--info .lp-alert__title { color: var(--ni-primary); }
+  .lp-alert__list { display: flex; flex-direction: column; gap: 4px; }
+  .lp-alert__item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--ni-text-muted); flex-wrap: wrap; }
+  .lp-pill { font-size: 0.6rem; padding: 2px 6px; border-radius: 99px; font-weight: 500; flex-shrink: 0; }
+  .lp-pill--danger { background: #fecaca; color: #991b1b; }
+  .lp-pill--warning { background: #fde68a; color: #92400e; }
+  .lp-pill--info { background: #bfdbfe; color: #1e40af; }
+
+  /* ── Slow/Dead Table extras ────────────────────────────────────────── */
+  .lp-status { display: inline-flex; align-items: center; gap: 3px; font-size: 0.65rem; padding: 2px 8px; border-radius: 99px; font-weight: 500; }
+  .lp-status--dead { background: #fee2e2; color: #991b1b; }
+  .lp-status--slow { background: #fef3c7; color: #92400e; }
+  .lp-status--new { background: #dcfce7; color: #166534; }
+
+  /* ── Aging bars ────────────────────────────────────────────────────── */
+  .lp-ag { display: flex; flex-direction: column; gap: 8px; padding: 4px 0; }
+  .lp-ag__row { display: flex; align-items: center; gap: 8px; }
+  .lp-ag__label { font-size: 0.7rem; color: var(--ni-text-muted); width: 70px; flex-shrink: 0; text-align: right; }
+  .lp-ag__track { flex: 1; height: 20px; background: var(--ni-bg); border-radius: 4px; overflow: hidden; }
+  .lp-ag__fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; min-width: 0; }
+  .lp-ag__fill-text { font-size: 0.6rem; font-weight: 500; color: #fff; white-space: nowrap; }
+  .lp-ag__pct { font-size: 0.7rem; width: 40px; text-align: right; flex-shrink: 0; color: var(--ni-text-muted); }
+
+  /* ── Cost Panel ────────────────────────────────────────────────────── */
+  .lp-cgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .lp-ci { background: var(--ni-bg); border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 12px; }
+  .lp-ci__label { font-size: 0.65rem; color: var(--ni-text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+  .lp-ci__value { font-size: 1rem; font-weight: 600; color: var(--ni-text); margin-bottom: 2px; }
+  .lp-ci__note { font-size: 0.65rem; color: var(--ni-text-muted); }
+  .lp-ci--active .lp-ci__value { color: var(--ni-success); }
+  .lp-ci--locked { opacity: 0.65; }
+  .lp-ci--locked .lp-ci__value { color: var(--ni-text-muted); }
+  .lp-locked-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 0.6rem; padding: 2px 6px; border-radius: 99px; background: #fef3c7; color: #92400e; margin-top: 4px; }
+
+  /* ── FIFO Layers ───────────────────────────────────────────────────── */
+  .lp-fifo { background: var(--ni-bg-card); border: 1px solid var(--ni-border); border-radius: var(--ni-radius); overflow: hidden; margin-bottom: 20px; }
+  .lp-fifo__row { display: grid; grid-template-columns: 30px 1fr 1fr 1fr 1fr; gap: 10px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; }
+  .lp-fifo__row:last-child { border-bottom: none; }
+  .lp-fifo__row--header { background: var(--ni-bg); font-size: 0.65rem; font-weight: 500; color: var(--ni-text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .lp-fifo__num { width: 22px; height: 22px; border-radius: 50%; background: #dcfce7; color: #166534; font-size: 0.6rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+
+  /* ── Mutasi tabs ────────────────────────────────────────────────────── */
+  .lp-tabbar { display: flex; border-bottom: 1px solid var(--ni-border); padding: 0 16px; }
+  .lp-tab { font-size: 0.75rem; font-weight: 500; padding: 10px 14px; cursor: pointer; color: var(--ni-text-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; white-space: nowrap; }
+  .lp-tab:hover { color: var(--ni-text); }
+  .lp-tab--active { color: var(--ni-primary); border-bottom-color: var(--ni-primary); }
+
+  /* ── Position table extras ─────────────────────────────────────────── */
+  .lp-rop-flag { display: inline-flex; align-items: center; gap: 2px; font-size: 0.6rem; padding: 1px 5px; border-radius: 99px; background: #fee2e2; color: #991b1b; font-weight: 500; margin-left: 4px; }
+  .lp-exp-danger { color: var(--ni-danger); font-size: 0.75rem; font-weight: 500; }
+  .lp-exp-warning { color: #92400e; font-size: 0.75rem; font-weight: 500; }
+  .lp-exp-sub { font-size: 0.6rem; margin-top: 1px; }
+  .lp-param-empty { font-size: 0.7rem; color: var(--ni-text-muted); font-style: italic; }
+  .lp-dead-note { font-size: 0.65rem; color: var(--ni-danger); }
+
+  /* ── Responsive ────────────────────────────────────────────────────── */
+  @media (max-width: 1024px) {
+    .lp-metrics { grid-template-columns: repeat(3, 1fr); }
+    .lp-cr--3, .lp-cr--2a, .lp-cr--2b { grid-template-columns: 1fr; }
+    .lp-cgrid { grid-template-columns: repeat(2, 1fr); }
+    .lp-fifo__row { grid-template-columns: 25px 1fr 1fr 1fr; }
+    .lp-fifo__row > :nth-child(5) { display: none; }
+  }
+  @media (max-width: 768px) {
+    .lp-metrics { grid-template-columns: repeat(2, 1fr); }
+    .lp-cgrid { grid-template-columns: 1fr; }
+    .lp-eg { grid-template-columns: 1fr; }
+    .lp-fifo__row { grid-template-columns: 25px 1fr 1fr; }
+    .lp-fifo__row > :nth-child(4), .lp-fifo__row > :nth-child(5) { display: none; }
+    .lp-wf__label { width: 80px; font-size: 0.6rem; }
+    .lp-wf__val { width: 70px; font-size: 0.6rem; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{# ── Page Header + Filters ────────────────────────────────────────────── #}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Persediaan</h1>
+    <p class="ni-page-header__subtitle">Analisis persediaan, mutasi, aging, dan cost accounting</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:14px 20px;">
+    <form method="get" class="ni-form-row" style="gap:10px;align-items:flex-end;">
+      <div class="ni-form-group" style="margin-bottom:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">Semua Entitas</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}" {% if eb_filter == eb.pk|stringformat:"s" %}selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;flex:0 0 auto;min-width:120px;">
+        <label class="ni-form-label">Tipe Item</label>
+        <select name="tipe" class="ni-input">
+          <option value="">Semua Tipe</option>
+          {% for code, label in tipe_choices %}
+          <option value="{{ code }}" {% if tipe_filter == code %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;flex:0 0 130px;">
+        <label class="ni-form-label">Dari</label>
+        <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+      </div>
+      <div class="ni-form-group" style="margin-bottom:0;flex:0 0 130px;">
+        <label class="ni-form-label">Sampai</label>
+        <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Filter</button>
+        <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# ── ① Metric Cards ──────────────────────────────────────────────────── #}
+<div class="lp-metrics ni-animate-fade-in">
+  <div class="lp-mc lp-mc--green">
+    <div class="lp-mc__label">Total Nilai Persediaan</div>
+    <div class="lp-mc__value"><small>Rp </small>{{ metrics.total_nilai|floatformat:0|intcomma }}</div>
+    <span class="lp-mc__tag lp-mc__tag--green">{{ metrics.active_items }} item aktif</span>
+  </div>
+  <div class="lp-mc lp-mc--blue">
+    <div class="lp-mc__label">Total Mutasi Masuk</div>
+    <div class="lp-mc__value"><small>Rp </small>{{ metrics.total_masuk|floatformat:0|intcomma }}</div>
+    <span class="lp-mc__tag lp-mc__tag--blue">{{ metrics.masuk_count }} transaksi</span>
+  </div>
+  <div class="lp-mc lp-mc--amber">
+    <div class="lp-mc__label">Total Mutasi Keluar</div>
+    <div class="lp-mc__value"><small>Rp </small>{{ metrics.total_keluar|floatformat:0|intcomma }}</div>
+    <span class="lp-mc__tag lp-mc__tag--amber">{{ metrics.keluar_count }} transaksi</span>
+  </div>
+  <div class="lp-mc lp-mc--red">
+    <div class="lp-mc__label">Item Butuh Aksi</div>
+    <div class="lp-mc__value">{{ metrics.items_need_action }}</div>
+    <span class="lp-mc__tag lp-mc__tag--red">Exp + ROP alert</span>
+  </div>
+  <div class="lp-mc lp-mc--purple">
+    <div class="lp-mc__label">Slow / Dead Stock</div>
+    <div class="lp-mc__value">{{ metrics.slow_dead_count }}</div>
+    <span class="lp-mc__tag lp-mc__tag--purple">Modal menganggur</span>
+  </div>
+</div>
+
+{# ── ② Charts Row 1: Donut + Line Tren + Waterfall ───────────────────── #}
+<div class="lp-cr lp-cr--3 ni-animate-fade-in">
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Proporsi nilai</div><div class="lp-cc__sub">per tipe item</div></div>
+    </div>
+    <div style="position:relative;width:100%;height:160px"><canvas id="lpPieChart"></canvas></div>
+  </div>
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Tren nilai persediaan</div><div class="lp-cc__sub">total nilai dari waktu ke waktu (Rp)</div></div>
+      <div class="lp-cc__badge">6 bulan</div>
+    </div>
+    <div style="position:relative;width:100%;height:160px"><canvas id="lpLineChart"></canvas></div>
+  </div>
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Saldo berjalan</div><div class="lp-cc__sub">waterfall nilai</div></div>
+    </div>
+    <div class="lp-wf">
+      {% for w in waterfall %}
+      <div class="lp-wf__row {% if w.type == 'total' %}lp-wf__row--total{% endif %}">
+        <div class="lp-wf__label" title="{{ w.label }}">{{ w.label }}</div>
+        <div class="lp-wf__bar">
+          <div class="lp-wf__fill" style="width:{{ w.width }}%;background:{% if w.type == 'in' %}var(--ni-success){% elif w.type == 'out' %}var(--ni-danger){% elif w.type == 'total' %}var(--ni-primary){% else %}var(--ni-border){% endif %};"></div>
+        </div>
+        <div class="lp-wf__val" style="color:{% if w.type == 'in' %}var(--ni-success){% elif w.type == 'out' %}var(--ni-danger){% elif w.type == 'total' %}var(--ni-primary){% else %}var(--ni-text-muted){% endif %};">
+          {% if w.type == 'in' %}+{% elif w.type == 'out' %}-{% endif %}{{ w.display }}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{# ── ③ Charts Row 2: Bar mutasi + Top Items ──────────────────────────── #}
+<div class="lp-cr lp-cr--2a ni-animate-fade-in">
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Mutasi masuk vs keluar per bulan</div><div class="lp-cc__sub">nilai (Rp)</div></div>
+      <div class="lp-cc__badge">6 bulan</div>
+    </div>
+    <div class="lp-legend">
+      <div class="lp-legend__item"><span class="lp-legend__dot" style="background:var(--ni-success)"></span>Masuk</div>
+      <div class="lp-legend__item"><span class="lp-legend__dot" style="background:var(--ni-danger)"></span>Keluar</div>
+    </div>
+    <div style="position:relative;width:100%;height:160px"><canvas id="lpBarChart"></canvas></div>
+  </div>
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Top item — pengikat modal terbesar</div><div class="lp-cc__sub">nilai persediaan (Rp)</div></div>
+    </div>
+    <div style="position:relative;width:100%;height:160px"><canvas id="lpTopChart"></canvas></div>
+  </div>
+</div>
+
+{# ── ④ Per Entitas Bisnis ────────────────────────────────────────────── #}
+{% if eb_breakdown %}
+<div class="lp-sh"><h3>Breakdown per Entitas Bisnis</h3><div class="lp-sh__line"></div></div>
+<div class="lp-eg ni-animate-fade-in">
+  {% for eb in eb_breakdown %}
+  <div class="lp-ec">
+    <div class="lp-ec__name">
+      <span class="lp-ec__dot" style="background:{% cycle 'var(--ni-success)' 'var(--ni-primary)' 'var(--ni-warning)' 'var(--ni-accent)' %}"></span>
+      {{ eb.nama }}
+    </div>
+    <div class="lp-ec__row"><span>Nilai persediaan</span><span style="color:var(--ni-primary);font-weight:500;">Rp {{ eb.nilai|floatformat:0|intcomma }}</span></div>
+    <div class="lp-ec__row"><span>Jumlah item</span><span>{{ eb.item_count }} item</span></div>
+    <div class="lp-ec__row"><span>Mutasi masuk</span><span style="color:var(--ni-success);font-weight:500;">Rp {{ eb.masuk|floatformat:0|intcomma }}</span></div>
+    <div class="lp-ec__row"><span>Dead stock</span><span style="{% if eb.dead_count > 0 %}color:var(--ni-danger){% else %}color:var(--ni-text-muted){% endif %}">{% if eb.dead_count > 0 %}{{ eb.dead_count }} item{% else %}—{% endif %}</span></div>
+    <div class="lp-ec__row"><span>Kadaluarsa</span><span style="{% if eb.exp_count > 0 %}color:var(--ni-danger){% else %}color:var(--ni-text-muted){% endif %}">{% if eb.exp_count > 0 %}{{ eb.exp_count }} item{% else %}—{% endif %}</span></div>
+    <div class="lp-ec__row"><span>Di bawah ROP</span><span style="{% if eb.rop_count > 0 %}color:var(--ni-danger){% else %}color:var(--ni-text-muted){% endif %}">{% if eb.rop_count > 0 %}{{ eb.rop_count }} item{% else %}—{% endif %}</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── ⑤ Peringatan ────────────────────────────────────────────────────── #}
+{% if expiry_past or expiry_soon or rop_alerts %}
+<div class="lp-sh">
+  <h3>Peringatan &amp; Aksi Segera</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag lp-mc__tag--red">{{ metrics.items_need_action }} item butuh tindakan</span>
+</div>
+
+{% if expiry_past %}
+<div class="lp-alert lp-alert--danger ni-animate-fade-in">
+  <i data-lucide="alert-circle" style="width:16px;height:16px;color:var(--ni-danger);flex-shrink:0;margin-top:2px;"></i>
+  <div style="flex:1">
+    <div class="lp-alert__title">Sudah kadaluarsa</div>
+    <div class="lp-alert__list">
+      {% for r, days in expiry_past %}
+      <div class="lp-alert__item">
+        <span class="lp-pill lp-pill--danger">KADALUARSA</span>
+        <span style="font-size:0.7rem;color:var(--ni-text-muted);">{{ r.inventory_number }}</span>
+        <span>{{ r.item.item_id }} - {{ r.item.nama }} · exp <strong>{{ r.tanggal_kadaluarsa|date:"d M Y" }}</strong> ({{ days|cut:"-" }} hari lalu) · Rp {{ r.total_value|floatformat:0|intcomma }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if expiry_soon %}
+<div class="lp-alert {% if expiry_soon.0.2 == 'danger' %}lp-alert--danger{% else %}lp-alert--warning{% endif %} ni-animate-fade-in">
+  <i data-lucide="alert-triangle" style="width:16px;height:16px;color:{% if expiry_soon.0.2 == 'danger' %}var(--ni-danger){% else %}#92400e{% endif %};flex-shrink:0;margin-top:2px;"></i>
+  <div style="flex:1">
+    <div class="lp-alert__title">Segera / mendekati kadaluarsa</div>
+    <div class="lp-alert__list">
+      {% for r, days, severity in expiry_soon %}
+      <div class="lp-alert__item">
+        <span class="lp-pill {% if severity == 'danger' %}lp-pill--danger{% else %}lp-pill--warning{% endif %}">{{ days }} hari{% if days == 0 %} (hari ini){% endif %}</span>
+        <span style="font-size:0.7rem;color:var(--ni-text-muted);">{{ r.inventory_number }}</span>
+        <span>{{ r.item.nama }} · exp <strong>{{ r.tanggal_kadaluarsa|date:"d M Y" }}</strong> · Rp {{ r.total_value|floatformat:0|intcomma }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if rop_alerts %}
+<div class="lp-alert lp-alert--info ni-animate-fade-in" style="margin-bottom:20px;">
+  <i data-lucide="package" style="width:16px;height:16px;color:var(--ni-primary);flex-shrink:0;margin-top:2px;"></i>
+  <div style="flex:1">
+    <div class="lp-alert__title">Di bawah Reorder Point — perlu segera beli</div>
+    <div class="lp-alert__list">
+      {% for r, current, rop in rop_alerts %}
+      <div class="lp-alert__item">
+        <span class="lp-pill lp-pill--info">ROP: {{ rop|floatformat:0 }}</span>
+        <span style="font-size:0.7rem;color:var(--ni-text-muted);">{{ r.inventory_number }}</span>
+        <span>{{ r.item.nama }} · stok saat ini <strong>{{ current|floatformat:0|intcomma }}</strong>, di bawah ROP {{ rop|floatformat:0 }}{% if r.lead_time_days %} · Lead time {{ r.lead_time_days }} hari{% endif %}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}
+
+{# ── ⑥ Slow-Moving & Dead Stock ──────────────────────────────────────── #}
+{% if slow_dead %}
+<div class="lp-sh">
+  <h3>Slow-Moving &amp; Dead Stock</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag lp-mc__tag--purple">{{ slow_dead|length }} item</span>
+</div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th class="ni-text-right">Nilai Tertahan (Rp)</th>
+          <th>Terakhir Keluar</th>
+          <th>Hari Menganggur</th>
+          <th>Status</th>
+          <th>Rekomendasi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in slow_dead %}
+        <tr>
+          <td>
+            <div style="font-weight:500;">{{ s.record.item.item_id }} - {{ s.record.item.nama }}</div>
+            <div style="font-size:0.7rem;color:var(--ni-text-muted);">{{ s.record.inventory_number }} · {{ s.record.entitas_bisnis.nama }}</div>
+          </td>
+          <td class="ni-text-right" style="font-weight:500;color:var(--ni-primary);">{{ s.value|floatformat:0|intcomma }}</td>
+          <td style="color:var(--ni-text-muted);font-size:0.8rem;">{{ s.last_out }}</td>
+          <td>
+            <span style="font-weight:600;color:{% if s.status == 'dead' %}var(--ni-danger){% elif s.status == 'slow' %}#92400e{% else %}var(--ni-success){% endif %};">{{ s.days_idle }} hari</span>
+          </td>
+          <td><span class="lp-status lp-status--{{ s.status }}">{% if s.status == 'dead' %}Dead Stock{% elif s.status == 'slow' %}Slow Moving{% else %}Baru masuk{% endif %}</span></td>
+          <td style="font-size:0.8rem;color:var(--ni-text-muted);">{{ s.recommendation }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── ⑦ Aging Analysis ────────────────────────────────────────────────── #}
+<div class="lp-sh"><h3>Aging Analysis Persediaan</h3><div class="lp-sh__line"></div></div>
+<div class="lp-cr lp-cr--2b ni-animate-fade-in">
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Distribusi umur stok</div><div class="lp-cc__sub">berdasarkan nilai (Rp)</div></div>
+    </div>
+    <div class="lp-ag">
+      {% for b in aging_buckets %}
+      <div class="lp-ag__row">
+        <div class="lp-ag__label">{{ b.label }}</div>
+        <div class="lp-ag__track">
+          <div class="lp-ag__fill" style="width:{{ b.pct }}%;background:{{ b.color }};">
+            {% if b.pct > 10 %}<span class="lp-ag__fill-text">{{ b.display }} · {{ b.count }} item</span>{% endif %}
+          </div>
+        </div>
+        <div class="lp-ag__pct">{{ b.pct }}%</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% with max_bucket=aging_buckets.0 %}
+    {% for b in aging_buckets %}
+    {% if b.pct > max_bucket.pct %}{% with max_bucket=b %}{% endwith %}{% endif %}
+    {% endfor %}
+    {% endwith %}
+  </div>
+  <div class="lp-cc">
+    <div class="lp-cc__head">
+      <div><div class="lp-cc__title">Komposisi nilai per aging bucket</div><div class="lp-cc__sub">proporsi</div></div>
+    </div>
+    <div style="position:relative;width:100%;height:180px"><canvas id="lpAgingChart"></canvas></div>
+  </div>
+</div>
+
+{# ── ⑧ Cost Accounting ──────────────────────────────────────────────── #}
+<div class="lp-sh"><h3>Analisis Cost Accounting</h3><div class="lp-sh__line"></div></div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+  <div class="ni-card__body">
+    <div class="lp-cgrid">
+      <div class="lp-ci lp-ci--active">
+        <div class="lp-ci__label">Total Nilai (FIFO)</div>
+        <div class="lp-ci__value">Rp {{ cost_data.total_fifo_value|floatformat:0|intcomma }}</div>
+        <div class="lp-ci__note">{{ cost_data.active_layers }} layer aktif</div>
+      </div>
+      <div class="lp-ci lp-ci--active">
+        <div class="lp-ci__label">Item EOQ Tersedia</div>
+        <div class="lp-ci__value">{{ cost_data.eoq_ready }} / {{ cost_data.total_items }}</div>
+        <div class="lp-ci__note">{{ cost_data.eoq_ready }} item sudah isi parameter</div>
+      </div>
+      <div class="lp-ci lp-ci--active">
+        <div class="lp-ci__label">Nilai Tertahan Dead</div>
+        <div class="lp-ci__value">Rp {{ cost_data.dead_value|floatformat:0|intcomma }}</div>
+        <div class="lp-ci__note">Dead stock</div>
+      </div>
+      <div class="lp-ci {% if cost_data.total_keluar == 0 %}lp-ci--locked{% endif %}">
+        <div class="lp-ci__label">Inventory Turnover</div>
+        <div class="lp-ci__value">{% if cost_data.total_keluar > 0 %}{{ cost_data.total_keluar|floatformat:0|intcomma }}{% else %}—{% endif %}</div>
+        <div class="lp-ci__note">{% if cost_data.total_keluar > 0 %}Berdasarkan mutasi keluar{% else %}Butuh data keluar{% endif %}</div>
+        {% if cost_data.total_keluar == 0 %}<div class="lp-locked-badge"><i data-lucide="lock" style="width:8px;height:8px;"></i> Butuh keluar</div>{% endif %}
+      </div>
+      <div class="lp-ci {% if cost_data.total_keluar == 0 %}lp-ci--locked{% endif %}">
+        <div class="lp-ci__label">HPP / COGS Total</div>
+        <div class="lp-ci__value">{% if cost_data.total_keluar > 0 %}Rp {{ cost_data.total_keluar|floatformat:0|intcomma }}{% else %}—{% endif %}</div>
+        <div class="lp-ci__note">Otomatis saat ada keluar</div>
+        {% if cost_data.total_keluar == 0 %}<div class="lp-locked-badge"><i data-lucide="lock" style="width:8px;height:8px;"></i> Butuh keluar</div>{% endif %}
+      </div>
+      <div class="lp-ci lp-ci--locked">
+        <div class="lp-ci__label">Est. Total Holding Cost</div>
+        <div class="lp-ci__value">—</div>
+        <div class="lp-ci__note">Isi holding cost % per item</div>
+        <div class="lp-locked-badge"><i data-lucide="lock" style="width:8px;height:8px;"></i> Butuh input</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── ⑨ Posisi Persediaan ─────────────────────────────────────────────── #}
+<div class="lp-sh"><h3>Posisi Persediaan</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag" style="background:var(--ni-bg);color:var(--ni-text-muted);">{{ positions|length }} item</span>
+</div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+  <div class="ni-table-wrapper">
+    <table class="ni-table" style="min-width:1050px;">
+      <thead>
+        <tr>
+          <th>No. Inv.</th>
+          <th>Item</th>
+          <th>Tipe</th>
+          <th>Entitas</th>
+          <th class="ni-text-right">Nilai (Rp)</th>
+          <th class="ni-text-right">Lead Time</th>
+          <th class="ni-text-right">Order Cost</th>
+          <th class="ni-text-right">Holding %</th>
+          <th class="ni-text-right">MOQ</th>
+          <th class="ni-text-right">EOQ</th>
+          <th class="ni-text-right">Reorder Point</th>
+          <th>Kadaluarsa</th>
+          <th>Metode</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in positions %}
+        <tr {% if p.exp_info and p.exp_info.class == 'danger' %}style="background:#fef2f2;"{% elif p.exp_info and p.exp_info.class == 'warning' %}style="background:#fffdf7;"{% endif %}>
+          <td><code style="font-size:0.7rem;color:var(--ni-text-muted);">{{ p.record.inventory_number }}</code></td>
+          <td>
+            <div style="font-weight:500;">{{ p.record.item.item_id }} - {{ p.record.item.nama }}</div>
+            <div style="font-size:0.65rem;color:var(--ni-text-muted);">
+              {% if p.is_bulk %}BULK{% else %}Satuan{% endif %}
+              {% if p.dead_days and p.dead_days > 30 %} · <span class="lp-dead-note">dead stock {{ p.dead_days }}hr</span>{% endif %}
+            </div>
+          </td>
+          <td><span class="ni-badge {% if 'Raw' in p.tipe_label %}ni-badge--warning{% elif 'Finished' in p.tipe_label %}ni-badge--success{% else %}ni-badge--secondary{% endif %}" style="font-size:0.65rem;">{{ p.tipe_label }}</span></td>
+          <td style="font-size:0.8rem;">{{ p.record.entitas_bisnis.nama }}</td>
+          <td class="ni-text-right" style="font-weight:500;color:var(--ni-primary);">{{ p.value|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="font-size:0.8rem;">{% if p.lead_time %}{{ p.lead_time }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}</td>
+          <td class="ni-text-right" style="font-size:0.8rem;">{% if p.ordering_cost %}{{ p.ordering_cost|floatformat:0|intcomma }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}</td>
+          <td class="ni-text-right" style="font-size:0.8rem;">{% if p.holding_pct %}{{ p.holding_pct|floatformat:0 }}%{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}</td>
+          <td class="ni-text-right" style="font-size:0.8rem;">{% if p.moq %}{{ p.moq|floatformat:0 }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}</td>
+          <td class="ni-text-right">{% if p.eoq %}<span style="font-weight:500;color:var(--ni-primary);">{{ p.eoq }}</span>{% else %}<span class="lp-param-empty">Isi parameter</span>{% endif %}</td>
+          <td class="ni-text-right">
+            {% if p.rop %}<span style="font-weight:500;color:var(--ni-primary);">{{ p.rop }}</span>{% else %}<span class="lp-param-empty">Isi parameter</span>{% endif %}
+            {% if p.below_rop %}<span class="lp-rop-flag">▼ ROP</span>{% endif %}
+          </td>
+          <td>
+            {% if p.exp_info %}
+              {% if p.exp_info.class == 'danger' %}<span class="lp-exp-danger">{{ p.exp_info.date|date:"d M Y" }}</span>
+              {% elif p.exp_info.class == 'warning' %}<span class="lp-exp-warning">{{ p.exp_info.date|date:"d M Y" }}</span>
+              {% else %}<span style="font-size:0.8rem;">{{ p.exp_info.date|date:"d M Y" }}</span>
+              {% endif %}
+              {% if p.exp_info.label %}<div class="lp-exp-sub" style="color:{% if p.exp_info.class == 'danger' %}var(--ni-danger){% elif p.exp_info.class == 'warning' %}#92400e{% endif %};">{{ p.exp_info.label }}</div>{% endif %}
+            {% else %}<span style="color:var(--ni-text-muted);font-size:0.8rem;">—</span>{% endif %}
+          </td>
+          <td><span class="ni-badge ni-badge--secondary" style="font-size:0.65rem;">{{ p.metode }}</span></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="13" class="ni-text-center ni-text-muted">Belum ada data persediaan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if positions %}
+  <div style="padding:10px 16px;border-top:1px solid var(--ni-border);display:flex;justify-content:space-between;align-items:center;font-size:0.8rem;">
+    <span style="color:var(--ni-text-muted);">
+      {% if expiry_past %}<span style="color:var(--ni-danger);font-weight:600;">{{ expiry_past|length }} kadaluarsa</span> · {% endif %}
+      {% if expiry_soon %}<span style="color:#92400e;font-weight:600;">{{ expiry_soon|length }} mendekati exp</span> · {% endif %}
+      {% if rop_alerts %}<span style="color:var(--ni-danger);font-weight:600;">{{ rop_alerts|length }} di bawah ROP</span> · {% endif %}
+      {{ positions|length }} item
+    </span>
+    <div><span style="color:var(--ni-text-muted);">Total nilai</span> <span style="font-weight:600;">Rp {{ metrics.total_nilai|floatformat:0|intcomma }}</span></div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── ⑩ Mutasi Persediaan ─────────────────────────────────────────────── #}
+<div class="lp-sh"><h3>Mutasi Persediaan</h3><div class="lp-sh__line"></div></div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+  <div class="lp-tabbar">
+    <div class="lp-tab lp-tab--active" data-mutasi-tab="all">Semua ({{ mutasi_list|length }})</div>
+    <div class="lp-tab" data-mutasi-tab="in">Masuk ({{ metrics.masuk_count }})</div>
+    <div class="lp-tab" data-mutasi-tab="out">Keluar ({{ metrics.keluar_count }})</div>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>No. Inv.</th>
+          <th>Item</th>
+          <th>Tipe</th>
+          <th>Referensi</th>
+          <th>Qty</th>
+          <th class="ni-text-right">Nilai</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody id="lpMutasiBody">
+        {% for m in mutasi_list %}
+        <tr data-mutasi-type="{{ m.tipe }}">
+          <td style="font-size:0.8rem;">{{ m.tanggal|date:"d M Y" }}</td>
+          <td><code style="font-size:0.7rem;color:var(--ni-text-muted);">{{ m.inventory_number }}</code></td>
+          <td style="font-size:0.8rem;">{{ m.item_name }}</td>
+          <td><span class="ni-badge {% if m.tipe == 'in' %}ni-badge--success{% else %}ni-badge--danger{% endif %}" style="font-size:0.65rem;">{{ m.tipe_label }}</span></td>
+          <td style="font-size:0.8rem;color:var(--ni-primary);">{{ m.ref }}</td>
+          <td style="font-size:0.8rem;">{% if m.qty %}{{ m.qty|floatformat:4 }}{% else %}<span style="color:var(--ni-text-muted);">—</span>{% endif %}</td>
+          <td class="ni-text-right" style="font-weight:500;color:{% if m.tipe == 'in' %}var(--ni-success){% else %}var(--ni-danger){% endif %};">
+            {% if m.tipe == 'in' %}+{% else %}-{% endif %}{{ m.value|floatformat:0|intcomma }}
+          </td>
+          <td style="font-size:0.8rem;color:var(--ni-text-muted);">{{ m.keterangan }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada mutasi.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{# ── ⑪ FIFO Cost Layer ──────────────────────────────────────────────── #}
+{% if fifo_layers %}
+<div class="lp-sh"><h3>FIFO Cost Layer</h3><div class="lp-sh__line"></div>
+  <span class="lp-mc__tag lp-mc__tag--green">{{ fifo_layers|length }} layer aktif</span>
+</div>
+<div class="lp-fifo ni-animate-fade-in">
+  <div class="lp-fifo__row lp-fifo__row--header">
+    <div></div>
+    <div>Inventaris</div>
+    <div>Tanggal Masuk</div>
+    <div>Nilai (Rp)</div>
+    <div>Status</div>
+  </div>
+  {% for fl in fifo_layers %}
+  <div class="lp-fifo__row">
+    <div><span class="lp-fifo__num">{{ fl.num }}</span></div>
+    <div>
+      <div style="font-weight:500;font-size:0.8rem;">{{ fl.inventory_number }}</div>
+      {% if fl.ref %}<div style="font-size:0.65rem;color:var(--ni-text-muted);">via {{ fl.ref }}</div>{% endif %}
+    </div>
+    <div style="font-size:0.8rem;color:var(--ni-text-muted);">{{ fl.tanggal|date:"d M Y" }}</div>
+    <div style="font-weight:600;font-size:0.85rem;">{{ fl.value|floatformat:0|intcomma }}</div>
+    <div>
+      <span class="lp-mc__tag lp-mc__tag--{% if fl.status_class == 'success' %}green{% elif fl.status_class == 'warning' %}amber{% else %}red{% endif %}">{{ fl.status_label }}</span>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var chartData = {{ chart_data_json|safe }};
+  var agingData = {{ aging_json|safe }};
+
+  // ── Chart defaults ─────────────────────────────────────────────────
+  var niColors = {
+    success: '#10b981', primary: '#0054a6', warning: '#f59e0b',
+    danger: '#ef4444', accent: '#6366f1', muted: '#64748b',
+    border: '#e2e8f0', bg: '#f8fafc',
+  };
+
+  function fmtRp(v) {
+    if (Math.abs(v) >= 1e6) return (v / 1e6).toFixed(1) + 'jt';
+    if (Math.abs(v) >= 1e3) return (v / 1e3).toFixed(0) + 'rb';
+    return v.toFixed(0);
+  }
+
+  var scaleOpts = {
+    x: { grid: { display: false }, ticks: { font: { size: 10 }, color: niColors.muted }, border: { color: niColors.border } },
+    y: { grid: { color: niColors.border, lineWidth: 0.5 }, ticks: { font: { size: 10 }, color: niColors.muted, callback: function (v) { return fmtRp(v); } }, border: { display: false } },
+  };
+
+  // ── ② Pie Chart ───────────────────────────────────────────────────
+  if (chartData.pie_labels.length > 0) {
+    new Chart(document.getElementById('lpPieChart'), {
+      type: 'doughnut',
+      data: {
+        labels: chartData.pie_labels,
+        datasets: [{ data: chartData.pie_data, backgroundColor: [niColors.success, niColors.primary, niColors.warning, niColors.accent], borderColor: '#fff', borderWidth: 3, hoverOffset: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '65%',
+        plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8 } }, tooltip: { callbacks: { label: function (ctx) { var v = ctx.parsed; var t = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0); return ' Rp ' + v.toLocaleString('id-ID') + ' (' + ((v / t) * 100).toFixed(1) + '%)'; } } } },
+      },
+    });
+  }
+
+  // ── ② Line Chart ──────────────────────────────────────────────────
+  if (chartData.months_labels.length > 0) {
+    new Chart(document.getElementById('lpLineChart'), {
+      type: 'line',
+      data: {
+        labels: chartData.months_labels,
+        datasets: [
+          { label: 'Nilai total', data: chartData.trend_data, borderColor: niColors.success, backgroundColor: 'rgba(16,185,129,0.07)', fill: true, tension: 0.35, pointRadius: 3, pointBackgroundColor: niColors.success, borderWidth: 2 },
+          { label: 'Rata-rata', data: chartData.months_labels.map(function () { return chartData.avg_trend; }), borderColor: niColors.primary, borderDash: [5, 3], borderWidth: 1.5, pointRadius: 0, fill: false },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (ctx) { return ' Rp ' + ctx.parsed.y.toLocaleString('id-ID'); } } } }, scales: scaleOpts },
+    });
+  }
+
+  // ── ③ Bar Chart ───────────────────────────────────────────────────
+  if (chartData.months_labels.length > 0) {
+    new Chart(document.getElementById('lpBarChart'), {
+      type: 'bar',
+      data: {
+        labels: chartData.months_labels,
+        datasets: [
+          { label: 'Masuk', data: chartData.bar_masuk, backgroundColor: niColors.success, borderRadius: 3, barPercentage: 0.5 },
+          { label: 'Keluar', data: chartData.bar_keluar, backgroundColor: niColors.danger, borderRadius: 3, barPercentage: 0.5 },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (ctx) { return ' Rp ' + ctx.parsed.y.toLocaleString('id-ID'); } } } }, scales: scaleOpts },
+    });
+  }
+
+  // ── ③ Top Items Chart ─────────────────────────────────────────────
+  if (chartData.top_labels.length > 0) {
+    new Chart(document.getElementById('lpTopChart'), {
+      type: 'bar',
+      data: {
+        labels: chartData.top_labels,
+        datasets: [{ label: 'Nilai (Rp)', data: chartData.top_data, backgroundColor: [niColors.success, niColors.primary, niColors.warning, niColors.danger, niColors.accent], borderRadius: 3, barPercentage: 0.65 }],
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (ctx) { return ' Rp ' + ctx.parsed.x.toLocaleString('id-ID'); } } } },
+        scales: { x: scaleOpts.y, y: { grid: { display: false }, ticks: { font: { size: 10 }, color: niColors.muted }, border: { display: false } } },
+      },
+    });
+  }
+
+  // ── ⑦ Aging Chart ─────────────────────────────────────────────────
+  if (agingData.data.some(function (v) { return v > 0; })) {
+    new Chart(document.getElementById('lpAgingChart'), {
+      type: 'doughnut',
+      data: {
+        labels: agingData.labels,
+        datasets: [{ data: agingData.data, backgroundColor: agingData.colors, borderColor: '#fff', borderWidth: 3, hoverOffset: 4 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '60%',
+        plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 10 }, boxWidth: 12, padding: 8 } }, tooltip: { callbacks: { label: function (ctx) { var v = ctx.parsed; var t = ctx.dataset.data.reduce(function (a, b) { return a + b; }, 0); return ' Rp ' + v.toLocaleString('id-ID') + ' (' + ((v / t) * 100).toFixed(1) + '%)'; } } } },
+      },
+    });
+  }
+
+  // ── ⑩ Mutasi tab switching ────────────────────────────────────────
+  var tabs = document.querySelectorAll('[data-mutasi-tab]');
+  tabs.forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      tabs.forEach(function (t) { t.classList.remove('lp-tab--active'); });
+      tab.classList.add('lp-tab--active');
+      var type = tab.getAttribute('data-mutasi-tab');
+      var rows = document.querySelectorAll('#lpMutasiBody tr[data-mutasi-type]');
+      rows.forEach(function (r) {
+        r.style.display = (type === 'all' || r.getAttribute('data-mutasi-type') === type) ? '' : 'none';
+      });
+    });
+  });
+})();
+</script>
+{% endblock %}

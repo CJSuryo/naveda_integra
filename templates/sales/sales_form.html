@@ -314,10 +314,11 @@
       : '0';
     var prefillIsBulk = prefill && prefill.tipe_item && BULK_TYPES.indexOf(prefill.tipe_item) !== -1;
     var hasItem = prefill && prefill.item_id;
-    // TD visibility helpers
+    // TD visibility helpers — field TDs still hide if no item selected
     var fieldTdStyle = hasItem ? '' : ' style="display:none;"';
-    var satuanTdStyle = (hasItem && !prefillIsBulk) ? '' : ' style="display:none;"';
-    var bulkTdStyle = (hasItem && prefillIsBulk) ? '' : ' style="display:none;"';
+    // Satuan/Bulk inputs: always show TDs but disable irrelevant inputs
+    var satuanInputDisabled = (!hasItem || prefillIsBulk) ? ' disabled style="display:none;"' : '';
+    var bulkInputDisabled = (!hasItem || !prefillIsBulk) ? ' disabled style="display:none;"' : '';
 
     var tr = document.createElement('tr');
     tr.id = rid;
@@ -327,10 +328,10 @@
         '<div class="ni-stock-info" id="' + rid + '_stock"></div>' +
       '</td>' +
       '<td class="item-field-td"' + fieldTdStyle + '><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
-      '<td class="item-field-td col-satuan"' + satuanTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"></td>' +
+      '<td class="item-field-td col-satuan"' + fieldTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"' + satuanInputDisabled + '></td>' +
       '<td class="item-field-td"' + fieldTdStyle + '><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Harga Jual"></td>' +
-      '<td class="item-field-td col-satuan"' + satuanTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"></td>' +
-      '<td class="item-field-td col-bulk"' + bulkTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"></td>' +
+      '<td class="item-field-td col-satuan"' + fieldTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"' + satuanInputDisabled + '></td>' +
+      '<td class="item-field-td col-bulk"' + fieldTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"' + bulkInputDisabled + '></td>' +
       '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
       '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
       '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
@@ -511,11 +512,16 @@
     var tr = document.getElementById(rid);
     if (!tr) return;
     tr.dataset.tipeItem = tipeItem || '';
-    tr.querySelectorAll('td.col-satuan').forEach(function (td) {
-      td.style.display = isBulk ? 'none' : '';
+    // Toggle inputs inside satuan/bulk cells (TDs stay visible for column alignment)
+    tr.querySelectorAll('td.col-satuan input').forEach(function (inp) {
+      inp.style.display = isBulk ? 'none' : '';
+      inp.disabled = isBulk;
+      if (isBulk) inp.value = '';
     });
-    tr.querySelectorAll('td.col-bulk').forEach(function (td) {
-      td.style.display = isBulk ? '' : 'none';
+    tr.querySelectorAll('td.col-bulk input').forEach(function (inp) {
+      inp.style.display = isBulk ? '' : 'none';
+      inp.disabled = !isBulk;
+      if (!isBulk) inp.value = '';
     });
   };
 

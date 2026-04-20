@@ -186,6 +186,9 @@
           <a href="{% url 'inventory:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Daftar Inventory</span>
           </a>
+          <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Persediaan</span>
+          </a>
         </div>
       </div>
 
@@ -243,6 +246,9 @@
           </a>
           <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Neraca Saldo</span>
+          </a>
+          <a href="{% url 'jurnal:buku_besar' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Buku Besar</span>
           </a>
           <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Laporan Laba Rugi</span>
@@ -311,5 +317,6 @@
 {% block extra_js %}{% endblock %}
 <script src="{% static 'js/sidebar.js' %}"></script>
 <script src="{% static 'js/toast.js' %}"></script>
+<script src="{% static 'js/paste-number.js' %}"></script>
 </body>
 </html>

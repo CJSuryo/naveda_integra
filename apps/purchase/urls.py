@@ -7,6 +7,7 @@ app_name = 'purchase'
 urlpatterns = [
     # Purchase transactions
     path('', views.purchase_list, name='list'),
+    path('export/', views.purchase_export, name='export'),
     path('create/', views.purchase_create, name='create'),
     path('<int:pk>/', views.purchase_detail, name='detail'),
     path('<int:pk>/edit/', views.purchase_update, name='update'),

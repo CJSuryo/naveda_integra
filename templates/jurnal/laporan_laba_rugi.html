@@ -115,7 +115,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">{{ item.kredit|floatformat:0|intcomma }}</div>
+          <div class="lr-row__value">{{ item.net|floatformat:0|intcomma }}</div>
         </div>
         {% empty %}
         <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
@@ -139,7 +139,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
         </div>
         {% empty %}
         <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
@@ -169,7 +169,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
         </div>
         {% empty %}
         <div class="lr-row"><div class="lr-row__label" style="color:var(--ni-text-muted);">Tidak ada data.</div><div class="lr-row__value">-</div></div>
@@ -199,7 +199,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">{{ item.kredit|floatformat:0|intcomma }}</div>
+          <div class="lr-row__value">{{ item.net|floatformat:0|intcomma }}</div>
         </div>
         {% endfor %}
         {% for item in beban_non_op_items %}
@@ -207,7 +207,7 @@
           <div class="lr-row__label">
             <span class="lr-row__kode">{{ item.kode }}</span>{{ item.nama }}
           </div>
-          <div class="lr-row__value">({{ item.debit|floatformat:0|intcomma }})</div>
+          <div class="lr-row__value">({{ item.net|floatformat:0|intcomma }})</div>
         </div>
         {% endfor %}
         {% if not pendapatan_non_op_items and not beban_non_op_items %}

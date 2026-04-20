@@ -921,6 +921,10 @@
           document.getElementById(rid + '_coa').value = data.coa_account_text;
           document.getElementById(rid + '_coa').dataset.id = data.coa_account_id;
         }
+        // Toggle bulk vs unit fields for the newly created item
+        if (data.tipe_item) {
+          toggleBulkFields(rid, data.tipe_item);
+        }
       }
 
       closeItemModal();

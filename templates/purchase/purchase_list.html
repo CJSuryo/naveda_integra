@@ -8,6 +8,9 @@
     <p class="ni-page-header__subtitle">Daftar semua transaksi pembelian inventori</p>
   </div>
   <div class="ni-page-header__actions">
+    <a id="exportXlsxBtn" href="{% url 'purchase:export' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
     <a href="{% url 'purchase:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Purchase
     </a>
@@ -110,4 +113,15 @@
   </div>
 </div>
 
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+  var exportBtn = document.getElementById('exportXlsxBtn');
+  if (exportBtn && window.location.search) {
+    exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
+  }
+})();
+</script>
 {% endblock %}

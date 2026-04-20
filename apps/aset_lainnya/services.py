@@ -147,7 +147,7 @@ def process_amortization(record: AsetLainnyaRecord, amortization_amount: Decimal
             nomor_transaksi=nomor,
             uraian_transaksi=f'Amortisasi {record.aset_number} — {record.item.nama}',
             entitas_bisnis=record.entitas_bisnis,
-            is_penyesuaian=True,
+            is_penyesuaian=False,
         )
 
         JurnalDetail.objects.bulk_create([

@@ -19,31 +19,141 @@
 
 <!-- Bulk Depreciation Modal -->
 <div id="bulk-dep-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;">
-  <div class="ni-card" style="max-width:480px;width:90%;border-radius:var(--ni-radius-lg);padding:0;">
-    <div class="ni-card__body" style="padding:32px;">
-      <h3 style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Proses Semua Penyusutan</h3>
-      <p style="margin:0 0 20px;font-size:0.875rem;color:var(--ni-text-muted);">Proses penyusutan untuk semua aset tetap aktif (metode garis lurus, saldo menurun, jumlah angka tahun). Aset berbasis aktivitas dilewati.</p>
-      <form method="post" action="{% url 'aset_tetap:bulk_depreciation' %}"
-            onsubmit="return confirm('Yakin ingin memproses semua penyusutan sekaligus?')">
-        {% csrf_token %}
-        <div class="ni-form-group">
+  <div class="ni-card" style="max-width:800px;width:95%;border-radius:var(--ni-radius-lg);padding:0;max-height:90vh;display:flex;flex-direction:column;">
+    <div class="ni-card__body" style="padding:24px 32px;overflow-y:auto;">
+      <h3 style="margin:0 0 8px;font-size:1.1rem;font-weight:600;">Proses Bulk Penyusutan</h3>
+      <p style="margin:0 0 20px;font-size:0.875rem;color:var(--ni-text-muted);">Pilih tanggal jurnal, preview perhitungan, lalu pilih aset yang akan diproses.</p>
+
+      <div class="ni-form-row" style="margin-bottom:16px;">
+        <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tanggal Jurnal</label>
-          <input type="date" name="tanggal" class="ni-input" required>
+          <input type="date" id="bulk-dep-tanggal" class="ni-input" required>
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Jumlah Hari</label>
-          <input type="number" name="hari" class="ni-input" value="30" min="1" max="366">
+      </div>
+      <div style="margin-bottom:16px;">
+        <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="loadBulkPreview()">
+          <i data-lucide="eye" style="width:14px;height:14px"></i> Lihat Preview
+        </button>
+      </div>
+
+      <div id="bulk-dep-preview" style="display:none;">
+        <div class="ni-table-wrapper" style="max-height:360px;overflow-y:auto;">
+          <table class="ni-table" style="font-size:0.85rem;">
+            <thead style="position:sticky;top:0;z-index:1;">
+              <tr>
+                <th style="width:32px;"><input type="checkbox" id="bulk-dep-select-all" checked onchange="toggleAllBulk(this)"></th>
+                <th>Nomor Aset</th>
+                <th>Item</th>
+                <th>Metode</th>
+                <th class="ni-text-right">Nilai Buku</th>
+                <th class="ni-text-right">Hari</th>
+                <th class="ni-text-right">Penyusutan</th>
+                <th class="ni-text-right">Nilai Buku Baru</th>
+              </tr>
+            </thead>
+            <tbody id="bulk-dep-tbody"></tbody>
+            <tfoot>
+              <tr style="font-weight:600;background:var(--ni-bg);">
+                <td colspan="6" class="ni-text-right">Total Penyusutan:</td>
+                <td class="ni-text-right" id="bulk-dep-total">0</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
         </div>
-        <div class="ni-btn-row" style="margin-top:24px;">
-          <button type="submit" class="ni-btn ni-btn--primary">
-            <i data-lucide="zap" style="width:16px;height:16px"></i> Proses
-          </button>
-          <button type="button" class="ni-btn ni-btn--secondary" onclick="document.getElementById('bulk-dep-modal').style.display='none'">Batal</button>
-        </div>
-      </form>
+        <form method="post" action="{% url 'aset_tetap:bulk_depreciation' %}" id="bulk-dep-form"
+              onsubmit="return prepareBulkSubmit()">
+          {% csrf_token %}
+          <input type="hidden" name="tanggal" id="bulk-dep-tanggal-hidden">
+          <div id="bulk-dep-ids-container"></div>
+          <div class="ni-btn-row" style="margin-top:20px;">
+            <button type="submit" class="ni-btn ni-btn--primary">
+              <i data-lucide="zap" style="width:16px;height:16px"></i> Proses Penyusutan
+            </button>
+            <button type="button" class="ni-btn ni-btn--secondary" onclick="document.getElementById('bulk-dep-modal').style.display='none'">Batal</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="bulk-dep-empty" style="display:none;text-align:center;padding:24px;color:var(--ni-text-muted);">
+        Tidak ada aset yang eligible untuk penyusutan pada tanggal tersebut.
+      </div>
+
+      <div id="bulk-dep-initial" style="text-align:center;padding:24px;color:var(--ni-text-muted);">
+        Pilih tanggal lalu klik <strong>Lihat Preview</strong> untuk melihat perhitungan.
+      </div>
+
+      <div class="ni-btn-row" id="bulk-dep-close-row" style="margin-top:16px;">
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="document.getElementById('bulk-dep-modal').style.display='none'">Tutup</button>
+      </div>
     </div>
   </div>
 </div>
+
+<script>
+var _bulkPreviewData = [];
+function loadBulkPreview() {
+  var tanggal = document.getElementById('bulk-dep-tanggal').value;
+  if (!tanggal) { alert('Pilih tanggal terlebih dahulu.'); return; }
+  var url = '{% url "aset_tetap:bulk_preview" %}?tanggal=' + encodeURIComponent(tanggal);
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      _bulkPreviewData = data.records || [];
+      var tbody = document.getElementById('bulk-dep-tbody');
+      tbody.innerHTML = '';
+      if (!_bulkPreviewData.length) {
+        document.getElementById('bulk-dep-preview').style.display = 'none';
+        document.getElementById('bulk-dep-empty').style.display = '';
+        document.getElementById('bulk-dep-initial').style.display = 'none';
+        return;
+      }
+      document.getElementById('bulk-dep-preview').style.display = '';
+      document.getElementById('bulk-dep-empty').style.display = 'none';
+      document.getElementById('bulk-dep-initial').style.display = 'none';
+      document.getElementById('bulk-dep-close-row').style.display = 'none';
+      var totalDep = 0;
+      _bulkPreviewData.forEach(function(rec) {
+        totalDep += rec.depreciation;
+        var tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td><input type="checkbox" class="bulk-dep-cb" value="' + rec.id + '" checked></td>' +
+          '<td>' + rec.aset_number + '</td>' +
+          '<td>' + rec.item_nama + '</td>' +
+          '<td>' + rec.metode + '</td>' +
+          '<td class="ni-text-right">' + fmtNum(rec.nilai_buku) + '</td>' +
+          '<td class="ni-text-right">' + rec.hari + '</td>' +
+          '<td class="ni-text-right" style="color:var(--ni-danger);font-weight:500;">' + fmtNum(rec.depreciation) + '</td>' +
+          '<td class="ni-text-right">' + fmtNum(rec.new_book_value) + '</td>';
+        tbody.appendChild(tr);
+      });
+      document.getElementById('bulk-dep-total').textContent = fmtNum(totalDep);
+      document.getElementById('bulk-dep-select-all').checked = true;
+    })
+    .catch(function(e) { alert('Gagal memuat preview: ' + e.message); });
+}
+function fmtNum(n) {
+  return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n));
+}
+function toggleAllBulk(master) {
+  document.querySelectorAll('.bulk-dep-cb').forEach(function(cb) { cb.checked = master.checked; });
+}
+function prepareBulkSubmit() {
+  var tanggal = document.getElementById('bulk-dep-tanggal').value;
+  if (!tanggal) { alert('Tanggal wajib diisi.'); return false; }
+  document.getElementById('bulk-dep-tanggal-hidden').value = tanggal;
+  var container = document.getElementById('bulk-dep-ids-container');
+  container.innerHTML = '';
+  var checked = document.querySelectorAll('.bulk-dep-cb:checked');
+  if (!checked.length) { alert('Pilih minimal satu aset.'); return false; }
+  checked.forEach(function(cb) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'record_ids'; inp.value = cb.value;
+    container.appendChild(inp);
+  });
+  return confirm('Yakin ingin memproses penyusutan untuk ' + checked.length + ' aset?');
+}
+</script>
 
 <!-- Filters -->
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
@@ -99,10 +209,11 @@
         <tr>
           <th>Nomor Aset</th>
           <th>Item</th>
+          <th>Kategori</th>
+          <th>Kode Akun</th>
           <th>Entitas Bisnis</th>
+          <th>Metode Penyusutan</th>
           <th>Tanggal Perolehan</th>
-          <th class="ni-text-right">Qty</th>
-          <th class="ni-text-right">Harga Perolehan</th>
           <th class="ni-text-right">Nilai Perolehan</th>
           <th class="ni-text-right">Akum. Penyusutan</th>
           <th class="ni-text-right">Nilai Buku</th>
@@ -115,10 +226,11 @@
         <tr>
           <td><a href="{% url 'aset_tetap:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.aset_number }}</a></td>
           <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
+          <td>{{ record.item.kategori.nama|default:'-' }}</td>
+          <td style="font-size:0.8rem;">{{ record.item.coa_account.kode_akun|default:'-' }}<br><span style="color:var(--ni-text-muted);">{{ record.item.coa_account.nama|default:'' }}</span></td>
           <td>{{ record.entitas_bisnis.nama }}</td>
+          <td>{{ record.get_metode_penyusutan_display|default:'-' }}</td>
           <td>{{ record.tanggal_perolehan }}</td>
-          <td class="ni-text-right">{{ record.quantity|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ record.harga_perolehan|floatformat:0|intcomma }}</td>
           <td class="ni-text-right"><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></td>
           <td class="ni-text-right">{{ record.akumulasi_penyusutan|floatformat:0|intcomma }}</td>
           <td class="ni-text-right"><strong>{{ record.nilai_buku|floatformat:0|intcomma }}</strong></td>
@@ -142,7 +254,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="11" class="ni-text-center ni-text-muted">Belum ada data aset tetap.</td></tr>
+        <tr><td colspan="12" class="ni-text-center ni-text-muted">Belum ada data aset tetap.</td></tr>
         {% endfor %}
       </tbody>
     </table>

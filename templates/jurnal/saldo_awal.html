@@ -1004,6 +1004,26 @@
     document.getElementById('modal_masa_manfaat_all').value = '';
     document.getElementById('modal_metode_amortisasi').value = '';
     document.getElementById('modal_nilai_residu_all').value = '';
+    // Infer CoA from the parent journal row's selected akun
+    var _inferRid = (tipeHint === 'ATP') ? _atActiveRid : (tipeHint === 'ALL') ? _alActiveRid : _modalCurrentRid;
+    if (_inferRid) {
+      var info = _rowAkunInfo[_inferRid];
+      if (info && info.kode && info.nama) {
+        var selEl = document.getElementById('akun_sel_' + _inferRid);
+        var akunId = selEl ? selEl.value : '';
+        var optData = { id: akunId, text: info.kode + ' — ' + info.nama };
+        if (tipeHint === 'ATP' && _modalCoaAtpTomSelect) {
+          _modalCoaAtpTomSelect.addOption(optData);
+          _modalCoaAtpTomSelect.setValue(akunId, true);
+        } else if (tipeHint === 'ALL' && _modalCoaAllTomSelect) {
+          _modalCoaAllTomSelect.addOption(optData);
+          _modalCoaAllTomSelect.setValue(akunId, true);
+        } else if (_modalCoaTomSelect) {
+          _modalCoaTomSelect.addOption(optData);
+          _modalCoaTomSelect.setValue(akunId, true);
+        }
+      }
+    }
     // Show EB name
     var ebSel = document.getElementById('saEntitasBisnis');
     var ebText = ebSel ? ebSel.options[ebSel.selectedIndex].text : '';

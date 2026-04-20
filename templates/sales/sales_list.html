@@ -8,6 +8,9 @@
     <p class="ni-page-header__subtitle">Daftar semua transaksi penjualan</p>
   </div>
   <div class="ni-page-header__actions">
+    <a id="exportXlsxBtn" href="{% url 'sales:export' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
     <a href="{% url 'sales:create' %}" class="ni-btn ni-btn--success">
       <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Penjualan
     </a>
@@ -73,6 +76,8 @@
           <th class="ni-text-right">Qty</th>
           <th class="ni-text-right">Harga Jual</th>
           <th class="ni-text-right">Total</th>
+          <th class="ni-text-right">HPP</th>
+          <th class="ni-text-right">Profit</th>
           <th>Entitas Bisnis</th>
           <th>Aksi</th>
         </tr>
@@ -93,6 +98,8 @@
           <td class="ni-text-right">{% if row.item.item.tipe_item == 'RMB' or row.item.item.tipe_item == 'FGB' or row.item.item.tipe_item == 'ITMB' %}-{% else %}{{ row.item.quantity|floatformat:0|intcomma }}{% endif %}</td>
           <td class="ni-text-right">{{ row.item.selling_price|floatformat:0|intcomma }}</td>
           <td class="ni-text-right"><strong>{{ row.item.total_sales|floatformat:0|intcomma }}</strong></td>
+          <td class="ni-text-right" style="color:var(--ni-danger);">{{ row.hpp|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="color:{% if row.profit >= 0 %}var(--ni-success){% else %}var(--ni-danger){% endif %};font-weight:500;">{{ row.profit|floatformat:0|intcomma }}</td>
           <td>{{ row.entitas_group.entitas_bisnis.nama }}</td>
           {% if row.show_trx_cell %}
           <td rowspan="{{ row.trx_rowspan }}">
@@ -108,7 +115,7 @@
           {% endif %}
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada transaksi penjualan.</td></tr>
+        <tr><td colspan="11" class="ni-text-center ni-text-muted">Belum ada transaksi penjualan.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -116,4 +123,15 @@
 </div>
 
 {% include 'components/delete_modal.html' %}
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+  var exportBtn = document.getElementById('exportXlsxBtn');
+  if (exportBtn && window.location.search) {
+    exportBtn.href = exportBtn.href.split('?')[0] + window.location.search;
+  }
+})();
+</script>
 {% endblock %}

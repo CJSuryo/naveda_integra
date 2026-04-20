@@ -1,7 +1,9 @@
 """Aset Tetap views — CRUD for AsetTetapRecord."""
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.entitas_bisnis.models import EntitasBisnis
@@ -17,7 +19,9 @@ DEFAULT_DAYS = 30  # monthly processing default
 @login_required
 def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     """List all fixed asset records with optional filters."""
-    qs = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis').all()
+    qs = AsetTetapRecord.objects.select_related(
+        'item', 'item__kategori', 'item__coa_account', 'entitas_bisnis',
+    ).all()
 
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
@@ -259,9 +263,8 @@ def aset_tetap_process_depreciation(request: HttpRequest, pk: int) -> HttpRespon
 
 @login_required
 def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
-    """Process depreciation for all eligible fixed assets in one batch."""
-    from decimal import Decimal
-    from datetime import date as date_cls
+    """Process depreciation for selected fixed assets in one batch."""
+    from datetime import date as date_cls, timedelta as _td
 
     if request.method != 'POST':
         return redirect('aset_tetap:list')
@@ -272,12 +275,15 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
     except ValueError:
         tanggal = date_cls.today()
 
-    try:
-        hari = max(1, int(request.POST.get('hari', str(DEFAULT_DAYS))))
-    except (ValueError, TypeError):
-        hari = DEFAULT_DAYS
+    # Selected asset IDs from checkboxes
+    selected_ids = request.POST.getlist('record_ids')
 
-    records = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis').all()
+    records = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis')
+    if selected_ids:
+        records = records.filter(pk__in=selected_ids)
+    else:
+        records = records.all()
+
     success_count = 0
     skip_count = 0
     error_msgs = []
@@ -288,10 +294,27 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
             continue
 
         metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
-        # Skip activity-based methods — require manual input per record
         if metode in ('service_hours', 'units_of_production'):
             skip_count += 1
             continue
+
+        # Calculate days from last depreciation or acquisition date
+        from apps.jurnal.models import JurnalHeader
+        last_dep = (
+            JurnalHeader.objects
+            .filter(
+                nomor_transaksi__startswith='TRX-DEP-',
+                uraian_transaksi__contains=record.aset_number,
+            )
+            .order_by('-tanggal')
+            .first()
+        )
+        start_date = (last_dep.tanggal + _td(days=1)) if last_dep else record.tanggal_perolehan
+        if tanggal < start_date:
+            skip_count += 1
+            continue
+
+        hari = (tanggal - start_date).days + 1
 
         masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
         tahun_ke = 1
@@ -313,7 +336,7 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
     if success_count:
         messages.success(
             request,
-            f'Bulk penyusutan selesai: {success_count} aset diproses ({hari} hari), '
+            f'Bulk penyusutan selesai: {success_count} aset diproses, '
             f'{skip_count} dilewati.',
         )
     else:
@@ -323,3 +346,69 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
         messages.error(request, msg)
 
     return redirect('aset_tetap:list')
+
+
+@login_required
+def aset_tetap_bulk_preview(request: HttpRequest) -> JsonResponse:
+    """AJAX preview: calculate depreciation amounts for all eligible assets."""
+    from datetime import date as date_cls, timedelta as _td
+
+    tanggal_str = request.GET.get('tanggal', '')
+    try:
+        tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else None
+    except ValueError:
+        tanggal = None
+
+    if not tanggal:
+        return JsonResponse({'error': 'Tanggal wajib diisi.'}, status=400)
+
+    from apps.jurnal.models import JurnalHeader
+
+    records = AsetTetapRecord.objects.select_related('item', 'entitas_bisnis').all()
+    preview = []
+
+    for record in records:
+        if record.nilai_buku <= record.nilai_residu:
+            continue
+        metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
+        if metode in ('service_hours', 'units_of_production'):
+            continue
+
+        last_dep = (
+            JurnalHeader.objects
+            .filter(
+                nomor_transaksi__startswith='TRX-DEP-',
+                uraian_transaksi__contains=record.aset_number,
+            )
+            .order_by('-tanggal')
+            .first()
+        )
+        start_date = (last_dep.tanggal + _td(days=1)) if last_dep else record.tanggal_perolehan
+        if tanggal < start_date:
+            continue
+
+        hari = (tanggal - start_date).days + 1
+
+        masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+        tahun_ke = 1
+        if masa > 0 and record.tanggal_perolehan:
+            years_elapsed = (tanggal - record.tanggal_perolehan).days / Decimal('365.25')
+            tahun_ke = min(int(years_elapsed) + 1, masa)
+
+        depreciation = calculate_depreciation(record, tahun_ke=tahun_ke, days=hari)
+        if depreciation <= 0:
+            continue
+
+        new_book_value = record.nilai_buku - depreciation
+        preview.append({
+            'id': record.pk,
+            'aset_number': record.aset_number,
+            'item_nama': record.item.nama if record.item else '-',
+            'metode': record.get_metode_penyusutan_display(),
+            'nilai_buku': float(record.nilai_buku),
+            'hari': hari,
+            'depreciation': float(depreciation),
+            'new_book_value': float(new_book_value),
+        })
+
+    return JsonResponse({'records': preview})

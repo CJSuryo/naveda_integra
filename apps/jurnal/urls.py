@@ -7,6 +7,7 @@ app_name = 'jurnal'
 urlpatterns = [
     # Rekap Jurnal (read-only journal index with date filtering)
     path('rekap/', views.rekap_jurnal, name='rekap_jurnal'),
+    path('rekap/export/', views.rekap_jurnal_export, name='rekap_jurnal_export'),
 
     # JurnalHeader detail (read-only)
     path('header/<int:pk>/', views.header_detail, name='header_detail'),
@@ -23,6 +24,9 @@ urlpatterns = [
 
     # Neraca Saldo (Trial Balance)
     path('neraca-saldo/', views.neraca_saldo, name='neraca_saldo'),
+
+    # Buku Besar (General Ledger)
+    path('buku-besar/', views.buku_besar, name='buku_besar'),
 
     # Laporan Laba Rugi (Income Statement)
     path('laporan-laba-rugi/', views.laporan_laba_rugi, name='laporan_laba_rugi'),

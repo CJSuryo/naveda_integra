@@ -12,4 +12,5 @@ urlpatterns = [
     path('<int:pk>/delete/', views.aset_tetap_delete, name='delete'),
     path('<int:pk>/proses-penyusutan/', views.aset_tetap_process_depreciation, name='process_depreciation'),
     path('bulk-penyusutan/', views.aset_tetap_bulk_depreciation, name='bulk_depreciation'),
+    path('bulk-penyusutan/preview/', views.aset_tetap_bulk_preview, name='bulk_preview'),
 ]

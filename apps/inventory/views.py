@@ -1,8 +1,16 @@
 """Inventory views — CRUD for InventoryRecord."""
+import json
+import math
+from collections import defaultdict
+from datetime import timedelta
+from decimal import Decimal
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from .forms import InventoryRecordForm
 from .models import InventoryRecord
@@ -323,3 +331,601 @@ def convert_bulk_to_satuan(request: HttpRequest, pk: int) -> HttpResponse:
         f'(Rp {total_deduction:,.0f}) dari {record.inventory_number}.',
     )
     return redirect('inventory:detail', pk=pk)
+
+
+# ── Laporan Persediaan ───────────────────────────────────────────────────────
+
+INVENTORY_TIPE_ITEMS = ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB')
+BULK_TYPES = ('RMB', 'FGB', 'ITMB')
+
+_TIPE_LABEL = {
+    'RM': 'Raw Material', 'FG': 'Finished Good', 'ITM': 'Item Lainnya',
+    'RMB': 'Raw Material (Bulk)', 'FGB': 'Finished Good (Bulk)', 'ITMB': 'Item Lainnya (Bulk)',
+}
+
+
+def _format_rp(val: Decimal | int | float) -> str:
+    """Format Rupiah as shortened string (jt/rb)."""
+    v = float(val)
+    if abs(v) >= 1_000_000:
+        return f'{v / 1_000_000:,.2f}jt'
+    if abs(v) >= 1_000:
+        return f'{v / 1_000:,.0f}rb'
+    return f'{v:,.0f}'
+
+
+@login_required
+def laporan_persediaan(request: HttpRequest) -> HttpResponse:
+    """Comprehensive inventory report page."""
+    from apps.entitas_bisnis.models import EntitasBisnis
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.sales.models import SalesItemFIFOAllocation
+
+    today = timezone.now().date()
+
+    # ── Filters ──────────────────────────────────────────────────────────
+    eb_filter = request.GET.get('entitas_bisnis', '')
+    tipe_filter = request.GET.get('tipe', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+
+    eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+
+    # Base queryset for inventory records
+    ir_qs = (
+        InventoryRecord.objects
+        .filter(item__tipe_item__in=INVENTORY_TIPE_ITEMS)
+        .select_related('item', 'entitas_bisnis', 'purchase_item__purchase_eb__purchase_header')
+    )
+    if eb_filter:
+        ir_qs = ir_qs.filter(entitas_bisnis_id=eb_filter)
+    if tipe_filter:
+        ir_qs = ir_qs.filter(item__tipe_item=tipe_filter)
+    if tanggal_dari:
+        ir_qs = ir_qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        ir_qs = ir_qs.filter(tanggal__lte=tanggal_sampai)
+
+    records = list(ir_qs)
+
+    # FIFOBatch base queryset (active)
+    fb_qs = FIFOBatch.objects.filter(
+        remaining_qty__gt=0, item__tipe_item__in=INVENTORY_TIPE_ITEMS,
+    ).select_related('item', 'purchase_item__purchase_eb__purchase_header')
+
+    # Sales allocations for outflows
+    alloc_qs = SalesItemFIFOAllocation.objects.filter(
+        inventory_record__item__tipe_item__in=INVENTORY_TIPE_ITEMS,
+    ).select_related(
+        'sales_item__sales_eb__sales_header',
+        'sales_item__sales_eb__entitas_bisnis',
+        'sales_item__item',
+        'inventory_record',
+    )
+    if eb_filter:
+        alloc_qs = alloc_qs.filter(
+            sales_item__sales_eb__entitas_bisnis_id=eb_filter,
+        )
+
+    # ── ① Metric Cards ──────────────────────────────────────────────────
+    total_nilai = sum(r.total_value for r in records)
+    total_masuk = total_nilai  # All records are inflows
+    total_keluar = sum(a.cogs_amount for a in alloc_qs)
+    active_items = len({r.item_id for r in records if r.total_value > 0})
+
+    # Expiry alerts
+    expiry_soon = []  # items expiring within 30 days
+    expiry_past = []  # already expired
+    for r in records:
+        if r.tanggal_kadaluarsa:
+            days_left = (r.tanggal_kadaluarsa - today).days
+            if days_left < 0:
+                expiry_past.append((r, days_left))
+            elif days_left <= 7:
+                expiry_soon.append((r, days_left, 'danger'))
+            elif days_left <= 30:
+                expiry_soon.append((r, days_left, 'warning'))
+
+    # ROP alerts
+    rop_alerts = []
+    for r in records:
+        if r.lead_time_days and r.total_value > 0:
+            # Calculate simple ROP from lead_time and historical daily usage
+            daily_usage = _calc_daily_usage(r, alloc_qs)
+            rop = Decimal(r.lead_time_days) * daily_usage
+            if rop > 0:
+                is_bulk = r.item.tipe_item in BULK_TYPES
+                current = r.total_value if is_bulk else r.quantity
+                if current < rop:
+                    rop_alerts.append((r, current, rop))
+
+    items_need_action = len(expiry_past) + len([e for e in expiry_soon if e[2] == 'danger']) + len(rop_alerts)
+
+    # Slow/Dead stock
+    slow_dead = _calc_slow_dead(records, alloc_qs, today)
+    dead_count = sum(1 for s in slow_dead if s['status'] == 'dead')
+    slow_count = sum(1 for s in slow_dead if s['status'] == 'slow')
+
+    metrics = {
+        'total_nilai': total_nilai,
+        'total_masuk': total_masuk,
+        'total_keluar': total_keluar,
+        'active_items': active_items,
+        'items_need_action': items_need_action,
+        'slow_dead_count': dead_count + slow_count,
+        'masuk_count': len(records),
+        'keluar_count': alloc_qs.count(),
+    }
+
+    # ── ② Chart data ────────────────────────────────────────────────────
+    # Proportion by item type
+    tipe_values = defaultdict(Decimal)
+    for r in records:
+        base_tipe = r.item.tipe_item.replace('B', '')  # RMB→RM, FGB→FG
+        if base_tipe not in ('RM', 'FG', 'ITM'):
+            base_tipe = r.item.tipe_item[:2] if len(r.item.tipe_item) >= 2 else r.item.tipe_item
+        tipe_values[base_tipe] += r.total_value
+    pie_labels = []
+    pie_data = []
+    for t in ('RM', 'FG', 'ITM'):
+        if tipe_values.get(t, 0) > 0:
+            pie_labels.append(_TIPE_LABEL.get(t, t))
+            pie_data.append(float(tipe_values[t]))
+
+    # Monthly trend (last 6 months)
+    months_labels = []
+    trend_data = []
+    for i in range(5, -1, -1):
+        dt = today.replace(day=1) - timedelta(days=i * 30)
+        month_start = dt.replace(day=1)
+        month_label = month_start.strftime('%b')
+        months_labels.append(month_label)
+        # Records that existed by end of that month
+        if i == 0:
+            month_end = today
+        else:
+            next_month = month_start.replace(day=28) + timedelta(days=4)
+            month_end = next_month.replace(day=1) - timedelta(days=1)
+        val = sum(
+            r.total_value for r in records
+            if r.tanggal <= month_end
+        )
+        trend_data.append(float(val))
+
+    avg_trend = sum(trend_data) / len(trend_data) if trend_data else 0
+
+    # Monthly mutations (masuk vs keluar)
+    masuk_monthly = defaultdict(float)
+    keluar_monthly = defaultdict(float)
+    for r in records:
+        key = r.tanggal.strftime('%b')
+        if key in months_labels:
+            masuk_monthly[key] += float(r.total_value)
+    for a in alloc_qs:
+        key = a.sales_item.sales_eb.sales_header.tanggal.strftime('%b')
+        if key in months_labels:
+            keluar_monthly[key] += float(a.cogs_amount)
+    bar_masuk = [masuk_monthly.get(m, 0) for m in months_labels]
+    bar_keluar = [keluar_monthly.get(m, 0) for m in months_labels]
+
+    # Top items by value
+    item_values = defaultdict(lambda: {'nama': '', 'value': Decimal(0)})
+    for r in records:
+        item_values[r.item_id]['nama'] = r.item.nama
+        item_values[r.item_id]['value'] += r.total_value
+    top_items = sorted(item_values.values(), key=lambda x: x['value'], reverse=True)[:5]
+    top_labels = [t['nama'][:20] for t in top_items]
+    top_data = [float(t['value']) for t in top_items]
+
+    # Waterfall — saldo berjalan
+    waterfall = _calc_waterfall(records, alloc_qs)
+
+    chart_data = {
+        'pie_labels': pie_labels,
+        'pie_data': pie_data,
+        'months_labels': months_labels,
+        'trend_data': trend_data,
+        'avg_trend': avg_trend,
+        'bar_masuk': bar_masuk,
+        'bar_keluar': bar_keluar,
+        'top_labels': top_labels,
+        'top_data': top_data,
+    }
+
+    # ── ④ Per-entity breakdown ───────────────────────────────────────────
+    eb_breakdown = []
+    eb_groups = defaultdict(list)
+    for r in records:
+        eb_groups[r.entitas_bisnis_id].append(r)
+    for eb_id, eb_records in eb_groups.items():
+        eb = eb_records[0].entitas_bisnis
+        eb_nilai = sum(r.total_value for r in eb_records)
+        eb_items = len({r.item_id for r in eb_records})
+        eb_masuk = eb_nilai
+        eb_dead = sum(1 for s in slow_dead if s['record'].entitas_bisnis_id == eb_id and s['status'] == 'dead')
+        eb_exp = sum(
+            1 for r in eb_records
+            if r.tanggal_kadaluarsa and (r.tanggal_kadaluarsa - today).days < 0
+        )
+        eb_rop = sum(1 for ra in rop_alerts if ra[0].entitas_bisnis_id == eb_id)
+        eb_breakdown.append({
+            'nama': eb.nama,
+            'nilai': eb_nilai,
+            'item_count': eb_items,
+            'masuk': eb_masuk,
+            'dead_count': eb_dead,
+            'exp_count': eb_exp,
+            'rop_count': eb_rop,
+        })
+
+    # ── ⑦ Aging analysis ────────────────────────────────────────────────
+    aging_buckets = _calc_aging(records, today)
+
+    # ── ⑧ Cost accounting ───────────────────────────────────────────────
+    fifo_batches = list(fb_qs)
+    total_fifo_value = sum(b.batch_value for b in fifo_batches)
+    active_layers = len(fifo_batches)
+    eoq_ready = sum(
+        1 for r in records
+        if r.ordering_cost and r.holding_cost_pct and r.total_value > 0
+    )
+    total_items_with_value = len([r for r in records if r.total_value > 0])
+    dead_value = sum(
+        Decimal(str(s['record'].total_value))
+        for s in slow_dead if s['status'] == 'dead'
+    )
+
+    cost_data = {
+        'total_fifo_value': total_fifo_value,
+        'active_layers': active_layers,
+        'eoq_ready': eoq_ready,
+        'total_items': total_items_with_value,
+        'dead_value': dead_value,
+        'total_keluar': total_keluar,
+    }
+
+    # ── ⑨ Posisi Persediaan ─────────────────────────────────────────────
+    positions = _calc_positions(records, alloc_qs, today)
+
+    # ── ⑩ Mutasi Persediaan ─────────────────────────────────────────────
+    mutasi_list = _build_mutasi(records, alloc_qs)
+
+    # ── ⑪ FIFO Layers ───────────────────────────────────────────────────
+    fifo_layers = []
+    for i, batch in enumerate(fifo_batches, 1):
+        inv_record = None
+        for r in records:
+            if r.item_id == batch.item_id:
+                inv_record = r
+                break
+        status_label = 'Aktif'
+        status_class = 'success'
+        # Check if dead stock
+        for s in slow_dead:
+            if s['record'].item_id == batch.item_id and s['status'] == 'dead':
+                status_label = 'Aktif · dead stock'
+                status_class = 'danger'
+                break
+        # Check if expired
+        if inv_record and inv_record.tanggal_kadaluarsa:
+            if inv_record.tanggal_kadaluarsa < today:
+                status_label = 'Aktif · kadaluarsa'
+                status_class = 'danger'
+            elif (inv_record.tanggal_kadaluarsa - today).days <= 7:
+                status_label = 'Aktif · segera kadaluarsa'
+                status_class = 'danger'
+        # Check if below ROP
+        for ra in rop_alerts:
+            if ra[0].item_id == batch.item_id:
+                if status_label == 'Aktif':
+                    status_label = 'Aktif · ROP alert'
+                    status_class = 'warning'
+                break
+
+        ref = ''
+        if batch.purchase_item:
+            ref = batch.purchase_item.purchase_eb.purchase_header.transaction_id
+
+        fifo_layers.append({
+            'num': i,
+            'inventory_number': inv_record.inventory_number if inv_record else f'{batch.item.item_id}',
+            'ref': ref,
+            'tanggal': batch.tanggal,
+            'value': batch.batch_value,
+            'status_label': status_label,
+            'status_class': status_class,
+        })
+
+    context = {
+        'metrics': metrics,
+        'chart_data_json': json.dumps(chart_data, default=str),
+        'waterfall': waterfall,
+        'eb_breakdown': eb_breakdown,
+        'expiry_past': expiry_past,
+        'expiry_soon': expiry_soon,
+        'rop_alerts': rop_alerts,
+        'slow_dead': slow_dead,
+        'aging_buckets': aging_buckets,
+        'aging_json': json.dumps(_aging_chart_data(aging_buckets), default=str),
+        'cost_data': cost_data,
+        'positions': positions,
+        'mutasi_list': mutasi_list,
+        'fifo_layers': fifo_layers,
+        'today': today,
+        # Filters
+        'eb_list': eb_list,
+        'eb_filter': eb_filter,
+        'tipe_filter': tipe_filter,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'tipe_choices': [
+            ('RM', 'Raw Material'),
+            ('FG', 'Finished Good'),
+            ('ITM', 'Item Lainnya'),
+            ('RMB', 'Raw Material (Bulk)'),
+            ('FGB', 'Finished Good (Bulk)'),
+            ('ITMB', 'Item Lainnya (Bulk)'),
+        ],
+    }
+    return render(request, 'inventory/laporan_persediaan.html', context)
+
+
+# ── Helper functions ─────────────────────────────────────────────────────────
+
+def _calc_daily_usage(record, alloc_qs) -> Decimal:
+    """Estimate daily usage from sales allocations for this item."""
+    item_allocs = [a for a in alloc_qs if a.inventory_record_id == record.pk]
+    if not item_allocs:
+        return Decimal(0)
+    is_bulk = record.item.tipe_item in BULK_TYPES
+    total_consumed = sum(a.cogs_amount if is_bulk else a.quantity_consumed for a in item_allocs)
+    dates = [a.sales_item.sales_eb.sales_header.tanggal for a in item_allocs]
+    if not dates:
+        return Decimal(0)
+    span = (max(dates) - min(dates)).days or 1
+    return total_consumed / Decimal(span)
+
+
+def _calc_slow_dead(records, alloc_qs, today):
+    """Calculate slow-moving and dead stock items."""
+    result = []
+    # Group allocations by inventory record
+    alloc_by_ir = defaultdict(list)
+    for a in alloc_qs:
+        alloc_by_ir[a.inventory_record_id].append(a)
+
+    for r in records:
+        if r.total_value <= 0:
+            continue
+        ir_allocs = alloc_by_ir.get(r.pk, [])
+        if ir_allocs:
+            last_sale_date = max(
+                a.sales_item.sales_eb.sales_header.tanggal for a in ir_allocs
+            )
+            days_idle = (today - last_sale_date).days
+        else:
+            days_idle = (today - r.tanggal).days
+
+        threshold = r.item.threshold_days_outstanding or 30
+        if days_idle > threshold:
+            status = 'dead'
+            recommendation = 'Evaluasi kebutuhan · pertimbangkan retur ke supplier'
+        elif days_idle > (threshold // 2):
+            status = 'slow'
+            recommendation = 'Pantau pergerakan stok'
+        elif days_idle <= 1:
+            status = 'new'
+            recommendation = f'Pantau {threshold} hari ke depan'
+        else:
+            continue
+
+        last_out_label = last_sale_date.strftime('%d %b %Y') if ir_allocs else 'Belum pernah'
+
+        result.append({
+            'record': r,
+            'value': r.total_value,
+            'last_out': last_out_label,
+            'days_idle': days_idle,
+            'status': status,
+            'recommendation': recommendation,
+        })
+    return result
+
+
+def _calc_waterfall(records, alloc_qs):
+    """Build waterfall data: saldo awal, each inflow, each outflow, saldo akhir."""
+    # Group by purchase header reference
+    inflows = defaultdict(Decimal)
+    for r in records:
+        if r.purchase_item:
+            ref = r.purchase_item.purchase_eb.purchase_header.transaction_id
+        else:
+            ref = f'SA-{r.tanggal}'
+        inflows[ref] += r.total_value
+
+    outflows = defaultdict(Decimal)
+    for a in alloc_qs:
+        ref = a.sales_item.sales_eb.sales_header.transaction_id
+        outflows[ref] += a.cogs_amount
+
+    total_in = sum(inflows.values())
+    total_out = sum(outflows.values())
+    saldo_akhir = total_in - total_out
+
+    items = [{'label': 'Saldo awal', 'value': Decimal(0), 'type': 'neutral'}]
+
+    # Top 3 inflows by value
+    sorted_in = sorted(inflows.items(), key=lambda x: x[1], reverse=True)[:3]
+    rest_in = sum(v for _, v in sorted(inflows.items(), key=lambda x: x[1], reverse=True)[3:])
+    for ref, val in sorted_in:
+        items.append({'label': f'+ {ref}', 'value': val, 'type': 'in'})
+    if rest_in > 0:
+        items.append({'label': f'+ lainnya ({len(inflows) - 3})', 'value': rest_in, 'type': 'in'})
+
+    # Top 3 outflows
+    sorted_out = sorted(outflows.items(), key=lambda x: x[1], reverse=True)[:3]
+    rest_out = sum(v for _, v in sorted(outflows.items(), key=lambda x: x[1], reverse=True)[3:])
+    for ref, val in sorted_out:
+        items.append({'label': f'− {ref}', 'value': val, 'type': 'out'})
+    if rest_out > 0:
+        items.append({'label': f'− lainnya ({len(outflows) - 3})', 'value': rest_out, 'type': 'out'})
+
+    items.append({'label': 'Saldo akhir', 'value': saldo_akhir, 'type': 'total'})
+
+    # Calculate bar widths
+    max_val = float(max((abs(i['value']) for i in items), default=1)) or 1
+    for item in items:
+        item['width'] = int(abs(float(item['value'])) / max_val * 100)
+        item['display'] = _format_rp(item['value'])
+
+    return items
+
+
+def _calc_aging(records, today):
+    """Calculate aging buckets: 0-30, 31-60, 61-90, >90 days."""
+    buckets = [
+        {'label': '0–30 hari', 'value': Decimal(0), 'count': 0, 'color': '#10b981'},
+        {'label': '31–60 hari', 'value': Decimal(0), 'count': 0, 'color': '#0054a6'},
+        {'label': '61–90 hari', 'value': Decimal(0), 'count': 0, 'color': '#f59e0b'},
+        {'label': '> 90 hari', 'value': Decimal(0), 'count': 0, 'color': '#ef4444'},
+    ]
+    for r in records:
+        if r.total_value <= 0:
+            continue
+        age = (today - r.tanggal).days
+        if age <= 30:
+            idx = 0
+        elif age <= 60:
+            idx = 1
+        elif age <= 90:
+            idx = 2
+        else:
+            idx = 3
+        buckets[idx]['value'] += r.total_value
+        buckets[idx]['count'] += 1
+
+    total = sum(b['value'] for b in buckets) or Decimal(1)
+    for b in buckets:
+        b['pct'] = int(float(b['value']) / float(total) * 100)
+        b['display'] = _format_rp(b['value'])
+    return buckets
+
+
+def _aging_chart_data(buckets):
+    return {
+        'labels': [b['label'] for b in buckets],
+        'data': [float(b['value']) for b in buckets],
+        'colors': [b['color'] for b in buckets],
+    }
+
+
+def _calc_positions(records, alloc_qs, today):
+    """Build position table rows."""
+    positions = []
+    for r in records:
+        if r.total_value <= 0:
+            continue
+        is_bulk = r.item.tipe_item in BULK_TYPES
+        # Calculate EOQ & ROP
+        daily_usage = _calc_daily_usage(r, alloc_qs)
+        eoq = None
+        rop = None
+        if r.ordering_cost and r.holding_cost_pct and daily_usage > 0:
+            annual_demand = daily_usage * 365
+            h = float(r.unit_price) * float(r.holding_cost_pct)
+            if h > 0:
+                eoq = math.sqrt(2 * float(annual_demand) * float(r.ordering_cost) / h)
+                eoq = round(eoq)
+        if r.lead_time_days and daily_usage > 0:
+            rop = float(r.lead_time_days) * float(daily_usage)
+            rop = round(rop)
+
+        current_qty = r.total_value if is_bulk else r.quantity
+
+        # Expiry info
+        exp_info = None
+        if r.tanggal_kadaluarsa:
+            days_left = (r.tanggal_kadaluarsa - today).days
+            if days_left < 0:
+                exp_info = {'date': r.tanggal_kadaluarsa, 'label': 'Sudah kadaluarsa', 'class': 'danger'}
+            elif days_left <= 7:
+                exp_info = {'date': r.tanggal_kadaluarsa, 'label': f'{days_left} hari lagi', 'class': 'danger'}
+            elif days_left <= 30:
+                exp_info = {'date': r.tanggal_kadaluarsa, 'label': f'{days_left} hari lagi', 'class': 'warning'}
+            else:
+                exp_info = {'date': r.tanggal_kadaluarsa, 'label': '', 'class': ''}
+
+        # Below ROP?
+        below_rop = rop is not None and float(current_qty) < rop
+
+        # Dead stock days
+        dead_days = None
+        for s in _quick_idle_days(r, alloc_qs, today):
+            dead_days = s
+            break
+
+        positions.append({
+            'record': r,
+            'tipe_label': _TIPE_LABEL.get(r.item.tipe_item, r.item.tipe_item),
+            'is_bulk': is_bulk,
+            'value': r.total_value,
+            'lead_time': r.lead_time_days,
+            'ordering_cost': r.ordering_cost,
+            'holding_pct': r.holding_cost_pct,
+            'moq': r.moq,
+            'eoq': eoq,
+            'rop': rop,
+            'below_rop': below_rop,
+            'exp_info': exp_info,
+            'metode': r.get_metode_alokasi_display() or 'FIFO',
+            'dead_days': dead_days,
+        })
+    return positions
+
+
+def _quick_idle_days(record, alloc_qs, today):
+    """Yield idle days for a single record (generator for lazy eval)."""
+    ir_allocs = [a for a in alloc_qs if a.inventory_record_id == record.pk]
+    if ir_allocs:
+        last_date = max(a.sales_item.sales_eb.sales_header.tanggal for a in ir_allocs)
+        yield (today - last_date).days
+    else:
+        yield (today - record.tanggal).days
+
+
+def _build_mutasi(records, alloc_qs):
+    """Build combined mutation list (masuk + keluar)."""
+    mutasi = []
+    for r in records:
+        ref = ''
+        if r.purchase_item:
+            ref = r.purchase_item.purchase_eb.purchase_header.transaction_id
+        is_bulk = r.item.tipe_item in BULK_TYPES
+        mutasi.append({
+            'tanggal': r.tanggal,
+            'inventory_number': r.inventory_number,
+            'item_name': f'{r.item.item_id} - {r.item.nama}',
+            'tipe': 'in',
+            'tipe_label': 'Masuk',
+            'ref': ref,
+            'qty': None if is_bulk else r.quantity,
+            'value': r.total_value,
+            'keterangan': f'Pembelian via {ref}' if ref else 'Saldo awal',
+        })
+    for a in alloc_qs:
+        sh = a.sales_item.sales_eb.sales_header
+        ir = a.inventory_record
+        is_bulk = a.sales_item.item.tipe_item in BULK_TYPES
+        mutasi.append({
+            'tanggal': sh.tanggal,
+            'inventory_number': ir.inventory_number,
+            'item_name': f'{a.sales_item.item.item_id} - {a.sales_item.item.nama}',
+            'tipe': 'out',
+            'tipe_label': 'Keluar',
+            'ref': sh.transaction_id,
+            'qty': None if is_bulk else a.quantity_consumed,
+            'value': a.cogs_amount,
+            'keterangan': f'Penjualan via {sh.transaction_id}',
+        })
+    mutasi.sort(key=lambda x: x['tanggal'], reverse=True)
+    return mutasi

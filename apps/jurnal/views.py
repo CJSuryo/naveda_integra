@@ -36,9 +36,9 @@ def _parse_int_list(values: list[str]) -> list[int]:
 
 # ── Rekap Jurnal (replaces old index / header_list) ─────────────────────────
 
-@login_required
-def rekap_jurnal(request: HttpRequest) -> HttpResponse:
-    """Read-only journal recap with date range and entitas bisnis filtering."""
+
+def _rekap_jurnal_qs(request: HttpRequest):
+    """Build filtered JurnalHeader queryset from request GET params. Returns (qs, filters_dict)."""
     from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
     qs = (
@@ -50,6 +50,8 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
 
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    prefix_filter = request.GET.get('prefix', '')
+    akun_filter = request.GET.get('akun', '')
     eb_lv1_ids = request.GET.getlist('eb_lv1')
     eb_lv2_ids = request.GET.getlist('eb_lv2')
     eb_lv3_ids = request.GET.getlist('eb_lv3')
@@ -58,8 +60,11 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if prefix_filter:
+        qs = qs.filter(nomor_transaksi__startswith=prefix_filter)
+    if akun_filter:
+        qs = qs.filter(details__akun_id=akun_filter).distinct()
 
-    # Build entitas bisnis filter: collect Lv1 IDs from all levels
     eb_filter_ids = set()
     if eb_lv1_ids:
         eb_filter_ids.update(_parse_int_list(eb_lv1_ids))
@@ -77,6 +82,23 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
     if eb_filter_ids:
         qs = qs.filter(entitas_bisnis_id__in=eb_filter_ids)
 
+    return qs, {
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'prefix_filter': prefix_filter,
+        'akun_filter': akun_filter,
+        'eb_lv1_ids': eb_lv1_ids,
+        'eb_lv2_ids': eb_lv2_ids,
+        'eb_lv3_ids': eb_lv3_ids,
+    }
+
+
+@login_required
+def rekap_jurnal(request: HttpRequest) -> HttpResponse:
+    """Read-only journal recap with date range and entitas bisnis filtering."""
+    from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
+
+    qs, filters = _rekap_jurnal_qs(request)
     headers = list(qs)
 
     # Prepare entitas bisnis hierarchy for filter modal
@@ -84,17 +106,113 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
     eb_lv2_all = EntitasBisnisLv2.objects.filter(status_aktif=True).select_related('entitas_bisnis').order_by('nama')
     eb_lv3_all = EntitasBisnisLv3.objects.filter(status_aktif=True).select_related('parent_lv2__entitas_bisnis').order_by('nama')
 
+    # Distinct transaction prefixes for filter dropdown
+    prefix_choices = (
+        JurnalHeader.objects
+        .values_list('nomor_transaksi', flat=True)
+        .order_by('nomor_transaksi')
+    )
+    prefix_set = sorted({trx.rsplit('-', 1)[0] for trx in prefix_choices if trx and '-' in trx})
+
+    # All akun for filter
+    from apps.master_data.utils import get_akun_sorted
+    akun_list = get_akun_sorted()
+
     return render(request, 'jurnal/rekap_jurnal.html', {
         'headers': headers,
-        'tanggal_dari': tanggal_dari,
-        'tanggal_sampai': tanggal_sampai,
+        'tanggal_dari': filters['tanggal_dari'],
+        'tanggal_sampai': filters['tanggal_sampai'],
+        'prefix_filter': filters['prefix_filter'],
+        'prefix_choices': prefix_set,
+        'akun_filter': filters['akun_filter'],
+        'akun_list': akun_list,
         'eb_lv1_all': eb_lv1_all,
         'eb_lv2_all': eb_lv2_all,
         'eb_lv3_all': eb_lv3_all,
-        'selected_lv1': eb_lv1_ids,
-        'selected_lv2': eb_lv2_ids,
-        'selected_lv3': eb_lv3_ids,
+        'selected_lv1': filters['eb_lv1_ids'],
+        'selected_lv2': filters['eb_lv2_ids'],
+        'selected_lv3': filters['eb_lv3_ids'],
     })
+
+
+@login_required
+def rekap_jurnal_export(request: HttpRequest) -> HttpResponse:
+    """Export filtered Rekap Jurnal as XLSX."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+
+    qs, filters = _rekap_jurnal_qs(request)
+    headers = list(qs)
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Rekap Jurnal'
+
+    # Styles
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin'),
+    )
+    right_align = Alignment(horizontal='right')
+
+    # Column headers
+    col_headers = ['Tanggal', 'No. Transaksi', 'Uraian', 'Entitas Bisnis', 'Akun', 'Debit', 'Kredit']
+    for col_idx, title in enumerate(col_headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+
+    row_num = 2
+    for header in headers:
+        details = list(header.details.all())
+        if not details:
+            for col_idx, val in enumerate([
+                header.tanggal,
+                header.nomor_transaksi,
+                header.uraian_transaksi,
+                str(header.entitas_bisnis) if header.entitas_bisnis else '-',
+                '-', 0, 0,
+            ], 1):
+                cell = ws.cell(row=row_num, column=col_idx, value=val)
+                cell.border = thin_border
+                if col_idx in (6, 7):
+                    cell.alignment = right_align
+                    cell.number_format = '#,##0'
+            row_num += 1
+        else:
+            for i, detail in enumerate(details):
+                for col_idx, val in enumerate([
+                    header.tanggal if i == 0 else '',
+                    header.nomor_transaksi if i == 0 else '',
+                    header.uraian_transaksi if i == 0 else '',
+                    (str(header.entitas_bisnis) if header.entitas_bisnis else '-') if i == 0 else '',
+                    f'{detail.akun.kode_akun} - {detail.akun.nama}',
+                    detail.debit or 0,
+                    detail.kredit or 0,
+                ], 1):
+                    cell = ws.cell(row=row_num, column=col_idx, value=val)
+                    cell.border = thin_border
+                    if col_idx in (6, 7):
+                        cell.alignment = right_align
+                        cell.number_format = '#,##0'
+                row_num += 1
+
+    # Auto-width
+    for col_idx in range(1, 8):
+        max_len = len(col_headers[col_idx - 1])
+        for row in ws.iter_rows(min_row=2, max_row=row_num - 1, min_col=col_idx, max_col=col_idx):
+            for cell in row:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = min(max_len + 2, 50)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="rekap_jurnal.xlsx"'
+    wb.save(response)
+    return response
 
 
 # ── JurnalHeader detail (read-only) ─────────────────────────────────────────
@@ -747,10 +865,16 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
         )
 
     def _sum_net(items: list[dict], net_type: str = 'kredit') -> Decimal:
-        """Sum net value. For pendapatan: kredit - debit. For beban: debit - kredit."""
-        if net_type == 'kredit':
-            return sum((i['kredit'] - i['debit'] for i in items), Decimal('0'))
-        return sum((i['debit'] - i['kredit'] for i in items), Decimal('0'))
+        """Sum net value. For pendapatan: kredit - debit. For beban: debit - kredit.
+        Also stamps each item with its 'net' value for template display."""
+        total = Decimal('0')
+        for i in items:
+            if net_type == 'kredit':
+                i['net'] = i['kredit'] - i['debit']
+            else:
+                i['net'] = i['debit'] - i['kredit']
+            total += i['net']
+        return total
 
     # 1. Pendapatan Operasional (4.1.x)
     pendapatan_op_items = _collect('4.1')
@@ -1715,4 +1839,101 @@ def jurnal_terhapus_list(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'search': search,
         'module_choices': module_choices,
+    })
+
+
+# ── Buku Besar (General Ledger) ─────────────────────────────────────────────
+
+@login_required
+def buku_besar(request: HttpRequest) -> HttpResponse:
+    """General Ledger — show all journal entries for a specific account with running balance."""
+    from apps.master_data.utils import get_akun_sorted
+
+    akun_id = request.GET.get('akun', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    akun_list = get_akun_sorted()
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+
+    rows = []
+    selected_akun = None
+    saldo_awal = Decimal('0')
+
+    if akun_id:
+        from apps.master_data.models import Akun
+        try:
+            selected_akun = Akun.objects.get(pk=akun_id)
+        except Akun.DoesNotExist:
+            selected_akun = None
+
+    if selected_akun:
+        # Determine normal balance direction: debit-normal for aset(1)/beban(5), kredit-normal for others
+        kat = selected_akun.kategori_akun or ''
+        is_debit_normal = kat in ('aset', 'beban')
+
+        # Build filters
+        filters: dict = {'akun': selected_akun}
+        if eb_filter:
+            filters['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+        # Saldo awal: sum of all entries before tanggal_dari
+        if tanggal_dari:
+            sa_qs = JurnalDetail.objects.filter(
+                jurnal_header__tanggal__lt=tanggal_dari,
+                **filters,
+            ).aggregate(
+                total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+                total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+            )
+            if is_debit_normal:
+                saldo_awal = sa_qs['total_debit'] - sa_qs['total_kredit']
+            else:
+                saldo_awal = sa_qs['total_kredit'] - sa_qs['total_debit']
+
+        # Period entries
+        period_filters = dict(filters)
+        if tanggal_dari:
+            period_filters['jurnal_header__tanggal__gte'] = tanggal_dari
+        if tanggal_sampai:
+            period_filters['jurnal_header__tanggal__lte'] = tanggal_sampai
+
+        entries = (
+            JurnalDetail.objects
+            .filter(**period_filters)
+            .select_related('jurnal_header', 'jurnal_header__entitas_bisnis')
+            .order_by('jurnal_header__tanggal', 'jurnal_header__pk')
+        )
+
+        running = saldo_awal
+        for entry in entries:
+            if is_debit_normal:
+                running += entry.debit - entry.kredit
+            else:
+                running += entry.kredit - entry.debit
+            rows.append({
+                'tanggal': entry.jurnal_header.tanggal,
+                'nomor_transaksi': entry.jurnal_header.nomor_transaksi,
+                'uraian': entry.jurnal_header.uraian_transaksi,
+                'entitas_bisnis': entry.jurnal_header.entitas_bisnis,
+                'debit': entry.debit,
+                'kredit': entry.kredit,
+                'saldo': running,
+                'header_pk': entry.jurnal_header.pk,
+            })
+
+    return render(request, 'jurnal/buku_besar.html', {
+        'akun_list': akun_list,
+        'eb_list': eb_list,
+        'selected_akun': selected_akun,
+        'akun_id': akun_id,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'eb_filter': eb_filter,
+        'saldo_awal': saldo_awal,
+        'rows': rows,
+        'total_debit': sum((r['debit'] for r in rows), Decimal('0')),
+        'total_kredit': sum((r['kredit'] for r in rows), Decimal('0')),
+        'saldo_akhir': rows[-1]['saldo'] if rows else saldo_awal,
     })

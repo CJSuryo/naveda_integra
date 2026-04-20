@@ -1,0 +1,117 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Buku Besar{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Buku Besar</h1>
+    <p class="ni-page-header__subtitle">General Ledger — riwayat transaksi per akun</p>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:2;min-width:200px;">
+        <label class="ni-form-label">Akun</label>
+        <select name="akun" class="ni-input" required>
+          <option value="">— Pilih Akun —</option>
+          {% for akun in akun_list %}
+          <option value="{{ akun.pk }}"{% if akun_id == akun.pk|stringformat:'d' %} selected{% endif %}>{{ akun.kode_akun }} — {{ akun.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="entitas_bisnis" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan
+      </button>
+      <a href="{% url 'jurnal:buku_besar' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+{% if selected_akun %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="padding:16px 20px 8px;">
+    <h3 style="margin:0 0 4px;font-size:1rem;font-weight:600;">{{ selected_akun.kode_akun }} — {{ selected_akun.nama }}</h3>
+    <p style="margin:0;font-size:0.85rem;color:var(--ni-text-muted);">
+      Kategori: {{ selected_akun.get_kategori_akun_display|default:selected_akun.kategori_akun }}
+      {% if tanggal_dari %} | Periode: {{ tanggal_dari }}{% endif %}
+      {% if tanggal_sampai %} s/d {{ tanggal_sampai }}{% endif %}
+    </p>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table" style="font-size:0.85rem;">
+      <thead>
+        <tr>
+          <th style="width:10%">Tanggal</th>
+          <th style="width:14%">No. Transaksi</th>
+          <th>Uraian</th>
+          <th style="width:12%">Entitas Bisnis</th>
+          <th class="ni-text-right" style="width:12%">Debit</th>
+          <th class="ni-text-right" style="width:12%">Kredit</th>
+          <th class="ni-text-right" style="width:12%">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if tanggal_dari %}
+        <tr style="background:var(--ni-bg);font-weight:500;">
+          <td colspan="4">Saldo Awal</td>
+          <td class="ni-text-right">-</td>
+          <td class="ni-text-right">-</td>
+          <td class="ni-text-right">{{ saldo_awal|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endif %}
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.tanggal }}</td>
+          <td><a href="{% url 'jurnal:header_detail' row.header_pk %}" style="color:var(--ni-primary);text-decoration:none;">{{ row.nomor_transaksi }}</a></td>
+          <td>{{ row.uraian|truncatewords:10 }}</td>
+          <td>{{ row.entitas_bisnis.nama|default:'-' }}</td>
+          <td class="ni-text-right">{% if row.debit %}{{ row.debit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+          <td class="ni-text-right">{% if row.kredit %}{{ row.kredit|floatformat:0|intcomma }}{% else %}-{% endif %}</td>
+          <td class="ni-text-right" style="font-weight:500;">{{ row.saldo|floatformat:0|intcomma }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Tidak ada transaksi untuk akun ini pada periode tersebut.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot>
+        <tr style="font-weight:600;background:var(--ni-bg);">
+          <td colspan="4" class="ni-text-right">Total Periode</td>
+          <td class="ni-text-right">{{ total_debit|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ total_kredit|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="color:var(--ni-primary);">{{ saldo_akhir|floatformat:0|intcomma }}</td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% elif not akun_id %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="padding:48px;text-align:center;color:var(--ni-text-muted);">
+    <i data-lucide="book-open" style="width:48px;height:48px;margin-bottom:16px;opacity:0.4;"></i>
+    <p>Pilih akun dan klik <strong>Tampilkan</strong> untuk melihat Buku Besar.</p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

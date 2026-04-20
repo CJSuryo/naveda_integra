@@ -138,10 +138,16 @@ def sales_list(request: HttpRequest) -> HttpResponse:
                     continue
                 if item_filter and str(si.item_id) != str(item_filter):
                     continue
+                # Compute HPP & profit
+                is_bulk = si.item.tipe_item in ('RMB', 'FGB', 'ITMB') if si.item else False
+                hpp = si.hpp_terpakai if is_bulk and si.hpp_terpakai else (si.cogs_amount or Decimal('0'))
+                profit = (si.total_sales or Decimal('0')) - hpp
                 rows.append({
                     'sales_header': sh,
                     'entitas_group': eg,
                     'item': si,
+                    'hpp': hpp,
+                    'profit': profit,
                 })
 
     # Compute rowspan
@@ -175,6 +181,106 @@ def sales_list(request: HttpRequest) -> HttpResponse:
         'stt_filter': stt_filter,
         'eb_filter': eb_filter,
     })
+
+
+@login_required
+def sales_export(request: HttpRequest) -> HttpResponse:
+    """Export sales list as XLSX with same filters as the list page."""
+    import openpyxl
+    from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+
+    qs = (
+        SalesHeader.objects
+        .prefetch_related(
+            'entitas_groups__entitas_bisnis',
+            'entitas_groups__items__item',
+            'entitas_groups__items__sub_transaction_type',
+        )
+        .order_by('-tanggal', '-created_at')
+    )
+
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    item_filter = request.GET.get('item', '')
+    stt_filter = request.GET.get('sub_transaction_type', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if item_filter:
+        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
+    if stt_filter:
+        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
+    if eb_filter:
+        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+
+    rows = []
+    for sh in qs:
+        for eg in sh.entitas_groups.all():
+            for si in eg.items.all():
+                if stt_filter and str(si.sub_transaction_type_id) != str(stt_filter):
+                    continue
+                if item_filter and str(si.item_id) != str(item_filter):
+                    continue
+                is_bulk = si.item.tipe_item in ('RMB', 'FGB', 'ITMB') if si.item else False
+                hpp = si.hpp_terpakai if is_bulk and si.hpp_terpakai else (si.cogs_amount or Decimal('0'))
+                profit = (si.total_sales or Decimal('0')) - hpp
+                rows.append({
+                    'transaction_id': sh.transaction_id,
+                    'tanggal': sh.tanggal,
+                    'item': str(si.item) if si.item else '-',
+                    'stt': si.sub_transaction_type.nama if si.sub_transaction_type else '-',
+                    'qty': si.quantity or 0,
+                    'selling_price': si.selling_price or 0,
+                    'total_sales': si.total_sales or 0,
+                    'hpp': hpp,
+                    'profit': profit,
+                    'entitas_bisnis': eg.entitas_bisnis.nama if eg.entitas_bisnis else '-',
+                })
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Sales'
+
+    header_font = Font(bold=True, size=11)
+    header_fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin'),
+    )
+    right_align = Alignment(horizontal='right')
+
+    col_headers = ['Transaction ID', 'Tanggal', 'Item', 'Sub-Transaction Type', 'Qty', 'Harga Jual', 'Total', 'HPP', 'Profit', 'Entitas Bisnis']
+    for col_idx, title in enumerate(col_headers, 1):
+        cell = ws.cell(row=1, column=col_idx, value=title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+
+    for row_num, row in enumerate(rows, 2):
+        vals = [row['transaction_id'], row['tanggal'], row['item'], row['stt'], row['qty'],
+                row['selling_price'], row['total_sales'], row['hpp'], row['profit'], row['entitas_bisnis']]
+        for col_idx, val in enumerate(vals, 1):
+            cell = ws.cell(row=row_num, column=col_idx, value=val)
+            cell.border = thin_border
+            if col_idx in (5, 6, 7, 8, 9):
+                cell.alignment = right_align
+                cell.number_format = '#,##0'
+
+    for col_idx in range(1, 11):
+        max_len = len(col_headers[col_idx - 1])
+        for row in ws.iter_rows(min_row=2, max_row=len(rows) + 1, min_col=col_idx, max_col=col_idx):
+            for cell in row:
+                if cell.value:
+                    max_len = max(max_len, len(str(cell.value)))
+        ws.column_dimensions[openpyxl.utils.get_column_letter(col_idx)].width = min(max_len + 2, 50)
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = 'attachment; filename="sales.xlsx"'
+    wb.save(response)
+    return response
 
 
 # ── Sales Create ─────────────────────────────────────────────────────────────
