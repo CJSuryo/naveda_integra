@@ -754,6 +754,21 @@ def _resolve_entitas_bisnis_id(selection: str | None) -> int | None:
 @login_required
 def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
     """Spreadsheet-like direct manual journal entry form."""
+    from django.db import transaction as db_transaction
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.inventory.models import InventoryRecord
+
+    AKUN_DETAIL_PREFIXES: dict[str, str] = {
+        '1.1.7': 'persediaan',
+        '1.1.8': 'persediaan',
+        '1.1.9': 'persediaan',
+        '1.1.10': 'persediaan',
+        '1.2': 'aset_tetap',
+        '1.2.3': 'aset_tetap',
+        '1.3': 'aset_lainnya',
+        '3.1.1': 'modal_disetor',
+    }
+
     if request.method == 'POST':
         tanggal = request.POST.get('tanggal')
         uraian = request.POST.get('uraian_transaksi', '').strip()
@@ -792,25 +807,182 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
                 'errors': errors,
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
+                'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
             })
 
-        nomor = _next_nomor_transaksi('TRX-MAN')
-        header = JurnalHeader.objects.create(
-            tanggal=tanggal,
-            nomor_transaksi=nomor,
-            uraian_transaksi=uraian,
-            entitas_bisnis_id=eb_id,
-            is_penyesuaian=True,
-        )
-        JurnalDetail.objects.bulk_create([
-            JurnalDetail(
-                jurnal_header=header,
-                akun_id=row['akun_id'],
-                debit=Decimal(str(row.get('debit') or 0)),
-                kredit=Decimal(str(row.get('kredit') or 0)),
+        with db_transaction.atomic():
+            nomor = _next_nomor_transaksi('TRX-MAN')
+            header = JurnalHeader.objects.create(
+                tanggal=tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=uraian,
+                entitas_bisnis_id=eb_id,
+                is_penyesuaian=True,
             )
-            for row in rows
-        ])
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(
+                    jurnal_header=header,
+                    akun_id=row['akun_id'],
+                    debit=Decimal(str(row.get('debit') or 0)),
+                    kredit=Decimal(str(row.get('kredit') or 0)),
+                )
+                for row in rows
+            ])
+
+            # ── Persediaan detail: InventoryRecord + FIFOBatch ─────────────
+            persediaan_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'persediaan' and r.get('detail_rows')
+            ]
+            if persediaan_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in persediaan_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in persediaan_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        InventoryRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            unit_price=unit_price,
+                            tanggal=tanggal,
+                        )
+                        FIFOBatch.objects.create(
+                            purchase_item=None,
+                            item=item,
+                            tanggal=tanggal,
+                            quantity_in=qty,
+                            unit_price=unit_price,
+                            remaining_qty=qty,
+                        )
+
+            # ── Aset Tetap detail: AsetTetapRecord ─────────────────────────
+            aset_tetap_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_tetap' and r.get('detail_rows')
+            ]
+            if aset_tetap_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_tetap_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_tetap_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        AsetTetapRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_penyusutan=item.metode_penyusutan,
+                        )
+
+            # ── Aset Lainnya detail: AsetLainnyaRecord ─────────────────────
+            aset_lainnya_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'aset_lainnya' and r.get('detail_rows')
+            ]
+            if aset_lainnya_rows:
+                all_item_ids = {
+                    int(d['item_id'])
+                    for r in aset_lainnya_rows
+                    for d in r.get('detail_rows', [])
+                    if str(d.get('item_id', '')).isdigit()
+                }
+                items_map = {
+                    item.pk: item
+                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                }
+                for row in aset_lainnya_rows:
+                    for d in row.get('detail_rows', []):
+                        try:
+                            item_pk = int(str(d.get('item_id', '')))
+                            qty = Decimal(str(d.get('qty') or 0))
+                            unit_price = Decimal(str(d.get('unit_price') or 0))
+                        except (ValueError, TypeError):
+                            continue
+                        if qty <= 0 or unit_price < 0:
+                            continue
+                        item = items_map.get(item_pk)
+                        if not item:
+                            continue
+                        AsetLainnyaRecord.objects.create(
+                            item=item,
+                            purchase_item=None,
+                            entitas_bisnis_id=eb_id,
+                            quantity=qty,
+                            harga_perolehan=unit_price,
+                            tanggal_perolehan=tanggal,
+                            masa_manfaat=item.masa_manfaat,
+                            metode_amortisasi=item.metode_amortisasi,
+                        )
+
+            # ── Modal Disetor detail: ModalDisetor + Pemilik ───────────────
+            from apps.ekuitas.models import ModalDisetor as ModalDisetorModel, Pemilik as PemilikModel
+            from apps.ekuitas.services import get_or_create_pemilik
+            modal_disetor_rows = [
+                r for r in rows
+                if r.get('detail_type') == 'modal_disetor' and r.get('detail_rows')
+            ]
+            for row in modal_disetor_rows:
+                for d in row.get('detail_rows', []):
+                    nama_pemilik = str(d.get('nama_pemilik', '')).strip()
+                    if not nama_pemilik:
+                        continue
+                    try:
+                        jumlah = Decimal(str(d.get('jumlah', 0)))
+                    except Exception:
+                        continue
+                    if jumlah <= 0:
+                        continue
+                    pemilik = get_or_create_pemilik(nama_pemilik)
+                    ModalDisetorModel.objects.create(
+                        entitas_bisnis_id=eb_id,
+                        pemilik=pemilik,
+                        jumlah_modal=jumlah,
+                        tanggal_setor=tanggal,
+                        keterangan=str(d.get('keterangan', '')).strip(),
+                        jurnal_header=header,
+                    )
+
         dj_messages.success(request, f'Jurnal manual {nomor} berhasil dibuat.')
         return redirect('jurnal:header_detail', pk=header.pk)
 
@@ -819,6 +991,7 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
         'today': timezone.now().date(),
         'eb_list': eb_list,
         'errors': {},
+        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
     })
 
 

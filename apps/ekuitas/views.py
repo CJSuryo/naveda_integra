@@ -94,6 +94,22 @@ def ekuitas_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def ekuitas_create(request: HttpRequest) -> HttpResponse:
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.inventory.models import InventoryRecord
+    from apps.aset_tetap.models import AsetTetapRecord
+    from apps.aset_lainnya.models import AsetLainnyaRecord
+
+    AKUN_DETAIL_PREFIXES: dict[str, str] = {
+        '1.1.7': 'persediaan',
+        '1.1.8': 'persediaan',
+        '1.1.9': 'persediaan',
+        '1.1.10': 'persediaan',
+        '1.2': 'aset_tetap',
+        '1.2.3': 'aset_tetap',
+        '1.3': 'aset_lainnya',
+        '3.1.1': 'modal_disetor',
+    }
+
     eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
     pemilik_list = Pemilik.objects.order_by('nama')
     akun_autocomplete_url = reverse('jurnal:akun_autocomplete')
@@ -132,6 +148,64 @@ def ekuitas_create(request: HttpRequest) -> HttpResponse:
                     owners=owners,
                     debit_lines=debit_lines,
                 )
+                # Process detail rows on debit lines (persediaan, aset_tetap, aset_lainnya)
+                eb_id_int = int(eb_id)
+                all_item_ids = {
+                    int(d['item_id'])
+                    for dl in debit_lines
+                    for d in dl.get('detail_rows', [])
+                    if dl.get('detail_type') in ('persediaan', 'aset_tetap', 'aset_lainnya')
+                    and str(d.get('item_id', '')).isdigit()
+                }
+                if all_item_ids:
+                    items_map = {
+                        item.pk: item
+                        for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+                    }
+                    for dl in debit_lines:
+                        detail_type = dl.get('detail_type')
+                        if not detail_type or detail_type not in ('persediaan', 'aset_tetap', 'aset_lainnya'):
+                            continue
+                        for d in dl.get('detail_rows', []):
+                            try:
+                                item_pk = int(str(d.get('item_id', '')))
+                                qty = Decimal(str(d.get('qty') or 0))
+                                unit_price = Decimal(str(d.get('unit_price') or 0))
+                            except (ValueError, TypeError):
+                                continue
+                            if qty <= 0 or unit_price < 0:
+                                continue
+                            item = items_map.get(item_pk)
+                            if not item:
+                                continue
+                            if detail_type == 'persediaan':
+                                InventoryRecord.objects.create(
+                                    item=item, purchase_item=None,
+                                    entitas_bisnis_id=eb_id_int,
+                                    quantity=qty, unit_price=unit_price, tanggal=tanggal,
+                                )
+                                FIFOBatch.objects.create(
+                                    purchase_item=None, item=item, tanggal=tanggal,
+                                    quantity_in=qty, unit_price=unit_price, remaining_qty=qty,
+                                )
+                            elif detail_type == 'aset_tetap':
+                                AsetTetapRecord.objects.create(
+                                    item=item, purchase_item=None,
+                                    entitas_bisnis_id=eb_id_int,
+                                    quantity=qty, harga_perolehan=unit_price,
+                                    tanggal_perolehan=tanggal,
+                                    masa_manfaat=item.masa_manfaat,
+                                    metode_penyusutan=item.metode_penyusutan,
+                                )
+                            elif detail_type == 'aset_lainnya':
+                                AsetLainnyaRecord.objects.create(
+                                    item=item, purchase_item=None,
+                                    entitas_bisnis_id=eb_id_int,
+                                    quantity=qty, harga_perolehan=unit_price,
+                                    tanggal_perolehan=tanggal,
+                                    masa_manfaat=item.masa_manfaat,
+                                    metode_amortisasi=item.metode_amortisasi,
+                                )
                 messages.success(request, f'{len(records)} data modal disetor berhasil disimpan dan jurnal dibuat.')
                 return redirect('ekuitas:list')
             except ValueError as e:
@@ -144,6 +218,7 @@ def ekuitas_create(request: HttpRequest) -> HttpResponse:
             'posted_eb': eb_id,
             'posted_tanggal': tanggal,
             'akun_autocomplete_url': akun_autocomplete_url,
+            'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
         })
 
     return render(request, 'ekuitas/ekuitas_create.html', {
@@ -152,6 +227,7 @@ def ekuitas_create(request: HttpRequest) -> HttpResponse:
         'errors': {},
         'posted_tanggal': timezone.now().date().isoformat(),
         'akun_autocomplete_url': akun_autocomplete_url,
+        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
     })
 
 
@@ -285,7 +361,35 @@ def ekuitas_export(request: HttpRequest) -> HttpResponse:
 def ekuitas_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly modal disetor list for browser PDF printing."""
     import datetime
-    records = list(_ekuitas_export_qs(request))
+    # Fetch ascending (oldest first) for cumulative computation
+    records_qs = _ekuitas_export_qs(request).order_by('entitas_bisnis_id', 'tanggal_setor', 'pk')
+    records = list(records_qs)
+
+    # Compute per-EB cumulative totals and ownership %
+    eb_cumulative: dict[int, Decimal] = {}
+    eb_pemilik_cumulative: dict[tuple, Decimal] = {}
+    eb_pemilik_prev_pct: dict[tuple, Decimal] = {}
+
+    for r in records:
+        eb_id = r.entitas_bisnis_id
+        pemilik_id = r.pemilik_id
+
+        eb_cumulative[eb_id] = eb_cumulative.get(eb_id, Decimal('0')) + r.jumlah_modal
+
+        key = (eb_id, pemilik_id)
+        eb_pemilik_cumulative[key] = eb_pemilik_cumulative.get(key, Decimal('0')) + r.jumlah_modal
+
+        total_all = eb_cumulative[eb_id]
+        pemilik_total = eb_pemilik_cumulative[key]
+        pct = (pemilik_total / total_all * 100) if total_all > 0 else Decimal('0')
+
+        prev_pct = eb_pemilik_prev_pct.get(key, Decimal('0'))
+        delta_pct = pct - prev_pct
+        eb_pemilik_prev_pct[key] = pct
+
+        r._pct = round(pct, 2)
+        r._delta_pct = round(delta_pct, 2)
+
     total_modal = sum(r.jumlah_modal for r in records)
     return render(request, 'ekuitas/ekuitas_export_pdf.html', {
         'records': records,

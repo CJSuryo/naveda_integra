@@ -283,17 +283,22 @@ class EkuitasViewTests(TestCase):
 
     # Create POST — happy path
     def test_create_post_valid(self):
+        owners = json.dumps([{
+            'pemilik_id': self.pemilik.pk,
+            'jumlah_modal': 20000000,
+            'persentase_kepemilikan': None,
+            'keterangan': '',
+        }])
         debit_lines = json.dumps([{'akun_id': self.kas_akun.pk, 'jumlah': 20000000}])
         r = self.client.post(reverse('ekuitas:create'), {
             'entitas_bisnis': self.eb.pk,
-            'pemilik': self.pemilik.pk,
             'tanggal': '2024-09-01',
-            'keterangan': '',
+            'owners_json': owners,
             'debit_lines_json': debit_lines,
         })
         self.assertEqual(ModalDisetor.objects.count(), 1)
         record = ModalDisetor.objects.first()
-        self.assertRedirects(r, reverse('ekuitas:detail', args=[record.pk]))
+        self.assertRedirects(r, reverse('ekuitas:list'))
 
     # Create POST — validation errors
     def test_create_post_missing_fields(self):

@@ -158,7 +158,9 @@
 {% endblock %}
 
 {% block extra_js %}
+{% include 'components/item_detail_modals.html' %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="{% static 'js/item-detail-modals.js' %}"></script>
 <script>
 (function () {
   'use strict';
@@ -168,6 +170,34 @@
   var pemilikSearchUrl = '{% url "ekuitas:api_pemilik_search" %}';
   var pemilikCreateUrl = '{% url "ekuitas:api_pemilik_create" %}';
   var csrfToken = '{{ csrf_token }}';
+
+  niDetailModals.init({
+    akunDetailMap: {{ akun_detail_prefixes_json|safe }},
+    autocompleteUrl: autocompleteUrl,
+    getEBLv1Id: function() {
+      return document.querySelector('[name="entitas_bisnis"]').value || '';
+    },
+    getEBDisplayText: function() {
+      var sel = document.querySelector('[name="entitas_bisnis"]');
+      return sel ? sel.options[sel.selectedIndex].text : '';
+    },
+    getAkunElementId: function(rid) { return 'mdd_akun_' + rid; },
+    itemAutocompleteUrl: '{% url "purchase:api_item_autocomplete" %}',
+    itemCreateUrl: '{% url "purchase:api_item_create" %}',
+    kategoriFilterUrl: '{% url "purchase:api_kategori_filter" %}',
+    kategoriCreateUrl: '{% url "purchase:api_kategori_create" %}',
+    csrfToken: csrfToken,
+    onDebitConfirmed: function(rid, total) {
+      var el = document.getElementById('mdd_jumlah_' + rid);
+      if (el) { el.value = total; el.setAttribute('data-detail-locked','1'); el.style.background='var(--ni-primary-light)'; el.readOnly = true; }
+      mdRecalc();
+    },
+    onKreditConfirmed: function(rid, total) { /* not used on this page */ },
+    onDetailCleared: function(rid) {
+      var el = document.getElementById('mdd_jumlah_' + rid);
+      if (el) { el.removeAttribute('data-detail-locked'); el.style.background=''; el.readOnly=false; }
+    },
+  });
   var _ownerTs = {};   // rid → TomSelect
   var _debitTs = {};   // rid → TomSelect
   var _newPemilikCallback = null;  // called after inline pemilik creation
@@ -229,8 +259,16 @@
     var tr = document.createElement('tr');
     tr.id = 'mdd_row_' + rid;
     tr.innerHTML =
-      '<td><select id="mdd_akun_' + rid + '" placeholder="Ketik kode/nama akun..."></select>' +
-        '<input type="hidden" id="mdd_akun_id_' + rid + '">' +
+      '<td>' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<div style="flex:1;min-width:0;"><select id="mdd_akun_' + rid + '" placeholder="Ketik kode/nama akun..."></select>' +
+            '<input type="hidden" id="mdd_akun_id_' + rid + '">' +
+          '</div>' +
+          '<div id="detail_wrap_' + rid + '" style="display:none;flex-shrink:0;">' +
+            '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="padding:4px 8px;"><i data-lucide="package" style="width:13px;height:13px"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<span id="detail_badge_' + rid + '" style="font-size:0.75rem;color:var(--ni-success);font-weight:600;display:block;margin-top:2px;"></span>' +
       '</td>' +
       '<td><input type="number" id="mdd_jumlah_' + rid + '" class="md-input" min="0" step="1" value="0" oninput="mdRecalc()"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="mdRemoveDebitRow(' + rid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
@@ -247,6 +285,14 @@
       },
       onChange: function (val) {
         document.getElementById('mdd_akun_id_' + rid).value = val || '';
+        if (!val) {
+          niDetailModals.clearRow(rid);
+          return;
+        }
+        var opt = this.options[val];
+        var kode = (opt && opt.kode) ? opt.kode : '';
+        var nama = (opt && (opt.nama || opt.text)) ? (opt.nama || opt.text) : '';
+        niDetailModals.onAkunChange(rid, kode, nama);
       },
       create: false,
     });
@@ -258,6 +304,7 @@
   window.mdRemoveDebitRow = function (rid) {
     var tr = document.getElementById('mdd_row_' + rid);
     if (!tr) return;
+    niDetailModals.clearRow(rid);
     if (_debitTs[rid]) { try { _debitTs[rid].destroy(); } catch(e) {} delete _debitTs[rid]; }
     tr.remove();
     mdRecalc();
@@ -367,12 +414,19 @@
     document.getElementById('mdOwnersJson').value = JSON.stringify(owners);
 
     var debits = [];
+    var detailMap = niDetailModals.getRowDetailMap();
     document.querySelectorAll('#mdDebitRows tr').forEach(function (tr) {
       var rid = tr.id.replace('mdd_row_', '');
       var aid = document.getElementById('mdd_akun_id_' + rid);
       var jm = document.getElementById('mdd_jumlah_' + rid);
       if (aid && aid.value && jm) {
-        debits.push({ akun_id: parseInt(aid.value), jumlah: parseFloat(jm.value || 0) });
+        var debitRow = { akun_id: parseInt(aid.value), jumlah: parseFloat(jm.value || 0) };
+        var detail = detailMap[rid];
+        if (detail && detail.detail_rows && detail.detail_rows.length) {
+          debitRow.detail_type = detail.type;
+          debitRow.detail_rows = detail.detail_rows;
+        }
+        debits.push(debitRow);
       }
     });
     document.getElementById('mdDebitJson').value = JSON.stringify(debits);

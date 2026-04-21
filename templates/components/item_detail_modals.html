@@ -1,0 +1,367 @@
+{% comment %}
+  Shared akun-detail modals component.
+
+  Include this on any page that uses the akun→detail mapping:
+    {% include 'components/item_detail_modals.html' %}
+
+  Then load the shared JS after TomSelect + Lucide CDN scripts:
+    {% load static %}
+    <script src="{% static 'js/item-detail-modals.js' %}"></script>
+
+  Finally call niDetailModals.init({ ... }) with page-specific config.
+{% endcomment %}
+
+<!-- ── Persediaan Detail Modal ──────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalPersediaanBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="package" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Persediaan &mdash; <span id="saModalAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseDetailModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:520px;">
+          <thead>
+            <tr>
+              <th style="width:42%">Item Persediaan</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:20%">HPP/Unit (Rp)</th>
+              <th style="width:16%">Total</th>
+              <th style="width:8%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Item
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseDetailModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Item Master Create Modal ─────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saItemMasterModalBackdrop" style="z-index:2100;">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" id="saItemModalTitle">Tambah Item Baru</h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseItemModal()" aria-label="Close">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Item <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="modal_nama" class="ni-input" placeholder="Nama item">
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tipe Item</label>
+          <select id="modal_tipe_item" class="ni-input" onchange="saOnModalTipeItemChange()">
+            <option value="RM">Raw Material (Satuan)</option>
+            <option value="FG">Finished Good (Satuan)</option>
+            <option value="ITM">Item Lainnya (Satuan)</option>
+            <option value="RMB">Raw Material (Bulk)</option>
+            <option value="FGB">Finished Good (Bulk)</option>
+            <option value="ITMB">Item Lainnya (Bulk)</option>
+            <option value="ATP">Aset Tetap</option>
+            <option value="ALL">Aset Lainnya</option>
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kategori</label>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="modal_kategori" class="ni-input" disabled style="flex:1;">
+              <option value="">— Pilih tipe item dahulu —</option>
+            </select>
+            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="saOpenKategoriModal()" title="Tambah Kategori Baru" style="padding:6px 8px;flex-shrink:0;">
+              <i data-lucide="plus" style="width:16px;height:16px"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <!-- Inventory fields (RM/FG/ITM/RMB/FGB/ITMB) -->
+      <div id="modal_inventory_fields">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Velocity Category</label>
+            <select id="modal_velocity" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="fast">Fast Moving</option>
+              <option value="medium">Medium (B)</option>
+              <option value="slow">Slow (C)</option>
+              <option value="dead">Dead Stock</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+        </div>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Lama Kadaluarsa (Hari)</label>
+            <input type="number" id="modal_lama_kadaluarsa" class="ni-input" min="0" placeholder="Jumlah hari default">
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Threshold Days Outstanding</label>
+            <input type="number" id="modal_threshold" class="ni-input" min="0">
+          </div>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Metode Biaya Persediaan</label>
+          <select id="modal_metode_biaya" class="ni-input">
+            <option value="">— Pilih —</option>
+            <option value="fifo">FIFO (First In First Out)</option>
+            <option value="lifo">LIFO (Last In First Out)</option>
+            <option value="average">Average (Rata-rata Tertimbang)</option>
+            <option value="weighted_moving_average">Weighted Moving Average</option>
+          </select>
+        </div>
+      </div>
+      <!-- Aset Tetap fields (ATP) -->
+      <div id="modal_atp_fields" style="display:none;">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account_atp" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+            <input type="number" id="modal_masa_manfaat_atp" class="ni-input" min="1">
+          </div>
+        </div>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Metode Penyusutan</label>
+            <select id="modal_metode_penyusutan" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="double_declining">Saldo Menurun Ganda (Double Declining Balance)</option>
+              <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years Digits)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Nilai Residu</label>
+            <input type="number" id="modal_nilai_residu_atp" class="ni-input" min="0" step="1" placeholder="0">
+          </div>
+        </div>
+      </div>
+      <!-- Aset Lainnya fields (ALL) -->
+      <div id="modal_all_fields" style="display:none;">
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">CoA Account</label>
+            <select id="modal_coa_account_all" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+            <input type="number" id="modal_masa_manfaat_all" class="ni-input" min="1">
+          </div>
+        </div>
+        <div class="ni-form-row">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Metode Amortisasi</label>
+            <select id="modal_metode_amortisasi" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+              <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
+            </select>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Nilai Residu</label>
+            <input type="number" id="modal_nilai_residu_all" class="ni-input" min="0" step="1" placeholder="0">
+          </div>
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <div id="modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
+          <em>Akan otomatis di-set dari entitas bisnis yang dipilih</em>
+        </div>
+      </div>
+      <div id="modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseItemModal()">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saSubmitItemModal()">
+        <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Item
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Kategori Create Modal ─────────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saKategoriModalBackdrop" style="z-index:2200;">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tambah Kategori Baru</h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseKategoriModal()" aria-label="Close">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Kategori <span style="color:var(--ni-danger)">*</span></label>
+        <input type="text" id="kat_modal_nama" class="ni-input" placeholder="Nama kategori">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <div id="kat_modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
+          <em>Otomatis dari entitas bisnis yang dipilih</em>
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Tipe Item</label>
+        <input type="text" id="kat_modal_tipe_display" class="ni-input" readonly style="opacity:0.6;">
+        <small style="color:var(--ni-text-muted);">Otomatis dari tipe item yang dipilih</small>
+      </div>
+      <div id="kat_modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseKategoriModal()">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saSubmitKategoriModal()">
+        <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Kategori
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Aset Tetap Detail Modal ─────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalAsetTetapBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="landmark" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Aset Tetap &mdash; <span id="saModalAsetTetapAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseAsetTetapModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:420px;">
+          <thead>
+            <tr>
+              <th style="width:48%">Item Aset Tetap</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:28%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalAsetTetapRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAsetTetapAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Aset
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalAsetTetapTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmAsetTetapDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseAsetTetapModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Aset Lainnya Detail Modal ───────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalAsetLainnyaBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="database" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Detail Aset Lainnya &mdash; <span id="saModalAsetLainnyaAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseAsetLainnyaModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:420px;">
+          <thead>
+            <tr>
+              <th style="width:48%">Item Aset Lainnya</th>
+              <th style="width:14%">Qty</th>
+              <th style="width:28%">Nilai Perolehan/Unit (Rp)</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalAsetLainnyaRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalAsetLainnyaAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Aset
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Nilai: <strong id="saModalAsetLainnyaTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmAsetLainnyaDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseAsetLainnyaModal()">Batal</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Disetor Detail Modal ──────────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="saModalDisetorBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="wallet" style="width:18px;height:18px;color:var(--ni-primary);"></i>
+        Rincian Modal Disetor &mdash; <span id="saModalDisetorAkunNama" style="color:var(--ni-primary);"></span>
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="saCloseModalDisetorModal()">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin-bottom:12px;">
+        Masukkan nama dan jumlah setoran modal tiap pemilik. Total harus sama dengan nilai kredit akun ini.
+      </p>
+      <div class="ni-table-wrapper">
+        <table class="ni-jm-table" style="min-width:480px;">
+          <thead>
+            <tr>
+              <th style="width:35%">Nama Pemilik</th>
+              <th style="width:25%">Jumlah Modal (Rp)</th>
+              <th style="width:30%">Keterangan</th>
+              <th style="width:10%"></th>
+            </tr>
+          </thead>
+          <tbody id="saModalDisetorRows"></tbody>
+        </table>
+      </div>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="margin-top:8px;" onclick="saModalDisetorAddRow()">
+        <i data-lucide="plus" style="width:13px;height:13px"></i> Tambah Pemilik
+      </button>
+      <div style="margin-top:12px;padding:10px 14px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.9rem;">
+        Total Modal: <strong id="saModalDisetorTotal" style="color:var(--ni-primary);">Rp 0</strong>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--primary" onclick="saConfirmModalDisetorDetail()">
+        <i data-lucide="check" style="width:15px;height:15px"></i> Konfirmasi
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="saCloseModalDisetorModal()">Batal</button>
+    </div>
+  </div>
+</div>

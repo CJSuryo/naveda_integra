@@ -12,17 +12,23 @@
     table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
     thead th { background: #1e3a5f; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
     thead th.r { text-align: right; }
+    thead th.c { text-align: center; }
     tbody tr:nth-child(even) { background: #f8fafc; }
     tbody td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
     tbody td.r { text-align: right; }
+    tbody td.c { text-align: center; }
     tfoot td { padding: 6px 8px; font-weight: 700; border-top: 2px solid #1e3a5f; background: #f1f5f9; }
     tfoot td.r { text-align: right; }
+    .pct { font-weight: 600; color: #0054a6; }
+    .delta-up { color: #10b981; font-size: 9.5px; }
+    .delta-down { color: #ef4444; font-size: 9.5px; }
+    .delta-zero { color: #94a3b8; font-size: 9.5px; }
     .print-btn { margin-bottom: 16px; }
     .print-btn button { padding: 8px 20px; background: #0054a6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
     @media print {
       .print-btn { display: none; }
       body { padding: 10px; }
-      @page { margin: 15mm; size: A4 portrait; }
+      @page { margin: 15mm; size: A4 landscape; }
     }
   </style>
 </head>
@@ -54,6 +60,8 @@
         <th class="r">Jumlah Modal (Rp)</th>
         <th>Tanggal Setor</th>
         <th>No. Jurnal</th>
+        <th class="c">% Kepemilikan</th>
+        <th class="c">Pergerakan %</th>
         <th>Keterangan</th>
       </tr>
     </thead>
@@ -65,10 +73,22 @@
         <td class="r"><strong>{{ r.jumlah_modal|floatformat:0|intcomma }}</strong></td>
         <td>{{ r.tanggal_setor }}</td>
         <td>{{ r.jurnal_header.nomor_transaksi|default:'-' }}</td>
+        <td class="c">
+          <span class="pct">{{ r._pct|floatformat:2 }}%</span>
+        </td>
+        <td class="c">
+          {% if r._delta_pct > 0 %}
+            <span class="delta-up">▲ {{ r._delta_pct|floatformat:2 }}%</span>
+          {% elif r._delta_pct < 0 %}
+            <span class="delta-down">▼ {{ r._delta_pct|floatformat:2 }}%</span>
+          {% else %}
+            <span class="delta-zero">—</span>
+          {% endif %}
+        </td>
         <td>{{ r.keterangan|default:'-' }}</td>
       </tr>
       {% empty %}
-      <tr><td colspan="6" style="text-align:center;padding:20px;color:#64748b;">Tidak ada data modal disetor.</td></tr>
+      <tr><td colspan="8" style="text-align:center;padding:20px;color:#64748b;">Tidak ada data modal disetor.</td></tr>
       {% endfor %}
     </tbody>
     {% if records %}
@@ -76,7 +96,7 @@
       <tr>
         <td colspan="2" class="r">Total Modal</td>
         <td class="r"><strong>{{ total_modal|floatformat:0|intcomma }}</strong></td>
-        <td colspan="3"></td>
+        <td colspan="5"></td>
       </tr>
     </tfoot>
     {% endif %}

@@ -111,14 +111,55 @@
 {% endblock %}
 
 {% block extra_js %}
+{% include 'components/item_detail_modals.html' %}
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="{% static 'js/item-detail-modals.js' %}"></script>
 <script>
 (function () {
   'use strict';
 
   var rowCount = 0;
   var autocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
+  var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var itemCreateUrl = '{% url "purchase:api_item_create" %}';
+  var kategoriFilterUrl = '{% url "purchase:api_kategori_filter" %}';
+  var kategoriCreateUrl = '{% url "purchase:api_kategori_create" %}';
+  var csrfToken = '{{ csrf_token }}';
   var _tomSelectInstances = [];  // Track all TomSelect instances for rows
+
+  niDetailModals.init({
+    akunDetailMap: {{ akun_detail_prefixes_json|safe }},
+    autocompleteUrl: autocompleteUrl,
+    getEBLv1Id: function() {
+      var val = document.getElementById('jmEntitasBisnis').value || '';
+      if (!val) return '';
+      var parts = val.split(':');
+      return (parts[0] === 'lv1') ? (parts[1] || '') : '';
+    },
+    getEBDisplayText: function() {
+      var sel = document.getElementById('jmEntitasBisnis');
+      return sel ? sel.options[sel.selectedIndex].text : '';
+    },
+    itemAutocompleteUrl: itemAutocompleteUrl,
+    itemCreateUrl: itemCreateUrl,
+    kategoriFilterUrl: kategoriFilterUrl,
+    kategoriCreateUrl: kategoriCreateUrl,
+    csrfToken: csrfToken,
+    onDebitConfirmed: function(rid, total) {
+      var el = document.getElementById('debit_' + rid);
+      if (el) { el.value = total; el.setAttribute('data-detail-locked','1'); el.style.background='var(--ni-primary-light)'; el.readOnly = true; }
+      jmUpdateTotals();
+    },
+    onKreditConfirmed: function(rid, total) {
+      var el = document.getElementById('kredit_' + rid);
+      if (el && parseFloat(el.value||0) === 0) { el.value = total; }
+      jmUpdateTotals();
+    },
+    onDetailCleared: function(rid) {
+      var el = document.getElementById('debit_' + rid);
+      if (el) { el.removeAttribute('data-detail-locked'); el.style.background=''; el.readOnly=false; }
+    },
+  });
 
   function formatNum(n) {
     return parseFloat(n || 0).toLocaleString('id-ID', { minimumFractionDigits: 0 });
@@ -145,6 +186,11 @@
 
   window.jmOnEBChange = function () {
     var ebSelected = isEBSelected();
+    // Clear detail state for all rows
+    document.querySelectorAll('#jmRows tr').forEach(function(tr) {
+      var rid = tr.id.replace('row_', '');
+      niDetailModals.clearRow(rid);
+    });
     // Reload all TomSelect instances with new EB filter
     _tomSelectInstances.forEach(function (ts) {
       ts.clearOptions();
@@ -165,7 +211,15 @@
     var tr = document.createElement('tr');
     tr.id = id;
     tr.innerHTML =
-      '<td><select id="akun_sel_' + rowCount + '" name="akun_sel_' + rowCount + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select></td>' +
+      '<td>' +
+        '<div style="display:flex;align-items:center;gap:6px;">' +
+          '<div style="flex:1;min-width:0;"><select id="akun_sel_' + rowCount + '" name="akun_sel_' + rowCount + '" class="ni-jm-input" placeholder="Ketik kode/nama akun..."></select></div>' +
+          '<div id="detail_wrap_' + rowCount + '" style="display:none;flex-shrink:0;">' +
+            '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" style="padding:4px 8px;"><i data-lucide="package" style="width:13px;height:13px"></i></button>' +
+          '</div>' +
+        '</div>' +
+        '<span id="detail_badge_' + rowCount + '" style="font-size:0.75rem;color:var(--ni-success);font-weight:600;display:block;margin-top:2px;"></span>' +
+      '</td>' +
       '<td><input type="text" id="akun_nama_' + rowCount + '" class="ni-jm-input" readonly placeholder="Nama akun" style="background:var(--ni-bg);"></td>' +
       '<td><input type="number" id="debit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="jmUpdateTotals()"></td>' +
       '<td><input type="number" id="kredit_' + rowCount + '" class="ni-jm-input" min="0" step="1" value="0" oninput="jmUpdateTotals()"></td>' +
@@ -194,11 +248,15 @@
       onChange: function (val) {
         if (!val) {
           document.getElementById('akun_nama_' + currentRowNum).value = '';
+          niDetailModals.clearRow(currentRowNum);
           return;
         }
         var opt = this.options[val];
         if (opt) {
-          document.getElementById('akun_nama_' + currentRowNum).value = opt.nama || opt.text;
+          var kode = opt.kode || '';
+          var nama = opt.nama || opt.text || '';
+          document.getElementById('akun_nama_' + currentRowNum).value = nama;
+          niDetailModals.onAkunChange(currentRowNum, kode, nama);
         }
         jmUpdateTotals();
       },
@@ -217,6 +275,8 @@
   window.jmRemoveRow = function (id) {
     var tr = document.getElementById(id);
     if (tr) {
+      var rid = tr.id.replace('row_', '');
+      niDetailModals.clearRow(rid);
       var selEl = tr.querySelector('select');
       if (selEl && selEl.tomselect) {
         var idx = _tomSelectInstances.indexOf(selEl.tomselect);
@@ -257,16 +317,24 @@
   document.getElementById('jmForm').addEventListener('submit', function () {
     var rows = document.querySelectorAll('#jmRows tr');
     var data = [];
+    var detailMap = niDetailModals.getRowDetailMap();
     rows.forEach(function (tr) {
+      var rid = tr.id.replace('row_', '');
       var selEl = tr.querySelector('select');
       var dInp = tr.querySelector('input[id^="debit_"]');
       var kInp = tr.querySelector('input[id^="kredit_"]');
       if (!selEl || !selEl.value) return;
-      data.push({
+      var rowData = {
         akun_id: selEl.value,
         debit: parseFloat(dInp ? dInp.value : 0) || 0,
         kredit: parseFloat(kInp ? kInp.value : 0) || 0,
-      });
+      };
+      var detail = detailMap[rid];
+      if (detail && detail.detail_rows && detail.detail_rows.length) {
+        rowData.detail_type = detail.type;
+        rowData.detail_rows = detail.detail_rows;
+      }
+      data.push(rowData);
     });
     document.getElementById('jmRowsData').value = JSON.stringify(data);
   });
