@@ -412,9 +412,10 @@ input[type="checkbox"].ni-checkbox:focus-visible {
   position: relative;
 }
 
-.ts-wrapper .ts-dropdown {
+.ts-wrapper .ts-dropdown,
+body > .ts-dropdown {
   position: absolute;
-  z-index: 2100;
+  z-index: 3000 !important;
   max-height: 500px;
   overflow-y: auto;
 }
