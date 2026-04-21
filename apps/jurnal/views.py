@@ -550,12 +550,15 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     term = request.GET.get('term', '')
     eb_id = request.GET.get('eb_id', '')
     return_all = request.GET.get('all', '')
+    prefix = request.GET.get('prefix', '')
 
     from apps.master_data.utils import natural_sort_key
 
     qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
     )
+    if prefix:
+        qs = qs.filter(kode_akun__startswith=prefix)
 
     # If eb_id is provided, filter to only available akuns for that EB
     if eb_id:

@@ -1013,6 +1013,7 @@ def api_stt_offset(request: HttpRequest) -> JsonResponse:
 @login_required
 def api_kategori_filter(request: HttpRequest) -> JsonResponse:
     """Return KategoriItem options filtered by tipe_item and optionally entitas bisnis."""
+    from django.db.models import Q
     tipe_item = request.GET.get('tipe_item', '')
     eb_lv1_id = request.GET.get('eb_lv1_id', '')
 
@@ -1020,7 +1021,10 @@ def api_kategori_filter(request: HttpRequest) -> JsonResponse:
     if tipe_item:
         qs = qs.filter(tipe_item=tipe_item)
     if eb_lv1_id:
-        qs = qs.filter(entitas_bisnis__pk=eb_lv1_id)
+        # Include categories linked to this EB OR categories with no EB restriction (global)
+        qs = qs.filter(
+            Q(entitas_bisnis__pk=eb_lv1_id) | Q(entitas_bisnis__isnull=True)
+        ).distinct()
 
     results = [{'id': k.pk, 'nama': k.nama} for k in qs]
     return JsonResponse(results, safe=False)
@@ -1043,12 +1047,16 @@ def api_kategori_create(request: HttpRequest) -> JsonResponse:
 
     if not nama:
         return JsonResponse({'error': 'Nama kategori wajib diisi.'}, status=400)
-    if tipe_item not in ('RM', 'FG', 'ITM', 'ATP', 'ALL'):
+    if tipe_item not in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB', 'ATP', 'ALL'):
         tipe_item = 'RM'
 
     # Check for duplicate
     existing = KategoriItem.objects.filter(nama__iexact=nama, tipe_item=tipe_item).first()
     if existing:
+        if eb_ids:
+            # Ensure the EB link exists even if it was created without one
+            for eb_id in eb_ids:
+                existing.entitas_bisnis.add(eb_id)
         return JsonResponse({
             'id': existing.pk,
             'nama': existing.nama,

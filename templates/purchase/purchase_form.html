@@ -638,9 +638,8 @@
       dropdownParent: 'body',
       maxOptions: false,
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
-        fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
+        fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1&prefix=1')
           .then(function (r) { return r.json(); })
           .then(function (data) { callback(data); })
           .catch(function () { callback(); });
