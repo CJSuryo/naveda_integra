@@ -765,7 +765,6 @@
       maxOptions: false,
       placeholder: 'Ketik kode/nama item…',
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
         var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
@@ -927,7 +926,6 @@
       dropdownParent: 'body',
       maxOptions: false,
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
         fetch(autocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1')
           .then(function (r) { return r.json(); })
@@ -1232,7 +1230,6 @@
       maxOptions: false,
       placeholder: 'Ketik kode/nama item…',
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
         var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
@@ -1401,7 +1398,6 @@
       maxOptions: false,
       placeholder: 'Ketik kode/nama item…',
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
         var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);

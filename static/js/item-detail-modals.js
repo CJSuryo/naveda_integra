@@ -182,7 +182,6 @@
       maxOptions: false,
       placeholder: 'Ketik kode/nama item…',
       preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (query, callback) {
         var url = cfg.itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
@@ -292,7 +291,6 @@
       valueField: 'id', labelField: 'text', searchField: 'text',
       placeholder: 'Ketik kode/nama akun...', dropdownParent: 'body',
       maxOptions: false, preload: 'focus',
-      shouldLoad: function () { return false; },
       load: function (q, cb) {
         fetch((cfg.autocompleteUrl || '') + '?term=' + encodeURIComponent(q) + '&all=1')
           .then(function (r) { return r.json(); }).then(cb).catch(function () { cb(); });
@@ -570,7 +568,7 @@
     var ts = new TomSelect('#at_modal_item_' + mrid, {
       valueField: 'id', labelField: 'text', searchField: 'text',
       options: [], maxOptions: false, placeholder: 'Ketik kode/nama item…',
-      preload: 'focus', shouldLoad: function () { return false; },
+      preload: 'focus',
       load: function (query, callback) {
         var url = cfg.itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
@@ -698,7 +696,7 @@
     var ts = new TomSelect('#al_modal_item_' + mrid, {
       valueField: 'id', labelField: 'text', searchField: 'text',
       options: [], maxOptions: false, placeholder: 'Ketik kode/nama item…',
-      preload: 'focus', shouldLoad: function () { return false; },
+      preload: 'focus',
       load: function (query, callback) {
         var url = cfg.itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (ebLv1) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1);
