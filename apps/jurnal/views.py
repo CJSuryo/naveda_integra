@@ -1129,7 +1129,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
     # 9. Laba Bersih
     laba_bersih = laba_operasional + net_non_op
 
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
 
     return render(request, 'jurnal/laporan_laba_rugi.html', {
         'tanggal_dari': tanggal_dari,
@@ -1997,7 +1997,7 @@ def neraca(request: HttpRequest) -> HttpResponse:
     selisih = total_aset - total_kewajiban_ekuitas
     is_balanced = abs(selisih) < Decimal('0.01')
 
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
 
     return render(request, 'jurnal/neraca.html', {
         'tanggal_sampai': tanggal_sampai,
@@ -2097,7 +2097,7 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
     # 4. Saldo Akhir
     saldo_akhir_ekuitas = saldo_awal_ekuitas + laba_bersih - prive
 
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
 
     return render(request, 'jurnal/laporan_perubahan_ekuitas.html', {
         'tanggal_dari': tanggal_dari,

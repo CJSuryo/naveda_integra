@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static humanize %}
+{% load static humanize jurnal_extras %}
 {% block title %}Laporan Laba Rugi{% endblock %}
 
 {% block extra_css %}
@@ -30,6 +30,8 @@
   .doc-kop { padding: 36px 52px 22px; text-align: center; }
   .doc-kop__name { font-family: var(--ff-disp); font-size: 20px; font-weight: 700; color: var(--d-black); letter-spacing: 1.5px; text-transform: uppercase; }
   .doc-kop__sub { font-family: var(--ff-body); font-style: italic; font-size: 12px; color: var(--d-muted); margin-top: 4px; }
+  .doc-kop__alamat { font-family: var(--ff-sans); font-size: 11px; color: var(--d-mid); margin-top: 4px; line-height: 1.5; }
+  .doc-kop__kontak { font-family: var(--ff-sans); font-size: 10px; color: var(--d-faint); margin-top: 3px; }
   .doc-kop-rule { margin-top: 14px; }
   .doc-kop-rule__thick { height: 2px; background: var(--d-black); }
   .doc-kop-rule__thin { height: 1px; background: var(--d-black); margin-top: 3px; }
@@ -159,8 +161,17 @@
 <div class="doc-lr">
   <!-- KOP -->
   <div class="doc-kop">
-    <div class="doc-kop__name">{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</div>
-    <div class="doc-kop__sub">{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.tipe_entitas|default:'Entitas Bisnis' }}{% endif %}{% endfor %}{% else %}Sistem Akuntansi Terintegrasi{% endif %}</div>
+    {% if eb_filter %}
+      {% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}
+      <div class="doc-kop__name">{{ eb.nama }}</div>
+      <div class="doc-kop__sub">{{ eb.tipe_entitas.nama|default:'Entitas Bisnis' }}</div>
+      {% if eb.alamat_lengkap %}<div class="doc-kop__alamat">{{ eb.alamat_lengkap|linebreaksbr }}</div>{% endif %}
+      {% if eb.telepon or eb.email %}<div class="doc-kop__kontak">{% if eb.telepon %}{{ eb.telepon }}{% endif %}{% if eb.telepon and eb.email %} &nbsp;&middot;&nbsp; {% endif %}{% if eb.email %}{{ eb.email }}{% endif %}</div>{% endif %}
+      {% endif %}{% endfor %}
+    {% else %}
+      <div class="doc-kop__name">Naveda Integra</div>
+      <div class="doc-kop__sub">Sistem Akuntansi Terintegrasi</div>
+    {% endif %}
     <div class="doc-kop-rule">
       <div class="doc-kop-rule__thick"></div>
       <div class="doc-kop-rule__thin"></div>
@@ -170,7 +181,7 @@
   <div class="doc-judul">
     <div class="doc-judul__id">Laporan Laba Rugi</div>
     <div class="doc-judul__en">Income Statement</div>
-    <div class="doc-judul__period">Untuk Periode yang Berakhir pada &nbsp;<span>{% if tanggal_dari and tanggal_sampai %}{{ tanggal_dari }} s/d {{ tanggal_sampai }}{% elif tanggal_dari %}mulai {{ tanggal_dari }}{% elif tanggal_sampai %}{{ tanggal_sampai }}{% else %}Semua Periode{% endif %}</span></div>
+    <div class="doc-judul__period">Untuk Periode yang Berakhir pada &nbsp;<span>{% if tanggal_dari and tanggal_sampai %}{{ tanggal_dari|tanggal_id }} s/d {{ tanggal_sampai|tanggal_id }}{% elif tanggal_dari %}mulai {{ tanggal_dari|tanggal_id }}{% elif tanggal_sampai %}{{ tanggal_sampai|tanggal_id }}{% else %}Semua Periode{% endif %}</span></div>
     <div class="doc-judul-rule"></div>
   </div>
   <!-- TABLE -->
@@ -309,14 +320,14 @@
         <div class="doc-ttd-gap"></div>
         <div class="doc-ttd-line"></div>
         <div class="doc-ttd-nama">{{ request.user.get_full_name|default:request.user.email }}</div>
-        <div class="doc-ttd-jabatan">{% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash;{% endif %}</div>
+        <div class="doc-ttd-jabatan">{% if tanggal_sampai %}{{ tanggal_sampai|tanggal_id }}{% else %}&mdash;{% endif %}</div>
       </div>
     </div>
   </div>
   <!-- Footer bar -->
   <div class="doc-page-foot">
     <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
-    <div class="doc-page-foot__right">Dicetak: {% now "d M Y, H:i" %}</div>
+    <div class="doc-page-foot__right">Dicetak: {% now_id %}</div>
   </div>
 </div>
 {% endblock %}

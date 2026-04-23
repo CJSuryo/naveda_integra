@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% load static humanize %}
+{% load static humanize jurnal_extras %}
 {% block title %}Laporan Perubahan Ekuitas{% endblock %}
 
 {% block extra_css %}
@@ -24,6 +24,8 @@
   .doc-kop { text-align: center; padding-bottom: 14px; border-bottom: 3px double var(--d-navy); margin-bottom: 20px; }
   .doc-kop__name { font-family: var(--ff-disp); font-size: 16pt; font-weight: 700; color: var(--d-navy); letter-spacing: .05em; text-transform: uppercase; margin: 0 0 3px; }
   .doc-kop__sub { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-muted); letter-spacing: .09em; text-transform: uppercase; }
+  .doc-kop__alamat { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-top: 4px; line-height: 1.5; text-transform: none; letter-spacing: normal; }
+  .doc-kop__kontak { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-faint); margin-top: 3px; text-transform: none; letter-spacing: normal; }
   /* ── JUDUL ── */
   .doc-judul { text-align: center; padding: 0 0 16px; border-bottom: 1px solid var(--d-rule); margin-bottom: 22px; }
   .doc-judul__id { font-family: var(--ff-disp); font-size: 14pt; font-weight: 700; color: var(--d-black); }
@@ -48,16 +50,23 @@
   /* ── Grand total ── */
   .lpe-grand { background: var(--d-navy); color: #fff; padding: 12px 14px; border-radius: 4px; display: flex; justify-content: space-between; font-family: var(--ff-disp); font-weight: 700; font-size: 13pt; }
   /* ── Catatan ── */
-  .lpe-note { margin-top: 20px; padding: 12px 16px; background: #F8F6F1; border-left: 3px solid var(--d-navy); font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-mid); line-height: 1.6; }
+  .doc-catatan { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--d-rule-lt); }
+  .doc-catatan__title { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--d-faint); font-weight: 600; margin-bottom: 8px; }
+  .doc-catatan__text { font-family: var(--ff-body); font-style: italic; font-size: 12px; color: var(--d-muted); line-height: 1.85; }
   /* ── TTD ── */
-  .doc-ttd { margin-top: 40px; display: flex; justify-content: flex-end; }
-  .doc-ttd__box { text-align: center; width: 190px; }
-  .doc-ttd__date { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-bottom: 3px; }
-  .doc-ttd__role { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); }
-  .doc-ttd__gap { height: 56px; }
-  .doc-ttd__name { font-family: var(--ff-body); font-size: 10pt; font-weight: 600; color: var(--d-dark); border-top: 1px solid var(--d-rule); padding-top: 5px; }
-  /* ── Footer ── */
-  .doc-footer { margin-top: 28px; background: var(--d-navy); color: rgba(255,255,255,.55); font-family: var(--ff-sans); font-size: 7.5pt; padding: 7px 12px; display: flex; justify-content: space-between; }
+  .doc-ttd-row { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .doc-ttd-kiri { font-family: var(--ff-body); font-style: italic; font-size: 11.5px; color: var(--d-faint); line-height: 1.75; }
+  .doc-ttd-kiri strong { font-style: normal; color: var(--d-dark); font-weight: 600; }
+  .doc-ttd-kanan { text-align: center; }
+  .doc-ttd-gap { height: 46px; }
+  .doc-ttd-line { width: 188px; height: 1px; background: var(--d-dark); margin: 0 auto 7px; }
+  .doc-ttd-nama { font-size: 12px; font-weight: 700; color: var(--d-dark); font-family: var(--ff-disp); }
+  .doc-ttd-jabatan { font-size: 10.5px; color: var(--d-faint); font-family: var(--ff-body); font-style: italic; margin-top: 2px; }
+  /* ── Footer bar ── */
+  .doc-page-foot { background: var(--d-navy); padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; }
+  .doc-page-foot__left { font-size: 10px; color: rgba(255,255,255,.45); }
+  .doc-page-foot__left strong { color: rgba(255,255,255,.8); }
+  .doc-page-foot__right { font-size: 10px; color: rgba(255,255,255,.3); font-family: var(--ff-body); font-style: italic; }
   /* ── Print ── */
   @media print {
     @page { size: A4 portrait; margin: 0; }
@@ -67,7 +76,7 @@
     .ni-main { padding: 0 !important; margin: 0 !important; }
     .ni-content-wrapper { padding: 0 !important; max-width: none !important; }
     .doc-lpe { max-width: 100% !important; width: 100% !important; min-height: 297mm; padding: 14mm 16mm 10mm !important; box-shadow: none !important; margin: 0 !important; }
-    .saldo-box__header, .lpe-grand, .doc-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .saldo-box__header, .lpe-grand, .doc-page-foot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 {% endblock %}
@@ -121,17 +130,26 @@
 <div class="doc-lpe">
   <!-- KOP -->
   <div class="doc-kop">
-    <div class="doc-kop__name">{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</div>
-    <div class="doc-kop__sub">Sistem Akuntansi Terintegrasi</div>
+    {% if eb_filter %}
+      {% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}
+      <div class="doc-kop__name">{{ eb.nama }}</div>
+      <div class="doc-kop__sub">{{ eb.tipe_entitas.nama|default:'Entitas Bisnis' }}</div>
+      {% if eb.alamat_lengkap %}<div class="doc-kop__alamat">{{ eb.alamat_lengkap|linebreaksbr }}</div>{% endif %}
+      {% if eb.telepon or eb.email %}<div class="doc-kop__kontak">{% if eb.telepon %}{{ eb.telepon }}{% endif %}{% if eb.telepon and eb.email %} &nbsp;&middot;&nbsp; {% endif %}{% if eb.email %}{{ eb.email }}{% endif %}</div>{% endif %}
+      {% endif %}{% endfor %}
+    {% else %}
+      <div class="doc-kop__name">Naveda Integra</div>
+      <div class="doc-kop__sub">Sistem Akuntansi Terintegrasi</div>
+    {% endif %}
   </div>
   <!-- JUDUL -->
   <div class="doc-judul">
     <div class="doc-judul__id">Laporan Perubahan Ekuitas</div>
     <div class="doc-judul__en">Statement of Changes in Equity</div>
     <div class="doc-judul__period">
-      {% if tanggal_dari and tanggal_sampai %}Periode {{ tanggal_dari }} s/d {{ tanggal_sampai }}
-      {% elif tanggal_dari %}Mulai {{ tanggal_dari }}
-      {% elif tanggal_sampai %}Per {{ tanggal_sampai }}
+      {% if tanggal_dari and tanggal_sampai %}Periode {{ tanggal_dari|tanggal_id }} s/d {{ tanggal_sampai|tanggal_id }}
+      {% elif tanggal_dari %}Mulai {{ tanggal_dari|tanggal_id }}
+      {% elif tanggal_sampai %}Per {{ tanggal_sampai|tanggal_id }}
       {% else %}Semua Periode{% endif %}
     </div>
   </div>
@@ -140,7 +158,7 @@
   <div class="saldo-box">
     <div class="saldo-box__header">Saldo Awal Ekuitas</div>
     <div class="saldo-box__body">
-      <span class="saldo-box__label">Saldo per {% if tanggal_dari %}{{ tanggal_dari }}{% else %}awal periode{% endif %}</span>
+      <span class="saldo-box__label">Saldo per {% if tanggal_dari %}{{ tanggal_dari|tanggal_id }}{% else %}awal periode{% endif %}</span>
       <span class="saldo-box__value">Rp {{ saldo_awal_ekuitas|floatformat:0|intcomma }}</span>
     </div>
   </div>
@@ -184,25 +202,33 @@
   </div>
 
   <!-- Catatan -->
-  <div class="lpe-note">
-    Catatan: Saldo Akhir Ekuitas = Saldo Awal (Rp {{ saldo_awal_ekuitas|floatformat:0|intcomma }}) + Laba Bersih (Rp {{ laba_bersih|floatformat:0|intcomma }}) &minus; Prive (Rp {{ prive|floatformat:0|intcomma }}).
-    Laporan ini dibuat secara otomatis dari data jurnal terintegrasi.
-  </div>
-
-  <!-- TTD -->
-  <div class="doc-ttd">
-    <div class="doc-ttd__box">
-      <div class="doc-ttd__date">{% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash; , &mdash;{% endif %}</div>
-      <div class="doc-ttd__role">Dibuat oleh,</div>
-      <div class="doc-ttd__gap"></div>
-      <div class="doc-ttd__name">{{ request.user.get_full_name|default:request.user.email }}</div>
+  <div class="doc-catatan">
+    <div class="doc-catatan__title">Catatan atas Laporan Keuangan</div>
+    <div class="doc-catatan__text">
+      1. Laporan disusun dengan basis akrual sesuai Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK yang berlaku).<br>
+      2. Seluruh angka disajikan dalam mata uang Rupiah (IDR).<br>
+      3. Angka dalam tanda kurung ( ) menunjukkan nilai pengurang atau negatif.
     </div>
   </div>
-
-  <!-- Footer -->
-  <div class="doc-footer">
-    <span>Laporan Perubahan Ekuitas &mdash; Naveda Integra</span>
-    <span>Dicetak: {% now "d M Y, H:i" %}</span>
+  <!-- TTD -->
+  <div class="doc-ttd-row">
+    <div class="doc-ttd-kiri">
+      Laporan ini disiapkan oleh<br>
+      <strong>Naveda Integra Finance</strong><br>
+      untuk keperluan pelaporan keuangan<br>
+      <strong>{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</strong>.
+    </div>
+    <div class="doc-ttd-kanan">
+      <div class="doc-ttd-gap"></div>
+      <div class="doc-ttd-line"></div>
+      <div class="doc-ttd-nama">{{ request.user.get_full_name|default:request.user.email }}</div>
+      <div class="doc-ttd-jabatan">{% if tanggal_sampai %}{{ tanggal_sampai|tanggal_id }}{% else %}&mdash;{% endif %}</div>
+    </div>
   </div>
+</div>
+<!-- Footer bar -->
+<div class="doc-page-foot">
+  <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
+  <div class="doc-page-foot__right">Dicetak: {% now_id %}</div>
 </div>
 {% endblock %}
