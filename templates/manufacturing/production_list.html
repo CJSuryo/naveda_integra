@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Produksi{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Production Orders</h1>
+    <p class="ni-page-header__subtitle">Daftar order produksi — konsumsi bahan baku dan output finished good.</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:production_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Buat Produksi
+    </a>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
+  <div class="ni-card__body" style="padding:16px 20px">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+      <div class="ni-form-group" style="margin:0;min-width:180px">
+        <label class="ni-form-label">Status</label>
+        <select name="status" class="ni-input" style="min-width:160px">
+          <option value="">— Semua Status —</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}"{% if status_filter == val %} selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;min-width:180px">
+        <label class="ni-form-label">Entitas Bisnis</label>
+        <select name="eb" class="ni-input" style="min-width:200px">
+          <option value="">— Semua Entitas —</option>
+          {% for eb in eb_list %}
+          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:"s" %} selected{% endif %}>{{ eb.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+      {% if status_filter or eb_filter %}
+      <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Reset</a>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Production ID</th>
+          <th>Tanggal</th>
+          <th>Finished Good</th>
+          <th>Entitas Bisnis</th>
+          <th class="ni-text-right">Qty Diproduksi</th>
+          <th class="ni-text-right">Unit Cost</th>
+          <th class="ni-text-right">Total Cost</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr data-href="{% url 'manufacturing:production_detail' order.pk %}">
+          <td><span class="ni-badge ni-badge--secondary">{{ order.production_id }}</span></td>
+          <td>{{ order.tanggal }}</td>
+          <td>
+            <div style="font-weight:500">{{ order.bom.finished_good.nama }}</div>
+            <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ order.bom.bom_id }}</div>
+          </td>
+          <td>{{ order.entitas_bisnis.nama }}</td>
+          <td class="ni-text-right">{{ order.qty_produced }}</td>
+          <td class="ni-text-right">Rp {{ order.unit_cost|floatformat:2 }}</td>
+          <td class="ni-text-right">Rp {{ order.total_cost|floatformat:2 }}</td>
+          <td>
+            {% if order.status == 'completed' %}
+              <span class="ni-badge ni-badge--success">Completed</span>
+            {% elif order.status == 'in_progress' %}
+              <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Dibatalkan</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'manufacturing:production_detail' order.pk %}" class="ni-btn ni-btn--outline ni-btn--sm">Detail</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="9" class="ni-text-center ni-text-muted" style="padding:40px 0">
+            Belum ada production order. <a href="{% url 'manufacturing:production_create' %}">Buat produksi pertama</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/table-utils.js' %}"></script>
+{% endblock %}

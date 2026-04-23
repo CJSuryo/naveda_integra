@@ -192,6 +192,22 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'manufacturing' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="factory" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Manufacturing</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'manufacturing:production_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Production Orders</span>
+          </a>
+          <a href="{% url 'manufacturing:bom_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Bill of Materials</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'aset-tetap' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="building" class="ni-nav-link__icon"></i>

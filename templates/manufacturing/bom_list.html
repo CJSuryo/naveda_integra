@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Bill of Materials{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Bill of Materials</h1>
+    <p class="ni-page-header__subtitle">Daftar resep produksi untuk setiap Finished Good.</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:bom_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Buat BOM
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>BOM ID</th>
+          <th>Finished Good</th>
+          <th>Entitas Bisnis</th>
+          <th>Tanggal Dibuat</th>
+          <th>Jumlah Bahan Baku</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for bom in bom_list %}
+        <tr data-href="{% url 'manufacturing:bom_detail' bom.pk %}">
+          <td><span class="ni-badge ni-badge--secondary">{{ bom.bom_id }}</span></td>
+          <td>
+            <div style="font-weight:600;color:var(--ni-text)">{{ bom.finished_good.nama }}</div>
+            <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ bom.finished_good.item_id }}</div>
+          </td>
+          <td>{{ bom.entitas_bisnis.nama }}</td>
+          <td>{{ bom.tanggal_dibuat }}</td>
+          <td>
+            <span class="ni-badge ni-badge--secondary">{{ bom.lines.count }} bahan baku</span>
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'manufacturing:bom_detail' bom.pk %}" class="ni-btn ni-btn--outline ni-btn--sm">Detail</a>
+              <a href="{% url 'manufacturing:bom_update' bom.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'manufacturing:bom_delete' bom.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="ni-text-center ni-text-muted" style="padding:40px 0">
+            Belum ada BOM. <a href="{% url 'manufacturing:bom_create' %}">Buat BOM pertama</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/table-utils.js' %}"></script>
+{% endblock %}

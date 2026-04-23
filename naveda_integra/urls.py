@@ -16,6 +16,7 @@ urlpatterns = [
     path('aset-tetap/', include('apps.aset_tetap.urls')),
     path('aset-lainnya/', include('apps.aset_lainnya.urls')),
     path('ekuitas/', include('apps.ekuitas.urls')),
+    path('manufacturing/', include('apps.manufacturing.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 

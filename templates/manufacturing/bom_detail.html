@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}{{ bom.bom_id }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <h1 class="ni-page-header__title">{{ bom.bom_id }}</h1>
+      <span class="ni-badge ni-badge--secondary">{{ bom.finished_good.tipe_item }}</span>
+    </div>
+    <p class="ni-page-header__subtitle">{{ bom.finished_good.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:bom_update' bom.pk %}" class="ni-btn ni-btn--warning">
+      <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
+    </a>
+    <a href="{% url 'manufacturing:bom_delete' bom.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </a>
+    <a href="{% url 'manufacturing:production_create' %}" class="ni-btn ni-btn--primary">
+      <i data-lucide="play" style="width:16px;height:16px"></i> Buat Produksi
+    </a>
+  </div>
+</div>
+
+<div class="ni-form-row">
+  <!-- BOM Info -->
+  <div class="ni-card ni-animate-fade-in" style="flex:1">
+    <div class="ni-card__body">
+      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Informasi BOM</h3>
+      <dl class="ni-detail-grid">
+        <dt>BOM ID</dt>
+        <dd><span class="ni-badge ni-badge--secondary">{{ bom.bom_id }}</span></dd>
+        <dt>Finished Good</dt>
+        <dd>
+          <div style="font-weight:600">{{ bom.finished_good.nama }}</div>
+          <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ bom.finished_good.item_id }}</div>
+        </dd>
+        <dt>Entitas Bisnis</dt>
+        <dd>{{ bom.entitas_bisnis.nama }}</dd>
+        <dt>Tanggal Dibuat</dt>
+        <dd>{{ bom.tanggal_dibuat }}</dd>
+        <dt>Catatan</dt>
+        <dd>{{ bom.catatan|default:'-' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- BOM Lines with current costs -->
+  <div class="ni-card ni-animate-fade-in" style="flex:2">
+    <div class="ni-card__body">
+      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Bahan Baku</h3>
+      <div class="ni-table-wrapper">
+        <table class="ni-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="ni-text-right">Qty / Unit FG</th>
+              <th>Satuan</th>
+              <th class="ni-text-right">Harga FIFO</th>
+              <th class="ni-text-right">Stok Tersedia</th>
+              <th class="ni-text-right">Total RM Cost*</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in lines_preview %}
+            <tr>
+              <td>
+                <div style="font-weight:500">{{ row.line.raw_material.nama }}</div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ row.line.raw_material.item_id }}</div>
+              </td>
+              <td class="ni-text-right">{{ row.line.qty_required }}</td>
+              <td>{{ row.line.raw_material.satuan|default:'—' }}</td>
+              <td class="ni-text-right">Rp {{ row.fifo_unit_cost|floatformat:2 }}</td>
+              <td class="ni-text-right">
+                {% if row.available_stock > 0 %}
+                  <span class="ni-badge ni-badge--success">{{ row.available_stock }}</span>
+                {% else %}
+                  <span class="ni-badge ni-badge--secondary">0</span>
+                {% endif %}
+              </td>
+              <td class="ni-text-right" style="font-weight:500">Rp {{ row.total_rm_cost|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="ni-text-center ni-text-muted">Belum ada bahan baku.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:8px">
+        * Total RM Cost dihitung dari harga FIFO saat ini (rata-rata tertimbang) untuk 1 unit FG.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Production Orders using this BOM -->
+{% if production_orders %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-section-header">
+      <h3 class="ni-section-header__title">Riwayat Produksi</h3>
+    </div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Production ID</th>
+            <th>Tanggal</th>
+            <th>Entitas Bisnis</th>
+            <th class="ni-text-right">Qty Diproduksi</th>
+            <th class="ni-text-right">Unit Cost</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for order in production_orders %}
+          <tr data-href="{% url 'manufacturing:production_detail' order.pk %}">
+            <td><span class="ni-badge ni-badge--secondary">{{ order.production_id }}</span></td>
+            <td>{{ order.tanggal }}</td>
+            <td>{{ order.entitas_bisnis.nama }}</td>
+            <td class="ni-text-right">{{ order.qty_produced }}</td>
+            <td class="ni-text-right">Rp {{ order.unit_cost|floatformat:2 }}</td>
+            <td>
+              {% if order.status == 'completed' %}
+                <span class="ni-badge ni-badge--success">Completed</span>
+              {% elif order.status == 'in_progress' %}
+                <span class="ni-badge ni-badge--secondary" style="background:var(--ni-warning);color:#fff">In Progress</span>
+              {% else %}
+                <span class="ni-badge ni-badge--secondary">Dibatalkan</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block extra_js %}
+{% load static %}
+<script src="{% static 'js/table-utils.js' %}"></script>
+{% endblock %}

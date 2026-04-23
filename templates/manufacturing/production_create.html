@@ -1,0 +1,269 @@
+{% extends 'base.html' %}
+{% block title %}Buat Production Order{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Buat Production Order</h1>
+    <p class="ni-page-header__subtitle">Pilih BOM, masukkan qty produksi, lalu konfirmasi sebelum memproses.</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+<form method="post" id="prod-form">
+  {% csrf_token %}
+  <div class="ni-form-row">
+
+    <!-- Left: form fields -->
+    <div class="ni-card ni-animate-fade-in" style="flex:2">
+      <div class="ni-card__body">
+        <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Detail Produksi</h3>
+
+        <div class="ni-form-row">
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.tanggal.id_for_label }}">{{ form.tanggal.label }} <span style="color:var(--ni-danger)">*</span></label>
+            {{ form.tanggal }}
+            {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="flex:2">
+            <label class="ni-form-label" for="{{ form.entitas_bisnis.id_for_label }}">{{ form.entitas_bisnis.label }} <span style="color:var(--ni-danger)">*</span></label>
+            {{ form.entitas_bisnis }}
+            {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.bom.id_for_label }}">{{ form.bom.label }} <span style="color:var(--ni-danger)">*</span></label>
+          {{ form.bom }}
+          {% if form.bom.errors %}<div class="ni-form-error">{{ form.bom.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-row">
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.qty_produced.id_for_label }}">{{ form.qty_produced.label }} <span style="color:var(--ni-danger)">*</span></label>
+            {{ form.qty_produced }}
+            {% if form.qty_produced.errors %}<div class="ni-form-error">{{ form.qty_produced.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.overhead_cost.id_for_label }}">{{ form.overhead_cost.label }}</label>
+            {{ form.overhead_cost }}
+            {% if form.overhead_cost.errors %}<div class="ni-form-error">{{ form.overhead_cost.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="ni-form-row">
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.coa_produksi.id_for_label }}">{{ form.coa_produksi.label }} <span style="color:var(--ni-danger)">*</span></label>
+            {{ form.coa_produksi }}
+            {% if form.coa_produksi.errors %}<div class="ni-form-error">{{ form.coa_produksi.errors }}</div>{% endif %}
+            <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.coa_produksi.help_text }}</div>
+          </div>
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.coa_overhead.id_for_label }}">{{ form.coa_overhead.label }}</label>
+            {{ form.coa_overhead }}
+            {% if form.coa_overhead.errors %}<div class="ni-form-error">{{ form.coa_overhead.errors }}</div>{% endif %}
+            <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.coa_overhead.help_text }}</div>
+          </div>
+        </div>
+
+        <details style="margin-top:8px">
+          <summary style="font-size:0.875rem;font-weight:600;cursor:pointer;color:var(--ni-text-muted);margin-bottom:12px">
+            Parameter Inventori FG (opsional)
+          </summary>
+          <div class="ni-form-row">
+            <div class="ni-form-group" style="flex:1">
+              <label class="ni-form-label" for="{{ form.lead_time_days.id_for_label }}">{{ form.lead_time_days.label }}</label>
+              {{ form.lead_time_days }}
+            </div>
+            <div class="ni-form-group" style="flex:1">
+              <label class="ni-form-label" for="{{ form.ordering_cost.id_for_label }}">{{ form.ordering_cost.label }}</label>
+              {{ form.ordering_cost }}
+            </div>
+          </div>
+          <div class="ni-form-row">
+            <div class="ni-form-group" style="flex:1">
+              <label class="ni-form-label" for="{{ form.holding_cost_pct.id_for_label }}">{{ form.holding_cost_pct.label }}</label>
+              {{ form.holding_cost_pct }}
+            </div>
+            <div class="ni-form-group" style="flex:1">
+              <label class="ni-form-label" for="{{ form.moq.id_for_label }}">{{ form.moq.label }}</label>
+              {{ form.moq }}
+            </div>
+            <div class="ni-form-group" style="flex:1">
+              <label class="ni-form-label" for="{{ form.target_turnover.id_for_label }}">{{ form.target_turnover.label }}</label>
+              {{ form.target_turnover }}
+            </div>
+          </div>
+        </details>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+          {{ form.notes }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: preview panel -->
+    <div class="ni-card ni-animate-fade-in" style="flex:3" id="preview-card">
+      <div class="ni-card__body">
+        <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Preview Bahan Baku yang Akan Digunakan</h3>
+        <div id="preview-placeholder" style="text-align:center;padding:40px 16px;color:var(--ni-text-muted)">
+          <i data-lucide="flask-conical" style="width:32px;height:32px;opacity:0.3;display:block;margin:0 auto 12px"></i>
+          Pilih BOM dan masukkan qty produksi untuk melihat preview.
+        </div>
+        <div id="preview-content" style="display:none">
+          <div class="ni-table-wrapper">
+            <table class="ni-table" style="min-width:500px">
+              <thead>
+                <tr>
+                  <th>Item RM</th>
+                  <th class="ni-text-right">Qty Dibutuhkan</th>
+                  <th class="ni-text-right">Stok Tersedia</th>
+                  <th class="ni-text-right">Harga FIFO</th>
+                  <th class="ni-text-right">Estimasi Biaya</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="preview-tbody"></tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:16px;padding:16px;background:var(--ni-bg);border-radius:var(--ni-radius-sm)">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+              <div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi RM Cost</div>
+                <div style="font-weight:700;font-size:1rem" id="prev-rm-cost">—</div>
+              </div>
+              <div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi Total Cost</div>
+                <div style="font-weight:700;font-size:1rem" id="prev-total-cost">—</div>
+              </div>
+              <div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi Unit Cost FG</div>
+                <div style="font-weight:700;font-size:1rem;color:var(--ni-primary)" id="prev-unit-cost">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div id="stock-warning" style="display:none;margin-top:12px;padding:12px 16px;background:#fef2f2;border-radius:var(--ni-radius-sm);color:var(--ni-danger);font-size:0.875rem">
+            <i data-lucide="alert-triangle" style="width:14px;height:14px;vertical-align:-2px"></i>
+            <strong>Stok tidak mencukupi.</strong> Periksa item yang ditandai merah di atas sebelum memproses.
+          </div>
+        </div>
+
+        <div id="preview-loading" style="display:none;text-align:center;padding:32px;color:var(--ni-text-muted)">
+          <span style="font-size:0.875rem">Memuat preview…</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="ni-btn-row" style="margin-top:24px">
+    <button type="submit" class="ni-btn ni-btn--primary" id="submit-btn">
+      <i data-lucide="play" style="width:16px;height:16px"></i> Proses Produksi
+    </button>
+    <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
+</form>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var API_URL = '{% url "manufacturing:api_bom_preview" %}';
+  var bomSel = document.getElementById('id_bom');
+  var qtyInput = document.getElementById('id_qty_produced');
+  var overheadInput = document.getElementById('id_overhead_cost');
+  var previewPlaceholder = document.getElementById('preview-placeholder');
+  var previewContent = document.getElementById('preview-content');
+  var previewLoading = document.getElementById('preview-loading');
+  var previewTbody = document.getElementById('preview-tbody');
+  var stockWarning = document.getElementById('stock-warning');
+
+  function fmt(val) {
+    var n = parseFloat(val);
+    if (isNaN(n)) return '—';
+    return 'Rp ' + n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function loadPreview() {
+    var bomId = bomSel.value;
+    var qty = qtyInput.value;
+    if (!bomId || !qty || parseFloat(qty) <= 0) {
+      previewContent.style.display = 'none';
+      previewLoading.style.display = 'none';
+      previewPlaceholder.style.display = '';
+      return;
+    }
+
+    previewPlaceholder.style.display = 'none';
+    previewContent.style.display = 'none';
+    previewLoading.style.display = '';
+    stockWarning.style.display = 'none';
+
+    var overhead = overheadInput ? overheadInput.value : '0';
+    var url = API_URL + '?bom_id=' + encodeURIComponent(bomId) + '&qty_produced=' + encodeURIComponent(qty) + '&overhead_cost=' + encodeURIComponent(overhead || '0');
+
+    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        previewLoading.style.display = 'none';
+        if (data.error) {
+          previewPlaceholder.textContent = data.error;
+          previewPlaceholder.style.display = '';
+          return;
+        }
+
+        previewTbody.innerHTML = '';
+        var anyShortage = !data.all_sufficient;
+
+        data.lines.forEach(function (line) {
+          var rowColor = line.is_sufficient ? '' : 'background:#fef2f2';
+          var statusBadge = line.is_sufficient
+            ? '<span class="ni-badge ni-badge--success">Cukup</span>'
+            : '<span class="ni-badge" style="background:var(--ni-danger);color:#fff">Kurang ' + parseFloat(line.shortage).toLocaleString('id-ID') + '</span>';
+          var tr = document.createElement('tr');
+          tr.style.cssText = rowColor;
+          tr.innerHTML =
+            '<td><div style="font-weight:500">' + line.rm_nama + '</div><div style="font-size:0.75rem;color:var(--ni-text-muted)">' + line.rm_item_id + '</div></td>' +
+            '<td class="ni-text-right">' + parseFloat(line.qty_required_total).toLocaleString('id-ID', {maximumFractionDigits:4}) + ' ' + (line.satuan || '') + '</td>' +
+            '<td class="ni-text-right">' + parseFloat(line.available_stock).toLocaleString('id-ID', {maximumFractionDigits:4}) + '</td>' +
+            '<td class="ni-text-right">Rp ' + parseFloat(line.fifo_unit_cost).toLocaleString('id-ID', {minimumFractionDigits:0, maximumFractionDigits:2}) + '</td>' +
+            '<td class="ni-text-right">Rp ' + parseFloat(line.total_rm_cost).toLocaleString('id-ID', {minimumFractionDigits:0, maximumFractionDigits:2}) + '</td>' +
+            '<td>' + statusBadge + '</td>';
+          previewTbody.appendChild(tr);
+        });
+
+        document.getElementById('prev-rm-cost').textContent = fmt(data.rm_cost);
+        document.getElementById('prev-total-cost').textContent = fmt(data.total_cost);
+        document.getElementById('prev-unit-cost').textContent = fmt(data.unit_cost);
+
+        if (anyShortage) stockWarning.style.display = '';
+        previewContent.style.display = '';
+
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      })
+      .catch(function () {
+        previewLoading.style.display = 'none';
+        previewPlaceholder.textContent = 'Gagal memuat preview. Coba lagi.';
+        previewPlaceholder.style.display = '';
+      });
+  }
+
+  var debounceTimer;
+  function debounce(fn, delay) {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(fn, delay);
+  }
+
+  bomSel.addEventListener('change', loadPreview);
+  qtyInput.addEventListener('input', function () { debounce(loadPreview, 400); });
+  if (overheadInput) overheadInput.addEventListener('input', function () { debounce(loadPreview, 400); });
+})();
+</script>
+{% endblock %}

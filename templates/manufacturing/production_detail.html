@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+{% block title %}{{ order.production_id }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <h1 class="ni-page-header__title">{{ order.production_id }}</h1>
+      {% if order.status == 'completed' %}
+        <span class="ni-badge ni-badge--success">Completed</span>
+      {% elif order.status == 'in_progress' %}
+        <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+      {% else %}
+        <span class="ni-badge ni-badge--secondary">Dibatalkan</span>
+      {% endif %}
+    </div>
+    <p class="ni-page-header__subtitle">{{ order.bom.finished_good.nama }} — {{ order.bom.bom_id }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if order.is_processed %}
+    <a href="{% url 'manufacturing:production_reverse' order.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="rotate-ccw" style="width:16px;height:16px"></i> Reverse
+    </a>
+    {% else %}
+    <a href="{% url 'manufacturing:production_delete' order.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="trash-2" style="width:16px;height:16px"></i> Hapus
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="ni-form-row">
+  <!-- Summary -->
+  <div class="ni-card ni-animate-fade-in" style="flex:1">
+    <div class="ni-card__body">
+      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Ringkasan Produksi</h3>
+      <dl class="ni-detail-grid">
+        <dt>Production ID</dt>
+        <dd><span class="ni-badge ni-badge--secondary">{{ order.production_id }}</span></dd>
+        <dt>Tanggal</dt>
+        <dd>{{ order.tanggal }}</dd>
+        <dt>Entitas Bisnis</dt>
+        <dd>{{ order.entitas_bisnis.nama }}</dd>
+        <dt>BOM</dt>
+        <dd><a href="{% url 'manufacturing:bom_detail' order.bom.pk %}">{{ order.bom.bom_id }}</a></dd>
+        <dt>Finished Good</dt>
+        <dd>{{ order.bom.finished_good.nama }}</dd>
+        <dt>Qty Diproduksi</dt>
+        <dd><strong>{{ order.qty_produced }}</strong> {{ order.bom.finished_good.satuan|default:'' }}</dd>
+        <dt>RM Cost</dt>
+        <dd>Rp {{ order.rm_cost|floatformat:2 }}</dd>
+        <dt>Overhead Cost</dt>
+        <dd>Rp {{ order.overhead_cost|floatformat:2 }}</dd>
+        <dt>Total Cost</dt>
+        <dd><strong>Rp {{ order.total_cost|floatformat:2 }}</strong></dd>
+        <dt>Unit Cost FG</dt>
+        <dd style="color:var(--ni-primary);font-weight:700;font-size:1.0625rem">Rp {{ order.unit_cost|floatformat:4 }}</dd>
+        <dt>Akun WIP</dt>
+        <dd>{{ order.coa_produksi.kode }} — {{ order.coa_produksi.nama }}</dd>
+        {% if order.coa_overhead %}
+        <dt>Akun Overhead</dt>
+        <dd>{{ order.coa_overhead.kode }} — {{ order.coa_overhead.nama }}</dd>
+        {% endif %}
+        {% if order.notes %}
+        <dt>Catatan</dt>
+        <dd>{{ order.notes }}</dd>
+        {% endif %}
+      </dl>
+
+      {% if order.lead_time_days or order.moq %}
+      <hr style="margin:16px 0;border:0;border-top:1px solid var(--ni-border)">
+      <h4 style="font-size:0.8125rem;font-weight:600;color:var(--ni-text-muted);margin-bottom:12px">Parameter Inventori FG</h4>
+      <dl class="ni-detail-grid">
+        {% if order.lead_time_days %}<dt>Lead Time</dt><dd>{{ order.lead_time_days }} hari</dd>{% endif %}
+        {% if order.ordering_cost %}<dt>Ordering Cost</dt><dd>Rp {{ order.ordering_cost|floatformat:2 }}</dd>{% endif %}
+        {% if order.holding_cost_pct %}<dt>Holding Cost %</dt><dd>{{ order.holding_cost_pct }}</dd>{% endif %}
+        {% if order.moq %}<dt>MOQ</dt><dd>{{ order.moq }}</dd>{% endif %}
+        {% if order.target_turnover %}<dt>Target Turnover</dt><dd>{{ order.target_turnover }}</dd>{% endif %}
+      </dl>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- RM Consumption detail -->
+  <div class="ni-card ni-animate-fade-in" style="flex:2">
+    <div class="ni-card__body">
+      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Konsumsi Bahan Baku</h3>
+      {% if order.rm_consumptions.exists %}
+      <div class="ni-table-wrapper">
+        <table class="ni-table" style="min-width:500px">
+          <thead>
+            <tr>
+              <th>Item RM</th>
+              <th>FIFO Batch</th>
+              <th class="ni-text-right">Qty Dikonsumsi</th>
+              <th class="ni-text-right">Harga FIFO</th>
+              <th class="ni-text-right">Total Biaya</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in order.rm_consumptions.all %}
+            <tr>
+              <td>
+                <div style="font-weight:500">{{ c.bom_line.raw_material.nama }}</div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ c.bom_line.raw_material.item_id }}</div>
+              </td>
+              <td style="font-size:0.8125rem;color:var(--ni-text-muted)">
+                Batch {{ c.fifo_batch.tanggal }}
+              </td>
+              <td class="ni-text-right">{{ c.qty_consumed }}</td>
+              <td class="ni-text-right">Rp {{ c.unit_cost|floatformat:2 }}</td>
+              <td class="ni-text-right" style="font-weight:500">Rp {{ c.total_cost|floatformat:2 }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="ni-text-center ni-text-muted" style="padding:32px 0">
+        Produksi belum diproses — tidak ada konsumsi RM tercatat.
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% endblock %}

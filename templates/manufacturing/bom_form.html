@@ -1,0 +1,228 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_create %}Buat BOM{% else %}Edit BOM — {{ bom.bom_id }}{% endif %}{% endblock %}
+{% block content %}
+{% load static %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{% if is_create %}Buat Bill of Materials{% else %}Edit BOM — {{ bom.bom_id }}{% endif %}</h1>
+    <p class="ni-page-header__subtitle">{% if is_create %}Tentukan resep bahan baku untuk produk jadi.{% else %}Perbarui resep produksi.{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:bom_list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+<form method="post" id="bom-form">
+  {% csrf_token %}
+
+  <div class="ni-form-row">
+    <div class="ni-card ni-animate-fade-in" style="flex:2">
+      <div class="ni-card__body">
+        <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600;color:var(--ni-text)">Informasi BOM</h3>
+
+        {% if not is_create %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">BOM ID</label>
+          <input type="text" class="ni-input" value="{{ bom.bom_id }}" disabled>
+        </div>
+        {% endif %}
+
+        {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+          {% if field.help_text %}<div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ field.help_text }}</div>{% endif %}
+        </div>
+        {% endfor %}
+
+        {% if not is_create %}
+        <div style="padding:12px;background:var(--ni-primary-light);border-radius:var(--ni-radius-sm);font-size:0.8125rem;color:var(--ni-primary)">
+          <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i>
+          Finished Good tidak dapat diubah setelah BOM dibuat.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="ni-card ni-animate-fade-in" style="flex:3">
+      <div class="ni-card__body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <h3 style="margin:0;font-size:0.9375rem;font-weight:600;color:var(--ni-text)">Bahan Baku (RM)</h3>
+          <button type="button" class="ni-btn ni-btn--outline ni-btn--sm" id="add-line-btn">
+            <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Bahan Baku
+          </button>
+        </div>
+
+        <div class="ni-table-wrapper">
+          <table class="ni-table" id="bom-lines-table" style="min-width:600px">
+            <thead>
+              <tr>
+                <th>Item Bahan Baku</th>
+                <th style="width:130px">Qty per Unit FG</th>
+                <th style="width:100px">Satuan</th>
+                <th style="width:120px">Stok Tersedia</th>
+                <th style="width:140px">Harga FIFO (Rp)</th>
+                <th style="width:40px"></th>
+              </tr>
+            </thead>
+            <tbody id="bom-lines-body">
+              <!-- Pre-populate on edit -->
+              {% if not is_create and existing_lines %}
+                {% for line in existing_lines %}
+                <tr class="bom-line-row" data-index="{{ forloop.counter0 }}">
+                  <td>
+                    <select name="rm_{{ forloop.counter0 }}" class="ni-input rm-select" data-index="{{ forloop.counter0 }}" required>
+                      <option value="">— Pilih Bahan Baku —</option>
+                    </select>
+                    <!-- Hidden: will be populated via JS from rm_data_json, pre-selecting existing RM -->
+                    <input type="hidden" class="rm-prefill" value="{{ line.raw_material.id }}">
+                  </td>
+                  <td>
+                    <input type="number" name="qty_{{ forloop.counter0 }}" class="ni-input qty-input" value="{{ line.qty_required }}" step="0.0001" min="0.0001" required>
+                  </td>
+                  <td class="satuan-cell">—</td>
+                  <td class="stock-cell">—</td>
+                  <td class="fifo-cell">—</td>
+                  <td>
+                    <button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris">
+                      <i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i>
+                    </button>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+        <div id="no-lines-msg" style="text-align:center;padding:24px 0;color:var(--ni-text-muted);font-size:0.875rem;{% if not is_create and existing_lines %}display:none{% endif %}">
+          Belum ada bahan baku. Klik "+ Tambah Bahan Baku" untuk menambah.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-btn-row" style="margin-top:24px">
+    <button type="submit" class="ni-btn ni-btn--primary">
+      <i data-lucide="save" style="width:16px;height:16px"></i>
+      {% if is_create %}Simpan BOM{% else %}Perbarui BOM{% endif %}
+    </button>
+    <a href="{% if is_create %}{% url 'manufacturing:bom_list' %}{% else %}{% url 'manufacturing:bom_detail' bom.pk %}{% endif %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
+</form>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var RM_DATA = {{ rm_data_json|safe }};
+  var lineIndex = 0;
+
+  function formatNumber(val) {
+    var n = parseFloat(val);
+    if (isNaN(n)) return '—';
+    return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function buildSelectOptions(selectedId) {
+    var html = '<option value="">— Pilih Bahan Baku —</option>';
+    Object.keys(RM_DATA).forEach(function (id) {
+      var d = RM_DATA[id];
+      var sel = (String(id) === String(selectedId)) ? ' selected' : '';
+      html += '<option value="' + id + '"' + sel + '>' + d.item_id + ' — ' + d.nama + '</option>';
+    });
+    return html;
+  }
+
+  function updateRowCells(row) {
+    var sel = row.querySelector('.rm-select');
+    var rmId = sel ? sel.value : '';
+    var satuanCell = row.querySelector('.satuan-cell');
+    var stockCell = row.querySelector('.stock-cell');
+    var fifoCell = row.querySelector('.fifo-cell');
+    if (rmId && RM_DATA[rmId]) {
+      var d = RM_DATA[rmId];
+      satuanCell.textContent = d.satuan || '—';
+      var stock = parseFloat(d.stock);
+      stockCell.innerHTML = '<span class="ni-badge ' + (stock > 0 ? 'ni-badge--success' : 'ni-badge--secondary') + '">' + formatNumber(d.stock) + '</span>';
+      fifoCell.textContent = 'Rp ' + formatNumber(d.fifo_cost);
+    } else {
+      satuanCell.textContent = '—';
+      stockCell.textContent = '—';
+      fifoCell.textContent = '—';
+    }
+  }
+
+  function reindexRows() {
+    var rows = document.querySelectorAll('.bom-line-row');
+    rows.forEach(function (row, i) {
+      var sel = row.querySelector('.rm-select');
+      var qty = row.querySelector('.qty-input');
+      if (sel) sel.name = 'rm_' + i;
+      if (qty) qty.name = 'qty_' + i;
+      row.dataset.index = i;
+    });
+    lineIndex = rows.length;
+    document.getElementById('no-lines-msg').style.display = rows.length === 0 ? '' : 'none';
+  }
+
+  function addRow(selectedId, qtyVal) {
+    var idx = lineIndex;
+    var tr = document.createElement('tr');
+    tr.className = 'bom-line-row';
+    tr.dataset.index = idx;
+    tr.innerHTML = [
+      '<td><select name="rm_' + idx + '" class="ni-input rm-select" required>' + buildSelectOptions(selectedId || '') + '</select></td>',
+      '<td><input type="number" name="qty_' + idx + '" class="ni-input qty-input" value="' + (qtyVal || '') + '" step="0.0001" min="0.0001" required></td>',
+      '<td class="satuan-cell">—</td>',
+      '<td class="stock-cell">—</td>',
+      '<td class="fifo-cell">—</td>',
+      '<td><button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris"><i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i></button></td>',
+    ].join('');
+
+    document.getElementById('bom-lines-body').appendChild(tr);
+    lineIndex++;
+    document.getElementById('no-lines-msg').style.display = 'none';
+
+    // Wire up events on the new row
+    var sel = tr.querySelector('.rm-select');
+    sel.addEventListener('change', function () { updateRowCells(tr); });
+    tr.querySelector('.remove-line-btn').addEventListener('click', function () {
+      tr.remove();
+      reindexRows();
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+
+    updateRowCells(tr);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+  }
+
+  // Pre-populate existing rows on edit
+  document.querySelectorAll('.bom-line-row').forEach(function (row) {
+    var prefill = row.querySelector('.rm-prefill');
+    var sel = row.querySelector('.rm-select');
+    if (sel && prefill) {
+      sel.innerHTML = buildSelectOptions(prefill.value);
+      sel.addEventListener('change', function () { updateRowCells(row); });
+    }
+    row.querySelector('.remove-line-btn').addEventListener('click', function () {
+      row.remove();
+      reindexRows();
+    });
+    updateRowCells(row);
+  });
+  reindexRows();
+
+  document.getElementById('add-line-btn').addEventListener('click', function () {
+    addRow();
+  });
+
+  // Add one blank row if creating and empty
+  if (document.querySelectorAll('.bom-line-row').length === 0) {
+    addRow();
+  }
+})();
+</script>
+{% endblock %}

@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'apps.aset_tetap',
     'apps.aset_lainnya',
     'apps.ekuitas',
+    'apps.manufacturing',
 ]
 
 MIDDLEWARE = [
