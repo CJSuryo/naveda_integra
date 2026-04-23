@@ -26,7 +26,7 @@
   .doc-kop__name { font-family: var(--ff-disp); font-size: 16pt; font-weight: 700; color: var(--d-navy); letter-spacing: .05em; text-transform: uppercase; margin: 0 0 3px; }
   .doc-kop__sub { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-muted); letter-spacing: .09em; text-transform: uppercase; }
   .doc-kop__alamat { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-top: 4px; line-height: 1.5; text-transform: none; letter-spacing: normal; }
-  .doc-kop__kontak { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-faint); margin-top: 3px; text-transform: none; letter-spacing: normal; }
+  .doc-kop__telepon, .doc-kop__email { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-faint); margin-top: 3px; text-transform: none; letter-spacing: normal; }
   /* ── JUDUL ── */
   .doc-judul { text-align: center; padding: 0 0 14px; border-bottom: 1px solid var(--d-rule); margin-bottom: 18px; }
   .doc-judul__id { font-family: var(--ff-disp); font-size: 13pt; font-weight: 700; color: var(--d-black); }
@@ -120,6 +120,14 @@
           <a href="{% url 'jurnal:neraca' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
         </div>
       </form>
+      {% if eb_filter %}
+      <div style="padding-top:10px;border-top:1px solid var(--ni-border);margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+        <span style="font-size:0.75rem;color:var(--ni-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Tampilkan di KOP:</span>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.875rem;cursor:pointer;"><input type="checkbox" id="kop-alamat" class="ni-checkbox"> Alamat</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.875rem;cursor:pointer;"><input type="checkbox" id="kop-telepon" class="ni-checkbox"> Telepon</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:0.875rem;cursor:pointer;"><input type="checkbox" id="kop-email" class="ni-checkbox"> Email</label>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -132,8 +140,9 @@
       {% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}
       <div class="doc-kop__name">{{ eb.nama }}</div>
       <div class="doc-kop__sub">{{ eb.tipe_entitas.nama|default:'Entitas Bisnis' }}</div>
-      {% if eb.alamat_lengkap %}<div class="doc-kop__alamat">{{ eb.alamat_lengkap|linebreaksbr }}</div>{% endif %}
-      {% if eb.telepon or eb.email %}<div class="doc-kop__kontak">{% if eb.telepon %}{{ eb.telepon }}{% endif %}{% if eb.telepon and eb.email %} &nbsp;&middot;&nbsp; {% endif %}{% if eb.email %}{{ eb.email }}{% endif %}</div>{% endif %}
+      {% if eb.alamat_lengkap %}<div class="doc-kop__alamat" data-kop="alamat">{{ eb.alamat_lengkap|linebreaksbr }}</div>{% endif %}
+      {% if eb.telepon %}<div class="doc-kop__telepon" data-kop="telepon">{{ eb.telepon }}</div>{% endif %}
+      {% if eb.email %}<div class="doc-kop__email" data-kop="email">{{ eb.email }}</div>{% endif %}
       {% endif %}{% endfor %}
     {% else %}
       <div class="doc-kop__name">Naveda Integra</div>
@@ -310,4 +319,46 @@
   <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
   <div class="doc-page-foot__right">Dicetak: {% now_id %}</div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var STORE_KEY = 'ni_kop_prefs';
+  var FIELDS = ['alamat', 'telepon', 'email'];
+
+  function loadPrefs() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+
+  function savePrefs(prefs) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch (e) {}
+  }
+
+  function applyPrefs(prefs) {
+    FIELDS.forEach(function (f) {
+      var visible = prefs[f] !== false;
+      document.querySelectorAll('[data-kop="' + f + '"]').forEach(function (el) {
+        el.style.display = visible ? '' : 'none';
+      });
+      var cb = document.getElementById('kop-' + f);
+      if (cb) cb.checked = visible;
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var prefs = loadPrefs();
+    applyPrefs(prefs);
+    FIELDS.forEach(function (f) {
+      var cb = document.getElementById('kop-' + f);
+      if (!cb) return;
+      cb.addEventListener('change', function () {
+        prefs[f] = this.checked;
+        savePrefs(prefs);
+        applyPrefs(prefs);
+      });
+    });
+  });
+})();
+</script>
 {% endblock %}
