@@ -1,5 +1,15 @@
 {% extends 'base.html' %}
 {% block title %}{% if is_create %}Buat BOM{% else %}Edit BOM — {{ bom.bom_id }}{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+<style>
+  .ts-wrapper.single .ts-control { border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); padding: 6px 10px; font-size: 0.875rem; min-height: unset; background: var(--ni-bg-card); color: var(--ni-text); }
+  .ts-wrapper .ts-dropdown { z-index: 2500; position: absolute; }
+  body > .ts-dropdown { z-index: 3000; }
+</style>
+{% endblock %}
+
 {% block content %}
 {% load static %}
 
@@ -56,47 +66,20 @@
         </div>
 
         <div class="ni-table-wrapper">
-          <table class="ni-table" id="bom-lines-table" style="min-width:600px">
+          <table class="ni-table" id="bom-lines-table" style="min-width:560px">
             <thead>
               <tr>
                 <th>Item Bahan Baku</th>
-                <th style="width:130px">Qty per Unit FG</th>
-                <th style="width:100px">Satuan</th>
-                <th style="width:120px">Stok Tersedia</th>
-                <th style="width:140px">Harga FIFO (Rp)</th>
+                <th style="width:140px">Qty per Unit FG</th>
+                <th style="width:130px">Stok Tersedia</th>
+                <th style="width:150px">Harga FIFO (Rp)</th>
                 <th style="width:40px"></th>
               </tr>
             </thead>
-            <tbody id="bom-lines-body">
-              <!-- Pre-populate on edit -->
-              {% if not is_create and existing_lines %}
-                {% for line in existing_lines %}
-                <tr class="bom-line-row" data-index="{{ forloop.counter0 }}">
-                  <td>
-                    <select name="rm_{{ forloop.counter0 }}" class="ni-input rm-select" data-index="{{ forloop.counter0 }}" required>
-                      <option value="">— Pilih Bahan Baku —</option>
-                    </select>
-                    <!-- Hidden: will be populated via JS from rm_data_json, pre-selecting existing RM -->
-                    <input type="hidden" class="rm-prefill" value="{{ line.raw_material.id }}">
-                  </td>
-                  <td>
-                    <input type="number" name="qty_{{ forloop.counter0 }}" class="ni-input qty-input" value="{{ line.qty_required }}" step="0.0001" min="0.0001" required>
-                  </td>
-                  <td class="satuan-cell">—</td>
-                  <td class="stock-cell">—</td>
-                  <td class="fifo-cell">—</td>
-                  <td>
-                    <button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris">
-                      <i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i>
-                    </button>
-                  </td>
-                </tr>
-                {% endfor %}
-              {% endif %}
-            </tbody>
+            <tbody id="bom-lines-body"></tbody>
           </table>
         </div>
-        <div id="no-lines-msg" style="text-align:center;padding:24px 0;color:var(--ni-text-muted);font-size:0.875rem;{% if not is_create and existing_lines %}display:none{% endif %}">
+        <div id="no-lines-msg" style="text-align:center;padding:24px 0;color:var(--ni-text-muted);font-size:0.875rem;">
           Belum ada bahan baku. Klik "+ Tambah Bahan Baku" untuk menambah.
         </div>
       </div>
@@ -112,13 +95,48 @@
   </div>
 </form>
 
+{% include 'components/item_detail_modals.html' %}
 {% endblock %}
+
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+<script src="{% static 'js/item-detail-modals.js' %}"></script>
 <script>
 (function () {
   'use strict';
+
+  var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
+  var itemCreateUrl = '{% url "purchase:api_item_create" %}';
+  var kategoriFilterUrl = '{% url "purchase:api_kategori_filter" %}';
+  var kategoriCreateUrl = '{% url "purchase:api_kategori_create" %}';
+  var csrfToken = '{{ csrf_token }}';
+
+  // Initialise shared item-creation modal (no akun→detail map needed for BOM).
+  niDetailModals.init({
+    akunDetailMap: {},
+    autocompleteUrl: '',
+    getEBLv1Id: function () {
+      var sel = document.getElementById('id_entitas_bisnis');
+      return sel ? sel.value : '';
+    },
+    getEBDisplayText: function () {
+      var sel = document.getElementById('id_entitas_bisnis');
+      return sel ? sel.options[sel.selectedIndex].text : '';
+    },
+    itemAutocompleteUrl: itemAutocompleteUrl,
+    itemCreateUrl: itemCreateUrl,
+    kategoriFilterUrl: kategoriFilterUrl,
+    kategoriCreateUrl: kategoriCreateUrl,
+    csrfToken: csrfToken,
+    onDebitConfirmed: function () {},
+    onKreditConfirmed: function () {},
+    onDetailCleared: function () {},
+  });
+
+  // RM_DATA: { "id": { item_id, nama, stock, fifo_cost } } — pre-loaded from view
   var RM_DATA = {{ rm_data_json|safe }};
   var lineIndex = 0;
+  var _tomSelects = {};  // row-uid → TomSelect instance
 
   function formatNumber(val) {
     var n = parseFloat(val);
@@ -126,103 +144,141 @@
     return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   }
 
-  function buildSelectOptions(selectedId) {
-    var html = '<option value="">— Pilih Bahan Baku —</option>';
-    Object.keys(RM_DATA).forEach(function (id) {
+  function buildInitialOptions() {
+    return Object.keys(RM_DATA).map(function (id) {
       var d = RM_DATA[id];
-      var sel = (String(id) === String(selectedId)) ? ' selected' : '';
-      html += '<option value="' + id + '"' + sel + '>' + d.item_id + ' — ' + d.nama + '</option>';
+      return { id: String(id), text: d.item_id + ' \u2014 ' + d.nama, item_id: d.item_id, nama: d.nama, stock: d.stock, fifo_cost: d.fifo_cost };
     });
-    return html;
   }
 
-  function updateRowCells(row) {
-    var sel = row.querySelector('.rm-select');
-    var rmId = sel ? sel.value : '';
-    var satuanCell = row.querySelector('.satuan-cell');
+  function updateRowCells(row, item) {
     var stockCell = row.querySelector('.stock-cell');
     var fifoCell = row.querySelector('.fifo-cell');
-    if (rmId && RM_DATA[rmId]) {
-      var d = RM_DATA[rmId];
-      satuanCell.textContent = d.satuan || '—';
-      var stock = parseFloat(d.stock);
-      stockCell.innerHTML = '<span class="ni-badge ' + (stock > 0 ? 'ni-badge--success' : 'ni-badge--secondary') + '">' + formatNumber(d.stock) + '</span>';
-      fifoCell.textContent = 'Rp ' + formatNumber(d.fifo_cost);
+    if (item) {
+      var stock = parseFloat(item.stock || 0);
+      stockCell.innerHTML = '<span class="ni-badge ' + (stock > 0 ? 'ni-badge--success' : 'ni-badge--secondary') + '">' + formatNumber(item.stock || 0) + '</span>';
+      fifoCell.textContent = 'Rp ' + formatNumber(item.fifo_cost || 0);
     } else {
-      satuanCell.textContent = '—';
-      stockCell.textContent = '—';
-      fifoCell.textContent = '—';
+      stockCell.textContent = '\u2014';
+      fifoCell.textContent = '\u2014';
     }
-  }
-
-  function reindexRows() {
-    var rows = document.querySelectorAll('.bom-line-row');
-    rows.forEach(function (row, i) {
-      var sel = row.querySelector('.rm-select');
-      var qty = row.querySelector('.qty-input');
-      if (sel) sel.name = 'rm_' + i;
-      if (qty) qty.name = 'qty_' + i;
-      row.dataset.index = i;
-    });
-    lineIndex = rows.length;
-    document.getElementById('no-lines-msg').style.display = rows.length === 0 ? '' : 'none';
   }
 
   function addRow(selectedId, qtyVal) {
-    var idx = lineIndex;
+    var uid = lineIndex++;
     var tr = document.createElement('tr');
     tr.className = 'bom-line-row';
-    tr.dataset.index = idx;
-    tr.innerHTML = [
-      '<td><select name="rm_' + idx + '" class="ni-input rm-select" required>' + buildSelectOptions(selectedId || '') + '</select></td>',
-      '<td><input type="number" name="qty_' + idx + '" class="ni-input qty-input" value="' + (qtyVal || '') + '" step="0.0001" min="0.0001" required></td>',
-      '<td class="satuan-cell">—</td>',
-      '<td class="stock-cell">—</td>',
-      '<td class="fifo-cell">—</td>',
-      '<td><button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris"><i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i></button></td>',
-    ].join('');
+    tr.dataset.uid = uid;
+    tr.innerHTML =
+      '<td><select id="rm_ts_' + uid + '" name="rm_' + uid + '" placeholder="Ketik kode/nama bahan baku..."></select></td>' +
+      '<td><input type="number" name="qty_' + uid + '" class="ni-input qty-input" value="' + (qtyVal || '') + '" step="0.0001" min="0.0001" required></td>' +
+      '<td class="stock-cell">\u2014</td>' +
+      '<td class="fifo-cell">\u2014</td>' +
+      '<td><button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris"><i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i></button></td>';
 
     document.getElementById('bom-lines-body').appendChild(tr);
-    lineIndex++;
     document.getElementById('no-lines-msg').style.display = 'none';
 
-    // Wire up events on the new row
-    var sel = tr.querySelector('.rm-select');
-    sel.addEventListener('change', function () { updateRowCells(tr); });
+    var currentUid = uid;
+    var ts = new TomSelect('#rm_ts_' + uid, {
+      valueField: 'id',
+      labelField: 'text',
+      searchField: ['text'],
+      options: buildInitialOptions(),
+      maxOptions: false,
+      placeholder: 'Ketik kode/nama bahan baku...',
+      preload: false,
+      shouldLoad: function (q) { return q.length >= 1; },
+      load: function (query, callback) {
+        fetch(itemAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&tipe_item=RM,RMB')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            data.forEach(function (d) {
+              d.id = String(d.id);
+              d.stock = d.stock || '0';
+              d.fifo_cost = d.fifo_cost || '0';
+              if (!d.text) d.text = (d.item_id || '') + ' \u2014 ' + (d.nama || '');
+            });
+            callback(data);
+          })
+          .catch(function () { callback(); });
+      },
+      onChange: function (val) {
+        var opt = this.options[val] || RM_DATA[val];
+        updateRowCells(tr, opt || null);
+      },
+      create: function (input, callback) {
+        window.saOpenItemModal(input, function (newItem) {
+          var itemData = {
+            id: String(newItem.id),
+            text: newItem.text || ((newItem.item_id || '') + ' \u2014 ' + (newItem.nama || '')),
+            item_id: newItem.item_id || '',
+            nama: newItem.nama || '',
+            stock: '0',
+            fifo_cost: '0',
+          };
+          RM_DATA[String(newItem.id)] = itemData;
+          callback(itemData);
+        }, 'RM');
+        return false;
+      },
+      createButtonLabel: '+ Buat item baru...',
+      dropdownParent: 'body',
+    });
+
+    if (selectedId) {
+      ts.setValue(String(selectedId), true);
+      var existingItem = RM_DATA[String(selectedId)];
+      if (existingItem) updateRowCells(tr, existingItem);
+    }
+
+    _tomSelects[uid] = ts;
+
     tr.querySelector('.remove-line-btn').addEventListener('click', function () {
+      if (_tomSelects[currentUid]) {
+        try { _tomSelects[currentUid].destroy(); } catch (e) {}
+        delete _tomSelects[currentUid];
+      }
       tr.remove();
       reindexRows();
-      if (typeof lucide !== 'undefined') lucide.createIcons();
+      lucide.createIcons();
     });
 
-    updateRowCells(tr);
-    if (typeof lucide !== 'undefined') lucide.createIcons();
+    lucide.createIcons();
   }
 
-  // Pre-populate existing rows on edit
-  document.querySelectorAll('.bom-line-row').forEach(function (row) {
-    var prefill = row.querySelector('.rm-prefill');
-    var sel = row.querySelector('.rm-select');
-    if (sel && prefill) {
-      sel.innerHTML = buildSelectOptions(prefill.value);
-      sel.addEventListener('change', function () { updateRowCells(row); });
-    }
-    row.querySelector('.remove-line-btn').addEventListener('click', function () {
-      row.remove();
-      reindexRows();
+  function reindexRows() {
+    // Renumber rm_N and qty_N names sequentially so parse_bom_lines works correctly.
+    var rows = document.querySelectorAll('#bom-lines-body .bom-line-row');
+    rows.forEach(function (row, i) {
+      var sel = row.querySelector('select');
+      var qty = row.querySelector('.qty-input');
+      if (sel) sel.name = 'rm_' + i;
+      if (qty) qty.name = 'qty_' + i;
     });
-    updateRowCells(row);
-  });
-  reindexRows();
+    document.getElementById('no-lines-msg').style.display = rows.length === 0 ? '' : 'none';
+  }
+
+  // Pre-populate existing lines on edit
+  {% if not is_create and existing_lines %}
+  {% for line in existing_lines %}
+  addRow('{{ line.raw_material.id }}', '{{ line.qty_required }}');
+  {% endfor %}
+  {% endif %}
+
+  // Always start with one blank row when creating
+  if (document.querySelectorAll('#bom-lines-body .bom-line-row').length === 0) {
+    addRow();
+  }
 
   document.getElementById('add-line-btn').addEventListener('click', function () {
     addRow();
   });
 
-  // Add one blank row if creating and empty
-  if (document.querySelectorAll('.bom-line-row').length === 0) {
-    addRow();
-  }
+  // Ensure sequential naming before submit
+  document.getElementById('bom-form').addEventListener('submit', function () {
+    reindexRows();
+  });
 })();
 </script>
 {% endblock %}

@@ -225,7 +225,7 @@ def process_production(production_order: ProductionOrder) -> None:
         )
 
         # 4. Create FG InventoryRecord
-        InventoryRecord.objects.create(
+        inv_record = InventoryRecord.objects.create(
             item=fg_item,
             purchase_item=None,
             entitas_bisnis=entitas_bisnis,
@@ -244,6 +244,7 @@ def process_production(production_order: ProductionOrder) -> None:
         # 6. Finalise the order
         production_order.status = 'completed'
         production_order.is_processed = True
+        production_order.fg_inventory_record = inv_record
         production_order.save()
 
 
@@ -382,14 +383,18 @@ def reverse_production(production_order: ProductionOrder) -> None:
             batch.save()
 
         # Delete FG InventoryRecord created by this production
-        InventoryRecord.objects.filter(
-            item=fg_item,
-            purchase_item__isnull=True,
-            tanggal=production_order.tanggal,
-            quantity=production_order.qty_produced,
-            unit_price=production_order.unit_cost,
-            entitas_bisnis=production_order.entitas_bisnis,
-        ).delete()
+        if production_order.fg_inventory_record_id:
+            production_order.fg_inventory_record.delete()
+        else:
+            # Fallback for orders processed before FK was added
+            InventoryRecord.objects.filter(
+                item=fg_item,
+                purchase_item__isnull=True,
+                tanggal=production_order.tanggal,
+                quantity=production_order.qty_produced,
+                unit_price=production_order.unit_cost,
+                entitas_bisnis=production_order.entitas_bisnis,
+            ).delete()
 
         # Delete FG FIFO batch created by this production
         FIFOBatch.objects.filter(
@@ -414,4 +419,5 @@ def reverse_production(production_order: ProductionOrder) -> None:
         production_order.rm_cost = Decimal('0')
         production_order.total_cost = Decimal('0')
         production_order.unit_cost = Decimal('0')
+        production_order.fg_inventory_record = None
         production_order.save()

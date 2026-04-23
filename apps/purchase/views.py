@@ -883,9 +883,10 @@ def kategori_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
-    """Return item master options matching a search term, optionally filtered by EB."""
+    """Return item master options matching a search term, optionally filtered by EB and tipe_item."""
     term = request.GET.get('term', '')
     eb_lv1_id = request.GET.get('eb_lv1_id', '')
+    tipe_item = request.GET.get('tipe_item', '')
     qs = ItemMasterPurchase.objects.filter(
         Q(nama__icontains=term) | Q(item_id__icontains=term)
     ).select_related('kategori', 'coa_account').order_by('nama')
@@ -893,6 +894,12 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
     if eb_lv1_id:
         # Filter to items linked to this entitas bisnis (lv1)
         qs = qs.filter(entitas_bisnis__pk=eb_lv1_id)
+
+    if tipe_item:
+        # Allow comma-separated list e.g. "RM,RMB"
+        tipe_list = [t.strip() for t in tipe_item.split(',') if t.strip()]
+        if tipe_list:
+            qs = qs.filter(tipe_item__in=tipe_list)
 
     items = qs[:50]
     results = [

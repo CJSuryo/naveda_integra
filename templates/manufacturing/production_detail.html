@@ -46,7 +46,7 @@
         <dt>Finished Good</dt>
         <dd>{{ order.bom.finished_good.nama }}</dd>
         <dt>Qty Diproduksi</dt>
-        <dd><strong>{{ order.qty_produced }}</strong> {{ order.bom.finished_good.satuan|default:'' }}</dd>
+        <dd><strong>{{ order.qty_produced }}</strong></dd>
         <dt>RM Cost</dt>
         <dd>Rp {{ order.rm_cost|floatformat:2 }}</dd>
         <dt>Overhead Cost</dt>
@@ -56,14 +56,18 @@
         <dt>Unit Cost FG</dt>
         <dd style="color:var(--ni-primary);font-weight:700;font-size:1.0625rem">Rp {{ order.unit_cost|floatformat:4 }}</dd>
         <dt>Akun WIP</dt>
-        <dd>{{ order.coa_produksi.kode }} — {{ order.coa_produksi.nama }}</dd>
+        <dd>{{ order.coa_produksi.kode_akun }} — {{ order.coa_produksi.nama }}</dd>
         {% if order.coa_overhead %}
         <dt>Akun Overhead</dt>
-        <dd>{{ order.coa_overhead.kode }} — {{ order.coa_overhead.nama }}</dd>
+        <dd>{{ order.coa_overhead.kode_akun }} — {{ order.coa_overhead.nama }}</dd>
         {% endif %}
         {% if order.notes %}
         <dt>Catatan</dt>
         <dd>{{ order.notes }}</dd>
+        {% endif %}
+        {% if order.fg_inventory_record %}
+        <dt>Inventory Record FG</dt>
+        <dd><a href="{% url 'inventory:detail' order.fg_inventory_record.pk %}" style="font-weight:600">{{ order.fg_inventory_record.inventory_number }}</a></dd>
         {% endif %}
       </dl>
 

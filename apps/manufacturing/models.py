@@ -189,6 +189,15 @@ class ProductionOrder(models.Model):
     is_processed = models.BooleanField(
         default=False, verbose_name='Sudah Diproses',
     )
+    fg_inventory_record = models.OneToOneField(
+        'inventory.InventoryRecord',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='production_order',
+        verbose_name='Inventory Record FG',
+        help_text='InventoryRecord yang dibuat saat produksi diproses.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
