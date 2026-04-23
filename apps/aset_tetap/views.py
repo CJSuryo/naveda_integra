@@ -543,7 +543,7 @@ def _aset_tetap_export_qs(request):
     """Return filtered AsetTetapRecord queryset based on GET params."""
     qs = AsetTetapRecord.objects.select_related(
         'item', 'item__kategori', 'entitas_bisnis',
-    ).order_by('-tanggal_perolehan', '-created_at')
+    ).order_by('item__kategori__nama', '-tanggal_perolehan', '-created_at')
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')

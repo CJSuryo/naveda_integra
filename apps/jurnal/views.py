@@ -2111,6 +2111,181 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
     })
 
 
+# ── Analisis Keuangan (Financial Ratio Analysis) ─────────────────────────────
+
+@login_required
+def analisis_keuangan(request: HttpRequest) -> HttpResponse:
+    """Financial ratio analysis: Likuiditas, Profitabilitas, Efisiensi, Solvabilitas."""
+    import json as _json
+
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    eb_filter = request.GET.get('entitas_bisnis', '')
+
+    # ── Balance-sheet period filter (cumulative up to tanggal_sampai) ──
+    bs_filter: dict = {}
+    if tanggal_sampai:
+        bs_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+    if eb_filter:
+        bs_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # ── P&L period filter (tanggal_dari – tanggal_sampai) ──
+    pl_filter: dict = {}
+    if tanggal_dari:
+        pl_filter['jurnal_header__tanggal__gte'] = tanggal_dari
+    if tanggal_sampai:
+        pl_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
+    if eb_filter:
+        pl_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+
+    # ── Aggregate balance sheet ──
+    bs_agg = (
+        JurnalDetail.objects
+        .filter(**bs_filter)
+        .values('akun__kode_akun')
+        .annotate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    bs_balances: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in bs_agg:
+        kode = row['akun__kode_akun'] or ''
+        bs_balances[kode] = (row['total_debit'], row['total_kredit'])
+
+    def _bs_net(prefix: str, normal: str = 'debit') -> Decimal:
+        total = Decimal('0')
+        for kode, (d, k) in bs_balances.items():
+            if kode.startswith(prefix + '.') or kode == prefix:
+                total += (d - k) if normal == 'debit' else (k - d)
+        return total
+
+    total_aset_lancar = _bs_net('1.1', 'debit')
+    # Persediaan typically lives in 1.1.3.x; use best-effort prefix
+    total_persediaan = _bs_net('1.1.3', 'debit')
+    total_aset_tetap = _bs_net('1.2', 'debit')
+    total_aset_lain = _bs_net('1.3', 'debit')
+    total_aset = total_aset_lancar + total_aset_tetap + total_aset_lain
+
+    total_kwj_pendek = _bs_net('2.1', 'kredit')
+    total_kwj_panjang = _bs_net('2.2', 'kredit')
+    total_kewajiban = total_kwj_pendek + total_kwj_panjang
+
+    total_ekuitas_akun = _bs_net('3.1', 'kredit')
+    # Laba berjalan is included in ekuitas for ratio purposes
+    for kode, (d, k) in bs_balances.items():
+        pass  # pendapatan/beban computed separately below
+    pendapatan_bs = Decimal('0')
+    beban_bs = Decimal('0')
+    for kode, (d, k) in bs_balances.items():
+        if kode.startswith('4.'):
+            pendapatan_bs += k - d
+        elif kode.startswith('5.'):
+            beban_bs += d - k
+    laba_berjalan_bs = pendapatan_bs - beban_bs
+    total_ekuitas = total_ekuitas_akun + laba_berjalan_bs
+
+    # ── Aggregate P&L ──
+    pl_agg = (
+        JurnalDetail.objects
+        .filter(**pl_filter)
+        .values('akun__kode_akun')
+        .annotate(
+            total_debit=Coalesce(Sum('debit'), Value(Decimal('0')), output_field=DecimalField()),
+            total_kredit=Coalesce(Sum('kredit'), Value(Decimal('0')), output_field=DecimalField()),
+        )
+    )
+    pl_balances: dict[str, tuple[Decimal, Decimal]] = {}
+    for row in pl_agg:
+        kode = row['akun__kode_akun'] or ''
+        pl_balances[kode] = (row['total_debit'], row['total_kredit'])
+
+    def _pl_sum(prefix: str, net_type: str = 'kredit') -> Decimal:
+        total = Decimal('0')
+        for kode, (d, k) in pl_balances.items():
+            if kode.startswith(prefix + '.') or kode == prefix:
+                total += (k - d) if net_type == 'kredit' else (d - k)
+        return total
+
+    total_pendapatan_op = _pl_sum('4.1', 'kredit')
+    hpp_total = sum(
+        _pl_sum(f'5.1.{i}', 'debit') for i in range(1, 6)
+    )
+    laba_kotor = total_pendapatan_op - hpp_total
+    total_pendapatan_non_op = _pl_sum('4.2', 'kredit')
+    total_pendapatan = total_pendapatan_op + total_pendapatan_non_op
+    total_beban = sum(
+        (d - k) for kode, (d, k) in pl_balances.items() if kode.startswith('5.')
+    )
+    laba_bersih = total_pendapatan - total_beban
+
+    # ── Compute ratios (safe division) ──
+    def _ratio(num: Decimal, den: Decimal, pct: bool = False, decimals: int = 2) -> float | None:
+        if den == 0:
+            return None
+        val = float(num / den)
+        return round(val * 100 if pct else val, decimals)
+
+    ratios: dict[str, float | None] = {
+        # Likuiditas
+        'current_ratio': _ratio(total_aset_lancar, total_kwj_pendek),
+        'quick_ratio': _ratio(total_aset_lancar - total_persediaan, total_kwj_pendek),
+        # Profitabilitas
+        'gross_profit_margin': _ratio(laba_kotor, total_pendapatan, pct=True),
+        'net_profit_margin': _ratio(laba_bersih, total_pendapatan, pct=True),
+        'roe': _ratio(laba_bersih, total_ekuitas, pct=True),
+        'roa': _ratio(laba_bersih, total_aset, pct=True),
+        # Efisiensi
+        'asset_turnover': _ratio(total_pendapatan, total_aset),
+        # Solvabilitas
+        'der': _ratio(total_kewajiban, total_ekuitas),
+        'dar': _ratio(total_kewajiban, total_aset, pct=True),
+    }
+
+    # Radar chart data (normalize each axis 0–100 for display)
+    def _radar_score(key: str, ideal_min: float, ideal_max: float, invert: bool = False) -> float:
+        val = ratios.get(key)
+        if val is None:
+            return 0.0
+        if invert:
+            score = max(0.0, min(100.0, (ideal_max - val) / max(ideal_max - ideal_min, 0.01) * 100))
+        else:
+            score = max(0.0, min(100.0, (val - ideal_min) / max(ideal_max - ideal_min, 0.01) * 100))
+        return round(score, 1)
+
+    radar_data = [
+        _radar_score('current_ratio', 0, 3),           # Likuiditas
+        _radar_score('der', 0, 3, invert=True),         # Solvabilitas (lower DER = better)
+        _radar_score('net_profit_margin', -20, 30),     # Profitabilitas
+        _radar_score('asset_turnover', 0, 2),           # Efisiensi
+        _radar_score('roe', -10, 30),                   # ROE
+        _radar_score('roa', -5, 20),                    # ROA
+    ]
+
+    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
+
+    return render(request, 'jurnal/analisis_keuangan.html', {
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'eb_filter': eb_filter,
+        'eb_list': eb_list,
+        # Balance sheet intermediate values
+        'total_aset_lancar': total_aset_lancar,
+        'total_aset': total_aset,
+        'total_kwj_pendek': total_kwj_pendek,
+        'total_kewajiban': total_kewajiban,
+        'total_ekuitas': total_ekuitas,
+        # P&L intermediate values
+        'total_pendapatan': total_pendapatan,
+        'laba_kotor': laba_kotor,
+        'laba_bersih': laba_bersih,
+        # Ratios
+        'ratios': ratios,
+        'ratios_json': _json.dumps(ratios),
+        'radar_json': _json.dumps(radar_data),
+    })
+
+
 # ── History Jurnal Terhapus ──────────────────────────────────────────────────
 
 @login_required

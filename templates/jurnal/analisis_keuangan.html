@@ -1,0 +1,401 @@
+{% extends 'base.html' %}
+{% load static humanize %}
+{% block title %}Analisis Keuangan{% endblock %}
+
+{% block extra_css %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── DM font layer ── */
+  .ak {
+    --ak-navy: #1A3A5C; --ak-navy-lt: #e8f0fe; --ak-indigo: #4338ca;
+    --ak-green: #059669; --ak-amber: #d97706; --ak-red: #dc2626;
+    --ak-border: #e2e8f0; --ak-bg: #f8fafc; --ak-muted: #64748b;
+    --ff-disp: 'DM Serif Display', Georgia, serif;
+    --ff-body: 'DM Sans', 'Inter', sans-serif;
+    --ff-mono: 'DM Mono', 'Courier New', monospace;
+    font-family: var(--ff-body);
+  }
+  /* ── Hero header ── */
+  .ak-hero {
+    background: linear-gradient(135deg, #0f172a 60%, #1A3A5C);
+    border-radius: 12px; padding: 32px 36px; margin-bottom: 24px;
+    display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+  }
+  .ak-hero__label { font-family: var(--ff-body,sans-serif); font-size: 9px; font-weight: 600; color: #94a3b8; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 6px; }
+  .ak-hero__title { font-family: var(--ff-disp,serif); font-size: 28px; font-weight: 400; color: #f1f5f9; line-height: 1.1; margin: 0; }
+  .ak-hero__sub { font-family: var(--ff-body,sans-serif); font-size: 12px; color: #64748b; margin-top: 4px; }
+  .ak-hero__meta { text-align: right; }
+  .ak-hero__period { font-family: var(--ff-mono,monospace); font-size: 11px; color: #cbd5e1; }
+  .ak-hero__entity { font-size: 10px; color: #64748b; margin-top: 3px; }
+  /* ── Chart + tabs layout ── */
+  .ak-body { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .ak-body { grid-template-columns: 1fr; } }
+  /* ── Radar chart card ── */
+  .ak-chart-card {
+    background: #fff; border: 1px solid var(--ak-border,#e2e8f0); border-radius: 10px; padding: 20px;
+    position: sticky; top: 80px;
+  }
+  .ak-chart-card__title { font-family: var(--ff-disp,serif); font-size: 14px; color: var(--ak-navy,#1A3A5C); margin-bottom: 12px; text-align: center; }
+  .ak-chart-canvas { width: 100% !important; }
+  .ak-chart-legend { margin-top: 12px; }
+  .ak-legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--ak-muted,#64748b); margin-bottom: 3px; }
+  .ak-legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  /* ── Tabs ── */
+  .ak-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--ak-border,#e2e8f0); margin-bottom: 16px; flex-wrap: wrap; }
+  .ak-tab {
+    padding: 9px 18px; font-family: var(--ff-body,sans-serif); font-size: 12px; font-weight: 600;
+    color: var(--ak-muted,#64748b); cursor: pointer; border: none; background: none;
+    border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap;
+    transition: color .15s, border-color .15s;
+  }
+  .ak-tab:hover { color: var(--ak-navy,#1A3A5C); }
+  .ak-tab.active { color: var(--ak-navy,#1A3A5C); border-bottom-color: var(--ak-navy,#1A3A5C); }
+  .ak-panel { display: none; }
+  .ak-panel.active { display: block; }
+  /* ── Ratio grid ── */
+  .ak-ratio-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px,1fr)); gap: 14px; margin-bottom: 20px; }
+  .ak-ratio-card { background: #fff; border: 1px solid var(--ak-border,#e2e8f0); border-radius: 10px; padding: 18px 20px; position: relative; overflow: hidden; }
+  .ak-ratio-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+  .ak-ratio-card--ok::before { background: var(--ak-green,#059669); }
+  .ak-ratio-card--warn::before { background: var(--ak-amber,#d97706); }
+  .ak-ratio-card--bad::before { background: var(--ak-red,#dc2626); }
+  .ak-ratio-card--neutral::before { background: #cbd5e1; }
+  .ak-ratio__label { font-family: var(--ff-body,sans-serif); font-size: 9px; font-weight: 700; color: var(--ak-muted,#64748b); text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; }
+  .ak-ratio__value { font-family: var(--ff-mono,monospace); font-size: 24px; font-weight: 500; color: var(--ak-navy,#1A3A5C); line-height: 1; }
+  .ak-ratio__unit { font-size: 11px; color: var(--ak-muted,#64748b); margin-left: 2px; }
+  .ak-ratio__bench { font-size: 9px; color: var(--ak-muted,#64748b); margin-top: 4px; }
+  .ak-ratio__null { font-family: var(--ff-mono,monospace); font-size: 20px; color: #cbd5e1; }
+  /* ── Analysis text ── */
+  .ak-analysis { background: #f8fafc; border-left: 3px solid var(--ak-navy,#1A3A5C); padding: 14px 18px; border-radius: 0 6px 6px 0; margin-top: 16px; font-size: 13px; line-height: 1.7; color: #334155; }
+  .ak-analysis__title { font-family: var(--ff-disp,serif); font-size: 14px; color: var(--ak-navy,#1A3A5C); margin-bottom: 6px; }
+  /* ── Intermediate values ── */
+  .ak-intermediates { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px,1fr)); gap: 10px; margin-bottom: 20px; }
+  .ak-int { background: var(--ak-bg,#f8fafc); border: 1px solid var(--ak-border,#e2e8f0); border-radius: 8px; padding: 12px 14px; }
+  .ak-int__lbl { font-size: 8px; font-weight: 700; color: var(--ak-muted,#64748b); text-transform: uppercase; letter-spacing: .07em; }
+  .ak-int__val { font-family: var(--ff-mono,monospace); font-size: 13px; font-weight: 500; color: var(--ak-navy,#1A3A5C); margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ak">
+  <!-- ── Filter bar ── -->
+  <div class="ni-card" style="margin-bottom:20px;">
+    <div class="ni-card__body" style="padding:14px 16px;">
+      <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+          <label class="ni-form-label">Dari Tanggal</label>
+          <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+          <label class="ni-form-label">Sampai Tanggal</label>
+          <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select name="entitas_bisnis" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for eb in eb_list %}
+            <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+            <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i> Analisis
+          </button>
+          <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Hero ── -->
+  <div class="ak-hero ni-animate-fade-in">
+    <div>
+      <div class="ak-hero__label">Financial Ratio Analysis</div>
+      <h1 class="ak-hero__title">Analisis Keuangan</h1>
+      <div class="ak-hero__sub">Rasio Likuiditas &middot; Profitabilitas &middot; Efisiensi &middot; Solvabilitas</div>
+    </div>
+    <div class="ak-hero__meta">
+      <div class="ak-hero__period">
+        {% if tanggal_dari %}{{ tanggal_dari }}{% else %}&mdash;{% endif %}
+        &nbsp;&ndash;&nbsp;
+        {% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash;{% endif %}
+      </div>
+      <div class="ak-hero__entity">
+        {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas Bisnis{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Body: chart + tabs ── -->
+  <div class="ak-body">
+    <!-- Radar chart -->
+    <div class="ak-chart-card ni-animate-fade-in">
+      <div class="ak-chart-card__title">Skor Kesehatan Keuangan</div>
+      <canvas id="radarChart" class="ak-chart-canvas" height="240"></canvas>
+      <div class="ak-chart-legend" id="radarLegend"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="ni-animate-fade-in">
+      <div class="ak-tabs">
+        <button class="ak-tab active" data-tab="likuiditas">Likuiditas</button>
+        <button class="ak-tab" data-tab="profitabilitas">Profitabilitas</button>
+        <button class="ak-tab" data-tab="efisiensi">Efisiensi</button>
+        <button class="ak-tab" data-tab="solvabilitas">Solvabilitas</button>
+      </div>
+
+      <!-- ── Panel: Likuiditas ── -->
+      <div class="ak-panel active" id="panel-likuiditas">
+        <div class="ak-ratio-grid">
+          {% with r=ratios.current_ratio %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 2 %}ak-ratio-card--ok{% elif r >= 1 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Current Ratio</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">×</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Ideal ≥ 2.0 &mdash; Aset Lancar / Kwj Jangka Pendek</div>
+          </div>
+          {% endwith %}
+          {% with r=ratios.quick_ratio %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 1 %}ak-ratio-card--ok{% elif r >= 0.5 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Quick Ratio</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">×</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Ideal ≥ 1.0 &mdash; (Aset Lancar &minus; Persediaan) / Kwj Pendek</div>
+          </div>
+          {% endwith %}
+        </div>
+        <div class="ak-intermediates">
+          <div class="ak-int"><div class="ak-int__lbl">Aset Lancar</div><div class="ak-int__val">Rp {{ total_aset_lancar|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Kwj Jangka Pendek</div><div class="ak-int__val">Rp {{ total_kwj_pendek|floatformat:0|intcomma }}</div></div>
+        </div>
+        <div class="ak-analysis">
+          <div class="ak-analysis__title">Interpretasi Likuiditas</div>
+          <span id="analysis-likuiditas"></span>
+        </div>
+      </div>
+
+      <!-- ── Panel: Profitabilitas ── -->
+      <div class="ak-panel" id="panel-profitabilitas">
+        <div class="ak-ratio-grid">
+          {% with r=ratios.gross_profit_margin %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 30 %}ak-ratio-card--ok{% elif r >= 10 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Gross Profit Margin</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">%</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Laba Kotor / Pendapatan × 100</div>
+          </div>
+          {% endwith %}
+          {% with r=ratios.net_profit_margin %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 10 %}ak-ratio-card--ok{% elif r >= 0 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Net Profit Margin</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">%</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Laba Bersih / Pendapatan × 100</div>
+          </div>
+          {% endwith %}
+          {% with r=ratios.roe %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 15 %}ak-ratio-card--ok{% elif r >= 5 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Return on Equity (ROE)</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">%</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Laba Bersih / Total Ekuitas × 100</div>
+          </div>
+          {% endwith %}
+          {% with r=ratios.roa %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 5 %}ak-ratio-card--ok{% elif r >= 1 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Return on Assets (ROA)</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">%</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Laba Bersih / Total Aset × 100</div>
+          </div>
+          {% endwith %}
+        </div>
+        <div class="ak-intermediates">
+          <div class="ak-int"><div class="ak-int__lbl">Pendapatan</div><div class="ak-int__val">Rp {{ total_pendapatan|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Laba Kotor</div><div class="ak-int__val">Rp {{ laba_kotor|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Laba Bersih</div><div class="ak-int__val">Rp {{ laba_bersih|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Total Ekuitas</div><div class="ak-int__val">Rp {{ total_ekuitas|floatformat:0|intcomma }}</div></div>
+        </div>
+        <div class="ak-analysis">
+          <div class="ak-analysis__title">Interpretasi Profitabilitas</div>
+          <span id="analysis-profitabilitas"></span>
+        </div>
+      </div>
+
+      <!-- ── Panel: Efisiensi ── -->
+      <div class="ak-panel" id="panel-efisiensi">
+        <div class="ak-ratio-grid">
+          {% with r=ratios.asset_turnover %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r >= 1 %}ak-ratio-card--ok{% elif r >= 0.5 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Asset Turnover</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">×</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Ideal ≥ 1.0 &mdash; Pendapatan / Total Aset</div>
+          </div>
+          {% endwith %}
+        </div>
+        <div class="ak-intermediates">
+          <div class="ak-int"><div class="ak-int__lbl">Total Pendapatan</div><div class="ak-int__val">Rp {{ total_pendapatan|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Total Aset</div><div class="ak-int__val">Rp {{ total_aset|floatformat:0|intcomma }}</div></div>
+        </div>
+        <div class="ak-analysis">
+          <div class="ak-analysis__title">Interpretasi Efisiensi</div>
+          <span id="analysis-efisiensi"></span>
+        </div>
+      </div>
+
+      <!-- ── Panel: Solvabilitas ── -->
+      <div class="ak-panel" id="panel-solvabilitas">
+        <div class="ak-ratio-grid">
+          {% with r=ratios.der %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r <= 1 %}ak-ratio-card--ok{% elif r <= 2 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Debt-to-Equity Ratio (DER)</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">×</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Ideal ≤ 1.0 &mdash; Total Kewajiban / Total Ekuitas</div>
+          </div>
+          {% endwith %}
+          {% with r=ratios.dar %}
+          <div class="ak-ratio-card {% if r == None %}ak-ratio-card--neutral{% elif r <= 40 %}ak-ratio-card--ok{% elif r <= 60 %}ak-ratio-card--warn{% else %}ak-ratio-card--bad{% endif %}">
+            <div class="ak-ratio__label">Debt-to-Assets Ratio (DAR)</div>
+            {% if r != None %}<div class="ak-ratio__value">{{ r }}<span class="ak-ratio__unit">%</span></div>{% else %}<div class="ak-ratio__null">N/A</div>{% endif %}
+            <div class="ak-ratio__bench">Ideal ≤ 40% &mdash; Total Kewajiban / Total Aset × 100</div>
+          </div>
+          {% endwith %}
+        </div>
+        <div class="ak-intermediates">
+          <div class="ak-int"><div class="ak-int__lbl">Total Kewajiban</div><div class="ak-int__val">Rp {{ total_kewajiban|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Total Ekuitas</div><div class="ak-int__val">Rp {{ total_ekuitas|floatformat:0|intcomma }}</div></div>
+          <div class="ak-int"><div class="ak-int__lbl">Total Aset</div><div class="ak-int__val">Rp {{ total_aset|floatformat:0|intcomma }}</div></div>
+        </div>
+        <div class="ak-analysis">
+          <div class="ak-analysis__title">Interpretasi Solvabilitas</div>
+          <span id="analysis-solvabilitas"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  // ── Tab switching ──
+  document.querySelectorAll('.ak-tab').forEach(function (tab) {
+    tab.addEventListener('click', function () {
+      document.querySelectorAll('.ak-tab').forEach(function (t) { t.classList.remove('active'); });
+      document.querySelectorAll('.ak-panel').forEach(function (p) { p.classList.remove('active'); });
+      tab.classList.add('active');
+      var panel = document.getElementById('panel-' + tab.dataset.tab);
+      if (panel) panel.classList.add('active');
+    });
+  });
+
+  // ── Radar Chart ──
+  var radarData = {{ radar_json }};
+  var labels = ['Likuiditas', 'Solvabilitas', 'Net Margin', 'Efisiensi', 'ROE', 'ROA'];
+  var colors = ['#4338ca', '#059669', '#d97706', '#06b6d4', '#8b5cf6', '#ec4899'];
+
+  var ctx = document.getElementById('radarChart');
+  if (ctx) {
+    new Chart(ctx, {
+      type: 'radar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Skor (0–100)',
+          data: radarData,
+          backgroundColor: 'rgba(26,58,92,0.15)',
+          borderColor: '#1A3A5C',
+          borderWidth: 2,
+          pointBackgroundColor: '#1A3A5C',
+          pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          r: {
+            beginAtZero: true,
+            max: 100,
+            ticks: { stepSize: 25, font: { size: 9 }, color: '#94a3b8' },
+            grid: { color: '#e2e8f0' },
+            pointLabels: { font: { size: 10, family: "'DM Sans', sans-serif" }, color: '#475569' }
+          }
+        },
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // ── Legend ──
+  var legend = document.getElementById('radarLegend');
+  if (legend) {
+    labels.forEach(function (lbl, i) {
+      var item = document.createElement('div');
+      item.className = 'ak-legend-item';
+      item.innerHTML = '<span class="ak-legend-dot" style="background:' + colors[i] + '"></span>' + lbl + ' <span style="margin-left:auto;font-family:\'DM Mono\',monospace;font-size:10px;color:#1A3A5C;font-weight:500;">' + radarData[i] + '</span>';
+      legend.appendChild(item);
+    });
+  }
+
+  // ── Smart analysis ──
+  var ratios = {{ ratios_json }};
+
+  function fmt(val, decimals) {
+    if (val === null || val === undefined) return 'N/A';
+    return Number(val).toFixed(decimals !== undefined ? decimals : 2);
+  }
+
+  function analysisLikuiditas() {
+    var cr = ratios.current_ratio, qr = ratios.quick_ratio;
+    if (cr === null) return 'Data tidak cukup untuk menghitung rasio likuiditas. Pastikan jurnal untuk akun aset lancar dan kewajiban jangka pendek sudah diinput.';
+    var text = '';
+    if (cr >= 2) {
+      text = 'Current Ratio sebesar <strong>' + fmt(cr) + '×</strong> menunjukkan posisi likuiditas yang <strong>sangat sehat</strong>. Perusahaan mampu menutup seluruh kewajiban jangka pendek hanya dari aset lancar. ';
+    } else if (cr >= 1) {
+      text = 'Current Ratio sebesar <strong>' + fmt(cr) + '×</strong> menunjukkan likuiditas yang <strong>cukup</strong>, namun perlu dijaga agar tidak turun di bawah 1. ';
+    } else {
+      text = 'Current Ratio sebesar <strong>' + fmt(cr) + '×</strong> menunjukkan potensi <strong>risiko likuiditas</strong>. Kewajiban jangka pendek melebihi aset lancar yang tersedia. ';
+    }
+    if (qr !== null) {
+      text += 'Quick Ratio <strong>' + fmt(qr) + '×</strong> ' + (qr >= 1 ? 'menunjukkan bahwa bahkan tanpa persediaan, likuiditas tetap terjaga.' : 'menunjukkan ketergantungan pada persediaan untuk memenuhi kewajiban jangka pendek.');
+    }
+    return text;
+  }
+
+  function analysisProfitabilitas() {
+    var gpm = ratios.gross_profit_margin, npm = ratios.net_profit_margin, roe = ratios.roe, roa = ratios.roa;
+    if (npm === null && gpm === null) return 'Data pendapatan tidak ditemukan. Pastikan jurnal pendapatan (akun 4.x) dan beban (5.x) sudah diinput pada periode ini.';
+    var parts = [];
+    if (gpm !== null) parts.push('Gross Profit Margin <strong>' + fmt(gpm) + '%</strong> ' + (gpm >= 30 ? '— margin kotor yang baik.' : gpm >= 10 ? '— margin kotor moderat, perhatikan efisiensi HPP.' : '— margin kotor rendah, evaluasi struktur biaya pokok.'));
+    if (npm !== null) parts.push('Net Profit Margin <strong>' + fmt(npm) + '%</strong> ' + (npm >= 10 ? '— profitabilitas bersih yang sehat.' : npm >= 0 ? '— menguntungkan namun tipis.' : '— perusahaan <strong>merugi</strong> pada periode ini.'));
+    if (roe !== null) parts.push('ROE <strong>' + fmt(roe) + '%</strong> ' + (roe >= 15 ? '— pengembalian modal pemilik yang sangat baik.' : roe >= 5 ? '— pengembalian modal cukup.' : '— pengembalian modal rendah atau negatif.'));
+    if (roa !== null) parts.push('ROA <strong>' + fmt(roa) + '%</strong> ' + (roa >= 5 ? '— aset digunakan secara efektif.' : roa >= 1 ? '— efektivitas aset moderat.' : '— aset kurang produktif.'));
+    return parts.join(' ');
+  }
+
+  function analysisEfisiensi() {
+    var at = ratios.asset_turnover;
+    if (at === null) return 'Data tidak cukup untuk menghitung efisiensi. Pastikan jurnal pendapatan dan aset sudah diinput.';
+    var desc = at >= 1.5 ? 'sangat efisien' : at >= 1 ? 'efisien' : at >= 0.5 ? 'cukup efisien' : 'kurang efisien';
+    return 'Asset Turnover <strong>' + fmt(at) + '×</strong> menunjukkan perusahaan ' + desc + ' dalam menggunakan asetnya untuk menghasilkan pendapatan. ' + (at < 1 ? 'Pertimbangkan untuk meningkatkan volume penjualan atau mengevaluasi aset yang tidak produktif.' : 'Pertahankan performa ini dengan menjaga pertumbuhan pendapatan selaras dengan ekspansi aset.');
+  }
+
+  function analysisSolvabilitas() {
+    var der = ratios.der, dar = ratios.dar;
+    if (der === null && dar === null) return 'Data tidak cukup untuk menghitung solvabilitas. Pastikan akun kewajiban (2.x) dan ekuitas (3.x) sudah diinput.';
+    var parts = [];
+    if (der !== null) parts.push('DER <strong>' + fmt(der) + '×</strong> ' + (der <= 1 ? '— struktur modal sehat, dominasi ekuitas.' : der <= 2 ? '— ketergantungan utang moderat, perlu dipantau.' : '— leverage tinggi, risiko solvabilitas perlu diperhatikan.'));
+    if (dar !== null) parts.push('DAR <strong>' + fmt(dar) + '%</strong> ' + (dar <= 40 ? '— proporsi utang aman.' : dar <= 60 ? '— proporsi utang sedang, masih terkendali.' : '— mayoritas aset dibiayai utang, risiko finansial meningkat.'));
+    return parts.join(' ');
+  }
+
+  document.getElementById('analysis-likuiditas').innerHTML = analysisLikuiditas();
+  document.getElementById('analysis-profitabilitas').innerHTML = analysisProfitabilitas();
+  document.getElementById('analysis-efisiensi').innerHTML = analysisEfisiensi();
+  document.getElementById('analysis-solvabilitas').innerHTML = analysisSolvabilitas();
+
+})();
+</script>
+{% endblock %}

@@ -253,7 +253,7 @@
         </div>
       </div>
 
-      <div class="ni-nav-item {% if 'neraca-saldo' in request.path or 'buku-besar' in request.path or 'laporan-laba-rugi' in request.path or '/jurnal/neraca/' in request.path or 'laporan-perubahan-ekuitas' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'neraca-saldo' in request.path or 'buku-besar' in request.path or 'laporan-laba-rugi' in request.path or '/jurnal/neraca/' in request.path or 'laporan-perubahan-ekuitas' in request.path or 'analisis-keuangan' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="bar-chart-2" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Laporan</span>
@@ -274,6 +274,9 @@
           </a>
           <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Laporan Perubahan Ekuitas</span>
+          </a>
+          <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Analisis Keuangan</span>
           </a>
         </div>
       </div>

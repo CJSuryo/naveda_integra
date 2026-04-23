@@ -1,95 +1,143 @@
-{% load humanize %}<!DOCTYPE html>
+﻿{% load humanize %}<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8">
   <title>Laporan Aset Lainnya</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Jost:wght@300;400;500;600;700&family=Inconsolata:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #1e293b; background: #fff; padding: 20px; }
-    h1 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
-    .subtitle { font-size: 11px; color: #64748b; margin-bottom: 12px; }
-    .meta { font-size: 10px; color: #64748b; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-    thead th { background: #1e3a5f; color: #fff; padding: 6px 8px; text-align: left; font-weight: 600; }
-    thead th.r { text-align: right; }
-    tbody tr:nth-child(even) { background: #f8fafc; }
-    tbody td { padding: 5px 8px; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-    tbody td.r { text-align: right; }
-    tfoot td { padding: 6px 8px; font-weight: 700; border-top: 2px solid #1e3a5f; background: #f1f5f9; }
-    tfoot td.r { text-align: right; }
-    .print-btn { margin-bottom: 16px; }
-    .print-btn button { padding: 8px 20px; background: #0054a6; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
-    @media print {
-      .print-btn { display: none; }
-      body { padding: 10px; }
-      @page { margin: 15mm; size: A4 landscape; }
+    :root {
+      --cover-bg: #0f172a; --cover-text: #e2e8f0; --cover-muted: #94a3b8;
+      --gold: #b59a5a; --navy: #1A3A5C; --navy-lt: #e8f0fe;
+      --dark: #1e293b; --muted: #94a3b8; --rule: #e2e8f0; --white: #fff; --bg: #f8fafc;
+      --ff-disp: 'Cormorant Garamond', Georgia, serif;
+      --ff-body: 'Jost', 'Inter', sans-serif;
+      --ff-mono: 'Inconsolata', 'Courier New', monospace;
     }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--dark); }
+    .toolbar { background: #1e293b; padding: 12px 24px; display: flex; align-items: center; gap: 12px; }
+    .toolbar button { padding: 8px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: var(--ff-body); }
+    .toolbar .btn-print { background: var(--gold); color: #1e293b; }
+    .toolbar .btn-close { background: #475569; color: #fff; }
+    .toolbar span { color: #94a3b8; font-size: 12px; margin-left: 8px; }
+    .doc { max-width: 960px; margin: 0 auto; background: var(--white); }
+    .cover { background: var(--cover-bg); padding: 60px 56px 52px; position: relative; overflow: hidden; }
+    .cover::before { content: ''; position: absolute; top: -40px; right: -40px; width: 300px; height: 300px; border-radius: 50%; background: rgba(181,154,90,.06); pointer-events: none; }
+    .cover__label { font-size: 9px; font-weight: 600; color: var(--gold); letter-spacing: .16em; text-transform: uppercase; margin-bottom: 12px; }
+    .cover__title { font-family: var(--ff-disp); font-size: 36px; font-weight: 700; color: var(--cover-text); line-height: 1.1; margin-bottom: 8px; }
+    .cover__sub { font-size: 13px; color: var(--cover-muted); margin-bottom: 32px; }
+    .cover__stats { display: flex; gap: 40px; flex-wrap: wrap; }
+    .cstat__val { font-family: var(--ff-disp); font-size: 28px; font-weight: 700; color: var(--gold); line-height: 1; }
+    .cstat__lbl { font-size: 9px; color: var(--cover-muted); text-transform: uppercase; letter-spacing: .1em; margin-top: 4px; }
+    .meta-strip { background: var(--gold); padding: 10px 56px; display: flex; gap: 32px; flex-wrap: wrap; align-items: center; }
+    .meta-item { display: flex; gap: 6px; align-items: baseline; }
+    .meta-item__key { font-size: 8.5px; font-weight: 600; color: #5c4200; text-transform: uppercase; letter-spacing: .08em; }
+    .meta-item__val { font-family: var(--ff-mono); font-size: 11px; font-weight: 600; color: #1e1200; }
+    .summary { padding: 32px 40px 24px; display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+    .scard { border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; }
+    .scard__lbl { font-size: 8px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+    .scard__val { font-family: var(--ff-disp); font-size: 22px; font-weight: 700; color: var(--navy); line-height: 1; }
+    .scard__note { font-size: 9px; color: var(--muted); margin-top: 4px; }
+    .scard--highlight { border-color: var(--navy); background: var(--navy-lt); }
+    .section-head { padding: 16px 40px 8px; display: flex; align-items: center; gap: 12px; }
+    .section-head__title { font-family: var(--ff-disp); font-size: 18px; font-weight: 700; color: var(--navy); }
+    .section-head__line { flex: 1; height: 1px; background: var(--rule); }
+    .cat-group { margin: 0 40px 28px; }
+    .cat-title { font-size: 9px; font-weight: 700; color: var(--gold); background: var(--cover-bg); letter-spacing: .1em; text-transform: uppercase; padding: 7px 14px; display: inline-block; border-radius: 3px 3px 0 0; }
+    .asset-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .asset-table thead th { background: var(--navy); color: #fff; font-size: 8px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 8px 10px; text-align: left; }
+    .asset-table thead th.r { text-align: right; }
+    .asset-table tbody td { padding: 6px 10px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+    .asset-table tbody td.r { text-align: right; font-family: var(--ff-mono); font-size: 10px; }
+    .asset-table tbody tr:nth-child(even) { background: #f8fafc; }
+    .aset-num { font-family: var(--ff-mono); font-size: 9.5px; color: var(--muted); }
+    .doc-footer { margin: 24px 40px 32px; border-top: 1px solid var(--rule); padding-top: 14px; display: flex; justify-content: space-between; align-items: center; }
+    .doc-footer__brand { font-family: var(--ff-disp); font-size: 14px; font-weight: 700; color: var(--navy); }
+    .doc-footer__note { font-size: 9px; color: var(--muted); text-align: right; line-height: 1.5; }
+    @media print {
+      .toolbar { display: none !important; }
+      body { background: white !important; }
+      .doc { max-width: 100%; }
+      @page { size: A4 landscape; margin: 0; }
+      .asset-table thead th, .cat-title, .cover, .meta-strip { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .cover::before { display: none; }
+    }
+    @media (max-width: 640px) { .summary { grid-template-columns: 1fr 1fr; } }
   </style>
 </head>
 <body>
-  <div class="print-btn">
-    <button onclick="window.print()">🖨️ Cetak / Simpan PDF</button>
-    <button onclick="window.close()" style="background:#64748b;margin-left:8px;">✕ Tutup</button>
+  <div class="toolbar">
+    <button class="btn-print" onclick="window.print()">&#128438; Cetak / Simpan PDF</button>
+    <button class="btn-close" onclick="window.close()">&#10005; Tutup</button>
+    <span>Laporan Aset Lainnya &mdash; {{ total_records }} aset</span>
   </div>
-
-  <h1>Laporan Aset Lainnya</h1>
-  <p class="subtitle">
-    {% if tanggal_dari or tanggal_sampai %}
-      Periode:
-      {% if tanggal_dari %}{{ tanggal_dari }}{% else %}—{% endif %}
-      s/d
-      {% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}—{% endif %}
-    {% else %}
-      Semua Periode
-    {% endif %}
-    &nbsp;·&nbsp; {{ total_records }} data
-  </p>
-  <p class="meta">Dicetak: {{ generated_at|date:"d M Y H:i" }}</p>
-
-  <table>
-    <thead>
-      <tr>
-        <th>No. Aset</th>
-        <th>Item</th>
-        <th>Entitas Bisnis</th>
-        <th>Tgl Perolehan</th>
-        <th class="r">Qty</th>
-        <th class="r">Harga Perolehan (Rp)</th>
-        <th class="r">Total Nilai (Rp)</th>
-        <th class="r">Akum. Amortisasi (Rp)</th>
-        <th class="r">Nilai Buku (Rp)</th>
-        <th>Metode</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for r in records %}
-      <tr>
-        <td>{{ r.aset_number }}</td>
-        <td>{{ r.item.item_id }} - {{ r.item.nama }}</td>
-        <td>{{ r.entitas_bisnis.nama }}</td>
-        <td>{{ r.tanggal_perolehan }}</td>
-        <td class="r">{{ r.quantity|floatformat:0|intcomma }}</td>
-        <td class="r">{{ r.harga_perolehan|floatformat:0|intcomma }}</td>
-        <td class="r"><strong>{{ r.total_value|floatformat:0|intcomma }}</strong></td>
-        <td class="r" style="color:#dc2626;">{{ r.akumulasi_amortisasi|floatformat:0|intcomma }}</td>
-        <td class="r"><strong>{{ r.nilai_buku|floatformat:0|intcomma }}</strong></td>
-        <td>{{ r.metode_amortisasi|default:'-' }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="10" style="text-align:center;padding:20px;color:#64748b;">Tidak ada data aset lainnya.</td></tr>
-      {% endfor %}
-    </tbody>
-    {% if records %}
-    <tfoot>
-      <tr>
-        <td colspan="6" class="r">Total</td>
-        <td class="r"><strong>{{ total_nilai|floatformat:0|intcomma }}</strong></td>
-        <td class="r" style="color:#dc2626;"><strong>{{ total_akum|floatformat:0|intcomma }}</strong></td>
-        <td class="r"><strong>{{ total_buku|floatformat:0|intcomma }}</strong></td>
-        <td></td>
-      </tr>
-    </tfoot>
-    {% endif %}
-  </table>
+  <div class="doc">
+    <div class="cover">
+      <div class="cover__label">Laporan Keuangan &middot; Aset Lainnya</div>
+      <div class="cover__title">Daftar Aset Lainnya</div>
+      <div class="cover__sub">Intangible &amp; Other Asset Register &mdash; Naveda Integra</div>
+      <div class="cover__stats">
+        <div><div class="cstat__val">{{ total_records }}</div><div class="cstat__lbl">Total Aset</div></div>
+        <div><div class="cstat__val">Rp {{ total_nilai|floatformat:0|intcomma }}</div><div class="cstat__lbl">Nilai Perolehan</div></div>
+        <div><div class="cstat__val">Rp {{ total_akum|floatformat:0|intcomma }}</div><div class="cstat__lbl">Akum. Amortisasi</div></div>
+        <div><div class="cstat__val">Rp {{ total_buku|floatformat:0|intcomma }}</div><div class="cstat__lbl">Total Nilai Buku</div></div>
+      </div>
+    </div>
+    <div class="meta-strip">
+      <div class="meta-item"><span class="meta-item__key">Periode</span><span class="meta-item__val">{% if tanggal_dari %}{{ tanggal_dari }}{% else %}&mdash;{% endif %} &ndash; {% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash;{% endif %}</span></div>
+      <div class="meta-item"><span class="meta-item__key">Dicetak</span><span class="meta-item__val">{{ generated_at|date:"d M Y H:i" }}</span></div>
+      <div class="meta-item"><span class="meta-item__key">Sistem</span><span class="meta-item__val">Naveda Integra</span></div>
+    </div>
+    <div class="summary">
+      <div class="scard"><div class="scard__lbl">Total Aset</div><div class="scard__val">{{ total_records }}</div><div class="scard__note">unit tercatat</div></div>
+      <div class="scard"><div class="scard__lbl">Nilai Perolehan</div><div class="scard__val">Rp {{ total_nilai|floatformat:0|intcomma }}</div><div class="scard__note">total harga beli</div></div>
+      <div class="scard"><div class="scard__lbl">Akum. Amortisasi</div><div class="scard__val">Rp {{ total_akum|floatformat:0|intcomma }}</div><div class="scard__note">total teramortisasi</div></div>
+      <div class="scard scard--highlight"><div class="scard__lbl">Nilai Buku Bersih</div><div class="scard__val">Rp {{ total_buku|floatformat:0|intcomma }}</div><div class="scard__note">NBV saat ini</div></div>
+    </div>
+    <div class="section-head"><span class="section-head__title">Rincian per Kategori</span><span class="section-head__line"></span></div>
+    {% regroup records by item.kategori.nama as category_list %}
+    {% for cat in category_list %}
+    <div class="cat-group">
+      <div class="cat-title">{{ cat.grouper|default:"Tanpa Kategori" }}</div>
+      <table class="asset-table">
+        <thead>
+          <tr>
+            <th>No. Aset</th><th>Item &amp; ID</th><th>Entitas Bisnis</th><th>Tgl Perolehan</th>
+            <th class="r">Qty</th><th class="r">Harga Perolehan</th><th class="r">Total Nilai</th>
+            <th class="r">Akum. Amortisasi</th><th class="r">Nilai Buku</th><th>Metode</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in cat.list %}
+          <tr>
+            <td><span class="aset-num">{{ r.aset_number }}</span></td>
+            <td><div style="font-weight:500;">{{ r.item.nama }}</div><div style="font-family:'Inconsolata';font-size:9px;color:#94a3b8;">{{ r.item.item_id }}</div></td>
+            <td>{{ r.entitas_bisnis.nama }}</td>
+            <td>{{ r.tanggal_perolehan }}</td>
+            <td class="r">{{ r.quantity|floatformat:0|intcomma }}</td>
+            <td class="r">{{ r.harga_perolehan|floatformat:0|intcomma }}</td>
+            <td class="r" style="font-weight:600;">{{ r.total_value|floatformat:0|intcomma }}</td>
+            <td class="r" style="color:#dc2626;">{{ r.akumulasi_amortisasi|floatformat:0|intcomma }}</td>
+            <td class="r" style="font-weight:700;color:#1A3A5C;">{{ r.nilai_buku|floatformat:0|intcomma }}</td>
+            <td style="font-size:10px;">{{ r.metode_amortisasi|default:'-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% empty %}
+    <div style="padding:24px 40px;color:#94a3b8;font-style:italic;">Tidak ada data aset lainnya.</div>
+    {% endfor %}
+    <div style="margin:0 40px 16px;padding:12px 14px;background:#0f172a;color:#fff;display:flex;justify-content:space-between;border-radius:4px;">
+      <span style="font-family:'Cormorant Garamond';font-size:15px;font-weight:700;">Total Keseluruhan</span>
+      <span style="font-family:'Inconsolata';font-size:12px;">Nilai: Rp {{ total_nilai|floatformat:0|intcomma }} &ensp;&middot;&ensp; Akum: Rp {{ total_akum|floatformat:0|intcomma }} &ensp;&middot;&ensp; NBV: Rp {{ total_buku|floatformat:0|intcomma }}</span>
+    </div>
+    <div class="doc-footer">
+      <div class="doc-footer__brand">Naveda Integra</div>
+      <div class="doc-footer__note">Laporan Aset Lainnya &mdash; Dicetak {{ generated_at|date:"d M Y H:i" }}<br>Dokumen ini dibuat secara otomatis. Periksa keabsahan data sebelum digunakan untuk keperluan audit.</div>
+    </div>
+  </div>
 </body>
 </html>

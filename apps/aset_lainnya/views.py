@@ -337,9 +337,9 @@ def aset_lainnya_bulk_amortization(request: HttpRequest) -> HttpResponse:
 
 def _aset_lainnya_export_qs(request):
     """Return filtered AsetLainnyaRecord queryset based on GET params."""
-    qs = AsetLainnyaRecord.objects.select_related('item', 'entitas_bisnis').order_by(
-        '-tanggal_perolehan', '-created_at',
-    )
+    qs = AsetLainnyaRecord.objects.select_related(
+        'item', 'item__kategori', 'entitas_bisnis',
+    ).order_by('item__kategori__nama', '-tanggal_perolehan', '-created_at')
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')

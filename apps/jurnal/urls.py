@@ -36,6 +36,7 @@ urlpatterns = [
 
     # Laporan Perubahan Ekuitas
     path('laporan-perubahan-ekuitas/', views.laporan_perubahan_ekuitas, name='laporan_perubahan_ekuitas'),
+    path('analisis-keuangan/', views.analisis_keuangan, name='analisis_keuangan'),
 
     # Saldo Awal (Opening Balance) — CRUD
     path('saldo-awal/', views.saldo_awal_list, name='saldo_awal_list'),
