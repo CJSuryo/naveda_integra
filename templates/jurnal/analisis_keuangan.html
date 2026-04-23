@@ -293,6 +293,9 @@
 
   // ── Radar Chart ──
   var radarData = {{ radar_json|safe }};
+  // Clamp nulls and zeros to a minimum so Chart.js radar always renders
+  // point elements (avoids "payload" TypeError in Chart.js 4.x on hover).
+  var radarDisplay = radarData.map(function (v) { return (v === null || v === undefined || v === 0) ? 1 : v; });
   var labels = ['Likuiditas', 'Solvabilitas', 'Net Margin', 'Efisiensi', 'ROE', 'ROA'];
   var colors = ['#4338ca', '#059669', '#d97706', '#06b6d4', '#8b5cf6', '#ec4899'];
 
@@ -304,7 +307,7 @@
         labels: labels,
         datasets: [{
           label: 'Skor (0–100)',
-          data: radarData,
+          data: radarDisplay,
           backgroundColor: 'rgba(26,58,92,0.15)',
           borderColor: '#1A3A5C',
           borderWidth: 2,
@@ -313,6 +316,10 @@
         }]
       },
       options: {
+        // Disable all pointer events — chart is display-only.
+        // Prevents Chart.js 4.x tooltip plugin from accessing undefined
+        // point element payload on hover (known issue with 0-value radar points).
+        events: [],
         responsive: true,
         scales: {
           r: {
@@ -323,7 +330,7 @@
             pointLabels: { font: { size: 10, family: "'DM Sans', sans-serif" }, color: '#475569' }
           }
         },
-        plugins: { legend: { display: false } }
+        plugins: { legend: { display: false }, tooltip: { enabled: false } }
       }
     });
   }
