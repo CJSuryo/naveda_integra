@@ -5,13 +5,13 @@
 {% block extra_css %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-  /* ── Document variables ── */
+  /* ── Design tokens ── */
   .doc-lr {
     --d-navy: #1A3A5C; --d-black: #111; --d-dark: #2A2A2A; --d-mid: #444;
     --d-muted: #777; --d-faint: #AAA; --d-rule: #C8C8C8; --d-rule-lt: #EBEBEB;
-    --d-white: #FFF;
+    --d-white: #FFF; --d-red: #7A1515; --d-green: #1B5E35;
     --ff-disp: 'Libre Baskerville', 'Georgia', serif;
     --ff-body: 'EB Garamond', 'Georgia', serif;
     --ff-sans: 'Source Sans 3', 'Inter', sans-serif;
@@ -23,44 +23,70 @@
   /* ── Document frame ── */
   .doc-lr {
     background: var(--d-white); max-width: 700px; margin: 0 auto;
-    padding: 44px 52px 36px; box-shadow: 0 2px 24px rgba(0,0,0,.09);
-    font-family: var(--ff-body); color: var(--d-dark); font-size: 11pt; line-height: 1.6;
+    box-shadow: 0 4px 48px rgba(0,0,0,.15), 0 0 0 1px rgba(0,0,0,.07);
+    font-family: var(--ff-sans); color: var(--d-dark); font-size: 12.5px; line-height: 1.55;
   }
   /* ── KOP ── */
-  .doc-kop { text-align: center; padding-bottom: 14px; border-bottom: 3px double var(--d-navy); margin-bottom: 20px; }
-  .doc-kop__name { font-family: var(--ff-disp); font-size: 16pt; font-weight: 700; color: var(--d-navy); letter-spacing: .05em; text-transform: uppercase; margin: 0 0 3px; }
-  .doc-kop__sub { font-family: var(--ff-sans); font-size: 8.5pt; color: var(--d-muted); letter-spacing: .09em; text-transform: uppercase; }
+  .doc-kop { padding: 36px 52px 22px; text-align: center; }
+  .doc-kop__name { font-family: var(--ff-disp); font-size: 20px; font-weight: 700; color: var(--d-black); letter-spacing: 1.5px; text-transform: uppercase; }
+  .doc-kop__sub { font-family: var(--ff-body); font-style: italic; font-size: 12px; color: var(--d-muted); margin-top: 4px; }
+  .doc-kop-rule { margin-top: 14px; }
+  .doc-kop-rule__thick { height: 2px; background: var(--d-black); }
+  .doc-kop-rule__thin { height: 1px; background: var(--d-black); margin-top: 3px; }
   /* ── JUDUL ── */
-  .doc-judul { text-align: center; padding: 0 0 16px; border-bottom: 1px solid var(--d-rule); margin-bottom: 20px; }
-  .doc-judul__id { font-family: var(--ff-disp); font-size: 14pt; font-weight: 700; color: var(--d-black); letter-spacing: .02em; }
-  .doc-judul__en { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-muted); font-style: italic; margin-top: 1px; }
-  .doc-judul__period { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-top: 6px; }
+  .doc-judul { padding: 16px 52px 14px; text-align: center; }
+  .doc-judul__id { font-family: var(--ff-disp); font-size: 14px; font-weight: 700; color: var(--d-black); text-transform: uppercase; letter-spacing: 2.5px; }
+  .doc-judul__en { font-family: var(--ff-body); font-style: italic; font-size: 12px; color: var(--d-muted); margin-top: 3px; }
+  .doc-judul__period { font-size: 11px; color: var(--d-muted); margin-top: 5px; }
+  .doc-judul__period span { color: var(--d-dark); font-weight: 600; }
+  .doc-judul-rule { margin-top: 12px; height: 1px; background: var(--d-rule); }
+  /* ── Body ── */
+  .doc-body { padding: 24px 52px 36px; }
   /* ── Table ── */
-  .doc-table { width: 100%; border-collapse: collapse; font-family: var(--ff-body); font-size: 10.5pt; }
-  .doc-table thead th { font-family: var(--ff-sans); font-size: 8pt; font-weight: 700; color: var(--d-muted); text-transform: uppercase; letter-spacing: .07em; padding: 0 0 8px; border-bottom: 1.5px solid var(--d-rule); }
-  .doc-table thead th:last-child { text-align: right; }
-  .doc-table tbody td { padding: 3px 0; border: none; }
-  .doc-table tbody td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--ff-sans); font-size: 10pt; white-space: nowrap; }
-  /* Row types */
-  .row-cat td { font-family: var(--ff-sans); font-size: 9pt; font-weight: 700; color: var(--d-navy); letter-spacing: .04em; text-transform: uppercase; padding-top: 16px; padding-bottom: 5px; border-bottom: 1px solid var(--d-rule-lt); }
-  .row-item td:first-child { padding-left: 18px; color: var(--d-mid); font-style: italic; }
-  .row-item td:last-child { color: var(--d-mid); }
-  .row-kode { font-family: var(--ff-sans); font-size: 8pt; color: var(--d-faint); margin-right: 8px; }
-  .row-sub td { font-family: var(--ff-sans); font-weight: 600; font-size: 10pt; color: var(--d-dark); border-top: 1px solid var(--d-rule-lt); padding-top: 5px; padding-bottom: 8px; }
-  .row-gross td { font-family: var(--ff-sans); font-weight: 700; font-size: 11pt; color: var(--d-navy); padding: 10px 0; }
-  .row-gross td:first-child { padding-left: 4px; }
-  .row-spacer { height: 8px; }
-  .row-grand td { font-family: var(--ff-disp); font-weight: 700; font-size: 12pt; color: #fff; background: var(--d-navy); padding: 11px 12px; }
-  .row-grand td:last-child { text-align: right; }
+  .doc-table { width: 100%; border-collapse: collapse; font-family: var(--ff-sans); }
+  .doc-table thead tr { border-top: 1.5px solid var(--d-black); border-bottom: 1px solid var(--d-black); }
+  .doc-table thead th { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: var(--d-dark); font-weight: 600; padding: 7px 0; text-align: left; }
+  .doc-table thead th.col-r { text-align: right; }
+  .doc-table thead th.col-code { width: 58px; color: var(--d-muted); font-weight: 400; }
+  .doc-table tbody td { padding: 5.5px 0; color: var(--d-mid); border-bottom: 1px solid var(--d-rule-lt); font-size: 12.5px; vertical-align: middle; }
+  .doc-table tbody td.col-code { font-size: 10px; color: var(--d-faint); width: 58px; }
+  .doc-table tbody td.col-desc { padding-left: 16px; }
+  .doc-table tbody td.col-r { text-align: right; font-variant-numeric: tabular-nums; color: var(--d-dark); font-weight: 500; width: 148px; white-space: nowrap; }
+  .doc-table tbody td.col-neg { color: var(--d-red) !important; }
+  /* Row: category */
+  .row-cat td { padding-top: 18px; padding-bottom: 4px; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--d-dark); border-bottom: 1px solid var(--d-rule-lt); background: none !important; }
+  /* Row: item */
+  .row-item td { border-bottom: 1px solid var(--d-rule-lt); }
+  /* Row: subtotal */
+  .row-sub td { background: #F4F2ED !important; border-top: 1px solid var(--d-rule); border-bottom: 1px solid var(--d-rule); padding: 7px 0; font-weight: 600; color: var(--d-dark); font-size: 12.5px; }
+  .row-sub td.col-r { color: var(--d-navy); }
+  .row-sub td.col-neg { color: var(--d-red) !important; }
+  /* Row: spacer */
+  .row-spacer td { height: 10px; border: none; background: none !important; padding: 0; }
+  /* Row: gross profit / operating income */
+  .row-gross td { border-top: 1.5px solid var(--d-black); border-bottom: 1.5px solid var(--d-black); padding: 9px 0; font-weight: 700; color: var(--d-black); background: none !important; font-family: var(--ff-disp); font-size: 13px; }
+  .row-gross td.col-r { color: var(--d-navy); }
+  /* Row: grand total */
+  .row-grand td { border-top: 2px solid var(--d-black); border-bottom: 3px double var(--d-black); padding: 10px 0; color: var(--d-black); font-weight: 700; font-size: 13.5px; font-family: var(--ff-disp); background: none !important; }
+  .row-grand td.col-r { color: var(--d-navy); }
+  /* ── Catatan ── */
+  .doc-catatan { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--d-rule-lt); }
+  .doc-catatan__title { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--d-faint); font-weight: 600; margin-bottom: 8px; }
+  .doc-catatan__text { font-family: var(--ff-body); font-style: italic; font-size: 12px; color: var(--d-muted); line-height: 1.85; }
   /* ── TTD ── */
-  .doc-ttd { margin-top: 40px; display: flex; justify-content: flex-end; }
-  .doc-ttd__box { text-align: center; width: 190px; }
-  .doc-ttd__date { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-bottom: 3px; }
-  .doc-ttd__role { font-family: var(--ff-sans); font-size: 9pt; color: var(--d-mid); margin-bottom: 2px; }
-  .doc-ttd__gap { height: 56px; }
-  .doc-ttd__name { font-family: var(--ff-body); font-size: 10pt; font-weight: 600; color: var(--d-dark); border-top: 1px solid var(--d-rule); padding-top: 5px; }
+  .doc-ttd-row { margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .doc-ttd-kiri { font-family: var(--ff-body); font-style: italic; font-size: 11.5px; color: var(--d-faint); line-height: 1.75; }
+  .doc-ttd-kiri strong { font-style: normal; color: var(--d-dark); font-weight: 600; }
+  .doc-ttd-kanan { text-align: center; }
+  .doc-ttd-gap { height: 46px; }
+  .doc-ttd-line { width: 188px; height: 1px; background: var(--d-dark); margin: 0 auto 7px; }
+  .doc-ttd-nama { font-size: 12px; font-weight: 700; color: var(--d-dark); font-family: var(--ff-disp); }
+  .doc-ttd-jabatan { font-size: 10.5px; color: var(--d-faint); font-family: var(--ff-body); font-style: italic; margin-top: 2px; }
   /* ── Footer bar ── */
-  .doc-footer { margin-top: 28px; background: var(--d-navy); color: rgba(255,255,255,.55); font-family: var(--ff-sans); font-size: 7.5pt; padding: 7px 12px; display: flex; justify-content: space-between; letter-spacing: .04em; }
+  .doc-page-foot { background: var(--d-navy); padding: 10px 52px; display: flex; justify-content: space-between; align-items: center; }
+  .doc-page-foot__left { font-size: 10px; color: rgba(255,255,255,.45); }
+  .doc-page-foot__left strong { color: rgba(255,255,255,.8); }
+  .doc-page-foot__right { font-size: 10px; color: rgba(255,255,255,.3); font-family: var(--ff-body); font-style: italic; }
   /* ── Print ── */
   @media print {
     @page { size: A4 portrait; margin: 0; }
@@ -69,8 +95,8 @@
     .ni-sidebar, .ni-mobile-topbar, .ni-sidebar-overlay { display: none !important; }
     .ni-main { padding: 0 !important; margin: 0 !important; }
     .ni-content-wrapper { padding: 0 !important; max-width: none !important; }
-    .doc-lr { max-width: 100% !important; width: 100% !important; min-height: 297mm; padding: 14mm 16mm 10mm !important; box-shadow: none !important; margin: 0 !important; }
-    .row-grand td, .doc-footer { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .doc-lr { max-width: 100% !important; width: 100% !important; min-height: 297mm; box-shadow: none !important; margin: 0 !important; }
+    .row-sub td, .doc-page-foot { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 </style>
 {% endblock %}
@@ -134,144 +160,163 @@
   <!-- KOP -->
   <div class="doc-kop">
     <div class="doc-kop__name">{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</div>
-    <div class="doc-kop__sub">Sistem Akuntansi Terintegrasi</div>
+    <div class="doc-kop__sub">{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.tipe_entitas|default:'Entitas Bisnis' }}{% endif %}{% endfor %}{% else %}Sistem Akuntansi Terintegrasi{% endif %}</div>
+    <div class="doc-kop-rule">
+      <div class="doc-kop-rule__thick"></div>
+      <div class="doc-kop-rule__thin"></div>
+    </div>
   </div>
   <!-- JUDUL -->
   <div class="doc-judul">
     <div class="doc-judul__id">Laporan Laba Rugi</div>
-    <div class="doc-judul__en">Statement of Profit and Loss</div>
-    <div class="doc-judul__period">
-      {% if tanggal_dari and tanggal_sampai %}Periode {{ tanggal_dari }} s/d {{ tanggal_sampai }}
-      {% elif tanggal_dari %}Mulai {{ tanggal_dari }}
-      {% elif tanggal_sampai %}Per {{ tanggal_sampai }}
-      {% else %}Semua Periode{% endif %}
-    </div>
+    <div class="doc-judul__en">Income Statement</div>
+    <div class="doc-judul__period">Untuk Periode yang Berakhir pada &nbsp;<span>{% if tanggal_dari and tanggal_sampai %}{{ tanggal_dari }} s/d {{ tanggal_sampai }}{% elif tanggal_dari %}mulai {{ tanggal_dari }}{% elif tanggal_sampai %}{{ tanggal_sampai }}{% else %}Semua Periode{% endif %}</span></div>
+    <div class="doc-judul-rule"></div>
   </div>
   <!-- TABLE -->
-  <table class="doc-table">
-    <thead>
-      <tr>
-        <th style="width:60%;text-align:left;">Keterangan</th>
-        <th style="width:40%;">Jumlah (Rp)</th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- Pendapatan Operasional -->
-      <tr class="row-cat"><td colspan="2">Pendapatan Operasional</td></tr>
-      {% if tampilan == 'detail' %}
-        {% for item in pendapatan_op_items %}
-        <tr class="row-item">
-          <td><span class="row-kode">{{ item.kode }}</span>{{ item.nama }}</td>
-          <td>{{ item.net|floatformat:0|intcomma }}</td>
+  <div class="doc-body">
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th class="col-code">No. Akun</th>
+          <th>Uraian</th>
+          <th class="col-r">Jumlah (Rp)</th>
         </tr>
-        {% empty %}
-        <tr class="row-item"><td colspan="2" style="color:var(--d-faint);font-style:italic;padding-left:18px;">— tidak ada data —</td></tr>
-        {% endfor %}
-      {% endif %}
-      <tr class="row-sub">
-        <td>Total Pendapatan Operasional</td>
-        <td>{{ total_pendapatan_op|floatformat:0|intcomma }}</td>
-      </tr>
-      <!-- HPP -->
-      <tr class="row-cat"><td colspan="2">Harga Pokok Penjualan (HPP)</td></tr>
-      {% if tampilan == 'detail' %}
-        {% for item in hpp_items %}
-        <tr class="row-item">
-          <td><span class="row-kode">{{ item.kode }}</span>{{ item.nama }}</td>
-          <td>({{ item.net|floatformat:0|intcomma }})</td>
+      </thead>
+      <tbody>
+        <!-- Pendapatan Operasional -->
+        <tr class="row-cat"><td></td><td colspan="2">Pendapatan Operasional</td></tr>
+        {% if tampilan == 'detail' %}
+          {% for item in pendapatan_op_items %}
+          <tr class="row-item">
+            <td class="col-code">{{ item.kode }}</td>
+            <td class="col-desc">{{ item.nama }}</td>
+            <td class="col-r">{{ item.net|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr class="row-item"><td class="col-code"></td><td colspan="2" class="col-desc" style="color:var(--d-faint);font-style:italic;">— tidak ada data —</td></tr>
+          {% endfor %}
+        {% endif %}
+        <tr class="row-sub">
+          <td class="col-code"></td>
+          <td>Total Pendapatan Operasional</td>
+          <td class="col-r">{{ total_pendapatan_op|floatformat:0|intcomma }}</td>
         </tr>
-        {% empty %}
-        <tr class="row-item"><td colspan="2" style="color:var(--d-faint);font-style:italic;padding-left:18px;">— tidak ada data —</td></tr>
-        {% endfor %}
-      {% endif %}
-      <tr class="row-sub">
-        <td>Total HPP</td>
-        <td>({{ total_hpp|floatformat:0|intcomma }})</td>
-      </tr>
-      <!-- Laba Kotor -->
-      <tr class="row-gross">
-        <td>Laba Kotor <span style="font-size:8.5pt;font-style:italic;color:var(--d-muted);font-family:var(--ff-body);">Gross Profit</span></td>
-        <td>{{ laba_kotor|floatformat:0|intcomma }}</td>
-      </tr>
-      <tr class="row-spacer"><td colspan="2"></td></tr>
-      <!-- Beban Operasional -->
-      <tr class="row-cat"><td colspan="2">Beban Operasional</td></tr>
-      {% if tampilan == 'detail' %}
-        {% for item in beban_op_items %}
-        <tr class="row-item">
-          <td><span class="row-kode">{{ item.kode }}</span>{{ item.nama }}</td>
-          <td>({{ item.net|floatformat:0|intcomma }})</td>
+        <!-- HPP -->
+        <tr class="row-cat"><td></td><td colspan="2">Harga Pokok Penjualan (HPP / COGS)</td></tr>
+        {% if tampilan == 'detail' %}
+          {% for item in hpp_items %}
+          <tr class="row-item">
+            <td class="col-code">{{ item.kode }}</td>
+            <td class="col-desc">{{ item.nama }}</td>
+            <td class="col-r col-neg">({{ item.net|floatformat:0|intcomma }})</td>
+          </tr>
+          {% empty %}
+          <tr class="row-item"><td class="col-code"></td><td colspan="2" class="col-desc" style="color:var(--d-faint);font-style:italic;">— tidak ada data —</td></tr>
+          {% endfor %}
+        {% endif %}
+        <tr class="row-sub">
+          <td class="col-code"></td>
+          <td>Total Harga Pokok Penjualan</td>
+          <td class="col-r col-neg">({{ total_hpp|floatformat:0|intcomma }})</td>
         </tr>
-        {% empty %}
-        <tr class="row-item"><td colspan="2" style="color:var(--d-faint);font-style:italic;padding-left:18px;">— tidak ada data —</td></tr>
-        {% endfor %}
-      {% endif %}
-      <tr class="row-sub">
-        <td>Total Beban Operasional</td>
-        <td>({{ total_beban_op|floatformat:0|intcomma }})</td>
-      </tr>
-      <!-- Laba Operasional -->
-      <tr class="row-gross">
-        <td>Laba Operasional <span style="font-size:8.5pt;font-style:italic;color:var(--d-muted);font-family:var(--ff-body);">Operating Income</span></td>
-        <td>{{ laba_operasional|floatformat:0|intcomma }}</td>
-      </tr>
-      <tr class="row-spacer"><td colspan="2"></td></tr>
-      <!-- Non-Operasional -->
-      <tr class="row-cat"><td colspan="2">Pendapatan Non-Operasional</td></tr>
-      {% if tampilan == 'detail' %}
-        {% for item in pendapatan_non_op_items %}
-        <tr class="row-item">
-          <td><span class="row-kode">{{ item.kode }}</span>{{ item.nama }}</td>
-          <td>{{ item.net|floatformat:0|intcomma }}</td>
+        <!-- Laba Kotor -->
+        <tr class="row-spacer"><td colspan="3"></td></tr>
+        <tr class="row-gross">
+          <td class="col-code"></td>
+          <td>Laba Kotor <span style="font-family:var(--ff-body);font-style:italic;font-size:12px;color:var(--d-muted);font-weight:400;">Gross Profit</span></td>
+          <td class="col-r">{{ laba_kotor|floatformat:0|intcomma }}</td>
         </tr>
-        {% empty %}
-        <tr class="row-item"><td colspan="2" style="color:var(--d-faint);font-style:italic;padding-left:18px;">— tidak ada data —</td></tr>
-        {% endfor %}
-      {% endif %}
-      <tr class="row-sub">
-        <td>Total Pendapatan Non-Operasional</td>
-        <td>{{ total_pendapatan_non_op|floatformat:0|intcomma }}</td>
-      </tr>
-      <tr class="row-cat"><td colspan="2">Beban Non-Operasional</td></tr>
-      {% if tampilan == 'detail' %}
-        {% for item in beban_non_op_items %}
-        <tr class="row-item">
-          <td><span class="row-kode">{{ item.kode }}</span>{{ item.nama }}</td>
-          <td>({{ item.net|floatformat:0|intcomma }})</td>
+        <tr class="row-spacer"><td colspan="3"></td></tr>
+        <!-- Beban Operasional -->
+        <tr class="row-cat"><td></td><td colspan="2">Beban Operasional</td></tr>
+        {% if tampilan == 'detail' %}
+          {% for item in beban_op_items %}
+          <tr class="row-item">
+            <td class="col-code">{{ item.kode }}</td>
+            <td class="col-desc">{{ item.nama }}</td>
+            <td class="col-r col-neg">({{ item.net|floatformat:0|intcomma }})</td>
+          </tr>
+          {% empty %}
+          <tr class="row-item"><td class="col-code"></td><td colspan="2" class="col-desc" style="color:var(--d-faint);font-style:italic;">— tidak ada data —</td></tr>
+          {% endfor %}
+        {% endif %}
+        <tr class="row-sub">
+          <td class="col-code"></td>
+          <td>Total Beban Operasional</td>
+          <td class="col-r col-neg">({{ total_beban_op|floatformat:0|intcomma }})</td>
         </tr>
-        {% empty %}
-        <tr class="row-item"><td colspan="2" style="color:var(--d-faint);font-style:italic;padding-left:18px;">— tidak ada data —</td></tr>
-        {% endfor %}
-      {% endif %}
-      <tr class="row-sub">
-        <td>Total Beban Non-Operasional</td>
-        <td>({{ total_beban_non_op|floatformat:0|intcomma }})</td>
-      </tr>
-      <tr class="row-gross">
-        <td>Net Non-Operasional</td>
-        <td>{{ net_non_op|floatformat:0|intcomma }}</td>
-      </tr>
-      <tr class="row-spacer"><td colspan="2"></td></tr>
-      <!-- Laba Bersih -->
-      <tr class="row-grand">
-        <td>Laba Bersih &ensp;&middot;&ensp; Net Income</td>
-        <td>Rp {{ laba_bersih|floatformat:0|intcomma }}</td>
-      </tr>
-    </tbody>
-  </table>
-  <!-- TTD -->
-  <div class="doc-ttd">
-    <div class="doc-ttd__box">
-      <div class="doc-ttd__date">{% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash; , &mdash;{% endif %}</div>
-      <div class="doc-ttd__role">Dibuat oleh,</div>
-      <div class="doc-ttd__gap"></div>
-      <div class="doc-ttd__name">{{ request.user.get_full_name|default:request.user.email }}</div>
+        <!-- Laba Operasional -->
+        <tr class="row-spacer"><td colspan="3"></td></tr>
+        <tr class="row-sub">
+          <td class="col-code"></td>
+          <td>Laba Operasional <span style="font-family:var(--ff-body);font-style:italic;font-size:12px;color:var(--d-muted);font-weight:400;">Operating Income</span></td>
+          <td class="col-r">{{ laba_operasional|floatformat:0|intcomma }}</td>
+        </tr>
+        <!-- Non-Operasional -->
+        <tr class="row-spacer"><td colspan="3"></td></tr>
+        <tr class="row-cat"><td></td><td colspan="2">Pendapatan / (Beban) Non-Operasional</td></tr>
+        {% if tampilan == 'detail' %}
+          {% for item in pendapatan_non_op_items %}
+          <tr class="row-item">
+            <td class="col-code">{{ item.kode }}</td>
+            <td class="col-desc">{{ item.nama }}</td>
+            <td class="col-r">{{ item.net|floatformat:0|intcomma }}</td>
+          </tr>
+          {% endfor %}
+          {% for item in beban_non_op_items %}
+          <tr class="row-item">
+            <td class="col-code">{{ item.kode }}</td>
+            <td class="col-desc">{{ item.nama }}</td>
+            <td class="col-r col-neg">({{ item.net|floatformat:0|intcomma }})</td>
+          </tr>
+          {% empty %}
+          <tr class="row-item"><td class="col-code"></td><td colspan="2" class="col-desc" style="color:var(--d-faint);font-style:italic;">Tidak ada transaksi non-operasional pada periode ini.</td></tr>
+          {% endfor %}
+        {% endif %}
+        <tr class="row-sub">
+          <td class="col-code"></td>
+          <td>Net Non-Operasional</td>
+          <td class="col-r">{{ net_non_op|floatformat:0|intcomma }}</td>
+        </tr>
+        <!-- Laba Bersih -->
+        <tr class="row-spacer"><td colspan="3"></td></tr>
+        <tr class="row-grand">
+          <td class="col-code"></td>
+          <td>Laba Bersih Periode Berjalan</td>
+          <td class="col-r">Rp&nbsp;{{ laba_bersih|floatformat:0|intcomma }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <!-- Catatan -->
+    <div class="doc-catatan">
+      <div class="doc-catatan__title">Catatan atas Laporan Keuangan</div>
+      <div class="doc-catatan__text">
+        1. Laporan disusun dengan basis akrual sesuai Standar Akuntansi Keuangan Entitas Mikro, Kecil, dan Menengah (SAK EMKM).<br>
+        2. Seluruh angka disajikan dalam mata uang Rupiah (IDR).<br>
+        3. Angka dalam tanda kurung ( ) menunjukkan nilai pengurang atau negatif.
+      </div>
+    </div>
+    <!-- TTD -->
+    <div class="doc-ttd-row">
+      <div class="doc-ttd-kiri">
+        Laporan ini disiapkan oleh<br>
+        <strong>Naveda Integra Finance</strong><br>
+        untuk keperluan pelaporan keuangan<br>
+        <strong>{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</strong>.
+      </div>
+      <div class="doc-ttd-kanan">
+        <div class="doc-ttd-gap"></div>
+        <div class="doc-ttd-line"></div>
+        <div class="doc-ttd-nama">{{ request.user.get_full_name|default:request.user.email }}</div>
+        <div class="doc-ttd-jabatan">{% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash;{% endif %}</div>
+      </div>
     </div>
   </div>
-  <!-- Footer -->
-  <div class="doc-footer">
-    <span>Laporan Laba Rugi &mdash; Naveda Integra</span>
-    <span>Dicetak: {% now "d M Y, H:i" %}</span>
+  <!-- Footer bar -->
+  <div class="doc-page-foot">
+    <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
+    <div class="doc-page-foot__right">Dicetak: {% now "d M Y, H:i" %}</div>
   </div>
 </div>
 {% endblock %}
