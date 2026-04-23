@@ -292,7 +292,7 @@
   });
 
   // ── Radar Chart ──
-  var radarData = {{ radar_json }};
+  var radarData = {{ radar_json|safe }};
   var labels = ['Likuiditas', 'Solvabilitas', 'Net Margin', 'Efisiensi', 'ROE', 'ROA'];
   var colors = ['#4338ca', '#059669', '#d97706', '#06b6d4', '#8b5cf6', '#ec4899'];
 
@@ -340,7 +340,7 @@
   }
 
   // ── Smart analysis ──
-  var ratios = {{ ratios_json }};
+  var ratios = {{ ratios_json|safe }};
 
   function fmt(val, decimals) {
     if (val === null || val === undefined) return 'N/A';
