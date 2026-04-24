@@ -39,12 +39,35 @@
         {% endif %}
 
         {% for field in form %}
+        {% if field.name == 'entitas_bisnis' %}
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="id_finished_good">{{ form.finished_good.label }}{% if form.finished_good.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          {% if is_create %}
+          <select name="finished_good" id="id_finished_good" class="ni-input">
+            <option value="">---------</option>
+          </select>
+          {% else %}
+          {{ form.finished_good }}
+          {% endif %}
+          {% if form.finished_good.errors %}<div class="ni-form-error">{{ form.finished_good.errors }}</div>{% endif %}
+        </div>
+
+        {% elif field.name == 'finished_good' %}
+        {# rendered above, skip #}
+        {% else %}
         <div class="ni-form-group">
           <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
           {% if field.help_text %}<div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ field.help_text }}</div>{% endif %}
         </div>
+        {% endif %}
         {% endfor %}
 
         {% if not is_create %}
@@ -137,6 +160,66 @@
   var RM_DATA = {{ rm_data_json|safe }};
   var lineIndex = 0;
   var _tomSelects = {};  // row-uid → TomSelect instance
+
+  // ── Finished Good TomSelect (create mode only) ────────────────────────────
+  {% if is_create %}
+  var _fgTs = new TomSelect('#id_finished_good', {
+    valueField: 'id',
+    labelField: 'text',
+    searchField: 'text',
+    options: [],
+    placeholder: 'Pilih Entitas Bisnis dahulu...',
+    load: function (q, cb) {
+      var ebId = document.getElementById('id_entitas_bisnis').value;
+      if (!ebId) { cb(); return; }
+      fetch(itemAutocompleteUrl + '?term=' + encodeURIComponent(q) + '&tipe_item=FG,FGB&eb_lv1_id=' + encodeURIComponent(ebId) + '&exclude_has_bom=1')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          data.forEach(function (d) { d.id = String(d.id); });
+          cb(data);
+        })
+        .catch(function () { cb(); });
+    },
+    create: function (input, callback) {
+      window.saOpenItemModal(input, function (newItem) {
+        callback({ id: String(newItem.id), text: newItem.text || ((newItem.item_id || '') + ' \u2014 ' + (newItem.nama || '')) });
+      }, 'FG');
+      return false;
+    },
+    createButtonLabel: '+ Buat item baru...',
+    dropdownParent: 'body',
+  });
+  _fgTs.disable();
+
+  function bomOnEBChange() {
+    var ebId = document.getElementById('id_entitas_bisnis').value;
+    _fgTs.clear(true);
+    _fgTs.clearOptions();
+    if (ebId) {
+      _fgTs.enable();
+      _fgTs.settings.placeholder = 'Pilih produk jadi...';
+      _fgTs.inputState();
+      _fgTs.load('');
+    } else {
+      _fgTs.settings.placeholder = 'Pilih Entitas Bisnis dahulu...';
+      _fgTs.inputState();
+      _fgTs.disable();
+    }
+  }
+
+  document.getElementById('id_entitas_bisnis').addEventListener('change', bomOnEBChange);
+
+  // If EB already selected on load (POST error), activate FG select
+  (function () {
+    if (document.getElementById('id_entitas_bisnis').value) {
+      _fgTs.enable();
+      _fgTs.settings.placeholder = 'Pilih produk jadi...';
+      _fgTs.inputState();
+      _fgTs.load('');
+    }
+  })();
+  {% endif %}
+  // ─────────────────────────────────────────────────────────────────────────
 
   function formatNumber(val) {
     var n = parseFloat(val);

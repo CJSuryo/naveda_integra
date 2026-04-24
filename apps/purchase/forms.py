@@ -1,4 +1,6 @@
 """Purchase forms."""
+import re
+
 from django import forms
 
 from .models import (
@@ -69,6 +71,19 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             # Inventory items: hide asset-specific fields
             for f in ('masa_manfaat', 'metode_penyusutan', 'metode_amortisasi'):
                 self.fields.pop(f, None)
+
+        # Natural-sort CoA account choices by kode_akun (e.g. "1.1.10" sorts after "1.1.9")
+        if 'coa_account' in self.fields:
+            from apps.master_data.models import Akun
+
+            def _kode_key(a: Akun) -> list:
+                parts = re.split(r'\.', a.kode_akun or '')
+                return [int(p) if p.isdigit() else p for p in parts] + [0, 0, 0]
+
+            sorted_akun = sorted(Akun.objects.all(), key=_kode_key)
+            self.fields['coa_account'].choices = [('', '---------')] + [
+                (a.pk, str(a)) for a in sorted_akun
+            ]
 
 
 class SubTransactionTypeForm(forms.ModelForm):

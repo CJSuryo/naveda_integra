@@ -901,6 +901,11 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
         if tipe_list:
             qs = qs.filter(tipe_item__in=tipe_list)
 
+    if request.GET.get('exclude_has_bom') == '1':
+        from apps.manufacturing.models import BillOfMaterials
+        used_ids = BillOfMaterials.objects.values_list('finished_good_id', flat=True)
+        qs = qs.exclude(pk__in=used_ids)
+
     items = qs[:50]
     results = [
         {

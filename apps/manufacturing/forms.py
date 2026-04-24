@@ -12,7 +12,7 @@ from .models import BillOfMaterials, BOMLine, ProductionOrder
 class BOMForm(forms.ModelForm):
     class Meta:
         model = BillOfMaterials
-        fields = ['finished_good', 'entitas_bisnis', 'tanggal_dibuat', 'catatan']
+        fields = ['entitas_bisnis', 'finished_good', 'tanggal_dibuat', 'catatan']
         widgets = {
             'finished_good': forms.Select(attrs={'class': 'ni-input', 'id': 'id_finished_good'}),
             'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
