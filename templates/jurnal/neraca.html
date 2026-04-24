@@ -276,19 +276,6 @@
     </div>
   </div>
 
-  <!-- Balance Check -->
-  {% if is_balanced %}
-  <div class="bs-check bs-check--ok">
-    <span>&#10003; Neraca Seimbang</span>
-    <span>Total Aset = Total Kewajiban + Ekuitas = Rp {{ total_aset|floatformat:0|intcomma }}</span>
-  </div>
-  {% else %}
-  <div class="bs-check bs-check--warn">
-    <span>&#9888; Neraca Tidak Seimbang</span>
-    <span>Selisih: Rp {{ selisih|floatformat:0|intcomma }}</span>
-  </div>
-  {% endif %}
-
   <!-- Catatan -->
   <div class="doc-catatan">
     <div class="doc-catatan__title">Catatan atas Laporan Keuangan</div>
