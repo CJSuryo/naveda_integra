@@ -8,7 +8,10 @@ from apps.jurnal.models import JurnalDetail, JurnalHeader
 from apps.purchase.models import FIFOBatch
 from apps.inventory.models import InventoryRecord
 
-from .models import BillOfMaterials, BOMLine, ProductionOrder, ProductionRMConsumption
+from .models import (
+    BillOfMaterials, BOMLine, ProductionOrder, ProductionRMConsumption,
+    OverheadCategory, OverheadRate, OverheadApplied,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -113,11 +116,6 @@ def validate_production(production_order: ProductionOrder) -> list[str]:
                 f'tersedia {available}, kurang {shortage}.'
             )
 
-    if production_order.overhead_cost > 0 and not production_order.coa_overhead_applied_id:
-        errors.append(
-            'Akun Manufacturing Overhead Applied wajib diisi jika Overhead Cost > 0.'
-        )
-
     return errors
 
 
@@ -167,6 +165,50 @@ def _consume_fifo(
 # Main production execution
 # ---------------------------------------------------------------------------
 
+def get_overhead_rates_for_period(periode_bulan: str) -> dict[int, 'OverheadRate']:
+    """Return a dict of {overhead_category_id: OverheadRate} for a given period.
+
+    Only returns active PRODUCTION categories that have a rate configured.
+    """
+    rates = (
+        OverheadRate.objects
+        .filter(periode_bulan=periode_bulan, overhead_category__is_active=True)
+        .select_related('overhead_category')
+    )
+    return {r.overhead_category_id: r for r in rates}
+
+
+def create_overhead_applied(
+    production_order: ProductionOrder,
+    overhead_drivers: dict[int, Decimal],
+    periode_bulan: str,
+) -> Decimal:
+    """Create OverheadApplied records for a production order and return total overhead.
+
+    overhead_drivers: {overhead_category_id: driver_value}
+    Returns total PRODUCTION overhead applied (for overhead_cost field on the order).
+    """
+    rates = get_overhead_rates_for_period(periode_bulan)
+    total_overhead = Decimal('0')
+
+    for cat_id, driver_value in overhead_drivers.items():
+        if driver_value <= 0:
+            continue
+        rate = rates.get(cat_id)
+        if not rate:
+            continue
+        applied = OverheadApplied.objects.create(
+            production_order=production_order,
+            overhead_category_id=cat_id,
+            periode_bulan=periode_bulan,
+            driver_value=driver_value,
+            rate_per_driver=rate.rate_per_driver,
+        )
+        total_overhead += applied.amount_applied
+
+    return total_overhead
+
+
 def process_production(production_order: ProductionOrder, as_wip: bool = False) -> None:
     """Execute a production order: consume RM stock, optionally create FG stock, generate journals.
 
@@ -187,7 +229,6 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
 
     bom = production_order.bom
     qty_produced = production_order.qty_produced
-    overhead = production_order.overhead_cost or Decimal('0')
     entitas_bisnis = production_order.entitas_bisnis
 
     with transaction.atomic():
@@ -206,8 +247,13 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                     unit_cost=batch.unit_price,
                 )
 
-        # 2. Compute final costs
-        total_cost = total_rm_cost + overhead
+        # 2. Compute final costs — read applied overhead from DB
+        production_overhead = (
+            production_order.overhead_applied
+            .filter(overhead_category__overhead_type='PRODUCTION')
+            .aggregate(total=Sum('amount_applied'))['total'] or Decimal('0')
+        )
+        total_cost = total_rm_cost + production_overhead
         unit_cost = (
             (total_cost / qty_produced).quantize(Decimal('0.0001'))
             if qty_produced > 0 else Decimal('0')
@@ -215,6 +261,7 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
 
         # Store costs on the order now so _create_production_journals can read them
         production_order.rm_cost = total_rm_cost
+        production_order.overhead_cost = production_overhead
         production_order.total_cost = total_cost
         production_order.unit_cost = unit_cost
 
@@ -322,19 +369,27 @@ def _create_production_journals(
             ))
 
     # Overhead entry: DR WIP / CR Manufacturing Overhead Applied (2.x.x liability)
-    overhead = production_order.overhead_cost or zero
-    if overhead > 0 and production_order.coa_overhead_applied_id:
+    # Overhead entries: one DR/CR pair per OverheadApplied (PRODUCTION only)
+    # DR coa_produksi (WIP) / CR coa_overhead_applied (2.x.x per category)
+    for applied in (
+        production_order.overhead_applied
+        .filter(overhead_category__overhead_type='PRODUCTION')
+        .select_related('overhead_category__coa_overhead_applied')
+    ):
+        cat = applied.overhead_category
+        if not cat.coa_overhead_applied_id:
+            continue
         details.append(JurnalDetail(
             jurnal_header=header,
             akun=production_order.coa_produksi,
-            debit=overhead,
+            debit=applied.amount_applied,
             kredit=zero,
         ))
         details.append(JurnalDetail(
             jurnal_header=header,
-            akun=production_order.coa_overhead_applied,
+            akun=cat.coa_overhead_applied,
             debit=zero,
-            kredit=overhead,
+            kredit=applied.amount_applied,
         ))
 
     # FG completion entry (only when completing directly, not for WIP)
@@ -521,14 +576,121 @@ def reverse_production(production_order: ProductionOrder) -> None:
             uraian_transaksi__startswith=f'Produksi {production_order.production_id}',
         ).delete()
 
-        # Delete consumption records
+        # Delete consumption records and overhead applied records
         production_order.rm_consumptions.all().delete()
+        production_order.overhead_applied.all().delete()
 
         # Reset the production order
         production_order.is_processed = False
         production_order.status = 'in_progress'
         production_order.rm_cost = Decimal('0')
+        production_order.overhead_cost = Decimal('0')
         production_order.total_cost = Decimal('0')
         production_order.unit_cost = Decimal('0')
         production_order.fg_inventory_record = None
         production_order.save()
+
+
+# ---------------------------------------------------------------------------
+# Period-end closing
+# ---------------------------------------------------------------------------
+
+def period_end_closing(
+    periode_bulan: str,
+    coa_cogs_id: int,
+) -> list[dict]:
+    """Compute over/under-absorbed overhead for a period and generate closing journals.
+
+    For each PRODUCTION overhead category that has an OverheadRate with aktual_total set:
+        - Compute total amount applied (from OverheadApplied records)
+        - Compare to aktual_total
+        - If applied > aktual_total (over-absorbed): DR Overhead Applied / CR COGS
+        - If applied < aktual_total (under-absorbed): DR COGS / CR Overhead Applied
+
+    Returns a list of result dicts with fields: category, applied, actual, variance, journal_id.
+    Raises ValueError if aktual_total is not set for any category in the period.
+    """
+    rates = (
+        OverheadRate.objects
+        .filter(
+            periode_bulan=periode_bulan,
+            overhead_category__overhead_type='PRODUCTION',
+        )
+        .select_related('overhead_category__coa_overhead_applied')
+    )
+
+    if not rates.exists():
+        raise ValueError(f'Tidak ada overhead rate yang dikonfigurasi untuk periode {periode_bulan}.')
+
+    missing_actual = [r.overhead_category.name for r in rates if r.aktual_total is None]
+    if missing_actual:
+        raise ValueError(
+            f'Aktual total belum diisi untuk: {", ".join(missing_actual)}. '
+            'Isi aktual total sebelum melakukan period-end closing.'
+        )
+
+    results = []
+    zero = Decimal('0')
+    from apps.jurnal.models import JurnalHeader, JurnalDetail  # local to avoid circulars
+
+    with transaction.atomic():
+        for rate in rates:
+            cat = rate.overhead_category
+            applied_total = (
+                OverheadApplied.objects
+                .filter(overhead_category=cat, periode_bulan=periode_bulan)
+                .aggregate(total=Sum('amount_applied'))['total'] or zero
+            )
+            actual_total = rate.aktual_total
+            variance = applied_total - actual_total  # positive = over-absorbed
+
+            if variance == 0 or not cat.coa_overhead_applied_id:
+                results.append({
+                    'category': cat.name,
+                    'applied': applied_total,
+                    'actual': actual_total,
+                    'variance': zero,
+                    'journal_id': None,
+                })
+                continue
+
+            # Build closing journal
+            from apps.master_data.models import Akun  # local import
+            try:
+                coa_cogs = Akun.objects.get(pk=coa_cogs_id)
+            except Akun.DoesNotExist:
+                raise ValueError(f'Akun COGS (id={coa_cogs_id}) tidak ditemukan.')
+
+            nomor = _next_production_journal_number()
+            if variance > 0:
+                # Over-absorbed: applied > actual — reduce overhead applied
+                uraian = f'Closing overhead over-absorbed {cat.name} {periode_bulan}'
+                debit_akun = cat.coa_overhead_applied
+                kredit_akun = coa_cogs
+            else:
+                # Under-absorbed: applied < actual — charge shortage to COGS
+                uraian = f'Closing overhead under-absorbed {cat.name} {periode_bulan}'
+                debit_akun = coa_cogs
+                kredit_akun = cat.coa_overhead_applied
+
+            header = JurnalHeader.objects.create(
+                tanggal=f'{periode_bulan}-01',  # first of month as journal date
+                nomor_transaksi=nomor,
+                uraian_transaksi=uraian,
+                is_penyesuaian=True,
+            )
+            amount = abs(variance)
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(jurnal_header=header, akun=debit_akun, debit=amount, kredit=zero),
+                JurnalDetail(jurnal_header=header, akun=kredit_akun, debit=zero, kredit=amount),
+            ])
+
+            results.append({
+                'category': cat.name,
+                'applied': applied_total,
+                'actual': actual_total,
+                'variance': variance,
+                'journal_id': header.pk,
+            })
+
+    return results

@@ -55,11 +55,9 @@ class ProductionOrderForm(forms.ModelForm):
             'entitas_bisnis',
             'bom',
             'qty_produced',
-            'overhead_cost',
             'status',
             'lama_pengerjaan',
             'coa_produksi',
-            'coa_overhead_applied',
             'lead_time_days',
             'ordering_cost',
             'holding_cost_pct',
@@ -69,13 +67,10 @@ class ProductionOrderForm(forms.ModelForm):
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input', 'id': 'id_entitas_bisnis'}),
             'bom': forms.Select(attrs={'class': 'ni-input', 'id': 'id_bom'}),
             'qty_produced': forms.NumberInput(
                 attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0.0001', 'id': 'id_qty_produced'},
-            ),
-            'overhead_cost': forms.NumberInput(
-                attrs={'class': 'ni-input', 'step': '0.01', 'min': '0', 'id': 'id_overhead_cost'},
             ),
             'status': forms.Select(attrs={'class': 'ni-input', 'id': 'id_status_produksi'}),
             'lama_pengerjaan': forms.NumberInput(
@@ -83,7 +78,6 @@ class ProductionOrderForm(forms.ModelForm):
                        'placeholder': 'Contoh: 7'},
             ),
             'coa_produksi': forms.Select(attrs={'class': 'ni-input'}),
-            'coa_overhead_applied': forms.Select(attrs={'class': 'ni-input'}),
             'lead_time_days': forms.NumberInput(attrs={'class': 'ni-input', 'min': '0'}),
             'ordering_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
             'holding_cost_pct': forms.NumberInput(
@@ -98,26 +92,13 @@ class ProductionOrderForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Limit status choices on the create form to in_progress / completed
         self.fields['status'].choices = self.STATUS_PRODUKSI_CHOICES
         self.fields['lama_pengerjaan'].required = False
-
-    def clean(self):
-        cleaned = super().clean()
-        overhead = cleaned.get('overhead_cost') or Decimal('0')
-        coa_overhead_applied = cleaned.get('coa_overhead_applied')
-        if overhead > 0 and not coa_overhead_applied:
-            self.add_error(
-                'coa_overhead_applied',
-                'Akun Overhead Applied wajib diisi jika Overhead Cost lebih dari 0.',
-            )
-        if coa_overhead_applied and getattr(coa_overhead_applied, 'kategori_id', None) == 'beban':
-            self.add_error(
-                'coa_overhead_applied',
-                'Akun Overhead Applied tidak boleh berupa akun Beban (5.x.x). '
-                'Pilih akun liability/contra (2.x.x) seperti "Manufacturing Overhead Applied".',
-            )
-        return cleaned
+        # BOM queryset: include FG name in label via select_related
+        from .models import BillOfMaterials as BOM
+        self.fields['bom'].queryset = (
+            BOM.objects.select_related('finished_good', 'entitas_bisnis').order_by('bom_id')
+        )
 
 
 def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
@@ -165,3 +146,63 @@ def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
         seen.add(rm_id)
 
     return lines, errors
+
+
+class OverheadCategoryForm(forms.ModelForm):
+    class Meta:
+        model = None  # set below
+        fields = ['name', 'overhead_type', 'coa_expense', 'coa_overhead_applied', 'cost_driver', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'ni-input'}),
+            'overhead_type': forms.Select(attrs={'class': 'ni-input', 'id': 'id_overhead_type'}),
+            'coa_expense': forms.Select(attrs={'class': 'ni-input'}),
+            'coa_overhead_applied': forms.Select(attrs={'class': 'ni-input'}),
+            'cost_driver': forms.Select(attrs={'class': 'ni-input', 'id': 'id_cost_driver'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        from apps.master_data.models import Akun
+        super().__init__(*args, **kwargs)
+        expense_qs = Akun.objects.filter(kategori_id='beban').order_by('kode_akun')
+        applied_qs = Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun')
+        self.fields['coa_expense'].queryset = expense_qs
+        self.fields['coa_overhead_applied'].queryset = applied_qs
+        self.fields['coa_overhead_applied'].required = False
+        self.fields['cost_driver'].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        overhead_type = cleaned.get('overhead_type')
+        cost_driver = cleaned.get('cost_driver')
+        coa_applied = cleaned.get('coa_overhead_applied')
+        if overhead_type == 'PRODUCTION':
+            if not cost_driver:
+                self.add_error('cost_driver', 'Cost Driver wajib diisi untuk Production Overhead.')
+            if not coa_applied:
+                self.add_error('coa_overhead_applied', 'Akun Overhead Applied wajib diisi untuk Production Overhead.')
+        if overhead_type == 'PERIOD' and cost_driver:
+            self.add_error('cost_driver', 'Period Overhead tidak memiliki Cost Driver.')
+        return cleaned
+
+
+from .models import OverheadCategory, OverheadRate
+OverheadCategoryForm.Meta.model = OverheadCategory
+
+
+class OverheadRateForm(forms.ModelForm):
+    class Meta:
+        model = OverheadRate
+        fields = ['estimasi_total', 'estimasi_volume', 'rate_per_driver', 'aktual_total']
+        widgets = {
+            'estimasi_total': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+            'estimasi_volume': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0'}),
+            'rate_per_driver': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.000001', 'min': '0'}),
+            'aktual_total': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['estimasi_volume'].required = False
+        self.fields['aktual_total'].required = False
+

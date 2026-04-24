@@ -10,14 +10,17 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.purchase.models import ItemMasterPurchase
 
-from .forms import BOMForm, ProductionOrderForm, parse_bom_lines
-from .models import BillOfMaterials, BOMLine, ProductionOrder
+from .forms import BOMForm, OverheadCategoryForm, OverheadRateForm, ProductionOrderForm, parse_bom_lines
+from .models import BillOfMaterials, BOMLine, OverheadApplied, OverheadCategory, OverheadRate, ProductionOrder
 from .services import (
     approve_production,
     compute_estimated_cost,
+    create_overhead_applied,
     get_available_stock,
     get_bom_preview,
     get_fifo_unit_cost,
+    get_overhead_rates_for_period,
+    period_end_closing,
     process_production,
     reverse_production,
     validate_production,
@@ -204,6 +207,10 @@ def production_list(request):
 
 @login_required
 def production_create(request):
+    from datetime import date
+    today = date.today()
+    default_period = today.strftime('%Y-%m')
+
     if request.method == 'POST':
         form = ProductionOrderForm(request.POST)
         if form.is_valid():
@@ -211,7 +218,38 @@ def production_create(request):
                 order = form.save(commit=False)
                 order.save()
                 as_wip = (order.status == 'in_progress')
+
+                # Parse overhead driver values from POST
+                periode_bulan = order.tanggal.strftime('%Y-%m')
+                prod_categories = (
+                    OverheadCategory.objects
+                    .filter(overhead_type='PRODUCTION', is_active=True)
+                )
+                overhead_drivers = {}
+                rates_map = get_overhead_rates_for_period(periode_bulan)
+                rm_cost_estimate = Decimal(request.POST.get('_rm_cost_estimate', '0') or '0')
+
+                for cat in prod_categories:
+                    rate = rates_map.get(cat.pk)
+                    if not rate or rate.rate_per_driver == 0:
+                        continue
+                    driver = cat.cost_driver
+                    if driver == 'PER_UNIT':
+                        overhead_drivers[cat.pk] = order.qty_produced
+                    elif driver == 'PERSEN_RM_COST':
+                        overhead_drivers[cat.pk] = rm_cost_estimate
+                    else:
+                        raw = request.POST.get(f'overhead_driver_{cat.pk}', '').strip()
+                        try:
+                            val = Decimal(raw)
+                            if val > 0:
+                                overhead_drivers[cat.pk] = val
+                        except (InvalidOperation, ValueError):
+                            pass
+
                 try:
+                    if overhead_drivers:
+                        create_overhead_applied(order, overhead_drivers, periode_bulan)
                     process_production(order, as_wip=as_wip)
                     if as_wip:
                         messages.success(
@@ -230,6 +268,23 @@ def production_create(request):
     else:
         form = ProductionOrderForm()
 
+    # Active PRODUCTION overhead categories + their current period rates
+    prod_categories = (
+        OverheadCategory.objects
+        .filter(overhead_type='PRODUCTION', is_active=True)
+        .select_related('coa_expense')
+        .order_by('name')
+    )
+    rates_map = get_overhead_rates_for_period(default_period)
+    overhead_cats_ctx = []
+    for cat in prod_categories:
+        rate = rates_map.get(cat.pk)
+        overhead_cats_ctx.append({
+            'cat': cat,
+            'rate': rate,
+            'has_rate': rate is not None,
+        })
+
     boms = (
         BillOfMaterials.objects
         .select_related('finished_good', 'entitas_bisnis')
@@ -240,6 +295,8 @@ def production_create(request):
     return render(request, 'manufacturing/production_create.html', {
         'form': form,
         'boms': boms,
+        'overhead_cats': overhead_cats_ctx,
+        'default_period': default_period,
     })
 
 
@@ -249,11 +306,12 @@ def production_detail(request, pk):
         ProductionOrder.objects
         .select_related(
             'bom__finished_good', 'entitas_bisnis',
-            'coa_produksi', 'coa_overhead_applied',
+            'coa_produksi',
         )
         .prefetch_related(
             'rm_consumptions__bom_line__raw_material',
             'rm_consumptions__fifo_batch',
+            'overhead_applied__overhead_category',
         ),
         pk=pk,
     )
@@ -376,4 +434,297 @@ def api_bom_preview(request):
         'total_cost': str(result['total_cost']),
         'unit_cost': str(result['unit_cost']),
         'all_sufficient': result['all_sufficient'],
+    })
+
+
+@login_required
+def api_boms_by_entity(request):
+    """AJAX: return BOMs filtered by entitas_bisnis.
+
+    GET param: eb_id
+    Returns JSON list of {id, bom_id, finished_good_nama}.
+    """
+    eb_id = request.GET.get('eb_id')
+    if not eb_id:
+        return JsonResponse({'boms': []})
+    boms = (
+        BillOfMaterials.objects
+        .filter(entitas_bisnis_id=eb_id)
+        .select_related('finished_good')
+        .order_by('bom_id')
+    )
+    data = [
+        {'id': b.pk, 'bom_id': b.bom_id, 'finished_good': b.finished_good.nama}
+        for b in boms
+    ]
+    return JsonResponse({'boms': data})
+
+
+@login_required
+def api_overhead_rates(request):
+    """AJAX: return active PRODUCTION overhead rates for a given period.
+
+    GET param: periode (YYYY-MM)
+    Returns JSON list of categories with their current rate.
+    """
+    periode = request.GET.get('periode', '')
+    if not periode:
+        from datetime import date
+        periode = date.today().strftime('%Y-%m')
+
+    categories = (
+        OverheadCategory.objects
+        .filter(overhead_type='PRODUCTION', is_active=True)
+        .order_by('name')
+    )
+    rates_map = get_overhead_rates_for_period(periode)
+
+    result = []
+    for cat in categories:
+        rate = rates_map.get(cat.pk)
+        result.append({
+            'id': cat.pk,
+            'name': cat.name,
+            'cost_driver': cat.cost_driver,
+            'rate_per_driver': str(rate.rate_per_driver) if rate else '0',
+            'has_rate': rate is not None,
+        })
+    return JsonResponse({'categories': result, 'periode': periode})
+
+
+# ---------------------------------------------------------------------------
+# Overhead Category CRUD
+# ---------------------------------------------------------------------------
+
+@login_required
+def overhead_category_list(request):
+    categories = OverheadCategory.objects.select_related('coa_expense', 'coa_overhead_applied').order_by('overhead_type', 'name')
+    return render(request, 'manufacturing/overhead_category_list.html', {'categories': categories})
+
+
+@login_required
+def overhead_category_create(request):
+    if request.method == 'POST':
+        form = OverheadCategoryForm(request.POST)
+        if form.is_valid():
+            cat = form.save()
+            messages.success(request, f'Overhead category "{cat.name}" berhasil dibuat.')
+            return redirect('manufacturing:overhead_category_list')
+    else:
+        form = OverheadCategoryForm()
+    return render(request, 'manufacturing/overhead_category_form.html', {'form': form, 'is_create': True})
+
+
+@login_required
+def overhead_category_update(request, pk):
+    cat = get_object_or_404(OverheadCategory, pk=pk)
+    if request.method == 'POST':
+        form = OverheadCategoryForm(request.POST, instance=cat)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Overhead category "{cat.name}" berhasil diperbarui.')
+            return redirect('manufacturing:overhead_category_list')
+    else:
+        form = OverheadCategoryForm(instance=cat)
+    return render(request, 'manufacturing/overhead_category_form.html', {'form': form, 'object': cat, 'is_create': False})
+
+
+@login_required
+def overhead_category_delete(request, pk):
+    cat = get_object_or_404(OverheadCategory, pk=pk)
+    if request.method == 'POST':
+        try:
+            name = cat.name
+            cat.delete()
+            messages.success(request, f'Overhead category "{name}" berhasil dihapus.')
+        except Exception:
+            messages.error(request, 'Tidak dapat menghapus kategori yang masih digunakan.')
+        return redirect('manufacturing:overhead_category_list')
+    return render(request, 'manufacturing/overhead_category_delete.html', {'object': cat})
+
+
+# ---------------------------------------------------------------------------
+# Overhead Rate Setup
+# ---------------------------------------------------------------------------
+
+@login_required
+def overhead_rate_setup(request):
+    """View / edit overhead rates for a chosen period."""
+    from datetime import date
+    periode = request.GET.get('periode') or date.today().strftime('%Y-%m')
+
+    prod_categories = (
+        OverheadCategory.objects
+        .filter(overhead_type='PRODUCTION', is_active=True)
+        .order_by('name')
+    )
+    rates_map = {r.overhead_category_id: r for r in OverheadRate.objects.filter(periode_bulan=periode)}
+
+    if request.method == 'POST':
+        errors = []
+        with transaction.atomic():
+            for cat in prod_categories:
+                est_total_str = request.POST.get(f'est_total_{cat.pk}', '').strip()
+                est_vol_str = request.POST.get(f'est_vol_{cat.pk}', '').strip()
+                rate_str = request.POST.get(f'rate_{cat.pk}', '').strip()
+                aktuak_str = request.POST.get(f'aktual_{cat.pk}', '').strip()
+
+                if not est_total_str:
+                    continue  # skip empty rows
+                try:
+                    est_total = Decimal(est_total_str)
+                except (InvalidOperation, ValueError):
+                    errors.append(f'{cat.name}: estimasi total tidak valid.')
+                    continue
+
+                est_vol = None
+                if est_vol_str:
+                    try:
+                        est_vol = Decimal(est_vol_str)
+                    except (InvalidOperation, ValueError):
+                        errors.append(f'{cat.name}: estimasi volume tidak valid.')
+                        continue
+
+                aktual = None
+                if aktuak_str:
+                    try:
+                        aktual = Decimal(aktuak_str)
+                    except (InvalidOperation, ValueError):
+                        pass
+
+                existing = rates_map.get(cat.pk)
+                if existing:
+                    existing.estimasi_total = est_total
+                    existing.estimasi_volume = est_vol
+                    if cat.cost_driver == 'PERSEN_RM_COST' and rate_str:
+                        try:
+                            existing.rate_per_driver = Decimal(rate_str)
+                        except (InvalidOperation, ValueError):
+                            pass
+                    if aktual is not None:
+                        existing.aktual_total = aktual
+                    existing.save()
+                else:
+                    rate_obj = OverheadRate(
+                        overhead_category=cat,
+                        periode_bulan=periode,
+                        estimasi_total=est_total,
+                        estimasi_volume=est_vol,
+                        aktual_total=aktual,
+                    )
+                    if cat.cost_driver == 'PERSEN_RM_COST' and rate_str:
+                        try:
+                            rate_obj.rate_per_driver = Decimal(rate_str)
+                        except (InvalidOperation, ValueError):
+                            pass
+                    rate_obj.save()
+
+        if errors:
+            for e in errors:
+                messages.error(request, e)
+        else:
+            messages.success(request, f'Overhead rates untuk periode {periode} berhasil disimpan.')
+        return redirect(f'{request.path}?periode={periode}')
+
+    # Rebuild rates_map after GET
+    rates_map = {r.overhead_category_id: r for r in OverheadRate.objects.filter(periode_bulan=periode)}
+    rows = []
+    for cat in prod_categories:
+        rows.append({'cat': cat, 'rate': rates_map.get(cat.pk)})
+
+    return render(request, 'manufacturing/overhead_rate_setup.html', {
+        'rows': rows,
+        'periode': periode,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Overhead Monitoring
+# ---------------------------------------------------------------------------
+
+@login_required
+def overhead_monitoring(request):
+    """Dashboard showing over/under absorbed overhead per period."""
+    from datetime import date
+    from django.db.models import Sum
+    periode = request.GET.get('periode') or date.today().strftime('%Y-%m')
+
+    rates = (
+        OverheadRate.objects
+        .filter(overhead_category__is_active=True)
+        .select_related('overhead_category')
+        .order_by('overhead_category__overhead_type', 'overhead_category__name')
+    )
+
+    # Get distinct periods
+    periods = (
+        OverheadRate.objects
+        .values_list('periode_bulan', flat=True)
+        .distinct()
+        .order_by('-periode_bulan')
+    )
+
+    prod_rows = []
+    period_rows = []
+    for rate in rates.filter(periode_bulan=periode):
+        cat = rate.overhead_category
+        applied = (
+            OverheadApplied.objects
+            .filter(overhead_category=cat, periode_bulan=periode)
+            .aggregate(total=Sum('amount_applied'))['total'] or Decimal('0')
+        )
+        row = {
+            'category': cat,
+            'rate': rate,
+            'applied': applied,
+            'actual': rate.aktual_total,
+            'variance': (applied - rate.aktual_total) if rate.aktual_total is not None else None,
+        }
+        if cat.overhead_type == 'PRODUCTION':
+            prod_rows.append(row)
+        else:
+            period_rows.append(row)
+
+    return render(request, 'manufacturing/overhead_monitoring.html', {
+        'prod_rows': prod_rows,
+        'period_rows': period_rows,
+        'periode': periode,
+        'periods': periods,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Period-end closing
+# ---------------------------------------------------------------------------
+
+@login_required
+def overhead_period_closing(request):
+    """Period-end closing: compare applied vs actual, generate adjustment journals."""
+    from apps.master_data.models import Akun
+
+    if request.method == 'POST':
+        periode = request.POST.get('periode', '').strip()
+        cogs_id = request.POST.get('coa_cogs_id', '').strip()
+        if not periode or not cogs_id:
+            messages.error(request, 'Periode dan Akun COGS wajib diisi.')
+            return redirect('manufacturing:overhead_monitoring')
+        try:
+            cogs_id_int = int(cogs_id)
+            results = period_end_closing(periode, cogs_id_int)
+            messages.success(
+                request,
+                f'Period-end closing untuk periode {periode} selesai. '
+                f'{len([r for r in results if r["journal_id"]])} jurnal dibuat.',
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        return redirect(f"{__import__('django.urls', fromlist=['reverse']).reverse('manufacturing:overhead_monitoring')}?periode={periode}")
+
+    # GET: show form
+    from datetime import date
+    periode = request.GET.get('periode') or date.today().strftime('%Y-%m')
+    cogs_accounts = Akun.objects.filter(kode_akun__startswith='5').order_by('kode_akun')
+    return render(request, 'manufacturing/overhead_period_closing.html', {
+        'periode': periode,
+        'cogs_accounts': cogs_accounts,
     })

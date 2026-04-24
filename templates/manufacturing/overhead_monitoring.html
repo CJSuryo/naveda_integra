@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% block title %}Overhead Monitoring — {{ periode }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Overhead Monitoring</h1>
+    <p class="ni-page-header__subtitle">Perbandingan overhead yang diserap vs aktual per periode</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:overhead_rate_setup' %}?periode={{ periode }}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="sliders" style="width:16px;height:16px"></i> Setup Rates
+    </a>
+    <a href="{% url 'manufacturing:overhead_period_closing' %}?periode={{ periode }}" class="ni-btn ni-btn--primary">
+      <i data-lucide="lock" style="width:16px;height:16px"></i> Period-end Closing
+    </a>
+  </div>
+</div>
+
+<!-- Period selector -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
+  <div class="ni-card__body" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <label class="ni-form-label" style="margin:0">Pilih Periode:</label>
+    <form method="get" style="display:flex;gap:8px;align-items:center">
+      <input type="month" name="periode" value="{{ periode }}" class="ni-input" style="max-width:180px">
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Tampilkan</button>
+    </form>
+    {% if periods %}
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      {% for p in periods %}
+      <a href="?periode={{ p }}" class="ni-btn ni-btn--sm {% if p == periode %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">{{ p }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- PRODUCTION overhead section -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
+  <div class="ni-card__body">
+    <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">
+      <i data-lucide="factory" style="width:16px;height:16px;vertical-align:-2px"></i>
+      Production Overhead — {{ periode }}
+    </h3>
+    {% if prod_rows %}
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="min-width:600px">
+        <thead>
+          <tr>
+            <th>Kategori</th>
+            <th class="ni-text-right">Rate</th>
+            <th class="ni-text-right">Estimasi Total</th>
+            <th class="ni-text-right">Applied (Diserap)</th>
+            <th class="ni-text-right">Aktual</th>
+            <th class="ni-text-right">Selisih</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in prod_rows %}
+          <tr>
+            <td style="font-weight:500">
+              {{ row.category.name }}
+              <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ row.category.get_cost_driver_display }}</div>
+            </td>
+            <td class="ni-text-right" style="font-size:0.8125rem">{{ row.rate.rate_per_driver }}</td>
+            <td class="ni-text-right">Rp {{ row.rate.estimasi_total|floatformat:0 }}</td>
+            <td class="ni-text-right" style="font-weight:500">Rp {{ row.applied|floatformat:0 }}</td>
+            <td class="ni-text-right">
+              {% if row.actual %}Rp {{ row.actual|floatformat:0 }}{% else %}<span style="color:var(--ni-text-muted)">Belum diisi</span>{% endif %}
+            </td>
+            <td class="ni-text-right">
+              {% if row.variance is not None %}
+                {% if row.variance > 0 %}
+                  <span style="color:var(--ni-success);font-weight:600">+Rp {{ row.variance|floatformat:0 }}</span>
+                  <div style="font-size:0.75rem;color:var(--ni-success)">Over-absorbed</div>
+                {% elif row.variance < 0 %}
+                  <span style="color:var(--ni-danger);font-weight:600">-Rp {{ row.variance|floatformat:0|slice:"1:" }}</span>
+                  <div style="font-size:0.75rem;color:var(--ni-danger)">Under-absorbed</div>
+                {% else %}
+                  <span style="color:var(--ni-text-muted)">Seimbang</span>
+                {% endif %}
+              {% else %}
+                <span style="color:var(--ni-text-muted)">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p style="color:var(--ni-text-muted);padding:24px 0">Tidak ada data production overhead untuk periode ini.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- PERIOD overhead section -->
+{% if period_rows %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">
+      <i data-lucide="calendar" style="width:16px;height:16px;vertical-align:-2px"></i>
+      Period Overhead — {{ periode }}
+    </h3>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:16px">
+      Period overhead tidak diserap ke WIP. Catat langsung sebagai beban melalui modul Jurnal.
+    </p>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="min-width:500px">
+        <thead>
+          <tr>
+            <th>Kategori</th>
+            <th>Akun Beban</th>
+            <th class="ni-text-right">Estimasi</th>
+            <th class="ni-text-right">Aktual</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in period_rows %}
+          <tr>
+            <td style="font-weight:500">{{ row.category.name }}</td>
+            <td style="font-size:0.8125rem">{{ row.category.coa_expense.kode_akun }} — {{ row.category.coa_expense.nama }}</td>
+            <td class="ni-text-right">Rp {{ row.rate.estimasi_total|floatformat:0 }}</td>
+            <td class="ni-text-right">
+              {% if row.actual %}Rp {{ row.actual|floatformat:0 }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

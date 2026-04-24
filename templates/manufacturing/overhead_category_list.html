@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}Overhead Categories{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Overhead Categories</h1>
+    <p class="ni-page-header__subtitle">Master data tipe biaya overhead dan cost driver-nya</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:overhead_rate_setup' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="sliders" style="width:16px;height:16px"></i> Setup Rates
+    </a>
+    <a href="{% url 'manufacturing:overhead_monitoring' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="bar-chart-2" style="width:16px;height:16px"></i> Monitoring
+    </a>
+    <a href="{% url 'manufacturing:overhead_category_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Kategori
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama Kategori</th>
+          <th>Sifat</th>
+          <th>Cost Driver</th>
+          <th>Akun Beban</th>
+          <th>Akun Overhead Applied</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in categories %}
+        <tr>
+          <td style="font-weight:500">{{ cat.name }}</td>
+          <td>
+            {% if cat.overhead_type == 'PRODUCTION' %}
+              <span class="ni-badge" style="background:var(--ni-primary-light);color:var(--ni-primary)">Production</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Period</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if cat.cost_driver %}
+              <span style="font-size:0.8125rem;font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px">{{ cat.get_cost_driver_display }}</span>
+            {% else %}
+              <span style="color:var(--ni-text-muted)">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:0.8125rem">
+            {% if cat.coa_expense %}{{ cat.coa_expense.kode_akun }} — {{ cat.coa_expense.nama }}{% else %}—{% endif %}
+          </td>
+          <td style="font-size:0.8125rem">
+            {% if cat.coa_overhead_applied %}{{ cat.coa_overhead_applied.kode_akun }} — {{ cat.coa_overhead_applied.nama }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}
+          </td>
+          <td>
+            {% if cat.is_active %}
+              <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'manufacturing:overhead_category_update' cat.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'manufacturing:overhead_category_delete' cat.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="ni-text-center ni-text-muted" style="padding:32px">
+            Belum ada overhead category. <a href="{% url 'manufacturing:overhead_category_create' %}">Tambah sekarang</a>.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

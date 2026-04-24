@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_create %}Tambah{% else %}Edit{% endif %} Overhead Category{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">
+      {% if is_create %}Tambah Overhead Category{% else %}Edit: {{ object.name }}{% endif %}
+    </h1>
+    <p class="ni-page-header__subtitle">Definisikan tipe overhead dan cara alokasi ke produksi</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:680px">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+
+      <div class="ni-form-group">
+        <label class="ni-form-label">Nama Kategori</label>
+        {{ form.name }}
+        {% if form.name.errors %}<div class="ni-form-error">{{ form.name.errors }}</div>{% endif %}
+      </div>
+
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Sifat Overhead</label>
+          {{ form.overhead_type }}
+          {% if form.overhead_type.errors %}<div class="ni-form-error">{{ form.overhead_type.errors }}</div>{% endif %}
+          <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">
+            <strong>Production:</strong> diserap ke WIP (jurnal DR WIP / CR Overhead Applied). 
+            <strong>Period:</strong> langsung ke beban periode, tidak masuk WIP.
+          </div>
+        </div>
+        <div class="ni-form-group" id="cost_driver_group">
+          <label class="ni-form-label">Cost Driver</label>
+          {{ form.cost_driver }}
+          {% if form.cost_driver.errors %}<div class="ni-form-error">{{ form.cost_driver.errors }}</div>{% endif %}
+          <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">
+            Wajib untuk Production Overhead. Tentukan dasar alokasi ke setiap production order.
+          </div>
+        </div>
+      </div>
+
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Akun Beban Aktual (5.x.x)</label>
+          {{ form.coa_expense }}
+          {% if form.coa_expense.errors %}<div class="ni-form-error">{{ form.coa_expense.errors }}</div>{% endif %}
+          <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">Akun beban tempat biaya aktual dicatat di GL.</div>
+        </div>
+        <div class="ni-form-group" id="coa_applied_group">
+          <label class="ni-form-label">Akun Overhead Applied (2.x.x)</label>
+          {{ form.coa_overhead_applied }}
+          {% if form.coa_overhead_applied.errors %}<div class="ni-form-error">{{ form.coa_overhead_applied.errors }}</div>{% endif %}
+          <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">Akun liability yang di-kredit saat overhead diserap ke WIP. Wajib untuk Production Overhead.</div>
+        </div>
+      </div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          {{ form.is_active }} Aktif
+        </label>
+        {% if form.is_active.errors %}<div class="ni-form-error">{{ form.is_active.errors }}</div>{% endif %}
+      </div>
+
+      {% if form.non_field_errors %}
+      <div class="ni-alert ni-alert--danger" style="margin-bottom:16px">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <div class="ni-btn-row" style="margin-top:24px">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'manufacturing:overhead_category_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var typeSelect = document.getElementById('id_overhead_type');
+  var driverGroup = document.getElementById('cost_driver_group');
+  var appliedGroup = document.getElementById('coa_applied_group');
+
+  function toggle() {
+    var isProd = typeSelect.value === 'PRODUCTION';
+    driverGroup.style.opacity = isProd ? '1' : '0.4';
+    appliedGroup.style.opacity = isProd ? '1' : '0.4';
+  }
+
+  if (typeSelect) {
+    typeSelect.addEventListener('change', toggle);
+    toggle();
+  }
+})();
+</script>
+{% endblock %}

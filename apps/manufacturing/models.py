@@ -43,7 +43,10 @@ class BillOfMaterials(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.bom_id
+        try:
+            return f'{self.finished_good.nama} ({self.bom_id})'
+        except Exception:
+            return self.bom_id
 
     def save(self, *args, **kwargs):
         if not self.bom_id:
@@ -120,7 +123,7 @@ class ProductionOrder(models.Model):
         max_digits=19,
         decimal_places=4,
         default=Decimal('0'),
-        blank=True,
+        editable=False,
         verbose_name='Overhead Cost',
     )
     rm_cost = models.DecimalField(
@@ -156,19 +159,6 @@ class ProductionOrder(models.Model):
         related_name='production_orders_wip',
         verbose_name='Akun Biaya Produksi (WIP)',
         help_text='Akun WIP yang menampung biaya produksi sementara.',
-    )
-    coa_overhead_applied = models.ForeignKey(
-        'master_data.Akun',
-        on_delete=models.PROTECT,
-        related_name='production_orders_overhead_applied',
-        null=True,
-        blank=True,
-        verbose_name='Akun Manufacturing Overhead Applied',
-        help_text=(
-            'Akun liability/contra (2.x.x) yang menampung overhead diserap ke WIP. '
-            'JANGAN pilih akun beban (5.x.x). '
-            'Wajib diisi jika ada Overhead Cost.'
-        ),
     )
     lead_time_days = models.PositiveIntegerField(
         null=True, blank=True, verbose_name='Lead Time (Hari)',
@@ -312,3 +302,190 @@ class ProductionRMConsumption(models.Model):
     def save(self, *args, **kwargs):
         self.total_cost = self.qty_consumed * self.unit_cost
         super().save(*args, **kwargs)
+
+
+class OverheadCategory(models.Model):
+    """Master data: types of overhead cost and how they are allocated."""
+
+    OVERHEAD_TYPE_CHOICES = [
+        ('PRODUCTION', 'Production Overhead'),
+        ('PERIOD', 'Period Overhead'),
+    ]
+    COST_DRIVER_CHOICES = [
+        ('PER_UNIT', 'Per Unit Produksi'),
+        ('PER_JAM_MESIN', 'Per Jam Mesin'),
+        ('PER_JAM_TK', 'Per Jam Tenaga Kerja'),
+        ('PERSEN_RM_COST', 'Persentase dari Biaya RM'),
+    ]
+
+    name = models.CharField(max_length=200, verbose_name='Nama Kategori')
+    overhead_type = models.CharField(
+        max_length=10, choices=OVERHEAD_TYPE_CHOICES, verbose_name='Sifat Overhead',
+    )
+    coa_expense = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='overhead_expense_categories',
+        verbose_name='Akun Beban Aktual',
+        help_text='Akun beban (5.x.x) tempat biaya aktual dicatat.',
+    )
+    coa_overhead_applied = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='overhead_applied_categories',
+        null=True,
+        blank=True,
+        verbose_name='Akun Overhead Applied (2.x.x)',
+        help_text=(
+            'Akun liability/contra yang di-kredit saat overhead diserap ke WIP. '
+            'Wajib untuk Production Overhead. JANGAN pilih akun beban (5.x.x).'
+        ),
+    )
+    cost_driver = models.CharField(
+        max_length=20,
+        choices=COST_DRIVER_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name='Cost Driver',
+        help_text='Dasar kalkulasi alokasi overhead ke produk. Wajib untuk Production Overhead.',
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Aktif')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Overhead Category'
+        verbose_name_plural = 'Overhead Categories'
+        ordering = ['overhead_type', 'name']
+
+    def __str__(self) -> str:
+        type_label = 'PROD' if self.overhead_type == 'PRODUCTION' else 'PERIOD'
+        return f'[{type_label}] {self.name}'
+
+
+class OverheadRate(models.Model):
+    """Period-level rate for a PRODUCTION overhead category.
+
+    rate_per_driver = estimasi_total / estimasi_volume  (auto-calculated)
+    For PERSEN_RM_COST: rate_per_driver is set directly (e.g. 0.10 = 10%).
+    """
+
+    overhead_category = models.ForeignKey(
+        OverheadCategory,
+        on_delete=models.PROTECT,
+        related_name='rates',
+        verbose_name='Kategori Overhead',
+        limit_choices_to={'overhead_type': 'PRODUCTION'},
+    )
+    periode_bulan = models.CharField(
+        max_length=7,
+        verbose_name='Periode (YYYY-MM)',
+        help_text='Format: YYYY-MM, misal 2026-04',
+    )
+    estimasi_total = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        verbose_name='Estimasi Total Biaya (Rp)',
+    )
+    estimasi_volume = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Estimasi Volume Driver',
+        help_text='Jumlah unit/jam yang diestimasi. Kosongkan untuk PERSEN_RM_COST.',
+    )
+    rate_per_driver = models.DecimalField(
+        max_digits=19,
+        decimal_places=6,
+        default=Decimal('0'),
+        verbose_name='Rate per Driver',
+        help_text=(
+            'Auto-kalkulasi: estimasi_total / estimasi_volume. '
+            'Untuk PERSEN_RM_COST: isi langsung sebagai desimal (0.10 = 10%).'
+        ),
+    )
+    aktual_total = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Aktual Total Biaya (Rp)',
+        help_text='Isi di akhir periode untuk period-end closing.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('overhead_category', 'periode_bulan')]
+        verbose_name = 'Overhead Rate'
+        verbose_name_plural = 'Overhead Rates'
+        ordering = ['-periode_bulan', 'overhead_category__name']
+
+    def __str__(self) -> str:
+        return f'{self.overhead_category.name} — {self.periode_bulan}'
+
+    def save(self, *args, **kwargs):
+        # Auto-calculate rate for non-PERSEN_RM_COST cost drivers
+        if self.overhead_category_id:
+            try:
+                driver = self.overhead_category.cost_driver
+            except OverheadCategory.DoesNotExist:
+                driver = None
+            if driver != 'PERSEN_RM_COST':
+                if self.estimasi_volume and self.estimasi_volume > 0:
+                    self.rate_per_driver = (
+                        self.estimasi_total / self.estimasi_volume
+                    ).quantize(Decimal('0.000001'))
+                else:
+                    self.rate_per_driver = Decimal('0')
+        super().save(*args, **kwargs)
+
+
+class OverheadApplied(models.Model):
+    """Records overhead allocated to a specific Production Order.
+
+    amount_applied = driver_value × rate_per_driver  (auto-calculated on save).
+    Only created for PRODUCTION overhead categories.
+    """
+
+    production_order = models.ForeignKey(
+        ProductionOrder,
+        on_delete=models.CASCADE,
+        related_name='overhead_applied',
+        verbose_name='Production Order',
+    )
+    overhead_category = models.ForeignKey(
+        OverheadCategory,
+        on_delete=models.PROTECT,
+        related_name='applied_records',
+        verbose_name='Kategori Overhead',
+    )
+    periode_bulan = models.CharField(max_length=7, verbose_name='Periode')
+    driver_value = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Nilai Driver',
+    )
+    rate_per_driver = models.DecimalField(
+        max_digits=19, decimal_places=6, verbose_name='Rate (Snapshot)',
+    )
+    amount_applied = models.DecimalField(
+        max_digits=19, decimal_places=4, editable=False, verbose_name='Jumlah Overhead Applied',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('production_order', 'overhead_category')]
+        verbose_name = 'Overhead Applied'
+        verbose_name_plural = 'Overhead Applied'
+        indexes = [
+            models.Index(fields=['production_order'], name='idx_oha_po'),
+            models.Index(fields=['overhead_category', 'periode_bulan'], name='idx_oha_cat_period'),
+        ]
+
+    def save(self, *args, **kwargs):
+        self.amount_applied = (
+            self.driver_value * self.rate_per_driver
+        ).quantize(Decimal('0.0001'))
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        return f'{self.production_order.production_id} — {self.overhead_category.name}'

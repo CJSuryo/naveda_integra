@@ -1,0 +1,152 @@
+{% extends 'base.html' %}
+{% block title %}Overhead Rate Setup — {{ periode }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Setup Overhead Rates</h1>
+    <p class="ni-page-header__subtitle">Tentukan estimasi biaya dan volume driver per periode untuk kalkulasi rate</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'manufacturing:overhead_category_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="settings" style="width:16px;height:16px"></i> Kelola Kategori
+    </a>
+  </div>
+</div>
+
+<!-- Period selector -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
+  <div class="ni-card__body" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <label class="ni-form-label" style="margin:0;white-space:nowrap">Pilih Periode:</label>
+    <form method="get" style="display:flex;gap:8px;align-items:center">
+      <input type="month" name="periode" value="{{ periode }}" class="ni-input" style="max-width:180px">
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Tampilkan</button>
+    </form>
+    <span style="color:var(--ni-text-muted);font-size:0.875rem">Periode aktif: <strong>{{ periode }}</strong></span>
+  </div>
+</div>
+
+{% if rows %}
+<form method="post">
+  {% csrf_token %}
+  <input type="hidden" name="periode" value="{{ periode }}">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Rate per Kategori — {{ periode }}</h3>
+      <div class="ni-table-wrapper">
+        <table class="ni-table" style="min-width:700px">
+          <thead>
+            <tr>
+              <th>Kategori Overhead</th>
+              <th>Cost Driver</th>
+              <th class="ni-text-right">Estimasi Total Biaya (Rp)</th>
+              <th class="ni-text-right" id="vol_header">Estimasi Volume Driver</th>
+              <th class="ni-text-right">Rate per Driver</th>
+              <th class="ni-text-right">Aktual Total (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr data-driver="{{ row.cat.cost_driver }}">
+              <td style="font-weight:500">{{ row.cat.name }}</td>
+              <td>
+                <span style="font-size:0.8125rem;font-family:monospace;background:#f1f5f9;padding:2px 6px;border-radius:4px">
+                  {{ row.cat.get_cost_driver_display }}
+                </span>
+              </td>
+              <td class="ni-text-right">
+                <input type="number" name="est_total_{{ row.cat.pk }}"
+                  value="{{ row.rate.estimasi_total|default:'' }}"
+                  class="ni-input" style="width:140px;text-align:right"
+                  step="0.01" min="0" placeholder="0">
+              </td>
+              <td class="ni-text-right est-vol-cell">
+                {% if row.cat.cost_driver == 'PERSEN_RM_COST' %}
+                  <span style="color:var(--ni-text-muted);font-size:0.8125rem">Otomatis (%)</span>
+                  <input type="hidden" name="est_vol_{{ row.cat.pk }}" value="">
+                {% else %}
+                  <input type="number" name="est_vol_{{ row.cat.pk }}"
+                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    class="ni-input" style="width:140px;text-align:right"
+                    step="0.0001" min="0" placeholder="0">
+                {% endif %}
+              </td>
+              <td class="ni-text-right">
+                {% if row.cat.cost_driver == 'PERSEN_RM_COST' %}
+                  <input type="number" name="rate_{{ row.cat.pk }}"
+                    value="{{ row.rate.rate_per_driver|default:'' }}"
+                    class="ni-input rate-input" style="width:120px;text-align:right"
+                    step="0.000001" min="0" max="1"
+                    placeholder="0.10 = 10%"
+                    data-category="{{ row.cat.pk }}"
+                    title="Isi langsung sebagai desimal (0.10 = 10%)">
+                {% else %}
+                  <input type="text" name="rate_{{ row.cat.pk }}"
+                    value="{{ row.rate.rate_per_driver|default:'' }}"
+                    class="ni-input rate-display" style="width:120px;text-align:right;background:#f8fafc"
+                    readonly data-category="{{ row.cat.pk }}">
+                {% endif %}
+              </td>
+              <td class="ni-text-right">
+                <input type="number" name="aktual_{{ row.cat.pk }}"
+                  value="{{ row.rate.aktual_total|default:'' }}"
+                  class="ni-input" style="width:140px;text-align:right"
+                  step="0.01" min="0" placeholder="Isi akhir periode">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:20px">
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Rates
+        </button>
+        <a href="{% url 'manufacturing:overhead_category_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </div>
+  </div>
+</form>
+{% else %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body ni-text-center" style="padding:48px">
+    <i data-lucide="sliders" style="width:40px;height:40px;color:var(--ni-text-muted);margin-bottom:12px"></i>
+    <p style="color:var(--ni-text-muted)">Tidak ada Production Overhead category yang aktif.</p>
+    <a href="{% url 'manufacturing:overhead_category_create' %}" class="ni-btn ni-btn--primary" style="margin-top:12px">
+      Buat Kategori Overhead
+    </a>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  function recalcRate(row) {
+    var driver = row.dataset.driver;
+    if (driver === 'PERSEN_RM_COST') return;  // user sets manually
+
+    var estTotalInput = row.querySelector('input[name^="est_total_"]');
+    var estVolInput = row.querySelector('input[name^="est_vol_"]');
+    var rateInput = row.querySelector('input[name^="rate_"]');
+
+    if (!estTotalInput || !estVolInput || !rateInput) return;
+
+    var total = parseFloat(estTotalInput.value) || 0;
+    var vol = parseFloat(estVolInput.value) || 0;
+    rateInput.value = vol > 0 ? (total / vol).toFixed(6) : '0';
+  }
+
+  document.querySelectorAll('tbody tr').forEach(function (row) {
+    var estTotalInput = row.querySelector('input[name^="est_total_"]');
+    var estVolInput = row.querySelector('input[name^="est_vol_"]');
+    if (estTotalInput) estTotalInput.addEventListener('input', function () { recalcRate(row); });
+    if (estVolInput) estVolInput.addEventListener('input', function () { recalcRate(row); });
+  });
+})();
+</script>
+{% endblock %}

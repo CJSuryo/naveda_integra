@@ -66,10 +66,6 @@
         <dd style="color:var(--ni-primary);font-weight:700;font-size:1.0625rem">Rp {{ order.unit_cost|floatformat:4 }}</dd>
         <dt>Akun WIP</dt>
         <dd>{{ order.coa_produksi.kode_akun }} — {{ order.coa_produksi.nama }}</dd>
-        {% if order.coa_overhead_applied %}
-        <dt>Akun Manufacturing Overhead Applied</dt>
-        <dd>{{ order.coa_overhead_applied.kode_akun }} — {{ order.coa_overhead_applied.nama }}</dd>
-        {% endif %}
         {% if order.notes %}
         <dt>Catatan</dt>
         <dd>{{ order.notes }}</dd>
@@ -144,5 +140,46 @@
     </div>
   </div>
 </div>
+
+{% if order.overhead_applied.exists %}
+<div class="ni-card ni-animate-fade-in" style="margin-top:0">
+  <div class="ni-card__body">
+    <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Overhead Diterapkan</h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="min-width:500px">
+        <thead>
+          <tr>
+            <th>Kategori Overhead</th>
+            <th>Periode</th>
+            <th class="ni-text-right">Nilai Driver</th>
+            <th class="ni-text-right">Rate</th>
+            <th class="ni-text-right">Jumlah Applied</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for oa in order.overhead_applied.all %}
+          <tr>
+            <td>
+              <div style="font-weight:500">{{ oa.overhead_category.name }}</div>
+              <div style="font-size:0.75rem;color:var(--ni-text-muted)">{{ oa.overhead_category.get_cost_driver_display }}</div>
+            </td>
+            <td>{{ oa.periode_bulan }}</td>
+            <td class="ni-text-right">{{ oa.driver_value }}</td>
+            <td class="ni-text-right">{{ oa.rate_per_driver }}</td>
+            <td class="ni-text-right" style="font-weight:500">Rp {{ oa.amount_applied|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="font-weight:600;text-align:right">Total Overhead</td>
+            <td class="ni-text-right" style="font-weight:700">Rp {{ order.overhead_cost|floatformat:2 }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}

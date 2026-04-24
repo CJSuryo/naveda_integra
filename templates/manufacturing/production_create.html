@@ -1,11 +1,12 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Buat Production Order{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Buat Production Order</h1>
-    <p class="ni-page-header__subtitle">Pilih BOM, masukkan qty produksi, lalu konfirmasi sebelum memproses.</p>
+    <p class="ni-page-header__subtitle">Pilih BOM, masukkan qty produksi, tentukan overhead, lalu proses.</p>
   </div>
   <div class="ni-page-header__actions">
     <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
@@ -14,6 +15,7 @@
 
 <form method="post" id="prod-form">
   {% csrf_token %}
+  <input type="hidden" name="_rm_cost_estimate" id="rm-cost-estimate" value="0">
   <div class="ni-form-row">
 
     <!-- Left: form fields -->
@@ -38,6 +40,7 @@
           <label class="ni-form-label" for="{{ form.bom.id_for_label }}">{{ form.bom.label }} <span style="color:var(--ni-danger)">*</span></label>
           {{ form.bom }}
           {% if form.bom.errors %}<div class="ni-form-error">{{ form.bom.errors }}</div>{% endif %}
+          <div id="bom-loading" style="display:none;font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">Memuat BOM…</div>
         </div>
 
         <div class="ni-form-row">
@@ -47,11 +50,6 @@
             {% if form.qty_produced.errors %}<div class="ni-form-error">{{ form.qty_produced.errors }}</div>{% endif %}
           </div>
           <div class="ni-form-group" style="flex:1">
-            <label class="ni-form-label" for="{{ form.overhead_cost.id_for_label }}">{{ form.overhead_cost.label }}</label>
-            {{ form.overhead_cost }}
-            {% if form.overhead_cost.errors %}<div class="ni-form-error">{{ form.overhead_cost.errors }}</div>{% endif %}
-          </div>
-        </div>
 
         <!-- Status Produksi -->
         <div class="ni-form-group">
@@ -80,12 +78,6 @@
             {{ form.coa_produksi }}
             {% if form.coa_produksi.errors %}<div class="ni-form-error">{{ form.coa_produksi.errors }}</div>{% endif %}
             <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.coa_produksi.help_text }}</div>
-          </div>
-          <div class="ni-form-group" style="flex:1">
-            <label class="ni-form-label" for="{{ form.coa_overhead_applied.id_for_label }}">{{ form.coa_overhead_applied.label }}</label>
-            {{ form.coa_overhead_applied }}
-            {% if form.coa_overhead_applied.errors %}<div class="ni-form-error">{{ form.coa_overhead_applied.errors }}</div>{% endif %}
-            <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.coa_overhead_applied.help_text }}</div>
           </div>
         </div>
 
@@ -126,10 +118,71 @@
       </div>
     </div>
 
+    <!-- Overhead section (shown below form card, above preview) -->
+    {% if overhead_cats %}
+    <div class="ni-card ni-animate-fade-in" style="flex-basis:100%;order:3">
+      <div class="ni-card__body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h3 style="font-size:0.9375rem;font-weight:600;margin:0">Production Overhead</h3>
+          <span style="font-size:0.8125rem;color:var(--ni-text-muted)">Periode: <strong id="overhead-periode-label">{{ default_period }}</strong></span>
+        </div>
+        <div class="ni-table-wrapper">
+          <table class="ni-table" style="min-width:600px">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th>Cost Driver</th>
+                <th class="ni-text-right">Rate</th>
+                <th class="ni-text-right">Nilai Driver</th>
+                <th class="ni-text-right">Est. Applied</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in overhead_cats %}
+              <tr>
+                <td style="font-weight:500">{{ row.cat.name }}</td>
+                <td style="font-size:0.8125rem">{{ row.cat.get_cost_driver_display }}</td>
+                <td class="ni-text-right" style="font-size:0.8125rem">
+                  {% if row.rate %}{{ row.rate.rate_per_driver }}{% else %}<span style="color:var(--ni-text-muted)">—</span>{% endif %}
+                </td>
+                <td class="ni-text-right">
+                  {% if row.has_rate %}
+                    {% if row.cat.cost_driver == 'PER_UNIT' or row.cat.cost_driver == 'PERSEN_RM_COST' %}
+                      <input type="text" class="ni-input overhead-driver-auto" style="width:120px;text-align:right;background:#f8fafc"
+                        data-cat="{{ row.cat.pk }}" data-driver="{{ row.cat.cost_driver }}"
+                        data-rate="{{ row.rate.rate_per_driver }}" readonly>
+                      <input type="hidden" name="overhead_driver_{{ row.cat.pk }}" class="overhead-driver-hidden" data-cat="{{ row.cat.pk }}">
+                    {% else %}
+                      <input type="number" name="overhead_driver_{{ row.cat.pk }}" class="ni-input overhead-driver-manual" style="width:120px;text-align:right"
+                        data-cat="{{ row.cat.pk }}" data-rate="{{ row.rate.rate_per_driver }}"
+                        step="0.01" min="0" placeholder="0">
+                    {% endif %}
+                  {% else %}
+                    <span style="color:var(--ni-text-muted);font-size:0.8125rem">Rate belum diset</span>
+                  {% endif %}
+                </td>
+                <td class="ni-text-right">
+                  <strong class="overhead-amount" data-cat="{{ row.cat.pk }}" style="color:var(--ni-accent)">Rp 0</strong>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colspan="4" style="font-weight:600;text-align:right">Total Overhead</td>
+                <td class="ni-text-right"><strong id="total-overhead-display" style="color:var(--ni-accent)">Rp 0</strong></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- Right: preview panel -->
     <div class="ni-card ni-animate-fade-in" style="flex:3" id="preview-card">
       <div class="ni-card__body">
-        <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Preview Bahan Baku yang Akan Digunakan</h3>
+        <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Preview Estimasi Biaya</h3>
         <div id="preview-placeholder" style="text-align:center;padding:40px 16px;color:var(--ni-text-muted)">
           <i data-lucide="flask-conical" style="width:32px;height:32px;opacity:0.3;display:block;margin:0 auto 12px"></i>
           Pilih BOM dan masukkan qty produksi untuk melihat preview.
@@ -152,10 +205,14 @@
           </div>
 
           <div style="margin-top:16px;padding:16px;background:var(--ni-bg);border-radius:var(--ni-radius-sm)">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
               <div>
                 <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi RM Cost</div>
                 <div style="font-weight:700;font-size:1rem" id="prev-rm-cost">—</div>
+              </div>
+              <div>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi Overhead</div>
+                <div style="font-weight:700;font-size:1rem;color:var(--ni-accent)" id="prev-overhead-cost">Rp 0</div>
               </div>
               <div>
                 <div style="font-size:0.75rem;color:var(--ni-text-muted)">Estimasi Total Cost</div>
@@ -197,14 +254,19 @@
 (function () {
   'use strict';
 
-  var API_URL = '{% url "manufacturing:api_bom_preview" %}';
+  var API_PREVIEW = '{% url "manufacturing:api_bom_preview" %}';
+  var API_BOMS = '{% url "manufacturing:api_boms_by_entity" %}';
   var bomSel = document.getElementById('id_bom');
   var qtyInput = document.getElementById('id_qty_produced');
-  var overheadInput = document.getElementById('id_overhead_cost');
+  var ebSel = document.getElementById('id_entitas_bisnis');
+  var tanggalInput = document.getElementById('id_tanggal');
   var statusSel = document.getElementById('id_status_produksi');
   var lamaGroup = document.getElementById('lama-pengerjaan-group');
   var wipNote = document.getElementById('wip-account-note');
   var submitLabel = document.getElementById('submit-label');
+  var rmCostEstimate = document.getElementById('rm-cost-estimate');
+  var bomLoading = document.getElementById('bom-loading');
+  var periodeLbl = document.getElementById('overhead-periode-label');
 
   function onStatusChange() {
     var isWip = statusSel && statusSel.value === 'in_progress';
@@ -212,96 +274,133 @@
     if (wipNote) wipNote.style.display = isWip ? '' : 'none';
     if (submitLabel) submitLabel.textContent = isWip ? 'Simpan sebagai WIP' : 'Proses Produksi';
   }
+  if (statusSel) { statusSel.addEventListener('change', onStatusChange); onStatusChange(); }
 
-  if (statusSel) {
-    statusSel.addEventListener('change', onStatusChange);
-    onStatusChange();  // run once on load (handles POST re-render with errors)
+  if (tanggalInput) tanggalInput.addEventListener('change', function () {
+    var val = tanggalInput.value;
+    var p = (val && val.length >= 7) ? val.substring(0, 7) : '{{ default_period }}';
+    if (periodeLbl) periodeLbl.textContent = p;
+  });
+
+  function filterBOMs() {
+    var ebId = ebSel ? ebSel.value : '';
+    if (!ebId) return;
+    if (bomLoading) bomLoading.style.display = '';
+    fetch(API_BOMS + '?eb_id=' + encodeURIComponent(ebId), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var current = bomSel.value;
+        while (bomSel.options.length > 1) bomSel.remove(1);
+        data.boms.forEach(function (b) {
+          var opt = document.createElement('option');
+          opt.value = b.id;
+          opt.textContent = b.bom_id + ' \u2014 ' + b.finished_good;
+          bomSel.appendChild(opt);
+        });
+        bomSel.value = current;
+        if (!bomSel.value) bomSel.selectedIndex = 0;
+        if (bomLoading) bomLoading.style.display = 'none';
+        loadPreview();
+      })
+      .catch(function () { if (bomLoading) bomLoading.style.display = 'none'; });
   }
+  if (ebSel) ebSel.addEventListener('change', filterBOMs);
+
+  function fmtRp(n) { return 'Rp ' + (parseFloat(n)||0).toLocaleString('id-ID', {minimumFractionDigits:0,maximumFractionDigits:2}); }
+
+  function recalcOverhead(rmCost) {
+    var qty = parseFloat(qtyInput ? qtyInput.value : '0') || 0;
+    var total = 0;
+    document.querySelectorAll('.overhead-driver-auto').forEach(function (el) {
+      var catId = el.dataset.cat; var driver = el.dataset.driver; var rate = parseFloat(el.dataset.rate) || 0;
+      var driverVal = driver === 'PER_UNIT' ? qty : rmCost;
+      el.value = driverVal > 0 ? driverVal.toFixed(4) : '';
+      var amount = driverVal * rate; total += amount;
+      var ae = document.querySelector('.overhead-amount[data-cat="' + catId + '"]'); if (ae) ae.textContent = fmtRp(amount);
+      var he = document.querySelector('.overhead-driver-hidden[data-cat="' + catId + '"]'); if (he) he.value = driverVal > 0 ? driverVal.toFixed(4) : '';
+    });
+    document.querySelectorAll('.overhead-driver-manual').forEach(function (el) {
+      var catId = el.dataset.cat; var rate = parseFloat(el.dataset.rate) || 0;
+      var driverVal = parseFloat(el.value) || 0; var amount = driverVal * rate; total += amount;
+      var ae = document.querySelector('.overhead-amount[data-cat="' + catId + '"]'); if (ae) ae.textContent = fmtRp(amount);
+    });
+    var te = document.getElementById('total-overhead-display'); if (te) te.textContent = fmtRp(total);
+    var oe = document.getElementById('prev-overhead-cost'); if (oe) oe.textContent = fmtRp(total);
+    return total;
+  }
+
+  function updateTotalCost() {
+    var rm = parseFloat(rmCostEstimate ? rmCostEstimate.value : '0') || 0;
+    var oh = recalcOverhead(rm); var total = rm + oh;
+    var qty = parseFloat(qtyInput ? qtyInput.value : '0') || 0;
+    var unit = qty > 0 ? total / qty : 0;
+    var el;
+    el = document.getElementById('prev-total-cost'); if (el) el.textContent = total > 0 ? fmtRp(total) : '\u2014';
+    el = document.getElementById('prev-unit-cost'); if (el) el.textContent = unit > 0 ? fmtRp(unit) : '\u2014';
+  }
+
+  document.querySelectorAll('.overhead-driver-manual').forEach(function (el) {
+    el.addEventListener('input', function () { recalcOverhead(parseFloat(rmCostEstimate ? rmCostEstimate.value : '0')||0); updateTotalCost(); });
+  });
+
   var previewPlaceholder = document.getElementById('preview-placeholder');
   var previewContent = document.getElementById('preview-content');
   var previewLoading = document.getElementById('preview-loading');
   var previewTbody = document.getElementById('preview-tbody');
   var stockWarning = document.getElementById('stock-warning');
 
-  function fmt(val) {
-    var n = parseFloat(val);
-    if (isNaN(n)) return '—';
-    return 'Rp ' + n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  }
-
   function loadPreview() {
-    var bomId = bomSel.value;
-    var qty = qtyInput.value;
+    var bomId = bomSel ? bomSel.value : '';
+    var qty = qtyInput ? qtyInput.value : '';
     if (!bomId || !qty || parseFloat(qty) <= 0) {
-      previewContent.style.display = 'none';
-      previewLoading.style.display = 'none';
-      previewPlaceholder.style.display = '';
+      if (previewContent) previewContent.style.display = 'none';
+      if (previewLoading) previewLoading.style.display = 'none';
+      if (previewPlaceholder) previewPlaceholder.style.display = '';
       return;
     }
+    if (previewPlaceholder) previewPlaceholder.style.display = 'none';
+    if (previewContent) previewContent.style.display = 'none';
+    if (previewLoading) previewLoading.style.display = '';
+    if (stockWarning) stockWarning.style.display = 'none';
 
-    previewPlaceholder.style.display = 'none';
-    previewContent.style.display = 'none';
-    previewLoading.style.display = '';
-    stockWarning.style.display = 'none';
-
-    var overhead = overheadInput ? overheadInput.value : '0';
-    var url = API_URL + '?bom_id=' + encodeURIComponent(bomId) + '&qty_produced=' + encodeURIComponent(qty) + '&overhead_cost=' + encodeURIComponent(overhead || '0');
-
-    fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    fetch(API_PREVIEW + '?bom_id=' + encodeURIComponent(bomId) + '&qty_produced=' + encodeURIComponent(qty),
+      {headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        previewLoading.style.display = 'none';
-        if (data.error) {
-          previewPlaceholder.textContent = data.error;
-          previewPlaceholder.style.display = '';
-          return;
+        if (previewLoading) previewLoading.style.display = 'none';
+        if (data.error) { if (previewPlaceholder) { previewPlaceholder.textContent = data.error; previewPlaceholder.style.display = ''; } return; }
+        if (previewTbody) {
+          previewTbody.innerHTML = '';
+          data.lines.forEach(function (line) {
+            var badge = line.is_sufficient ? '<span class="ni-badge ni-badge--success">Cukup</span>' : '<span class="ni-badge" style="background:var(--ni-danger);color:#fff">Kurang</span>';
+            var tr = document.createElement('tr');
+            if (!line.is_sufficient) tr.style.background = '#fef2f2';
+            tr.innerHTML = '<td><div style="font-weight:500">' + line.rm_nama + '</div><div style="font-size:0.75rem;color:var(--ni-text-muted)">' + line.rm_item_id + '</div></td>' +
+              '<td class="ni-text-right">' + parseFloat(line.qty_required_total).toLocaleString('id-ID',{maximumFractionDigits:4}) + '</td>' +
+              '<td class="ni-text-right">' + parseFloat(line.available_stock).toLocaleString('id-ID',{maximumFractionDigits:4}) + '</td>' +
+              '<td class="ni-text-right">Rp ' + parseFloat(line.fifo_unit_cost).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2}) + '</td>' +
+              '<td class="ni-text-right" style="font-weight:500">Rp ' + parseFloat(line.total_rm_cost).toLocaleString('id-ID',{minimumFractionDigits:0,maximumFractionDigits:2}) + '</td>' +
+              '<td>' + badge + '</td>';
+            previewTbody.appendChild(tr);
+          });
         }
-
-        previewTbody.innerHTML = '';
-        var anyShortage = !data.all_sufficient;
-
-        data.lines.forEach(function (line) {
-          var rowColor = line.is_sufficient ? '' : 'background:#fef2f2';
-          var statusBadge = line.is_sufficient
-            ? '<span class="ni-badge ni-badge--success">Cukup</span>'
-            : '<span class="ni-badge" style="background:var(--ni-danger);color:#fff">Kurang ' + parseFloat(line.shortage).toLocaleString('id-ID') + '</span>';
-          var tr = document.createElement('tr');
-          tr.style.cssText = rowColor;
-          tr.innerHTML =
-            '<td><div style="font-weight:500">' + line.rm_nama + '</div><div style="font-size:0.75rem;color:var(--ni-text-muted)">' + line.rm_item_id + '</div></td>' +
-            '<td class="ni-text-right">' + parseFloat(line.qty_required_total).toLocaleString('id-ID', {maximumFractionDigits:4}) + ' ' + (line.satuan || '') + '</td>' +
-            '<td class="ni-text-right">' + parseFloat(line.available_stock).toLocaleString('id-ID', {maximumFractionDigits:4}) + '</td>' +
-            '<td class="ni-text-right">Rp ' + parseFloat(line.fifo_unit_cost).toLocaleString('id-ID', {minimumFractionDigits:0, maximumFractionDigits:2}) + '</td>' +
-            '<td class="ni-text-right">Rp ' + parseFloat(line.total_rm_cost).toLocaleString('id-ID', {minimumFractionDigits:0, maximumFractionDigits:2}) + '</td>' +
-            '<td>' + statusBadge + '</td>';
-          previewTbody.appendChild(tr);
-        });
-
-        document.getElementById('prev-rm-cost').textContent = fmt(data.rm_cost);
-        document.getElementById('prev-total-cost').textContent = fmt(data.total_cost);
-        document.getElementById('prev-unit-cost').textContent = fmt(data.unit_cost);
-
-        if (anyShortage) stockWarning.style.display = '';
-        previewContent.style.display = '';
-
+        var rmCost = parseFloat(data.rm_cost) || 0;
+        if (rmCostEstimate) rmCostEstimate.value = rmCost;
+        var prevRm = document.getElementById('prev-rm-cost'); if (prevRm) prevRm.textContent = fmtRp(rmCost);
+        recalcOverhead(rmCost); updateTotalCost();
+        if (!data.all_sufficient && stockWarning) stockWarning.style.display = '';
+        if (previewContent) previewContent.style.display = '';
         if (typeof lucide !== 'undefined') lucide.createIcons();
       })
       .catch(function () {
-        previewLoading.style.display = 'none';
-        previewPlaceholder.textContent = 'Gagal memuat preview. Coba lagi.';
-        previewPlaceholder.style.display = '';
+        if (previewLoading) previewLoading.style.display = 'none';
+        if (previewPlaceholder) { previewPlaceholder.textContent = 'Gagal memuat preview.'; previewPlaceholder.style.display = ''; }
       });
   }
 
   var debounceTimer;
-  function debounce(fn, delay) {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(fn, delay);
-  }
-
-  bomSel.addEventListener('change', loadPreview);
-  qtyInput.addEventListener('input', function () { debounce(loadPreview, 400); });
-  if (overheadInput) overheadInput.addEventListener('input', function () { debounce(loadPreview, 400); });
+  if (bomSel) bomSel.addEventListener('change', loadPreview);
+  if (qtyInput) qtyInput.addEventListener('input', function () { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadPreview, 400); });
 })();
 </script>
 {% endblock %}

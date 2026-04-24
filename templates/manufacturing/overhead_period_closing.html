@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Period-end Closing — {{ periode }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Period-end Closing</h1>
+    <p class="ni-page-header__subtitle">Buat jurnal penyesuaian over/under-absorbed overhead untuk periode {{ periode }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:600px">
+  <div class="ni-card__body">
+    <div style="background:#fffbeb;border:1px solid var(--ni-warning);border-radius:var(--ni-radius-sm);padding:14px 16px;margin-bottom:20px;font-size:0.875rem">
+      <strong>Perhatian:</strong> Pastikan semua Overhead Rate untuk periode <strong>{{ periode }}</strong> sudah diisi <em>aktual_total</em> sebelum melanjutkan.
+      <a href="{% url 'manufacturing:overhead_rate_setup' %}?periode={{ periode }}" style="margin-left:4px">Setup rates →</a>
+    </div>
+
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px">
+      Sistem akan membandingkan overhead yang <em>diserap ke WIP</em> (OverheadApplied) dengan biaya <em>aktual</em> yang terjadi:
+    </p>
+    <ul style="font-size:0.875rem;color:var(--ni-text);margin:0 0 20px 20px;line-height:1.8">
+      <li><strong>Over-absorbed</strong> (diserap &gt; aktual): DR Overhead Applied / CR COGS</li>
+      <li><strong>Under-absorbed</strong> (diserap &lt; aktual): DR COGS / CR Overhead Applied</li>
+    </ul>
+
+    <form method="post" action="{% url 'manufacturing:overhead_period_closing' %}">
+      {% csrf_token %}
+      <input type="hidden" name="periode" value="{{ periode }}">
+
+      <div class="ni-form-group">
+        <label class="ni-form-label">Periode</label>
+        <input type="text" class="ni-input" value="{{ periode }}" readonly style="background:#f8fafc">
+      </div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label">Akun COGS (debit/kredit penyesuaian)</label>
+        <select name="coa_cogs_id" class="ni-input" required>
+          <option value="">— Pilih akun —</option>
+          {% for akun in cogs_accounts %}
+          <option value="{{ akun.pk }}">{{ akun.kode_akun }} — {{ akun.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:24px">
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="check" style="width:16px;height:16px"></i> Proses Closing
+        </button>
+        <a href="{% url 'manufacturing:overhead_monitoring' %}?periode={{ periode }}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
