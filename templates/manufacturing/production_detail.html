@@ -9,7 +9,11 @@
       {% if order.status == 'completed' %}
         <span class="ni-badge ni-badge--success">Completed</span>
       {% elif order.status == 'in_progress' %}
-        <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+        {% if order.is_past_estimated_completion %}
+          <span class="ni-badge" style="background:var(--ni-info);color:#fff">Selesai (Estimasi)</span>
+        {% else %}
+          <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+        {% endif %}
       {% else %}
         <span class="ni-badge ni-badge--secondary">Dibatalkan</span>
       {% endif %}
@@ -17,6 +21,11 @@
     <p class="ni-page-header__subtitle">{{ order.bom.finished_good.nama }} — {{ order.bom.bom_id }}</p>
   </div>
   <div class="ni-page-header__actions">
+    {% if order.status == 'in_progress' and order.is_processed %}
+    <a href="{% url 'manufacturing:production_approve' order.pk %}" class="ni-btn ni-btn--success">
+      <i data-lucide="check-circle" style="width:16px;height:16px"></i> Approve / Selesaikan
+    </a>
+    {% endif %}
     {% if order.is_processed %}
     <a href="{% url 'manufacturing:production_reverse' order.pk %}" class="ni-btn ni-btn--outline-danger">
       <i data-lucide="rotate-ccw" style="width:16px;height:16px"></i> Reverse
@@ -64,6 +73,14 @@
         {% if order.notes %}
         <dt>Catatan</dt>
         <dd>{{ order.notes }}</dd>
+        {% endif %}
+        {% if order.lama_pengerjaan %}
+        <dt>Lama Pengerjaan Estimasi</dt>
+        <dd>{{ order.lama_pengerjaan }} hari
+          {% if order.estimated_completion_date %}
+          <span style="color:var(--ni-text-muted);font-size:0.8125rem">&mdash; Est. selesai: {{ order.estimated_completion_date }}</span>
+          {% endif %}
+        </dd>
         {% endif %}
         {% if order.fg_inventory_record %}
         <dt>Inventory Record FG</dt>

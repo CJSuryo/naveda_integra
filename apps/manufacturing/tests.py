@@ -198,6 +198,7 @@ class ProductionOrderViewTests(TestCase):
             'bom': self.bom.pk,
             'qty_produced': '5',
             'overhead_cost': '0',
+            'status': 'completed',
             'coa_produksi': self.akun_wip.pk,
         })
         self.assertEqual(ProductionOrder.objects.count(), 1)

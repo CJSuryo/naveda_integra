@@ -167,10 +167,15 @@ def _consume_fifo(
 # Main production execution
 # ---------------------------------------------------------------------------
 
-def process_production(production_order: ProductionOrder) -> None:
-    """Execute a production order: consume RM stock, create FG stock, generate journals.
+def process_production(production_order: ProductionOrder, as_wip: bool = False) -> None:
+    """Execute a production order: consume RM stock, optionally create FG stock, generate journals.
 
-    Marks the order as is_processed=True and status='completed'.
+    as_wip=False (default): Full production — consume RM, create FG batch + inventory,
+        post full journal (including FG completion entry), set status='completed'.
+    as_wip=True: WIP mode — consume RM, post WIP-only journals (no FG completion entry),
+        do NOT create FG batch/inventory. Status remains 'in_progress'.
+        Call approve_production() later to complete.
+
     Raises ValueError for validation failures or duplicate processing.
     """
     if production_order.is_processed:
@@ -213,38 +218,44 @@ def process_production(production_order: ProductionOrder) -> None:
         production_order.total_cost = total_cost
         production_order.unit_cost = unit_cost
 
-        # 3. Create FG FIFO inflow batch
         fg_item = bom.finished_good
-        FIFOBatch.objects.create(
-            purchase_item=None,
-            item=fg_item,
-            tanggal=production_order.tanggal,
-            quantity_in=qty_produced,
-            unit_price=unit_cost,
-            remaining_qty=qty_produced,
-        )
 
-        # 4. Create FG InventoryRecord
-        inv_record = InventoryRecord.objects.create(
-            item=fg_item,
-            purchase_item=None,
-            entitas_bisnis=entitas_bisnis,
-            quantity=qty_produced,
-            unit_price=unit_cost,
-            tanggal=production_order.tanggal,
-            lead_time_days=production_order.lead_time_days,
-            ordering_cost=production_order.ordering_cost,
-            holding_cost_pct=production_order.holding_cost_pct,
-            moq=production_order.moq,
-        )
+        if not as_wip:
+            # 3. Create FG FIFO inflow batch (completed mode only)
+            FIFOBatch.objects.create(
+                purchase_item=None,
+                item=fg_item,
+                tanggal=production_order.tanggal,
+                quantity_in=qty_produced,
+                unit_price=unit_cost,
+                remaining_qty=qty_produced,
+            )
+
+            # 4. Create FG InventoryRecord
+            inv_record = InventoryRecord.objects.create(
+                item=fg_item,
+                purchase_item=None,
+                entitas_bisnis=entitas_bisnis,
+                quantity=qty_produced,
+                unit_price=unit_cost,
+                tanggal=production_order.tanggal,
+                lead_time_days=production_order.lead_time_days,
+                ordering_cost=production_order.ordering_cost,
+                holding_cost_pct=production_order.holding_cost_pct,
+                moq=production_order.moq,
+            )
 
         # 5. Generate journal entries
-        _create_production_journals(production_order)
+        # WIP: post RM consumption + overhead only (no FG completion entry yet)
+        # Completed: post full journal including FG completion entry
+        _create_production_journals(production_order, include_fg_completion=not as_wip)
 
         # 6. Finalise the order
-        production_order.status = 'completed'
         production_order.is_processed = True
-        production_order.fg_inventory_record = inv_record
+        if not as_wip:
+            production_order.status = 'completed'
+            production_order.fg_inventory_record = inv_record
+        # else: status stays 'in_progress' as set by the form
         production_order.save()
 
 
@@ -252,7 +263,10 @@ def process_production(production_order: ProductionOrder) -> None:
 # Journal generation
 # ---------------------------------------------------------------------------
 
-def _create_production_journals(production_order: ProductionOrder) -> JurnalHeader:
+def _create_production_journals(
+    production_order: ProductionOrder,
+    include_fg_completion: bool = True,
+) -> JurnalHeader:
     """Create double-entry journal entries for a production run.
 
     Per RM consumed:
@@ -263,7 +277,7 @@ def _create_production_journals(production_order: ProductionOrder) -> JurnalHead
         DR coa_produksi (WIP)        | overhead_cost
         CR coa_overhead              | overhead_cost
 
-    FG completion:
+    FG completion (only when include_fg_completion=True):
         DR fg.coa_account            | total_cost
         CR coa_produksi (WIP)        | total_cost
     """
@@ -323,8 +337,8 @@ def _create_production_journals(production_order: ProductionOrder) -> JurnalHead
             kredit=overhead,
         ))
 
-    # FG completion entry
-    if fg_item.coa_account_id:
+    # FG completion entry (only when completing directly, not for WIP)
+    if include_fg_completion and fg_item.coa_account_id:
         details.append(JurnalDetail(
             jurnal_header=header,
             akun=fg_item.coa_account,
@@ -339,6 +353,44 @@ def _create_production_journals(production_order: ProductionOrder) -> JurnalHead
         ))
 
     JurnalDetail.objects.bulk_create(details)
+    return header
+
+
+def _create_fg_completion_journal(production_order: ProductionOrder) -> JurnalHeader | None:
+    """Create the FG completion journal when approving a WIP order.
+
+    DR fg.coa_account  | total_cost
+    CR coa_produksi    | total_cost
+    """
+    fg_item = production_order.bom.finished_good
+    if not fg_item.coa_account_id:
+        return None
+
+    nomor = _next_production_journal_number()
+    header = JurnalHeader.objects.create(
+        tanggal=production_order.tanggal,
+        nomor_transaksi=nomor,
+        uraian_transaksi=(
+            f'Produksi {production_order.production_id} — Selesai (FG)'
+        ),
+        entitas_bisnis=production_order.entitas_bisnis,
+        is_penyesuaian=False,
+    )
+    zero = Decimal('0')
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(
+            jurnal_header=header,
+            akun=fg_item.coa_account,
+            debit=production_order.total_cost,
+            kredit=zero,
+        ),
+        JurnalDetail(
+            jurnal_header=header,
+            akun=production_order.coa_produksi,
+            debit=zero,
+            kredit=production_order.total_cost,
+        ),
+    ])
     return header
 
 
@@ -358,6 +410,65 @@ def _next_production_journal_number() -> str:
     else:
         seq = 1
     return f'TRX-PROD-{seq:04d}'
+
+
+# ---------------------------------------------------------------------------
+# WIP Approval
+# ---------------------------------------------------------------------------
+
+def approve_production(production_order: ProductionOrder) -> None:
+    """Complete a WIP production order.
+
+    Creates the FG FIFO batch, FG InventoryRecord, and the FG completion
+    journal entry (DR fg.coa_account / CR coa_produksi).
+    Sets status='completed' and links fg_inventory_record.
+
+    Raises ValueError if the order is not a processable WIP.
+    """
+    if production_order.status != 'in_progress':
+        raise ValueError('Hanya production order berstatus In Progress yang dapat di-approve.')
+    if not production_order.is_processed:
+        raise ValueError(
+            'Production order belum diproses. Proses order terlebih dahulu sebelum approve.'
+        )
+    if production_order.fg_inventory_record_id:
+        raise ValueError('Production order sudah memiliki Inventory FG — tidak dapat di-approve ulang.')
+
+    fg_item = production_order.bom.finished_good
+    qty_produced = production_order.qty_produced
+
+    with transaction.atomic():
+        # Create FG FIFO inflow batch
+        FIFOBatch.objects.create(
+            purchase_item=None,
+            item=fg_item,
+            tanggal=production_order.tanggal,
+            quantity_in=qty_produced,
+            unit_price=production_order.unit_cost,
+            remaining_qty=qty_produced,
+        )
+
+        # Create FG InventoryRecord
+        inv_record = InventoryRecord.objects.create(
+            item=fg_item,
+            purchase_item=None,
+            entitas_bisnis=production_order.entitas_bisnis,
+            quantity=qty_produced,
+            unit_price=production_order.unit_cost,
+            tanggal=production_order.tanggal,
+            lead_time_days=production_order.lead_time_days,
+            ordering_cost=production_order.ordering_cost,
+            holding_cost_pct=production_order.holding_cost_pct,
+            moq=production_order.moq,
+        )
+
+        # Create completion journal (DR fg_coa / CR wip_coa)
+        _create_fg_completion_journal(production_order)
+
+        # Finalize
+        production_order.status = 'completed'
+        production_order.fg_inventory_record = inv_record
+        production_order.save()
 
 
 # ---------------------------------------------------------------------------

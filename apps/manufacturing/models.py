@@ -1,4 +1,5 @@
 """Manufacturing models — Bill of Materials and Production Orders."""
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import models
@@ -189,6 +190,11 @@ class ProductionOrder(models.Model):
     is_processed = models.BooleanField(
         default=False, verbose_name='Sudah Diproses',
     )
+    lama_pengerjaan = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='Lama Pengerjaan Estimasi (Hari)',
+        help_text='Opsional (WIP): estimasi jumlah hari penyelesaian sejak tanggal produksi.',
+    )
     fg_inventory_record = models.OneToOneField(
         'inventory.InventoryRecord',
         on_delete=models.SET_NULL,
@@ -213,6 +219,21 @@ class ProductionOrder(models.Model):
 
     def __str__(self) -> str:
         return self.production_id
+
+    @property
+    def estimated_completion_date(self):
+        """Return the estimated completion date if lama_pengerjaan is set."""
+        if self.lama_pengerjaan and self.tanggal:
+            return self.tanggal + timedelta(days=self.lama_pengerjaan)
+        return None
+
+    @property
+    def is_past_estimated_completion(self) -> bool:
+        """True if the WIP order is past its estimated completion date."""
+        ec = self.estimated_completion_date
+        if ec is None:
+            return False
+        return ec <= timezone.now().date()
 
     def save(self, *args, **kwargs):
         if not self.production_id:

@@ -18,6 +18,7 @@ urlpatterns = [
     path('<int:pk>/', views.production_detail, name='production_detail'),
     path('<int:pk>/delete/', views.production_delete, name='production_delete'),
     path('<int:pk>/reverse/', views.production_reverse, name='production_reverse'),
+    path('<int:pk>/approve/', views.production_approve, name='production_approve'),
 
     # AJAX API
     path('api/bom-preview/', views.api_bom_preview, name='api_bom_preview'),

@@ -53,6 +53,27 @@
           </div>
         </div>
 
+        <!-- Status Produksi -->
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="id_status_produksi">Status Produksi <span style="color:var(--ni-danger)">*</span></label>
+          {{ form.status }}
+          {% if form.status.errors %}<div class="ni-form-error">{{ form.status.errors }}</div>{% endif %}
+        </div>
+
+        <!-- Lama Pengerjaan (only shown for WIP) -->
+        <div class="ni-form-group" id="lama-pengerjaan-group" style="display:none">
+          <label class="ni-form-label" for="id_lama_pengerjaan">{{ form.lama_pengerjaan.label }}</label>
+          {{ form.lama_pengerjaan }}
+          {% if form.lama_pengerjaan.errors %}<div class="ni-form-error">{{ form.lama_pengerjaan.errors }}</div>{% endif %}
+          <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.lama_pengerjaan.help_text }}</div>
+        </div>
+        <!-- WIP account note -->
+        <div id="wip-account-note" style="display:none;padding:10px 14px;background:var(--ni-primary-light);border-radius:var(--ni-radius-sm);font-size:0.8125rem;color:var(--ni-primary);margin-bottom:8px">
+          <i data-lucide="info" style="width:13px;height:13px;vertical-align:-2px"></i>
+          <strong>WIP:</strong> Jurnal RM → WIP (Akun Biaya Produksi) dibuat sekarang.
+          Jurnal WIP → FG Inventory dibuat saat order di-approve.
+        </div>
+
         <div class="ni-form-row">
           <div class="ni-form-group" style="flex:1">
             <label class="ni-form-label" for="{{ form.coa_produksi.id_for_label }}">{{ form.coa_produksi.label }} <span style="color:var(--ni-danger)">*</span></label>
@@ -163,7 +184,8 @@
 
   <div class="ni-btn-row" style="margin-top:24px">
     <button type="submit" class="ni-btn ni-btn--primary" id="submit-btn">
-      <i data-lucide="play" style="width:16px;height:16px"></i> Proses Produksi
+      <i data-lucide="play" style="width:16px;height:16px"></i>
+      <span id="submit-label">Proses Produksi</span>
     </button>
     <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
   </div>
@@ -179,6 +201,22 @@
   var bomSel = document.getElementById('id_bom');
   var qtyInput = document.getElementById('id_qty_produced');
   var overheadInput = document.getElementById('id_overhead_cost');
+  var statusSel = document.getElementById('id_status_produksi');
+  var lamaGroup = document.getElementById('lama-pengerjaan-group');
+  var wipNote = document.getElementById('wip-account-note');
+  var submitLabel = document.getElementById('submit-label');
+
+  function onStatusChange() {
+    var isWip = statusSel && statusSel.value === 'in_progress';
+    if (lamaGroup) lamaGroup.style.display = isWip ? '' : 'none';
+    if (wipNote) wipNote.style.display = isWip ? '' : 'none';
+    if (submitLabel) submitLabel.textContent = isWip ? 'Simpan sebagai WIP' : 'Proses Produksi';
+  }
+
+  if (statusSel) {
+    statusSel.addEventListener('change', onStatusChange);
+    onStatusChange();  // run once on load (handles POST re-render with errors)
+  }
   var previewPlaceholder = document.getElementById('preview-placeholder');
   var previewContent = document.getElementById('preview-content');
   var previewLoading = document.getElementById('preview-loading');

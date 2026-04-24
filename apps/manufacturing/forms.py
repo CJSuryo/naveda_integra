@@ -43,6 +43,11 @@ class BOMForm(forms.ModelForm):
 
 
 class ProductionOrderForm(forms.ModelForm):
+    STATUS_PRODUKSI_CHOICES = [
+        ('completed', 'Selesai (Langsung)'),
+        ('in_progress', 'Work In Progress'),
+    ]
+
     class Meta:
         model = ProductionOrder
         fields = [
@@ -51,6 +56,8 @@ class ProductionOrderForm(forms.ModelForm):
             'bom',
             'qty_produced',
             'overhead_cost',
+            'status',
+            'lama_pengerjaan',
             'coa_produksi',
             'coa_overhead',
             'lead_time_days',
@@ -70,6 +77,11 @@ class ProductionOrderForm(forms.ModelForm):
             'overhead_cost': forms.NumberInput(
                 attrs={'class': 'ni-input', 'step': '0.01', 'min': '0', 'id': 'id_overhead_cost'},
             ),
+            'status': forms.Select(attrs={'class': 'ni-input', 'id': 'id_status_produksi'}),
+            'lama_pengerjaan': forms.NumberInput(
+                attrs={'class': 'ni-input', 'min': '1', 'id': 'id_lama_pengerjaan',
+                       'placeholder': 'Contoh: 7'},
+            ),
             'coa_produksi': forms.Select(attrs={'class': 'ni-input'}),
             'coa_overhead': forms.Select(attrs={'class': 'ni-input'}),
             'lead_time_days': forms.NumberInput(attrs={'class': 'ni-input', 'min': '0'}),
@@ -83,6 +95,12 @@ class ProductionOrderForm(forms.ModelForm):
             ),
             'notes': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Limit status choices on the create form to in_progress / completed
+        self.fields['status'].choices = self.STATUS_PRODUKSI_CHOICES
+        self.fields['lama_pengerjaan'].required = False
 
     def clean(self):
         cleaned = super().clean()

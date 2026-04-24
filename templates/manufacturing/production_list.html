@@ -77,7 +77,17 @@
             {% if order.status == 'completed' %}
               <span class="ni-badge ni-badge--success">Completed</span>
             {% elif order.status == 'in_progress' %}
-              <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+              {% if order.is_past_estimated_completion %}
+                <span class="ni-badge" style="background:var(--ni-info);color:#fff">Selesai (Estimasi)</span>
+                {% if order.estimated_completion_date %}
+                <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">Est. {{ order.estimated_completion_date }}</div>
+                {% endif %}
+              {% elif order.estimated_completion_date %}
+                <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+                <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">Est. selesai: {{ order.estimated_completion_date }}</div>
+              {% else %}
+                <span class="ni-badge" style="background:var(--ni-warning);color:#fff">In Progress</span>
+              {% endif %}
             {% else %}
               <span class="ni-badge ni-badge--secondary">Dibatalkan</span>
             {% endif %}
@@ -85,6 +95,11 @@
           <td>
             <div class="ni-btn-row">
               <a href="{% url 'manufacturing:production_detail' order.pk %}" class="ni-btn ni-btn--outline ni-btn--sm">Detail</a>
+              {% if order.status == 'in_progress' and order.is_processed %}
+              <a href="{% url 'manufacturing:production_approve' order.pk %}" class="ni-btn ni-btn--success ni-btn--sm">
+                <i data-lucide="check-circle" style="width:13px;height:13px"></i> Approve
+              </a>
+              {% endif %}
             </div>
           </td>
         </tr>

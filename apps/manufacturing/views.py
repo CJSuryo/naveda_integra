@@ -13,6 +13,7 @@ from apps.purchase.models import ItemMasterPurchase
 from .forms import BOMForm, ProductionOrderForm, parse_bom_lines
 from .models import BillOfMaterials, BOMLine, ProductionOrder
 from .services import (
+    approve_production,
     compute_estimated_cost,
     get_available_stock,
     get_bom_preview,
@@ -209,16 +210,21 @@ def production_create(request):
             with transaction.atomic():
                 order = form.save(commit=False)
                 order.save()
+                as_wip = (order.status == 'in_progress')
                 try:
-                    process_production(order)
-                    messages.success(
-                        request,
-                        f'Production order {order.production_id} berhasil diproses.',
-                    )
+                    process_production(order, as_wip=as_wip)
+                    if as_wip:
+                        messages.success(
+                            request,
+                            f'Production order {order.production_id} disimpan sebagai Work In Progress.',
+                        )
+                    else:
+                        messages.success(
+                            request,
+                            f'Production order {order.production_id} berhasil diproses dan diselesaikan.',
+                        )
                     return redirect('manufacturing:production_detail', pk=order.pk)
                 except ValueError as exc:
-                    # process_production rolls back via atomic, but we need to
-                    # delete the newly-created order too
                     order.delete()
                     messages.error(request, str(exc))
     else:
@@ -290,6 +296,24 @@ def production_reverse(request, pk):
         return redirect('manufacturing:production_detail', pk=pk)
 
     return render(request, 'manufacturing/production_reverse_confirm.html', {'object': order})
+
+
+@login_required
+def production_approve(request, pk):
+    """Approve (complete) a WIP production order: create FG stock + completion journal."""
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if request.method == 'POST':
+        try:
+            approve_production(order)
+            messages.success(
+                request,
+                f'Production order {order.production_id} berhasil diselesaikan.',
+            )
+        except ValueError as exc:
+            messages.error(request, str(exc))
+        return redirect('manufacturing:production_detail', pk=pk)
+
+    return render(request, 'manufacturing/production_approve_confirm.html', {'object': order})
 
 
 # ---------------------------------------------------------------------------
