@@ -44,4 +44,4 @@ class ProductionOrderAdmin(admin.ModelAdmin):
         'is_processed', 'created_at', 'updated_at',
     ]
     inlines = [ProductionRMConsumptionInline]
-    raw_id_fields = ['bom', 'coa_produksi', 'coa_overhead']
+    raw_id_fields = ['bom', 'coa_produksi', 'coa_overhead_applied']

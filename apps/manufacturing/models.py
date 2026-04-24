@@ -157,14 +157,18 @@ class ProductionOrder(models.Model):
         verbose_name='Akun Biaya Produksi (WIP)',
         help_text='Akun WIP yang menampung biaya produksi sementara.',
     )
-    coa_overhead = models.ForeignKey(
+    coa_overhead_applied = models.ForeignKey(
         'master_data.Akun',
         on_delete=models.PROTECT,
-        related_name='production_orders_overhead',
+        related_name='production_orders_overhead_applied',
         null=True,
         blank=True,
-        verbose_name='Akun Overhead',
-        help_text='Wajib diisi jika ada Overhead Cost.',
+        verbose_name='Akun Manufacturing Overhead Applied',
+        help_text=(
+            'Akun liability/contra (2.x.x) yang menampung overhead diserap ke WIP. '
+            'JANGAN pilih akun beban (5.x.x). '
+            'Wajib diisi jika ada Overhead Cost.'
+        ),
     )
     lead_time_days = models.PositiveIntegerField(
         null=True, blank=True, verbose_name='Lead Time (Hari)',

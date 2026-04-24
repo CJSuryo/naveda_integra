@@ -66,9 +66,9 @@
         <dd style="color:var(--ni-primary);font-weight:700;font-size:1.0625rem">Rp {{ order.unit_cost|floatformat:4 }}</dd>
         <dt>Akun WIP</dt>
         <dd>{{ order.coa_produksi.kode_akun }} — {{ order.coa_produksi.nama }}</dd>
-        {% if order.coa_overhead %}
-        <dt>Akun Overhead</dt>
-        <dd>{{ order.coa_overhead.kode_akun }} — {{ order.coa_overhead.nama }}</dd>
+        {% if order.coa_overhead_applied %}
+        <dt>Akun Manufacturing Overhead Applied</dt>
+        <dd>{{ order.coa_overhead_applied.kode_akun }} — {{ order.coa_overhead_applied.nama }}</dd>
         {% endif %}
         {% if order.notes %}
         <dt>Catatan</dt>

@@ -113,9 +113,9 @@ def validate_production(production_order: ProductionOrder) -> list[str]:
                 f'tersedia {available}, kurang {shortage}.'
             )
 
-    if production_order.overhead_cost > 0 and not production_order.coa_overhead_id:
+    if production_order.overhead_cost > 0 and not production_order.coa_overhead_applied_id:
         errors.append(
-            'Akun Overhead wajib diisi jika Overhead Cost > 0.'
+            'Akun Manufacturing Overhead Applied wajib diisi jika Overhead Cost > 0.'
         )
 
     return errors
@@ -273,9 +273,9 @@ def _create_production_journals(
         DR coa_produksi (WIP)        | actual consumed cost
         CR rm.coa_account            | actual consumed cost
 
-    If overhead > 0 and coa_overhead is set:
-        DR coa_produksi (WIP)        | overhead_cost
-        CR coa_overhead              | overhead_cost
+    If overhead > 0 and coa_overhead_applied is set:
+        DR coa_produksi (WIP)             | overhead_cost
+        CR coa_overhead_applied (2.x.x)  | overhead_cost  (Manufacturing Overhead Applied)
 
     FG completion (only when include_fg_completion=True):
         DR fg.coa_account            | total_cost
@@ -321,9 +321,9 @@ def _create_production_journals(
                 kredit=consumed_cost,
             ))
 
-    # Overhead entry
+    # Overhead entry: DR WIP / CR Manufacturing Overhead Applied (2.x.x liability)
     overhead = production_order.overhead_cost or zero
-    if overhead > 0 and production_order.coa_overhead_id:
+    if overhead > 0 and production_order.coa_overhead_applied_id:
         details.append(JurnalDetail(
             jurnal_header=header,
             akun=production_order.coa_produksi,
@@ -332,7 +332,7 @@ def _create_production_journals(
         ))
         details.append(JurnalDetail(
             jurnal_header=header,
-            akun=production_order.coa_overhead,
+            akun=production_order.coa_overhead_applied,
             debit=zero,
             kredit=overhead,
         ))

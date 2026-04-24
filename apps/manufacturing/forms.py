@@ -59,7 +59,7 @@ class ProductionOrderForm(forms.ModelForm):
             'status',
             'lama_pengerjaan',
             'coa_produksi',
-            'coa_overhead',
+            'coa_overhead_applied',
             'lead_time_days',
             'ordering_cost',
             'holding_cost_pct',
@@ -83,7 +83,7 @@ class ProductionOrderForm(forms.ModelForm):
                        'placeholder': 'Contoh: 7'},
             ),
             'coa_produksi': forms.Select(attrs={'class': 'ni-input'}),
-            'coa_overhead': forms.Select(attrs={'class': 'ni-input'}),
+            'coa_overhead_applied': forms.Select(attrs={'class': 'ni-input'}),
             'lead_time_days': forms.NumberInput(attrs={'class': 'ni-input', 'min': '0'}),
             'ordering_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
             'holding_cost_pct': forms.NumberInput(
@@ -105,11 +105,17 @@ class ProductionOrderForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         overhead = cleaned.get('overhead_cost') or Decimal('0')
-        coa_overhead = cleaned.get('coa_overhead')
-        if overhead > 0 and not coa_overhead:
+        coa_overhead_applied = cleaned.get('coa_overhead_applied')
+        if overhead > 0 and not coa_overhead_applied:
             self.add_error(
-                'coa_overhead',
-                'Akun Overhead wajib diisi jika Overhead Cost lebih dari 0.',
+                'coa_overhead_applied',
+                'Akun Overhead Applied wajib diisi jika Overhead Cost lebih dari 0.',
+            )
+        if coa_overhead_applied and getattr(coa_overhead_applied, 'kategori_id', None) == 'beban':
+            self.add_error(
+                'coa_overhead_applied',
+                'Akun Overhead Applied tidak boleh berupa akun Beban (5.x.x). '
+                'Pilih akun liability/contra (2.x.x) seperti "Manufacturing Overhead Applied".',
             )
         return cleaned
 
