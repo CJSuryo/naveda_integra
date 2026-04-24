@@ -27,6 +27,22 @@
 </div>
 
 {% if rows %}
+
+{% comment %}Warning: highlight any categories where no rate is configured yet{% endcomment %}
+{% with unset_count=rows|length %}
+{% for row in rows %}{% if not row.rate %}{% comment %}{% endcomment %}{% endif %}{% endfor %}
+{% endwith %}
+{% for row in rows %}{% if not row.rate %}
+<div class="ni-alert" style="margin-bottom:16px;padding:12px 16px;background:#fffbeb;border:1px solid #f59e0b;border-radius:var(--ni-radius-sm);font-size:0.875rem;color:#92400e;display:flex;align-items:flex-start;gap:10px">
+  <i data-lucide="alert-triangle" style="width:16px;height:16px;flex-shrink:0;margin-top:1px"></i>
+  <div>
+    <strong>Rate belum diatur untuk periode {{ periode }}.</strong>
+    Beberapa kategori overhead belum memiliki rate. Production Order yang dibuat bulan ini tidak akan menyertakan overhead dari kategori tersebut.
+    Simpan form di bawah untuk mengatur semua rate sekarang.
+  </div>
+</div>
+{% endif %}{% endfor %}
+
 <form method="post">
   {% csrf_token %}
   <input type="hidden" name="periode" value="{{ periode }}">
@@ -62,8 +78,27 @@
               </td>
               <td class="ni-text-right est-vol-cell">
                 {% if row.cat.cost_driver == 'PERSEN_RM_COST' %}
-                  <span style="color:var(--ni-text-muted);font-size:0.8125rem">Otomatis (%)</span>
+                  <span style="color:var(--ni-text-muted);font-size:0.8125rem">Tidak diperlukan</span>
+                  <div style="font-size:0.75rem;color:var(--ni-text-muted)">Rate diisi langsung (0.10 = 10%)</div>
                   <input type="hidden" name="est_vol_{{ row.cat.pk }}" value="">
+                {% elif row.cat.cost_driver == 'PER_UNIT' %}
+                  <input type="number" name="est_vol_{{ row.cat.pk }}"
+                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    class="ni-input" style="width:140px;text-align:right"
+                    step="1" min="0" placeholder="Estimasi unit">
+                  <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">unit diproduksi</div>
+                {% elif row.cat.cost_driver == 'PER_JAM_MESIN' %}
+                  <input type="number" name="est_vol_{{ row.cat.pk }}"
+                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    class="ni-input" style="width:140px;text-align:right"
+                    step="0.01" min="0" placeholder="Estimasi jam">
+                  <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam mesin / periode</div>
+                {% elif row.cat.cost_driver == 'PER_JAM_TK' %}
+                  <input type="number" name="est_vol_{{ row.cat.pk }}"
+                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    class="ni-input" style="width:140px;text-align:right"
+                    step="0.01" min="0" placeholder="Estimasi jam">
+                  <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam tenaga kerja / periode</div>
                 {% else %}
                   <input type="number" name="est_vol_{{ row.cat.pk }}"
                     value="{{ row.rate.estimasi_volume|default:'' }}"

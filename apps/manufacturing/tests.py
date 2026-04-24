@@ -545,6 +545,66 @@ class ProductionServiceTests(TestCase):
         self.assertEqual(applied.rate_per_driver, Decimal('10000.000000'))
         self.assertEqual(applied.amount_applied, Decimal('100000.0000'))
 
+    def test_approve_production_completes_wip_and_creates_fg_journal(self):
+        from .services import create_overhead_applied, process_production, approve_production
+        from apps.jurnal.models import JurnalDetail
+
+        self.order.status = 'in_progress'
+        self.order.save()
+        create_overhead_applied(self.order, {self.oh_cat.pk: Decimal('10')}, '2025-01')
+        process_production(self.order, as_wip=True)
+        self.order.refresh_from_db()
+        self.assertTrue(self.order.is_processed)
+        self.assertEqual(self.order.status, 'in_progress')
+        self.assertIsNone(self.order.fg_inventory_record)
+
+        approve_production(self.order)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, 'completed')
+        self.assertIsNotNone(self.order.fg_inventory_record)
+
+        journal = JurnalDetail.objects.filter(jurnal_header__uraian_transaksi__icontains=self.order.production_id)
+        self.assertTrue(journal.exists())
+        self.assertTrue(JurnalDetail.objects.filter(akun=self.akun_fg, debit=self.order.total_cost).exists())
+        self.assertTrue(JurnalDetail.objects.filter(akun=self.akun_wip, kredit=self.order.total_cost).exists())
+
+    def test_period_end_closing_creates_variance_journals(self):
+        from .services import period_end_closing
+        from apps.jurnal.models import JurnalDetail
+
+        akun_cogs = _make_akun('5201', 'COGS')
+        other_cat = OverheadCategory.objects.create(
+            name='Listrik Pabrik', overhead_type='PRODUCTION',
+            coa_expense=self.akun_beban, coa_overhead_applied=self.akun_applied,
+            cost_driver='PER_UNIT',
+        )
+        existing_rate = OverheadRate.objects.get(overhead_category=self.oh_cat, periode_bulan='2025-01')
+        existing_rate.aktual_total = Decimal('90000')
+        existing_rate.save()
+        OverheadRate.objects.create(
+            overhead_category=other_cat, periode_bulan='2025-01',
+            estimasi_total=Decimal('2000000'), estimasi_volume=Decimal('200'), aktual_total=Decimal('220000'),
+        )
+        OverheadApplied.objects.create(
+            production_order=self.order, overhead_category=self.oh_cat,
+            periode_bulan='2025-01', driver_value=Decimal('10'), rate_per_driver=Decimal('10000'),
+        )
+        OverheadApplied.objects.create(
+            production_order=self.order, overhead_category=other_cat,
+            periode_bulan='2025-01', driver_value=Decimal('20'), rate_per_driver=Decimal('10000'),
+        )
+
+        results = period_end_closing('2025-01', akun_cogs.pk)
+        self.assertEqual(len(results), 2)
+        over = next(r for r in results if r['category'] == self.oh_cat.name)
+        under = next(r for r in results if r['category'] == other_cat.name)
+        self.assertEqual(over['variance'], Decimal('10000'))
+        self.assertEqual(under['variance'], Decimal('-20000'))
+        self.assertIsNotNone(over['journal_id'])
+        self.assertIsNotNone(under['journal_id'])
+        self.assertTrue(JurnalDetail.objects.filter(jurnal_header_id=over['journal_id'], akun=self.akun_applied, debit=Decimal('10000')).exists())
+        self.assertTrue(JurnalDetail.objects.filter(jurnal_header_id=under['journal_id'], akun=self.akun_applied, kredit=Decimal('20000')).exists())
+
 
 # ---------------------------------------------------------------------------
 # BOM view tests
@@ -649,6 +709,32 @@ class ProductionOrderViewTests(TestCase):
         order = ProductionOrder.objects.first()
         self.assertIsNotNone(order)
         self.assertEqual(order.status, 'in_progress')
+
+    def test_production_create_post_persen_rm_cost_uses_server_side_rm_cost(self):
+        akun_beban = _make_akun('5102', 'Overhead Umum')
+        akun_applied = _make_akun('2102', 'Overhead Applied Umum', 'kewajiban')
+        cat = OverheadCategory.objects.create(
+            name='Overhead % RM', overhead_type='PRODUCTION',
+            coa_expense=akun_beban, coa_overhead_applied=akun_applied,
+            cost_driver='PERSEN_RM_COST',
+        )
+        OverheadRate.objects.create(
+            overhead_category=cat, periode_bulan='2025-01',
+            estimasi_total=Decimal('1000000'), rate_per_driver=Decimal('0.10'),
+        )
+
+        response = self.client.post(reverse('manufacturing:production_create'), {
+            'tanggal': '2025-01-10',
+            'entitas_bisnis': self.eb.pk,
+            'bom': self.bom.pk,
+            'qty_produced': '5',
+            'status': 'completed',
+            'coa_produksi': self.akun_wip.pk,
+        })
+        self.assertEqual(ProductionOrder.objects.count(), 1)
+        order = ProductionOrder.objects.first()
+        self.assertEqual(order.overhead_cost, Decimal('5000'))
+        self.assertEqual(order.total_cost, Decimal('55000'))
 
     def test_api_bom_preview(self):
         response = self.client.get(reverse('manufacturing:api_bom_preview'), {

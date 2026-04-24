@@ -229,6 +229,11 @@ def production_create(request):
                 rates_map = get_overhead_rates_for_period(periode_bulan)
                 rm_cost_estimate = Decimal(request.POST.get('_rm_cost_estimate', '0') or '0')
 
+                if rm_cost_estimate == 0 and order.bom and order.qty_produced > 0:
+                    # Fallback when the browser preview did not populate RM cost.
+                    rm_preview = compute_estimated_cost(order.bom, order.qty_produced, Decimal('0'))
+                    rm_cost_estimate = rm_preview['rm_cost']
+
                 for cat in prod_categories:
                     rate = rates_map.get(cat.pk)
                     if not rate or rate.rate_per_driver == 0:

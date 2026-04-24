@@ -124,6 +124,14 @@
           <h3 style="font-size:0.9375rem;font-weight:600;margin:0">Production Overhead</h3>
           <span style="font-size:0.8125rem;color:var(--ni-text-muted)">Periode: <strong id="overhead-periode-label">{{ default_period }}</strong></span>
         </div>
+        {% for row in overhead_cats %}{% if not row.has_rate %}
+        <div style="padding:10px 14px;background:#fffbeb;border:1px solid #f59e0b;border-radius:var(--ni-radius-sm);font-size:0.8125rem;color:#92400e;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+          <i data-lucide="alert-triangle" style="width:14px;height:14px;flex-shrink:0"></i>
+          Beberapa kategori belum memiliki rate untuk periode <strong>{{ default_period }}</strong>.
+          Overhead tersebut tidak akan dihitung.
+          <a href="{% url 'manufacturing:overhead_rate_setup' %}?periode={{ default_period }}" style="color:var(--ni-primary);margin-left:4px">Setup sekarang →</a>
+        </div>
+        {% if forloop.first %}{% endif %}{% endif %}{% endfor %}
         <div class="ni-table-wrapper">
           <table class="ni-table" style="min-width:600px">
             <thead>
@@ -145,18 +153,42 @@
                 </td>
                 <td class="ni-text-right">
                   {% if row.has_rate %}
-                    {% if row.cat.cost_driver == 'PER_UNIT' or row.cat.cost_driver == 'PERSEN_RM_COST' %}
+                    {% if row.cat.cost_driver == 'PER_UNIT' %}
                       <input type="text" class="ni-input overhead-driver-auto" style="width:120px;text-align:right;background:#f8fafc"
                         data-cat="{{ row.cat.pk }}" data-driver="{{ row.cat.cost_driver }}"
-                        data-rate="{{ row.rate.rate_per_driver }}" readonly>
+                        data-rate="{{ row.rate.rate_per_driver }}" readonly
+                        title="Auto-fill dari qty produksi">
                       <input type="hidden" name="overhead_driver_{{ row.cat.pk }}" class="overhead-driver-hidden" data-cat="{{ row.cat.pk }}">
+                      <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">auto: qty produksi</div>
+                    {% elif row.cat.cost_driver == 'PERSEN_RM_COST' %}
+                      <input type="text" class="ni-input overhead-driver-auto" style="width:120px;text-align:right;background:#f8fafc"
+                        data-cat="{{ row.cat.pk }}" data-driver="{{ row.cat.cost_driver }}"
+                        data-rate="{{ row.rate.rate_per_driver }}" readonly
+                        title="Auto-kalkulasi dari RM cost">
+                      <input type="hidden" name="overhead_driver_{{ row.cat.pk }}" class="overhead-driver-hidden" data-cat="{{ row.cat.pk }}">
+                      <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">auto: % dari RM cost</div>
+                    {% elif row.cat.cost_driver == 'PER_JAM_MESIN' %}
+                      <input type="number" name="overhead_driver_{{ row.cat.pk }}" class="ni-input overhead-driver-manual" style="width:120px;text-align:right"
+                        data-cat="{{ row.cat.pk }}" data-rate="{{ row.rate.rate_per_driver }}"
+                        step="0.01" min="0" placeholder="0.00">
+                      <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam mesin untuk run ini</div>
+                    {% elif row.cat.cost_driver == 'PER_JAM_TK' %}
+                      <input type="number" name="overhead_driver_{{ row.cat.pk }}" class="ni-input overhead-driver-manual" style="width:120px;text-align:right"
+                        data-cat="{{ row.cat.pk }}" data-rate="{{ row.rate.rate_per_driver }}"
+                        step="0.01" min="0" placeholder="0.00">
+                      <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam TK untuk run ini</div>
                     {% else %}
                       <input type="number" name="overhead_driver_{{ row.cat.pk }}" class="ni-input overhead-driver-manual" style="width:120px;text-align:right"
                         data-cat="{{ row.cat.pk }}" data-rate="{{ row.rate.rate_per_driver }}"
                         step="0.01" min="0" placeholder="0">
                     {% endif %}
                   {% else %}
-                    <span style="color:var(--ni-text-muted);font-size:0.8125rem">Rate belum diset</span>
+                    <div style="color:var(--ni-warning);font-size:0.8125rem;display:flex;align-items:center;gap:4px">
+                      <i data-lucide="alert-circle" style="width:13px;height:13px"></i> Rate belum diset
+                    </div>
+                    <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">
+                      <a href="{% url 'manufacturing:overhead_rate_setup' %}?periode={{ default_period }}" style="color:var(--ni-primary)">Setup rate →</a>
+                    </div>
                   {% endif %}
                 </td>
                 <td class="ni-text-right">
