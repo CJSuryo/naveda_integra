@@ -249,7 +249,7 @@ def production_detail(request, pk):
         ProductionOrder.objects
         .select_related(
             'bom__finished_good', 'entitas_bisnis',
-            'coa_produksi', 'coa_overhead',
+            'coa_produksi', 'coa_overhead_applied',
         )
         .prefetch_related(
             'rm_consumptions__bom_line__raw_material',
