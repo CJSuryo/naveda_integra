@@ -29,7 +29,11 @@ def get_available_stock(item_id: int) -> Decimal:
 
 
 def get_fifo_unit_cost(item_id: int) -> Decimal:
-    """Weighted-average FIFO unit cost across remaining batches."""
+    """Weighted-average cost across ALL remaining batches (used for reference/display only).
+
+    NOTE: This is a simple weighted average, not a true FIFO simulation.
+    For accurate cost preview, use _simulate_fifo_cost.
+    """
     result = FIFOBatch.objects.filter(
         item_id=item_id, remaining_qty__gt=0,
     ).aggregate(
@@ -43,6 +47,37 @@ def get_fifo_unit_cost(item_id: int) -> Decimal:
     return (total_value / total_qty).quantize(Decimal('0.0001'))
 
 
+def _simulate_fifo_cost(item_id: int, quantity: Decimal) -> tuple[Decimal, Decimal]:
+    """Read-only FIFO simulation — same batch order as _consume_fifo but no DB writes.
+
+    Returns (total_cost, qty_filled):
+      total_cost  — cost for the qty_filled portion (oldest batches first)
+      qty_filled  — how many units could be filled from current stock
+                    (may be < quantity if stock is insufficient)
+
+    Example: stock = 15 units @ Rp 20,000 (older) + 5 units @ Rp 18,000 (newer)
+      _simulate_fifo_cost(item, 10)  → (200_000, 10)   ← 10 × 20k, all from batch 1
+      _simulate_fifo_cost(item, 17)  → (336_000, 17)   ← 15 × 20k + 2 × 18k
+      _simulate_fifo_cost(item, 22)  → (390_000, 20)   ← only 20 available
+    """
+    batches = (
+        FIFOBatch.objects
+        .filter(item_id=item_id, remaining_qty__gt=0)
+        .order_by('tanggal', 'created_at')  # oldest first — same as _consume_fifo
+    )
+    remaining = quantity
+    total_cost = Decimal('0')
+    qty_filled = Decimal('0')
+    for batch in batches:
+        if remaining <= 0:
+            break
+        take = min(batch.remaining_qty, remaining)
+        total_cost += take * batch.unit_price
+        qty_filled += take
+        remaining -= take
+    return total_cost, qty_filled
+
+
 # ---------------------------------------------------------------------------
 # BOM preview
 # ---------------------------------------------------------------------------
@@ -50,22 +85,34 @@ def get_fifo_unit_cost(item_id: int) -> Decimal:
 def get_bom_preview(bom: BillOfMaterials, qty_produced: Decimal) -> list[dict]:
     """Return per-BOM-line preview data for a given production quantity.
 
-    Each entry contains:
-      bom_line, rm_item, qty_required_per_unit, qty_required_total,
-      fifo_unit_cost, total_rm_cost, available_stock, is_sufficient
+    Uses FIFO simulation (same batch-order as actual consumption) so the unit cost
+    and total cost shown match what will actually be consumed.
+
+    Example: if oldest batch = 15 @ Rp 20,000 and next = 5 @ Rp 18,000:
+      qty_total=10  → fifo_unit_cost = 20,000  (all from first batch)
+      qty_total=17  → fifo_unit_cost ≈ 19,765  (blended: 15×20k + 2×18k)
     """
     rows = []
     for line in bom.lines.select_related('raw_material').all():
         qty_total = line.qty_required * qty_produced
-        fifo_cost = get_fifo_unit_cost(line.raw_material_id)
         available = get_available_stock(line.raw_material_id)
+
+        # Simulate FIFO to get accurate costs (oldest batches consumed first)
+        fifo_cost, qty_filled = _simulate_fifo_cost(line.raw_material_id, qty_total)
+        if qty_filled > 0:
+            fifo_unit_cost = (fifo_cost / qty_filled).quantize(Decimal('0.0001'))
+        else:
+            fifo_unit_cost = Decimal('0')
+        # Extrapolate to the full requested qty using the blended rate
+        total_rm_cost = (fifo_unit_cost * qty_total).quantize(Decimal('0.0001'))
+
         rows.append({
             'bom_line': line,
             'rm_item': line.raw_material,
             'qty_required_per_unit': line.qty_required,
             'qty_required_total': qty_total,
-            'fifo_unit_cost': fifo_cost,
-            'total_rm_cost': qty_total * fifo_cost,
+            'fifo_unit_cost': fifo_unit_cost,
+            'total_rm_cost': total_rm_cost,
             'available_stock': available,
             'is_sufficient': available >= qty_total,
             'shortage': max(Decimal('0'), qty_total - available),

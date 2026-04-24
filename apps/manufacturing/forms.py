@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 
 from apps.purchase.models import ItemMasterPurchase
 
-from .models import BillOfMaterials, BOMLine, ProductionOrder
+from .models import BillOfMaterials, BOMLine, OverheadCategory, OverheadRate, ProductionOrder
 
 
 class BOMForm(forms.ModelForm):
@@ -150,7 +150,7 @@ def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
 
 class OverheadCategoryForm(forms.ModelForm):
     class Meta:
-        model = None  # set below
+        model = OverheadCategory
         fields = ['name', 'overhead_type', 'coa_expense', 'coa_overhead_applied', 'cost_driver', 'is_active']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'ni-input'}),
@@ -186,8 +186,6 @@ class OverheadCategoryForm(forms.ModelForm):
         return cleaned
 
 
-from .models import OverheadCategory, OverheadRate
-OverheadCategoryForm.Meta.model = OverheadCategory
 
 
 class OverheadRateForm(forms.ModelForm):

@@ -50,12 +50,10 @@
             {% if form.qty_produced.errors %}<div class="ni-form-error">{{ form.qty_produced.errors }}</div>{% endif %}
           </div>
           <div class="ni-form-group" style="flex:1">
-
-        <!-- Status Produksi -->
-        <div class="ni-form-group">
-          <label class="ni-form-label" for="id_status_produksi">Status Produksi <span style="color:var(--ni-danger)">*</span></label>
-          {{ form.status }}
-          {% if form.status.errors %}<div class="ni-form-error">{{ form.status.errors }}</div>{% endif %}
+            <label class="ni-form-label" for="id_status_produksi">Status Produksi <span style="color:var(--ni-danger)">*</span></label>
+            {{ form.status }}
+            {% if form.status.errors %}<div class="ni-form-error">{{ form.status.errors }}</div>{% endif %}
+          </div>
         </div>
 
         <!-- Lama Pengerjaan (only shown for WIP) -->
