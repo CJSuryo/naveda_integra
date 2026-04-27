@@ -48,13 +48,18 @@
   <input type="hidden" name="periode" value="{{ periode }}">
   <div class="ni-card ni-animate-fade-in">
     <div class="ni-card__body">
-      <h3 style="margin-bottom:16px;font-size:0.9375rem;font-weight:600">Rate per Kategori — {{ periode }}</h3>
+      <h3 style="margin-bottom:8px;font-size:0.9375rem;font-weight:600">Rate per Kategori — {{ periode }}</h3>
+      <p style="margin-bottom:16px;color:var(--ni-text-muted);font-size:0.875rem">
+        Jika periode ini belum memiliki data, nilai dari periode sebelumnya ({{ prev_periode }}) akan diisi secara otomatis.
+      </p>
       <div class="ni-table-wrapper">
-        <table class="ni-table" style="min-width:700px">
+        <table class="ni-table" style="min-width:920px">
           <thead>
             <tr>
               <th>Kategori Overhead</th>
               <th>Cost Driver</th>
+              <th>Average Biaya Aktual</th>
+              <th>Average Biaya Produksi</th>
               <th>Estimasi Total Biaya (Rp)</th>
               <th id="vol_header">Estimasi Volume Driver</th>
               <th>Rate per Driver</th>
@@ -71,8 +76,22 @@
                 </span>
               </td>
               <td class="ni-text-right">
+                {% if row.avg_aktual is not None %}
+                  {{ row.avg_aktual|floatformat:2 }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="ni-text-right">
+                {% if row.avg_produksi is not None %}
+                  {{ row.avg_produksi|floatformat:2 }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td class="ni-text-right">
                 <input type="number" name="est_total_{{ row.cat.pk }}"
-                  value="{{ row.rate.estimasi_total|default:'' }}"
+                  value="{{ row.est_total|default_if_none:'' }}"
                   class="ni-input" style="width:140px;text-align:right"
                   step="0.01" min="0" placeholder="0">
               </td>
@@ -83,25 +102,25 @@
                   <input type="hidden" name="est_vol_{{ row.cat.pk }}" value="">
                 {% elif row.cat.cost_driver == 'PER_UNIT' %}
                   <input type="number" name="est_vol_{{ row.cat.pk }}"
-                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    value="{{ row.est_vol|default_if_none:'' }}"
                     class="ni-input" style="width:140px;text-align:right"
                     step="1" min="0" placeholder="Estimasi unit">
                   <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">unit diproduksi</div>
                 {% elif row.cat.cost_driver == 'PER_JAM_MESIN' %}
                   <input type="number" name="est_vol_{{ row.cat.pk }}"
-                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    value="{{ row.est_vol|default_if_none:'' }}"
                     class="ni-input" style="width:140px;text-align:right"
                     step="0.01" min="0" placeholder="Estimasi jam">
                   <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam mesin / periode</div>
                 {% elif row.cat.cost_driver == 'PER_JAM_TK' %}
                   <input type="number" name="est_vol_{{ row.cat.pk }}"
-                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    value="{{ row.est_vol|default_if_none:'' }}"
                     class="ni-input" style="width:140px;text-align:right"
                     step="0.01" min="0" placeholder="Estimasi jam">
                   <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:2px">jam tenaga kerja / periode</div>
                 {% else %}
                   <input type="number" name="est_vol_{{ row.cat.pk }}"
-                    value="{{ row.rate.estimasi_volume|default:'' }}"
+                    value="{{ row.est_vol|default_if_none:'' }}"
                     class="ni-input" style="width:140px;text-align:right"
                     step="0.0001" min="0" placeholder="0">
                 {% endif %}
@@ -109,7 +128,7 @@
               <td class="ni-text-right">
                 {% if row.cat.cost_driver == 'PERSEN_RM_COST' %}
                   <input type="number" name="rate_{{ row.cat.pk }}"
-                    value="{{ row.rate.rate_per_driver|default:'' }}"
+                    value="{{ row.rate_value|default_if_none:'' }}"
                     class="ni-input rate-input" style="width:120px;text-align:right"
                     step="0.000001" min="0" max="1"
                     placeholder="0.10 = 10%"
@@ -117,14 +136,14 @@
                     title="Isi langsung sebagai desimal (0.10 = 10%)">
                 {% else %}
                   <input type="text" name="rate_{{ row.cat.pk }}"
-                    value="{{ row.rate.rate_per_driver|default:'' }}"
+                    value="{{ row.rate_value|default_if_none:'' }}"
                     class="ni-input rate-display" style="width:120px;text-align:right;background:#f8fafc"
                     readonly data-category="{{ row.cat.pk }}">
                 {% endif %}
               </td>
               <td class="ni-text-right">
                 <input type="number" name="aktual_{{ row.cat.pk }}"
-                  value="{{ row.rate.aktual_total|default:'' }}"
+                  value="{{ row.aktual|default_if_none:'' }}"
                   class="ni-input" style="width:140px;text-align:right"
                   step="0.01" min="0" placeholder="Isi akhir periode">
               </td>

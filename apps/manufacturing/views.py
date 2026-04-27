@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.purchase.models import ItemMasterPurchase
 
 from .forms import BOMForm, OverheadCategoryForm, OverheadRateForm, ProductionOrderForm, parse_bom_lines
-from .models import BillOfMaterials, BOMLine, OverheadApplied, OverheadCategory, OverheadRate, ProductionOrder
+from .models import BillOfMaterials, BOMLine, OverheadApplied, OverheadCategory, OverheadRate, PeriodClosing, ProductionOrder
 from .services import (
     approve_production,
     compute_estimated_cost,
@@ -20,6 +20,7 @@ from .services import (
     get_bom_preview,
     get_fifo_unit_cost,
     get_overhead_rates_for_period,
+    get_period_closing_preview,
     period_end_closing,
     process_production,
     reverse_production,
@@ -633,13 +634,59 @@ def overhead_rate_setup(request):
 
     # Rebuild rates_map after GET
     rates_map = {r.overhead_category_id: r for r in OverheadRate.objects.filter(periode_bulan=periode)}
+
+    year, month = map(int, periode.split('-'))
+    prev_year = year if month > 1 else year - 1
+    prev_month = month - 1 if month > 1 else 12
+    prev_periode = f'{prev_year:04d}-{prev_month:02d}'
+    prev_rates_map = {r.overhead_category_id: r for r in OverheadRate.objects.filter(periode_bulan=prev_periode)}
+
+    def safe_div(value, divider):
+        if value is None or divider in (None, 0):
+            return None
+        return value / divider
+
     rows = []
     for cat in prod_categories:
-        rows.append({'cat': cat, 'rate': rates_map.get(cat.pk)})
+        rate = rates_map.get(cat.pk)
+        prev_rate = prev_rates_map.get(cat.pk)
+
+        est_total = None
+        est_vol = None
+        rate_value = None
+        aktual = None
+
+        if rate:
+            est_total = rate.estimasi_total
+            est_vol = rate.estimasi_volume
+            aktual = rate.aktual_total
+            rate_value = rate.rate_per_driver
+        elif prev_rate:
+            est_total = prev_rate.estimasi_total
+            est_vol = prev_rate.estimasi_volume
+            aktual = prev_rate.aktual_total
+            rate_value = prev_rate.rate_per_driver
+
+        avg_produksi = safe_div(est_total, est_vol)
+        avg_aktual = safe_div(aktual, est_vol)
+
+        rows.append({
+            'cat': cat,
+            'rate': rate,
+            'prev_rate': prev_rate,
+            'est_total': est_total,
+            'est_vol': est_vol,
+            'rate_value': rate_value,
+            'aktual': aktual,
+            'avg_produksi': avg_produksi,
+            'avg_aktual': avg_aktual,
+            'prev_periode': prev_periode,
+        })
 
     return render(request, 'manufacturing/overhead_rate_setup.html', {
         'rows': rows,
         'periode': periode,
+        'prev_periode': prev_periode,
     })
 
 
@@ -715,7 +762,9 @@ def overhead_period_closing(request):
             return redirect('manufacturing:overhead_monitoring')
         try:
             cogs_id_int = int(cogs_id)
-            results = period_end_closing(periode, cogs_id_int)
+            results = period_end_closing(
+                periode, cogs_id_int, closed_by=request.user,
+            )
             messages.success(
                 request,
                 f'Period-end closing untuk periode {periode} selesai. '
@@ -729,7 +778,20 @@ def overhead_period_closing(request):
     from datetime import date
     periode = request.GET.get('periode') or date.today().strftime('%Y-%m')
     cogs_accounts = Akun.objects.filter(kode_akun__startswith='5').order_by('kode_akun')
+    closing = PeriodClosing.objects.filter(periode_bulan=periode).first()
+    preview_results, missing_actual = get_period_closing_preview(periode)
+    year, month = map(int, periode.split('-'))
+    wip_count = ProductionOrder.objects.filter(
+        tanggal__year=year,
+        tanggal__month=month,
+        status='in_progress',
+        is_processed=True,
+    ).count()
     return render(request, 'manufacturing/overhead_period_closing.html', {
         'periode': periode,
         'cogs_accounts': cogs_accounts,
+        'closing': closing,
+        'preview_results': preview_results,
+        'missing_actual': missing_actual,
+        'wip_count': wip_count,
     })

@@ -3,7 +3,7 @@ from django.contrib import admin
 
 from .models import (
     BillOfMaterials, BOMLine, ProductionOrder, ProductionRMConsumption,
-    OverheadCategory, OverheadRate, OverheadApplied,
+    OverheadCategory, OverheadRate, OverheadApplied, PeriodClosing,
 )
 
 
@@ -88,4 +88,13 @@ class OverheadAppliedAdmin(admin.ModelAdmin):
     search_fields = ['production_order__production_id', 'overhead_category__name']
     list_select_related = ['production_order', 'overhead_category']
     readonly_fields = ['amount_applied']
+
+
+@admin.register(PeriodClosing)
+class PeriodClosingAdmin(admin.ModelAdmin):
+    list_display = ['periode_bulan', 'closed_at', 'closed_by', 'coa_cogs']
+    list_filter = ['closed_at', 'closed_by']
+    search_fields = ['periode_bulan', 'closed_by__email']
+    list_select_related = ['closed_by', 'coa_cogs']
+    readonly_fields = ['closed_at']
 

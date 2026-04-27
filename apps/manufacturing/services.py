@@ -12,7 +12,7 @@ from apps.inventory.models import InventoryRecord
 
 from .models import (
     BillOfMaterials, BOMLine, ProductionOrder, ProductionRMConsumption,
-    OverheadCategory, OverheadRate, OverheadApplied,
+    OverheadCategory, OverheadRate, OverheadApplied, PeriodClosing,
 )
 
 
@@ -227,6 +227,54 @@ def get_overhead_rates_for_period(periode_bulan: str) -> dict[int, 'OverheadRate
     return {r.overhead_category_id: r for r in rates}
 
 
+def _normalize_tanggal(tanggal):
+    if isinstance(tanggal, str):
+        return date.fromisoformat(tanggal)
+    return tanggal
+
+
+def _periode_bulan_from_tanggal(tanggal) -> str:
+    return _normalize_tanggal(tanggal).strftime('%Y-%m')
+
+
+def is_period_closed(periode_bulan: str) -> bool:
+    """Return True if the given period has already been closed."""
+    return PeriodClosing.objects.filter(periode_bulan=periode_bulan).exists()
+
+
+def get_period_closing_preview(periode_bulan: str) -> tuple[list[dict], list[str]]:
+    """Return the overhead closing preview results and missing actual categories."""
+    rates = (
+        OverheadRate.objects
+        .filter(
+            periode_bulan=periode_bulan,
+            overhead_category__overhead_type='PRODUCTION',
+        )
+        .select_related('overhead_category__coa_overhead_applied')
+    )
+
+    missing_actual = [r.overhead_category.name for r in rates if r.aktual_total is None]
+    zero = Decimal('0')
+    results = []
+    for rate in rates:
+        cat = rate.overhead_category
+        applied_total = (
+            OverheadApplied.objects
+            .filter(overhead_category=cat, periode_bulan=periode_bulan)
+            .aggregate(total=Sum('amount_applied'))['total'] or zero
+        )
+        actual_total = rate.aktual_total
+        variance = applied_total - actual_total if actual_total is not None else None
+        results.append({
+            'category': cat.name,
+            'applied': applied_total,
+            'actual': actual_total,
+            'variance': variance,
+            'has_applied_account': bool(cat.coa_overhead_applied_id),
+        })
+    return results, missing_actual
+
+
 def create_overhead_applied(
     production_order: ProductionOrder,
     overhead_drivers: dict[int, Decimal],
@@ -237,6 +285,9 @@ def create_overhead_applied(
     overhead_drivers: {overhead_category_id: driver_value}
     Returns total PRODUCTION overhead applied (for overhead_cost field on the order).
     """
+    if is_period_closed(periode_bulan):
+        raise ValueError(f'Periode {periode_bulan} sudah ditutup. Tidak dapat menambah overhead applied baru.')
+
     rates = get_overhead_rates_for_period(periode_bulan)
     total_overhead = Decimal('0')
 
@@ -269,6 +320,11 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
 
     Raises ValueError for validation failures or duplicate processing.
     """
+    periode_bulan = _periode_bulan_from_tanggal(production_order.tanggal)
+    if is_period_closed(periode_bulan):
+        raise ValueError(
+            f'Periode {periode_bulan} sudah ditutup. Produksi tidak dapat diproses kembali.'
+        )
     if production_order.is_processed:
         raise ValueError('Production order sudah diproses sebelumnya.')
 
@@ -499,23 +555,19 @@ def _create_fg_completion_journal(production_order: ProductionOrder) -> JurnalHe
 
 
 def _next_production_journal_number() -> str:
-    query = (
-        JurnalHeader.objects
-        .filter(nomor_transaksi__startswith='TRX-PROD-')
-        .order_by('-nomor_transaksi')
-    )
+    query = JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-PROD-')
     if transaction.get_connection().in_atomic_block:
         query = query.select_for_update()
 
-    last = query.values_list('nomor_transaksi', flat=True).first()
-    if last:
+    seq = 0
+    for nomor in query.values_list('nomor_transaksi', flat=True):
         try:
-            seq = int(last.rsplit('-', 1)[1]) + 1
+            candidate = int(nomor.rsplit('-', 1)[1])
+            if candidate > seq:
+                seq = candidate
         except (ValueError, IndexError):
-            seq = 1
-    else:
-        seq = 1
-    return f'TRX-PROD-{seq:04d}'
+            continue
+    return f'TRX-PROD-{seq + 1:04d}'
 
 
 # ---------------------------------------------------------------------------
@@ -531,6 +583,11 @@ def approve_production(production_order: ProductionOrder) -> None:
 
     Raises ValueError if the order is not a processable WIP.
     """
+    periode_bulan = _periode_bulan_from_tanggal(production_order.tanggal)
+    if is_period_closed(periode_bulan):
+        raise ValueError(
+            f'Periode {periode_bulan} sudah ditutup. WIP tidak dapat di-approve setelah closing.'
+        )
     if production_order.status != 'in_progress':
         raise ValueError('Hanya production order berstatus In Progress yang dapat di-approve.')
     if not production_order.is_processed:
@@ -587,6 +644,11 @@ def reverse_production(production_order: ProductionOrder) -> None:
     Restores RM FIFO batches, deletes FG FIFO batch, FG InventoryRecord,
     journal entries, and RM consumption records. Resets the order to in_progress.
     """
+    periode_bulan = _periode_bulan_from_tanggal(production_order.tanggal)
+    if is_period_closed(periode_bulan):
+        raise ValueError(
+            f'Periode {periode_bulan} sudah ditutup. Reverse produksi diblokir setelah closing.'
+        )
     if not production_order.is_processed:
         raise ValueError('Production order belum diproses, tidak dapat di-reverse.')
 
@@ -649,6 +711,7 @@ def reverse_production(production_order: ProductionOrder) -> None:
 def period_end_closing(
     periode_bulan: str,
     coa_cogs_id: int,
+    closed_by=None,
 ) -> list[dict]:
     """Compute over/under-absorbed overhead for a period and generate closing journals.
 
@@ -659,7 +722,7 @@ def period_end_closing(
         - If applied < aktual_total (under-absorbed): DR COGS / CR Overhead Applied
 
     Returns a list of result dicts with fields: category, applied, actual, variance, journal_id.
-    Raises ValueError if aktual_total is not set for any category in the period.
+    Raises ValueError if aktual_total is not set for any category in the period, or if the period is already closed.
     """
     rates = (
         OverheadRate.objects
@@ -669,6 +732,28 @@ def period_end_closing(
         )
         .select_related('overhead_category__coa_overhead_applied')
     )
+
+    if is_period_closed(periode_bulan):
+        zero = Decimal('0')
+        results: list[dict] = []
+        for rate in rates:
+            cat = rate.overhead_category
+            applied_total = (
+                OverheadApplied.objects
+                .filter(overhead_category=cat, periode_bulan=periode_bulan)
+                .aggregate(total=Sum('amount_applied'))['total'] or zero
+            )
+            actual_total = rate.aktual_total
+            variance = applied_total - actual_total if actual_total is not None else None
+            results.append({
+                'category': cat.name,
+                'applied': applied_total,
+                'actual': actual_total,
+                'variance': variance,
+                'journal_id': None,
+                'skipped': True,
+            })
+        return results
 
     if not rates.exists():
         raise ValueError(f'Tidak ada overhead rate yang dikonfigurasi untuk periode {periode_bulan}.')
@@ -767,5 +852,12 @@ def period_end_closing(
                 'variance': variance,
                 'journal_id': header.pk,
             })
+
+        # Create a closing audit record even if all variances are zero.
+        PeriodClosing.objects.create(
+            periode_bulan=periode_bulan,
+            closed_by=closed_by,
+            coa_cogs_id=coa_cogs_id,
+        )
 
     return results

@@ -12,7 +12,7 @@ from apps.purchase.models import ItemMasterPurchase, FIFOBatch
 
 from .models import (
     BillOfMaterials, BOMLine, OverheadApplied, OverheadCategory, OverheadRate,
-    ProductionOrder,
+    PeriodClosing, ProductionOrder,
 )
 
 
@@ -413,6 +413,7 @@ class FIFOSimulationTests(TestCase):
 
 class ProductionServiceTests(TestCase):
     def setUp(self):
+        self.user = _make_user()
         self.eb = _make_entitas()
         self.akun_wip = _make_akun('1301', 'WIP')
         self.akun_rm = _make_akun('1201', 'Persediaan RM')
@@ -530,6 +531,70 @@ class ProductionServiceTests(TestCase):
         self.order.refresh_from_db()
         self.assertEqual(self.order.overhead_applied.count(), 0)
         self.assertEqual(self.order.overhead_cost, Decimal('0'))
+
+    def test_reverse_production_blocked_after_period_close(self):
+        from .services import create_overhead_applied, process_production, reverse_production
+        akun_cogs = _make_akun('5201', 'COGS')
+        create_overhead_applied(self.order, {self.oh_cat.pk: Decimal('10')}, '2025-01')
+        process_production(self.order)
+        PeriodClosing.objects.create(
+            periode_bulan='2025-01',
+            closed_by=self.user,
+            coa_cogs=akun_cogs,
+        )
+        with self.assertRaises(ValueError):
+            reverse_production(self.order)
+
+    def test_period_end_closing_creates_period_closing_record(self):
+        from .services import period_end_closing
+
+        akun_cogs = _make_akun('5201', 'COGS')
+        existing_rate = OverheadRate.objects.get(overhead_category=self.oh_cat, periode_bulan='2025-01')
+        existing_rate.aktual_total = Decimal('90000')
+        existing_rate.save()
+        OverheadApplied.objects.create(
+            production_order=self.order, overhead_category=self.oh_cat,
+            periode_bulan='2025-01', driver_value=Decimal('10'), rate_per_driver=Decimal('10000'),
+        )
+
+        results = period_end_closing('2025-01', akun_cogs.pk, closed_by=self.user)
+        self.assertTrue(PeriodClosing.objects.filter(periode_bulan='2025-01').exists())
+        closing = PeriodClosing.objects.get(periode_bulan='2025-01')
+        self.assertEqual(closing.closed_by, self.user)
+        self.assertEqual(closing.coa_cogs, akun_cogs)
+        self.assertEqual(len(results), 1)
+
+    def test_period_end_closing_blocks_duplicate_closing(self):
+        from .services import period_end_closing
+
+        akun_cogs = _make_akun('5201', 'COGS')
+        PeriodClosing.objects.create(
+            periode_bulan='2025-01',
+            closed_by=self.user,
+            coa_cogs=akun_cogs,
+        )
+
+        results = period_end_closing('2025-01', akun_cogs.pk, closed_by=self.user)
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0].get('skipped'), 'Closing should skip duplicate journal creation.')
+
+    def test_next_production_journal_number_handles_invalid_suffix(self):
+        from apps.jurnal.models import JurnalHeader
+        from .services import _next_production_journal_number
+
+        JurnalHeader.objects.create(
+            nomor_transaksi='TRX-PROD-0001',
+            uraian_transaksi='Test 1',
+        )
+        JurnalHeader.objects.create(
+            nomor_transaksi='TRX-PROD-0005',
+            uraian_transaksi='Test 5',
+        )
+        JurnalHeader.objects.create(
+            nomor_transaksi='TRX-PROD-XYZ',
+            uraian_transaksi='Test invalid',
+        )
+        self.assertEqual(_next_production_journal_number(), 'TRX-PROD-0006')
 
     def test_cannot_process_twice(self):
         from .services import process_production

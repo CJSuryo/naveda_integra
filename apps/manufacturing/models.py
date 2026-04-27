@@ -441,6 +441,45 @@ class OverheadRate(models.Model):
         super().save(*args, **kwargs)
 
 
+class PeriodClosing(models.Model):
+    """Tracks a period-end closing event and who executed it."""
+    periode_bulan = models.CharField(
+        max_length=7,
+        unique=True,
+        verbose_name='Periode (YYYY-MM)',
+        help_text='Periode yang sudah ditutup. Format: YYYY-MM.',
+    )
+    closed_at = models.DateTimeField(auto_now_add=True, verbose_name='Tanggal Ditutup')
+    closed_by = models.ForeignKey(
+        'accounts.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='manufacturing_period_closings',
+        verbose_name='Ditutup Oleh',
+    )
+    coa_cogs = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='manufacturing_period_closings',
+        verbose_name='Akun COGS',
+        help_text='Akun COGS yang digunakan pada closing periode.',
+    )
+
+    class Meta:
+        verbose_name = 'Period Closing'
+        verbose_name_plural = 'Period Closings'
+        ordering = ['-closed_at']
+        indexes = [
+            models.Index(fields=['periode_bulan'], name='idx_pc_periode'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.periode_bulan} ditutup pada {self.closed_at.date()} oleh {self.closed_by or "-"}'
+
+
 class OverheadApplied(models.Model):
     """Records overhead allocated to a specific Production Order.
 

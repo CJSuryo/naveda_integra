@@ -9,11 +9,33 @@
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in" style="max-width:600px">
+<div class="ni-card ni-animate-fade-in" style="max-width:760px">
   <div class="ni-card__body">
-    <div style="background:#fffbeb;border:1px solid var(--ni-warning);border-radius:var(--ni-radius-sm);padding:14px 16px;margin-bottom:20px;font-size:0.875rem">
-      <strong>Perhatian:</strong> Pastikan semua Overhead Rate untuk periode <strong>{{ periode }}</strong> sudah diisi <em>aktual_total</em> sebelum melanjutkan.
-      <a href="{% url 'manufacturing:overhead_rate_setup' %}?periode={{ periode }}" style="margin-left:4px">Setup rates →</a>
+    {% if closing %}
+    <div class="ni-alert ni-alert--success" style="margin-bottom:20px;">
+      <strong>Periode sudah ditutup.</strong>
+      Closing periode {{ closing.periode_bulan }} dilakukan pada {{ closing.closed_at|date:'Y-m-d H:i' }} oleh {{ closing.closed_by }}.
+    </div>
+    {% endif %}
+
+    {% if wip_count > 0 %}
+    <div class="ni-alert" style="margin-bottom:20px;background:#fffbeb;border:1px solid var(--ni-warning);">
+      <strong>Ada {{ wip_count }} production order WIP yang belum selesai untuk periode ini.</strong>
+      Biaya tersebut mungkin masih tersisa di akun WIP dan tidak akan tercermin dalam laporan periode ini.
+    </div>
+    {% endif %}
+
+    {% if missing_actual %}
+    <div class="ni-alert" style="margin-bottom:20px;background:#fee2e2;border:1px solid var(--ni-danger);">
+      <strong>Aktual belum lengkap:</strong>
+      {{ missing_actual|join:', ' }}.
+      Isi semua <em>Aktual Total Biaya</em> sebelum mengeksekusi closing.
+    </div>
+    {% endif %}
+
+    <div style="background:#eff6ff;border:1px solid var(--ni-primary-light);border-radius:var(--ni-radius-sm);padding:14px 16px;margin-bottom:20px;font-size:0.875rem;color:var(--ni-text-muted)">
+      <strong>Catatan:</strong> Kategori overhead bertipe <strong>PERIOD</strong> tidak dicatat otomatis oleh modul ini.
+      Jika ada biaya period overhead, harap catat secara manual melalui modul <strong>Jurnal</strong>.
     </div>
 
     <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px">
@@ -24,7 +46,37 @@
       <li><strong>Under-absorbed</strong> (diserap &lt; aktual): DR COGS / CR Overhead Applied</li>
     </ul>
 
-    <form method="post" action="{% url 'manufacturing:overhead_period_closing' %}">
+    {% if preview_results %}
+    <div class="ni-card ni-card--compact" style="margin-bottom:20px;">
+      <div class="ni-card__body">
+        <h3 class="ni-page-header__title" style="font-size:0.95rem;margin-bottom:12px">Preview Closing</h3>
+        <div class="ni-table-wrapper">
+          <table class="ni-table" style="min-width:700px">
+            <thead>
+              <tr>
+                <th>Kategori</th>
+                <th class="ni-text-right">Applied</th>
+                <th class="ni-text-right">Aktual</th>
+                <th class="ni-text-right">Variance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in preview_results %}
+              <tr>
+                <td>{{ item.category }}</td>
+                <td class="ni-text-right">{{ item.applied|floatformat:2 }}</td>
+                <td class="ni-text-right">{% if item.actual is not None %}{{ item.actual|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+                <td class="ni-text-right">{% if item.variance is not None %}{{ item.variance|floatformat:2 }}{% else %}&ndash;{% endif %}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'manufacturing:overhead_period_closing' %}" id="closing-form">
       {% csrf_token %}
       <input type="hidden" name="periode" value="{{ periode }}">
 
@@ -35,7 +87,7 @@
 
       <div class="ni-form-group">
         <label class="ni-form-label">Akun COGS (debit/kredit penyesuaian)</label>
-        <select name="coa_cogs_id" class="ni-input" required>
+        <select name="coa_cogs_id" class="ni-input" {% if closing %}disabled{% endif %} required>
           <option value="">— Pilih akun —</option>
           {% for akun in cogs_accounts %}
           <option value="{{ akun.pk }}">{{ akun.kode_akun }} — {{ akun.nama }}</option>
@@ -44,13 +96,31 @@
       </div>
 
       <div class="ni-btn-row" style="margin-top:24px">
+        {% if not closing %}
         <button type="submit" class="ni-btn ni-btn--primary">
           <i data-lucide="check" style="width:16px;height:16px"></i> Proses Closing
         </button>
-        <a href="{% url 'manufacturing:overhead_monitoring' %}?periode={{ periode }}" class="ni-btn ni-btn--secondary">Batal</a>
+        {% else %}
+        <button type="button" class="ni-btn ni-btn--secondary" disabled>Periode sudah ditutup</button>
+        {% endif %}
+        <a href="{% url 'manufacturing:overhead_monitoring' %}?periode={{ periode }}" class="ni-btn ni-btn--secondary">Kembali</a>
       </div>
     </form>
   </div>
 </div>
 
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+  var form = document.getElementById('closing-form');
+  if (!form) return;
+  form.addEventListener('submit', function (event) {
+    if (!confirm('Tindakan ini akan menutup periode dan membuat jurnal penyesuaian. Lanjutkan?')) {
+      event.preventDefault();
+    }
+  });
+})();
+</script>
 {% endblock %}

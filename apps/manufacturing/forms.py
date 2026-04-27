@@ -100,6 +100,17 @@ class ProductionOrderForm(forms.ModelForm):
             BOM.objects.select_related('finished_good', 'entitas_bisnis').order_by('bom_id')
         )
 
+    def clean_tanggal(self):
+        tanggal = self.cleaned_data.get('tanggal')
+        if tanggal:
+            from .models import PeriodClosing
+            periode = tanggal.strftime('%Y-%m')
+            if PeriodClosing.objects.filter(periode_bulan=periode).exists():
+                raise ValidationError(
+                    f'Periode {periode} sudah ditutup. Tidak dapat membuat production order pada periode ini.'
+                )
+        return tanggal
+
 
 def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
     """Parse BOM line data from POST.
