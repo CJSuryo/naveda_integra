@@ -152,13 +152,16 @@
 
       <div class="ni-nav-item {% if 'purchase' in request.path and '/purchase/persediaan/' not in request.path and '/purchase/aset-tetap/' not in request.path and '/purchase/aset-lainnya/' not in request.path and '/purchase/item-master/' not in request.path and '/purchase/kategori/' not in request.path and '/purchase/settings/' not in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
-          <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
-          <span class="ni-nav-link__text">Purchase</span>
+          <i data-lucide="credit-card" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Utang</span>
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
           <a href="{% url 'purchase:list' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Daftar Purchase</span>
+            <span class="ni-nav-link__text">Daftar Utang</span>
+          </a>
+          <a href="{% url 'purchase:create' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tambah Utang</span>
           </a>
         </div>
       </div>
