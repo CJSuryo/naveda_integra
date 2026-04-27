@@ -1,4 +1,5 @@
 ﻿"""Manufacturing tests."""
+from datetime import date
 from decimal import Decimal
 
 from django.test import TestCase
@@ -570,7 +571,7 @@ class ProductionServiceTests(TestCase):
 
     def test_period_end_closing_creates_variance_journals(self):
         from .services import period_end_closing
-        from apps.jurnal.models import JurnalDetail
+        from apps.jurnal.models import JurnalDetail, JurnalHeader
 
         akun_cogs = _make_akun('5201', 'COGS')
         other_cat = OverheadCategory.objects.create(
@@ -604,6 +605,20 @@ class ProductionServiceTests(TestCase):
         self.assertIsNotNone(under['journal_id'])
         self.assertTrue(JurnalDetail.objects.filter(jurnal_header_id=over['journal_id'], akun=self.akun_applied, debit=Decimal('10000')).exists())
         self.assertTrue(JurnalDetail.objects.filter(jurnal_header_id=under['journal_id'], akun=self.akun_applied, kredit=Decimal('20000')).exists())
+
+        header_over = JurnalHeader.objects.get(
+            uraian_transaksi=f'Closing overhead over-absorbed {self.oh_cat.name} 2025-01'
+        )
+        self.assertEqual(header_over.tanggal, date(2025, 1, 31))
+        self.assertEqual(header_over.entitas_bisnis, self.eb)
+
+        current_count = JurnalHeader.objects.filter(uraian_transaksi__contains='Closing overhead').count()
+        results_again = period_end_closing('2025-01', akun_cogs.pk)
+        self.assertEqual(
+            JurnalHeader.objects.filter(uraian_transaksi__contains='Closing overhead').count(),
+            current_count,
+        )
+        self.assertTrue(all(result['journal_id'] is None for result in results_again))
 
 
 # ---------------------------------------------------------------------------

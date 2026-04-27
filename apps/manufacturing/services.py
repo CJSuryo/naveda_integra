@@ -1,4 +1,6 @@
 """Manufacturing services — BOM cost computation, FIFO consumption, production processing."""
+from calendar import monthrange
+from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
@@ -497,13 +499,15 @@ def _create_fg_completion_journal(production_order: ProductionOrder) -> JurnalHe
 
 
 def _next_production_journal_number() -> str:
-    last = (
+    query = (
         JurnalHeader.objects
         .filter(nomor_transaksi__startswith='TRX-PROD-')
         .order_by('-nomor_transaksi')
-        .values_list('nomor_transaksi', flat=True)
-        .first()
     )
+    if transaction.get_connection().in_atomic_block:
+        query = query.select_for_update()
+
+    last = query.values_list('nomor_transaksi', flat=True).first()
     if last:
         try:
             seq = int(last.rsplit('-', 1)[1]) + 1
@@ -680,6 +684,10 @@ def period_end_closing(
     zero = Decimal('0')
     from apps.jurnal.models import JurnalHeader, JurnalDetail  # local to avoid circulars
 
+    year, month = map(int, periode_bulan.split('-'))
+    last_day = monthrange(year, month)[1]
+    journal_date = date(year, month, last_day)
+
     with transaction.atomic():
         for rate in rates:
             cat = rate.overhead_category
@@ -708,7 +716,6 @@ def period_end_closing(
             except Akun.DoesNotExist:
                 raise ValueError(f'Akun COGS (id={coa_cogs_id}) tidak ditemukan.')
 
-            nomor = _next_production_journal_number()
             if variance > 0:
                 # Over-absorbed: applied > actual — reduce overhead applied
                 uraian = f'Closing overhead over-absorbed {cat.name} {periode_bulan}'
@@ -720,10 +727,31 @@ def period_end_closing(
                 debit_akun = coa_cogs
                 kredit_akun = cat.coa_overhead_applied
 
+            if JurnalHeader.objects.filter(uraian_transaksi=uraian, is_penyesuaian=True).exists():
+                results.append({
+                    'category': cat.name,
+                    'applied': applied_total,
+                    'actual': actual_total,
+                    'variance': variance,
+                    'journal_id': None,
+                    'skipped': True,
+                })
+                continue
+
+            entitas_ids = list(
+                OverheadApplied.objects
+                .filter(overhead_category=cat, periode_bulan=periode_bulan)
+                .values_list('production_order__entitas_bisnis_id', flat=True)
+                .distinct()
+            )
+            entitas_bisnis_id = entitas_ids[0] if len(entitas_ids) == 1 else None
+
+            nomor = _next_production_journal_number()
             header = JurnalHeader.objects.create(
-                tanggal=f'{periode_bulan}-01',  # first of month as journal date
+                tanggal=journal_date,
                 nomor_transaksi=nomor,
                 uraian_transaksi=uraian,
+                entitas_bisnis_id=entitas_bisnis_id,
                 is_penyesuaian=True,
             )
             amount = abs(variance)

@@ -170,10 +170,15 @@ class OverheadCategoryForm(forms.ModelForm):
         self.fields['coa_overhead_applied'].queryset = applied_qs
         self.fields['coa_overhead_applied'].required = False
         self.fields['cost_driver'].required = False
+        self.fields['overhead_type'].widget = forms.HiddenInput()
+        self.fields['overhead_type'].required = False
+        if not self.instance.pk:
+            self.fields['overhead_type'].initial = 'PRODUCTION'
 
     def clean(self):
         cleaned = super().clean()
-        overhead_type = cleaned.get('overhead_type')
+        overhead_type = cleaned.get('overhead_type') or 'PRODUCTION'
+        cleaned['overhead_type'] = overhead_type
         cost_driver = cleaned.get('cost_driver')
         coa_applied = cleaned.get('coa_overhead_applied')
         if overhead_type == 'PRODUCTION':

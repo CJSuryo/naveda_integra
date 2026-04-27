@@ -2,19 +2,23 @@
 {% block title %}{% if is_create %}Tambah{% else %}Edit{% endif %} Overhead Category{% endblock %}
 {% block content %}
 
-<div class="ni-page-header">
-  <div>
-    <h1 class="ni-page-header__title">
-      {% if is_create %}Tambah Overhead Category{% else %}Edit: {{ object.name }}{% endif %}
-    </h1>
-    <p class="ni-page-header__subtitle">Definisikan jenis overhead dan cara alokasi ke produksi</p>
-  </div>
-</div>
+<form method="post" id="oh-cat-form">
+  {% csrf_token %}
+  {{ form.overhead_type }}
 
-<div class="ni-card ni-animate-fade-in" style="max-width:720px">
-  <div class="ni-card__body">
-    <form method="post" id="oh-cat-form">
-      {% csrf_token %}
+  <div class="ni-modal-backdrop ni-modal-backdrop--visible" id="oh-modal-backdrop">
+    <div class="ni-modal ni-modal--lg">
+      <div class="ni-modal__header">
+        <div>
+          <h3 class="ni-modal__title">{% if is_create %}Tambah Overhead Category{% else %}Edit: {{ object.name }}{% endif %}</h3>
+          <p style="margin:4px 0 0;color:var(--ni-text-muted);font-size:0.9375rem">Definisikan jenis overhead dan cara alokasi ke produksi</p>
+        </div>
+        <button type="button" class="ni-modal__close" onclick="window.location='{% url 'manufacturing:overhead_category_list' %}'">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="ni-modal__body">
 
       <!-- Nama Kategori -->
       <div class="ni-form-group">
@@ -24,58 +28,6 @@
         <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px">
           Contoh: <em>"Listrik Mesin Produksi"</em>, <em>"Gaji Operator Lantai 1"</em>
         </div>
-      </div>
-
-      <!-- Sifat Overhead — card radio buttons -->
-      <div class="ni-form-group">
-        <label class="ni-form-label">Sifat Overhead <span style="color:var(--ni-danger)">*</span></label>
-        {% with cur=form.overhead_type.value %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px" id="type-cards">
-
-          <label class="oh-type-card" data-value="PRODUCTION" style="display:block;padding:16px;border-radius:var(--ni-radius);cursor:pointer;border:2px solid {% if cur == 'PRODUCTION' or not cur %}var(--ni-primary){% else %}var(--ni-border){% endif %};background:{% if cur == 'PRODUCTION' or not cur %}var(--ni-primary-light){% else %}var(--ni-bg-card){% endif %}">
-            <input type="radio" name="overhead_type" value="PRODUCTION" class="sr-only" id="type_prod" {% if cur == 'PRODUCTION' or not cur %}checked{% endif %}>
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ni-primary);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center">
-                <div id="type-prod-dot" style="width:8px;height:8px;border-radius:50%;background:var(--ni-primary);{% if cur == 'PERIOD' %}display:none{% endif %}"></div>
-              </div>
-              <div>
-                <div style="font-weight:600;font-size:0.9375rem">Production Overhead</div>
-                <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px;line-height:1.5">
-                  Biaya terkait <strong>langsung</strong> dengan proses produksi.
-                  Dialokasikan ke setiap produk via Overhead Rate dan masuk ke harga pokok barang jadi (COGS).
-                </div>
-                <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:6px">Contoh: listrik mesin, gaji operator, depresiasi mesin</div>
-              </div>
-            </div>
-          </label>
-
-          <label class="oh-type-card" data-value="PERIOD" style="display:block;padding:16px;border-radius:var(--ni-radius);cursor:pointer;border:2px solid {% if cur == 'PERIOD' %}var(--ni-primary){% else %}var(--ni-border){% endif %};background:{% if cur == 'PERIOD' %}var(--ni-primary-light){% else %}var(--ni-bg-card){% endif %}">
-            <input type="radio" name="overhead_type" value="PERIOD" class="sr-only" id="type_period" {% if cur == 'PERIOD' %}checked{% endif %}>
-            <div style="display:flex;align-items:flex-start;gap:10px">
-              <div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--ni-primary);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center">
-                <div id="type-period-dot" style="width:8px;height:8px;border-radius:50%;background:var(--ni-primary);{% if cur != 'PERIOD' %}display:none{% endif %}"></div>
-              </div>
-              <div>
-                <div style="font-weight:600;font-size:0.9375rem">Period Overhead</div>
-                <div style="font-size:0.8125rem;color:var(--ni-text-muted);margin-top:4px;line-height:1.5">
-                  Biaya <strong>tidak</strong> terkait langsung dengan produk.
-                  Langsung jadi beban P&L dan <strong>tidak</strong> mempengaruhi harga pokok produk.
-                </div>
-                <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:6px">Contoh: listrik kantor, gaji admin, sewa kantor, ATK</div>
-              </div>
-            </div>
-          </label>
-
-        </div>
-        {% endwith %}
-        {% if form.overhead_type.errors %}<div class="ni-form-error" style="margin-top:6px">{{ form.overhead_type.errors }}</div>{% endif %}
-      </div>
-
-      <!-- Period info box (shown when PERIOD selected) -->
-      <div id="period-info-box" style="display:none;padding:12px 16px;background:var(--ni-primary-light);border-radius:var(--ni-radius-sm);font-size:0.8125rem;color:var(--ni-primary);margin-bottom:16px">
-        <i data-lucide="info" style="width:14px;height:14px;vertical-align:-2px"></i>
-        Overhead ini <strong>tidak akan muncul</strong> di Production Order dan tidak mempengaruhi harga pokok produk.
-        Pastikan biaya ini dicatat melalui modul Pembelian atau Jurnal Manual.
       </div>
 
       <!-- Akun Beban Aktual -->
@@ -171,80 +123,13 @@
       <div class="ni-alert ni-alert--danger" style="margin-bottom:16px">{{ form.non_field_errors }}</div>
       {% endif %}
 
-      <div class="ni-btn-row" style="margin-top:24px">
-        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+      <div class="ni-modal__footer" style="gap:10px">
         <a href="{% url 'manufacturing:overhead_category_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
       </div>
-    </form>
+    </div>
   </div>
 </div>
+</form>
 
-{% endblock %}
-{% block extra_js %}
-<script>
-(function () {
-  'use strict';
-
-  var typeCards = document.querySelectorAll('.oh-type-card');
-  var driverGroup = document.getElementById('cost-driver-group');
-  var coaAppliedGroup = document.getElementById('coa-applied-group');
-  var periodInfoBox = document.getElementById('period-info-box');
-  var driverCards = document.querySelectorAll('.oh-driver-card');
-
-  function getSelectedType() {
-    var checked = document.querySelector('input[name="overhead_type"]:checked');
-    return checked ? checked.value : 'PRODUCTION';
-  }
-
-  function getSelectedDriver() {
-    var checked = document.querySelector('input[name="cost_driver"]:checked');
-    return checked ? checked.value : '';
-  }
-
-  function updateTypeCardStyles(sel) {
-    typeCards.forEach(function (card) {
-      var isSel = card.dataset.value === sel;
-      card.style.borderColor = isSel ? 'var(--ni-primary)' : 'var(--ni-border)';
-      card.style.background = isSel ? 'var(--ni-primary-light)' : 'var(--ni-bg-card)';
-      var dot = document.getElementById(card.dataset.value === 'PRODUCTION' ? 'type-prod-dot' : 'type-period-dot');
-      if (dot) dot.style.display = isSel ? '' : 'none';
-    });
-  }
-
-  function updateDriverCardStyles(sel) {
-    driverCards.forEach(function (card) {
-      var isSel = card.dataset.value === sel;
-      card.style.borderColor = isSel ? 'var(--ni-accent)' : 'var(--ni-border)';
-      card.style.background = isSel ? '#f0f0ff' : 'var(--ni-bg-card)';
-    });
-  }
-
-  function applyTypeChange() {
-    var isProd = getSelectedType() === 'PRODUCTION';
-    if (driverGroup) driverGroup.style.display = isProd ? '' : 'none';
-    if (coaAppliedGroup) coaAppliedGroup.style.display = isProd ? '' : 'none';
-    if (periodInfoBox) periodInfoBox.style.display = isProd ? 'none' : '';
-    updateTypeCardStyles(getSelectedType());
-  }
-
-  typeCards.forEach(function (card) {
-    card.addEventListener('click', function () {
-      var radio = card.querySelector('input[type="radio"]');
-      if (radio) { radio.checked = true; applyTypeChange(); }
-    });
-  });
-
-  driverCards.forEach(function (card) {
-    card.addEventListener('click', function () {
-      var radio = card.querySelector('input[type="radio"]');
-      if (radio) { radio.checked = true; updateDriverCardStyles(card.dataset.value); }
-    });
-  });
-
-  applyTypeChange();
-  updateDriverCardStyles(getSelectedDriver());
-
-  if (typeof lucide !== 'undefined') lucide.createIcons();
-})();
-</script>
 {% endblock %}
