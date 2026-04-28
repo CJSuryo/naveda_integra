@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daftar Utang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Utang</h1>
+    <p class="ni-page-header__subtitle">Daftar kewajiban pembayaran dan status utang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'utang:create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Utang
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor Utang</th>
+          <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
+          <th>Total</th>
+          <th>Dibayar</th>
+          <th>Sisa</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for utang in utangs %}
+        <tr>
+          <td><a href="{% url 'utang:detail' utang.pk %}" class="ni-link">{{ utang.nomor_utang }}</a></td>
+          <td>{{ utang.tanggal }}</td>
+          <td>{{ utang.entitas_display }}</td>
+          <td class="ni-text-right">{{ utang.total_amount|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ utang.paid_amount|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ utang.outstanding_amount|floatformat:0|intcomma }}</td>
+          <td>
+            {% if utang.status == 'paid' %}
+              <span class="ni-badge ni-badge--success">Lunas</span>
+            {% elif utang.status == 'partial' %}
+              <span class="ni-badge ni-badge--warning">Sebagian</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Terbuka</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'utang:detail' utang.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
+              <a href="{% url 'utang:update' utang.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'utang:delete' utang.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data utang.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
