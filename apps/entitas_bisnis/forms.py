@@ -17,7 +17,7 @@ class TipeEntitasForm(forms.ModelForm):
 class EntitasBisnisForm(forms.ModelForm):
     class Meta:
         model = EntitasBisnis
-        fields = ('nama', 'tipe_entitas', 'relasi', 'email', 'telepon', 'alamat_lengkap', 'tax_id', 'tanggal_bergabung', 'status_aktif')
+        fields = ('nama', 'tipe_entitas', 'relasi', 'email', 'telepon', 'alamat_lengkap', 'tax_id', 'tanggal_bergabung', 'status_aktif', 'is_company_profile')
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
             'tipe_entitas': forms.Select(attrs={'class': 'ni-input'}),
@@ -28,6 +28,7 @@ class EntitasBisnisForm(forms.ModelForm):
             'tax_id': forms.TextInput(attrs={'class': 'ni-input'}),
             'tanggal_bergabung': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'status_aktif': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+            'is_company_profile': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):

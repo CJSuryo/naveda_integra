@@ -6,6 +6,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
 <link rel="stylesheet" href="{% static 'css/transaction-forms.css' %}">
 <style>
+  /* ── Shared (all breakpoints) ── */
   .ni-sales-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
   .ni-sales-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .ni-sales-eb-card__header select { flex: 1; min-width: 0; }
@@ -19,9 +20,166 @@
   .ni-sales-item-table-wrapper { overflow-x: auto; }
   .ni-stock-info { font-size: 0.75rem; color: var(--ni-text-muted); margin-top: 2px; }
   .ni-stock-warning { color: var(--ni-danger); font-weight: 600; }
-  @media (max-width: 768px) {
-    .ni-sales-eb-card { padding: 12px; }
-    .ni-sales-item-table { min-width: 900px; }
+
+  /* ── Mobile styles (≤ 767px) ── */
+  @media (max-width: 767px) {
+    /* Page header */
+    .ni-page-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .ni-page-header__title { font-size: 1.25rem; }
+    .ni-page-header__subtitle { font-size: 0.8rem; }
+
+    /* Form header rows */
+    .ni-form-row { flex-direction: column; gap: 16px; }
+    .ni-form-row .ni-form-group { width: 100%; }
+    .ni-form-group .ni-input { font-size: 16px; }
+
+    /* EB card */
+    .ni-sales-eb-card { padding: 12px; margin-bottom: 12px; }
+    .ni-sales-eb-card__header { flex-direction: column; gap: 8px; }
+    .ni-sales-eb-card__header select { width: 100%; }
+    #ebGroupsContainer { display: flex; flex-direction: column; gap: 12px; }
+
+    /* ── Table → Card transform ── */
+    /* Hide the scrollable table wrapper; table itself becomes card-stacked */
+    .ni-sales-item-table-wrapper { overflow-x: visible; }
+    .ni-sales-item-table thead { display: none; }
+
+    /* Each <tr> becomes a card */
+    .ni-sales-item-table tbody tr:not(.advanced-row) {
+      display: block;
+      border: 1px solid var(--ni-border);
+      border-radius: var(--ni-radius);
+      margin-bottom: 10px;
+      padding: 10px 12px 4px;
+      background: var(--ni-bg-card);
+      box-shadow: var(--ni-shadow-sm);
+    }
+    .ni-sales-item-table tbody tr:not(.advanced-row):last-child {
+      margin-bottom: 0;
+    }
+
+    /* Each <td> becomes a labeled row */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--ni-border);
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      vertical-align: middle;
+    }
+    .ni-sales-item-table tbody tr:not(.advanced-row) td:last-child {
+      border-bottom: none;
+      justify-content: flex-end;
+      padding-top: 8px;
+    }
+
+    /* The data-label pseudo-element acts as the field label */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td[data-label]:not([data-label=""])::before {
+      content: attr(data-label);
+      font-size: 0.72rem;
+      font-weight: 500;
+      color: var(--ni-text-muted);
+      flex-shrink: 0;
+      min-width: 110px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+
+    /* Hide item TDs with display:none when no item selected — keep working */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td[style*="display:none"],
+    .ni-sales-item-table tbody tr:not(.advanced-row) td[style*="display: none"] {
+      display: none !important;
+    }
+
+    /* Inputs/selects fill remaining space */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td .ni-sales-input,
+    .ni-sales-item-table tbody tr:not(.advanced-row) td select.ni-sales-input,
+    .ni-sales-item-table tbody tr:not(.advanced-row) td input.ni-sales-input {
+      flex: 1;
+      min-width: 0;
+      font-size: 16px; /* prevent iOS zoom */
+      min-height: 40px;
+      padding: 8px 10px;
+    }
+
+    /* TomSelect control height on mobile */
+    .ni-sales-item-table .ts-wrapper.single .ts-control {
+      min-height: 40px;
+      padding: 8px 10px;
+      font-size: 16px;
+    }
+
+    /* Stock info sits below the TomSelect, full width */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td[data-label="Item"] {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .ni-sales-item-table tbody tr:not(.advanced-row) td[data-label="Item"]::before {
+      min-width: unset;
+    }
+
+    /* Advanced tax row on mobile */
+    .ni-sales-item-table tbody tr.advanced-row {
+      display: block;
+      border: 1px dashed var(--ni-border);
+      border-radius: var(--ni-radius);
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      background: var(--ni-bg);
+    }
+    .ni-sales-item-table tbody tr.advanced-row td {
+      display: block;
+      padding: 6px 0;
+      border: none;
+    }
+    .ni-sales-item-table tbody tr.advanced-row td > div {
+      flex-direction: column !important;
+      gap: 10px !important;
+    }
+
+    /* Delete button: full-width, visible */
+    .ni-sales-item-table tbody tr:not(.advanced-row) td:last-child .ni-btn {
+      width: 100%;
+      justify-content: center;
+      min-height: 36px;
+      padding: 6px 12px;
+    }
+
+    /* Add Item button row */
+    .ni-btn-row { flex-direction: column; gap: 8px; }
+    .ni-btn-row .ni-btn { width: 100%; justify-content: center; }
+
+    /* Group footer totals: 3-column grid */
+    .ni-eb-group-footer {
+      display: grid !important;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-left: 0 !important;
+      font-size: 0.78rem;
+    }
+    .ni-eb-group-footer span {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      background: var(--ni-bg);
+      border-radius: var(--ni-radius-sm);
+      padding: 6px 4px;
+    }
+    .ni-eb-group-footer span strong { font-size: 0.8rem; margin-top: 2px; }
+
+    /* Add item + advanced row */
+    .ni-eb-add-row { flex-wrap: wrap; gap: 8px !important; }
+    .ni-eb-add-row .ni-btn { flex: 1; min-width: 120px; justify-content: center; }
+
+    /* Journal preview */
+    #journalPreview { width: 100%; overflow-x: auto; }
+    #journalPreview table { min-width: 500px; }
+    .ni-journal-preview { padding: 12px; }
   }
 </style>
 {% endblock %}
@@ -224,14 +382,14 @@
           '<tbody id="' + gid + '_items"></tbody>' +
         '</table>' +
       '</div>' +
-      '<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">' +
+      '<div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;" class="ni-eb-add-row">' +
         '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addItemRow(\'' + gid + '\')">' +
           '<i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item' +
         '</button>' +
         '<span class="ni-advanced-toggle" onclick="toggleAdvanced(\'' + gid + '\')">' +
           '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced (Pajak)' +
         '</span>' +
-        '<div style="margin-left:auto;display:flex;gap:16px;font-size:0.85rem;">' +
+        '<div style="margin-left:auto;display:flex;gap:16px;font-size:0.85rem;" class="ni-eb-group-footer">' +
           '<span style="color:var(--ni-text-muted);">Total HPP: <strong id="' + gid + '_total_hpp" style="color:var(--ni-danger);">0</strong></span>' +
           '<span style="color:var(--ni-text-muted);">Total Penjualan: <strong id="' + gid + '_total_sales" style="color:var(--ni-primary);">0</strong></span>' +
           '<span style="color:var(--ni-text-muted);">Total Profit: <strong id="' + gid + '_total_profit" style="color:var(--ni-success);">0</strong></span>' +
@@ -323,19 +481,19 @@
     var tr = document.createElement('tr');
     tr.id = rid;
     tr.innerHTML =
-      '<td>' +
+      '<td data-label="Item">' +
         '<select id="' + rid + '_item" class="ni-sales-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select>' +
         '<div class="ni-stock-info" id="' + rid + '_stock"></div>' +
       '</td>' +
-      '<td class="item-field-td"' + fieldTdStyle + '><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
-      '<td class="item-field-td col-satuan"' + fieldTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"' + satuanInputDisabled + '></td>' +
-      '<td class="item-field-td"' + fieldTdStyle + '><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Harga Jual"></td>' +
-      '<td class="item-field-td col-satuan"' + fieldTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"' + satuanInputDisabled + '></td>' +
-      '<td class="item-field-td col-bulk"' + fieldTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"' + bulkInputDisabled + '></td>' +
-      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
-      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
-      '<td class="item-field-td"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
-      '<td>' +
+      '<td class="item-field-td" data-label="Sub-Trx Type"' + fieldTdStyle + '><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
+      '<td class="item-field-td col-satuan" data-label="Qty"' + fieldTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"' + satuanInputDisabled + '></td>' +
+      '<td class="item-field-td" data-label="Harga Jual"' + fieldTdStyle + '><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Harga Jual"></td>' +
+      '<td class="item-field-td col-satuan" data-label="Total"' + fieldTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"' + satuanInputDisabled + '></td>' +
+      '<td class="item-field-td col-bulk" data-label="HPP Terpakai"' + fieldTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"' + bulkInputDisabled + '></td>' +
+      '<td class="item-field-td" data-label="Offset CoA (HPP)"' + fieldTdStyle + '><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
+      '<td class="item-field-td" data-label="Revenue Akun"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
+      '<td class="item-field-td" data-label="Payment Akun"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
+      '<td data-label="">' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
         '</button>' +

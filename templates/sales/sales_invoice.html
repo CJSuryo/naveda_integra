@@ -1,0 +1,417 @@
+{% load humanize %}<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoice {{ sales.transaction_id }}</title>
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: #f0f2f5; color: #1e293b; font-size: 13px; }
+
+    /* ── Screen toolbar (hidden on print) ── */
+    .inv-toolbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #0f172a; color: #fff;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px; gap: 12px; flex-wrap: wrap;
+    }
+    .inv-toolbar__title { font-size: 0.85rem; font-weight: 600; opacity: 0.85; }
+    .inv-toolbar__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .inv-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px; border-radius: 7px; border: none;
+      font-size: 0.8rem; font-weight: 500; cursor: pointer;
+      text-decoration: none; white-space: nowrap; transition: opacity 150ms;
+      font-family: inherit;
+    }
+    .inv-btn:hover { opacity: 0.85; }
+    .inv-btn--back   { background: #334155; color: #fff; }
+    .inv-btn--toggle { background: #1d4ed8; color: #fff; }
+    .inv-btn--toggle.is-thermal { background: #7c3aed; }
+    .inv-btn--print  { background: #059669; color: #fff; }
+
+    /* ── Page wrapper ── */
+    .inv-page-wrap {
+      padding: 68px 20px 40px;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ── Invoice document ── */
+    .inv-doc {
+      background: #fff;
+      width: 100%; max-width: 210mm;
+      border-radius: 10px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+      overflow: hidden;
+    }
+
+    /* ── A4: Header band ── */
+    .inv-header {
+      background: #0f172a; color: #fff;
+      padding: 28px 32px 22px;
+    }
+    .inv-header__top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 16px; flex-wrap: wrap;
+    }
+    .inv-header__company-name {
+      font-size: 1.4rem; font-weight: 700;
+      letter-spacing: -0.01em; margin-bottom: 4px;
+    }
+    .inv-header__company-sub {
+      font-size: 0.78rem; opacity: 0.65;
+      line-height: 1.65; max-width: 280px;
+    }
+    .inv-header__badge { text-align: right; }
+    .inv-header__type {
+      font-size: 0.75rem; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      opacity: 0.5; margin-bottom: 4px;
+    }
+    .inv-header__id   { font-size: 1.4rem; font-weight: 800; letter-spacing: -0.02em; }
+    .inv-header__date { font-size: 0.8rem; opacity: 0.6; margin-top: 2px; }
+
+    /* ── Customer meta bar ── */
+    .inv-meta {
+      padding: 16px 32px; display: flex; gap: 24px;
+      flex-wrap: wrap; border-bottom: 1px solid #e2e8f0;
+      background: #f8fafc;
+    }
+    .inv-meta__block { flex: 1; min-width: 150px; }
+    .inv-meta__label {
+      font-size: 0.65rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: #94a3b8; margin-bottom: 3px;
+    }
+    .inv-meta__value { font-size: 0.85rem; font-weight: 500; }
+    .inv-meta__sub   { font-size: 0.74rem; color: #64748b; margin-top: 1px; }
+
+    /* ── Section ── */
+    .inv-section { padding: 20px 32px; }
+    .inv-section + .inv-section { border-top: 1px solid #e2e8f0; }
+    .inv-section__title {
+      font-size: 0.67rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: #94a3b8; margin-bottom: 12px;
+    }
+
+    /* ── Items table ── */
+    .inv-table { width: 100%; border-collapse: collapse; }
+    .inv-table th {
+      text-align: left; font-size: 0.67rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em; color: #64748b;
+      padding: 6px 8px; border-bottom: 2px solid #e2e8f0;
+    }
+    .inv-table td {
+      padding: 9px 8px; font-size: 0.82rem;
+      border-bottom: 1px solid #f1f5f9; vertical-align: top;
+    }
+    .inv-table tr:last-child td { border-bottom: none; }
+    .r { text-align: right; }
+    .inv-table .tax-row td {
+      font-size: 0.74rem; color: #64748b;
+      padding: 3px 8px; border-bottom: none; background: #fafbfc;
+    }
+
+    /* ── Totals block ── */
+    .inv-totals { padding: 16px 32px 24px; display: flex; justify-content: flex-end; }
+    .inv-totals__inner { min-width: 260px; }
+    .inv-totals__row {
+      display: flex; justify-content: space-between;
+      gap: 32px; padding: 4px 0;
+      font-size: 0.82rem; color: #475569; border-bottom: 1px solid #f1f5f9;
+    }
+    .inv-totals__row:last-of-type { border-bottom: none; }
+    .inv-totals__row.grand {
+      border-top: 2px solid #1e293b; border-bottom: none;
+      margin-top: 6px; padding-top: 8px;
+      font-size: 1rem; font-weight: 700; color: #1e293b;
+    }
+    .inv-totals__val { font-weight: 600; }
+
+    /* ── Footer ── */
+    .inv-footer {
+      background: #f8fafc; border-top: 1px solid #e2e8f0;
+      padding: 14px 32px; font-size: 0.75rem; color: #94a3b8;
+      display: flex; justify-content: space-between;
+      align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .inv-footer__note { font-style: italic; }
+    .inv-footer__id   { font-weight: 600; font-family: monospace; }
+
+    /* ═══════════════════════════════════════════════════
+       THERMAL / RECEIPT MODE  (body.receipt-mode)
+       Narrow ~80mm, monospace, dashed separators
+       ═══════════════════════════════════════════════════ */
+    body.receipt-mode { background: #fff; }
+    body.receipt-mode .inv-page-wrap { padding-top: 60px; align-items: flex-start; }
+    body.receipt-mode .inv-doc {
+      max-width: 76mm; border-radius: 0; box-shadow: none;
+      font-family: 'Courier New', Courier, monospace; font-size: 11px;
+    }
+
+    body.receipt-mode .inv-header {
+      background: #fff; color: #000;
+      padding: 12px 8px 8px; text-align: center;
+      border-bottom: 1px dashed #000;
+    }
+    body.receipt-mode .inv-header__top { flex-direction: column; align-items: center; gap: 2px; }
+    body.receipt-mode .inv-header__company-name { font-size: 0.95rem; text-transform: uppercase; }
+    body.receipt-mode .inv-header__company-sub  { font-size: 0.68rem; opacity: 1; max-width: 100%; text-align: center; }
+    body.receipt-mode .inv-header__badge { text-align: center; }
+    body.receipt-mode .inv-header__type { font-size: 0.62rem; opacity: 1; margin-top: 6px; }
+    body.receipt-mode .inv-header__id   { font-size: 0.82rem; }
+    body.receipt-mode .inv-header__date { font-size: 0.68rem; opacity: 1; }
+
+    body.receipt-mode .inv-meta {
+      flex-direction: column; gap: 3px;
+      padding: 7px 8px; background: #fff;
+      border-bottom: 1px dashed #000;
+    }
+    body.receipt-mode .inv-meta__label { font-size: 0.62rem; color: #555; }
+    body.receipt-mode .inv-meta__value { font-size: 0.76rem; }
+    body.receipt-mode .inv-meta__sub   { font-size: 0.66rem; color: #555; }
+
+    body.receipt-mode .inv-section { padding: 7px 8px; }
+    body.receipt-mode .inv-section + .inv-section { border-top: 1px dashed #000; }
+    body.receipt-mode .inv-section__title { font-size: 0.62rem; color: #555; }
+
+    body.receipt-mode .inv-table th { font-size: 0.62rem; padding: 3px 4px; border-bottom: 1px solid #000; color: #000; }
+    body.receipt-mode .inv-table td { font-size: 0.7rem;  padding: 3px 4px; border-bottom: 1px dotted #bbb; }
+    body.receipt-mode .inv-table tr:last-child td { border-bottom: none; }
+    body.receipt-mode .inv-table .tax-row td { font-size: 0.66rem; color: #555; }
+
+    body.receipt-mode .inv-totals { padding: 7px 8px 10px; justify-content: stretch; }
+    body.receipt-mode .inv-totals__inner { width: 100%; min-width: 0; }
+    body.receipt-mode .inv-totals__row { font-size: 0.7rem; padding: 2px 0; border-bottom: 1px dotted #ccc; }
+    body.receipt-mode .inv-totals__row.grand {
+      font-size: 0.86rem; border-top: 1px solid #000;
+      margin-top: 4px; padding-top: 4px; border-bottom: none;
+    }
+
+    body.receipt-mode .inv-footer {
+      background: #fff; border-top: 1px dashed #000;
+      padding: 8px 8px; flex-direction: column;
+      align-items: center; text-align: center;
+      font-size: 0.66rem; color: #555;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       PRINT STYLES
+       ═══════════════════════════════════════════════════ */
+    @media print {
+      .inv-toolbar { display: none !important; }
+      body { background: #fff; }
+      .inv-page-wrap { padding: 0; background: #fff; min-height: unset; }
+      .inv-doc { box-shadow: none; border-radius: 0; max-width: 100%; width: 100%; }
+      @page { size: A4 portrait; margin: 1.2cm 1.5cm; }
+    }
+  </style>
+  <!-- Thermal @page injected by JS when toggled -->
+  <style id="thermalPageStyle"></style>
+</head>
+<body>
+
+<!-- Toolbar (screen only, hidden on print) -->
+<div class="inv-toolbar">
+  <span class="inv-toolbar__title">Invoice &mdash; {{ sales.transaction_id }}</span>
+  <div class="inv-toolbar__actions">
+    <a href="{% url 'sales:detail' sales.pk %}" class="inv-btn inv-btn--back">&#8592; Kembali</a>
+    <button type="button" class="inv-btn inv-btn--toggle" id="modeToggle" onclick="toggleMode()">
+      &#128247; Mode: A4
+    </button>
+    <button type="button" class="inv-btn inv-btn--print" onclick="window.print()">
+      &#128424; Cetak / Print
+    </button>
+  </div>
+</div>
+
+<div class="inv-page-wrap">
+<div class="inv-doc">
+
+  <!-- ── Company header ── -->
+  <div class="inv-header">
+    <div class="inv-header__top">
+      <div>
+        <div class="inv-header__company-name">
+          {% if company %}{{ company.nama }}{% else %}Naveda Integra{% endif %}
+        </div>
+        {% if company %}
+        <div class="inv-header__company-sub">
+          {% if company.alamat_lengkap %}{{ company.alamat_lengkap }}<br>{% endif %}
+          {% if company.telepon %}Telp: {{ company.telepon }}<br>{% endif %}
+          {% if company.email %}{{ company.email }}<br>{% endif %}
+          {% if company.tax_id %}NPWP: {{ company.tax_id }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+      <div class="inv-header__badge">
+        <div class="inv-header__type">Invoice Penjualan</div>
+        <div class="inv-header__id">{{ sales.transaction_id }}</div>
+        <div class="inv-header__date">{{ sales.tanggal }}</div>
+      </div>
+    </div>
+  </div>
+
+  {% if sales.deskripsi %}
+  <div style="padding:8px 32px;font-size:0.78rem;color:#64748b;background:#fffbeb;border-bottom:1px solid #fde68a;">
+    <strong>Keterangan:</strong> {{ sales.deskripsi }}
+  </div>
+  {% endif %}
+
+  <!-- ── Per-EB-group sections ── -->
+  {% for gdata in eb_groups_data %}
+  {% with eg=gdata.group %}
+
+  <!-- Customer meta -->
+  <div class="inv-meta">
+    <div class="inv-meta__block">
+      <div class="inv-meta__label">Kepada</div>
+      <div class="inv-meta__value">{{ eg.entitas_bisnis.nama }}</div>
+      {% if eg.entitas_bisnis_lv2 %}
+      <div class="inv-meta__sub">
+        {{ eg.entitas_bisnis_lv2.nama }}{% if eg.entitas_bisnis_lv3 %} / {{ eg.entitas_bisnis_lv3.nama }}{% endif %}
+      </div>
+      {% endif %}
+      {% if eg.entitas_bisnis.alamat_lengkap %}
+      <div class="inv-meta__sub">{{ eg.entitas_bisnis.alamat_lengkap }}</div>
+      {% endif %}
+    </div>
+    {% if eg.entitas_bisnis.telepon %}
+    <div class="inv-meta__block">
+      <div class="inv-meta__label">Telepon</div>
+      <div class="inv-meta__value">{{ eg.entitas_bisnis.telepon }}</div>
+    </div>
+    {% endif %}
+    {% if eg.entitas_bisnis.tax_id %}
+    <div class="inv-meta__block">
+      <div class="inv-meta__label">NPWP Pelanggan</div>
+      <div class="inv-meta__value">{{ eg.entitas_bisnis.tax_id }}</div>
+    </div>
+    {% endif %}
+    <div class="inv-meta__block">
+      <div class="inv-meta__label">Metode Pembayaran</div>
+      <div class="inv-meta__value">{{ eg.payment_account|default:'—' }}</div>
+    </div>
+  </div>
+
+  <!-- Items -->
+  <div class="inv-section">
+    {% if eb_groups_data|length > 1 %}
+    <div class="inv-section__title">{{ eg.entitas_bisnis.nama }}</div>
+    {% endif %}
+    <table class="inv-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item</th>
+          <th>Tipe</th>
+          <th class="r">Qty</th>
+          <th class="r">Harga</th>
+          <th class="r">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for si in eg.items.all %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ si.item }}</td>
+          <td style="color:#64748b;font-size:0.75rem;">{{ si.sub_transaction_type.nama }}</td>
+          <td class="r">
+            {% if si.item.tipe_item == 'RMB' or si.item.tipe_item == 'FGB' or si.item.tipe_item == 'ITMB' %}
+            &mdash;
+            {% else %}
+            {{ si.quantity|floatformat:0|intcomma }}
+            {% endif %}
+          </td>
+          <td class="r">{{ si.selling_price|floatformat:0|intcomma }}</td>
+          <td class="r"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
+        </tr>
+        {% if si.tax %}
+        <tr class="tax-row">
+          <td></td>
+          <td colspan="4" style="padding-left:16px;">
+            &#8627; Pajak: {{ si.get_tax_type_display }}
+            {% if si.tax_payment %}&mdash; {{ si.get_tax_payment_display }}{% endif %}
+          </td>
+          <td class="r">{{ si.tax|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endif %}
+        {% empty %}
+        <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px 8px;">Tidak ada item.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Group totals -->
+  <div class="inv-totals">
+    <div class="inv-totals__inner">
+      <div class="inv-totals__row">
+        <span>Sub-total</span>
+        <span class="inv-totals__val">Rp {{ gdata.subtotal|floatformat:0|intcomma }}</span>
+      </div>
+      {% if gdata.tax_total %}
+      <div class="inv-totals__row">
+        <span>Pajak</span>
+        <span class="inv-totals__val">Rp {{ gdata.tax_total|floatformat:0|intcomma }}</span>
+      </div>
+      {% endif %}
+      <div class="inv-totals__row grand">
+        <span>TOTAL</span>
+        <span class="inv-totals__val">Rp {{ gdata.group_total|floatformat:0|intcomma }}</span>
+      </div>
+    </div>
+  </div>
+
+  {% endwith %}
+  {% empty %}
+  <div class="inv-section" style="text-align:center;color:#94a3b8;padding:32px;">
+    Tidak ada data entitas bisnis.
+  </div>
+  {% endfor %}
+
+  <!-- Grand total (only shown if multiple EB groups) -->
+  {% if eb_groups_data|length > 1 %}
+  <div style="padding:12px 32px 20px;background:#f8fafc;border-top:2px solid #e2e8f0;">
+    <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:700;color:#1e293b;">
+      <span>GRAND TOTAL</span>
+      <span>Rp {{ grand_total|floatformat:0|intcomma }}</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Footer -->
+  <div class="inv-footer">
+    <span class="inv-footer__note">Terima kasih atas kepercayaan Anda.</span>
+    <span class="inv-footer__id">{{ sales.transaction_id }}</span>
+  </div>
+
+</div><!-- /.inv-doc -->
+</div><!-- /.inv-page-wrap -->
+
+<script>
+(function () {
+  'use strict';
+  var isReceipt = false;
+  var thermalStyle = document.getElementById('thermalPageStyle');
+  var toggleBtn = document.getElementById('modeToggle');
+
+  window.toggleMode = function () {
+    isReceipt = !isReceipt;
+    document.body.classList.toggle('receipt-mode', isReceipt);
+    toggleBtn.textContent = isReceipt ? '\u{1F4F7} Mode: Thermal 80mm' : '\u{1F4F7} Mode: A4';
+    toggleBtn.classList.toggle('is-thermal', isReceipt);
+    thermalStyle.textContent = isReceipt
+      ? '@media print { @page { size: 80mm auto; margin: 2mm 4mm; } }'
+      : '';
+  };
+}());
+</script>
+</body>
+</html>

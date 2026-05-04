@@ -497,6 +497,52 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
+# ── Sales Invoice ─────────────────────────────────────────────────────────────
+
+@login_required
+def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
+    """Render a printable invoice/receipt for a sales transaction."""
+    sales = get_object_or_404(SalesHeader, pk=pk)
+    eb_groups = sales.entitas_groups.select_related(
+        'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3', 'payment_account',
+    ).prefetch_related(
+        'items__item', 'items__sub_transaction_type',
+        'items__offset_coa_account', 'items__revenue_account',
+        'items__payment_account',
+        'items__tax_account', 'items__tax_payment_account',
+    ).all()
+
+    company = EntitasBisnis.objects.filter(is_company_profile=True).first()
+
+    # Pre-compute per-group totals for the template
+    eb_groups_with_totals = []
+    grand_total = Decimal('0')
+    grand_tax = Decimal('0')
+    for eg in eb_groups:
+        subtotal = Decimal('0')
+        tax_total = Decimal('0')
+        for si in eg.items.all():
+            subtotal += si.total_sales or Decimal('0')
+            tax_total += si.tax or Decimal('0')
+        group_total = subtotal + tax_total
+        grand_total += group_total
+        grand_tax += tax_total
+        eb_groups_with_totals.append({
+            'group': eg,
+            'subtotal': subtotal,
+            'tax_total': tax_total,
+            'group_total': group_total,
+        })
+
+    return render(request, 'sales/sales_invoice.html', {
+        'sales': sales,
+        'eb_groups_data': eb_groups_with_totals,
+        'company': company,
+        'grand_total': grand_total,
+        'grand_tax': grand_tax,
+    })
+
+
 # ── Sales Delete ─────────────────────────────────────────────────────────────
 
 @login_required

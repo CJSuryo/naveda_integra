@@ -11,6 +11,7 @@ urlpatterns = [
     path('master-data/', include('apps.master_data.urls')),
     path('jurnal/', include('apps.jurnal.urls')),
     path('purchase/', include('apps.purchase.urls')),
+    path('utang/', include('apps.utang.urls')),
     path('sales/', include('apps.sales.urls')),
     path('inventory/', include('apps.inventory.urls')),
     path('aset-tetap/', include('apps.aset_tetap.urls')),

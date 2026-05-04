@@ -41,6 +41,11 @@ class EntitasBisnis(models.Model):
     tax_id = models.CharField(max_length=50, unique=True, blank=True, null=True)
     tanggal_bergabung = models.DateField(blank=True, null=True)
     status_aktif = models.BooleanField(default=True)
+    is_company_profile = models.BooleanField(
+        default=False,
+        verbose_name='Profil Perusahaan (Invoice)',
+        help_text='Tandai sebagai profil perusahaan penerbit invoice/struk. Hanya satu entitas yang bisa ditandai.',
+    )
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name='entitas_bisnis_owned',
@@ -60,6 +65,12 @@ class EntitasBisnis(models.Model):
 
     def __str__(self) -> str:
         return self.nama
+
+    def save(self, *args, **kwargs):
+        if self.is_company_profile:
+            # Ensure only one record is flagged as company profile
+            EntitasBisnis.objects.filter(is_company_profile=True).exclude(pk=self.pk).update(is_company_profile=False)
+        super().save(*args, **kwargs)
 
 
 class EntitasBisnisLv2(models.Model):

@@ -1,6 +1,108 @@
 {% extends 'base.html' %}
 {% load humanize %}
 {% block title %}Detail Sales {{ sales.transaction_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Desktop: nothing special needed ── */
+
+/* ── Mobile styles (≤ 767px) ── */
+@media (max-width: 767px) {
+  /* Page header */
+  .ni-page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .ni-page-header__actions { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+  .ni-page-header__actions .ni-btn { flex: 1; min-width: 120px; justify-content: center; min-height: 40px; }
+
+  /* ── Items table → card transform ── */
+  .ni-detail-table-wrapper { overflow-x: visible !important; }
+  .ni-detail-table thead  { display: none; }
+
+  .ni-detail-table tbody tr {
+    display: block;
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius);
+    margin-bottom: 10px;
+    padding: 10px 12px 4px;
+    background: var(--ni-bg-card);
+    box-shadow: var(--ni-shadow-sm);
+  }
+  .ni-detail-table tbody tr.tax-detail-row {
+    border: 1px dashed var(--ni-border);
+    background: var(--ni-bg);
+    padding: 8px 12px;
+    margin-top: -8px;
+    border-radius: 0 0 var(--ni-radius) var(--ni-radius);
+  }
+  .ni-detail-table tbody tr:last-child { margin-bottom: 0; }
+
+  .ni-detail-table tbody tr td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--ni-border);
+    border-top: none; border-left: none; border-right: none;
+    text-align: left !important;
+  }
+  .ni-detail-table tbody tr td:last-child { border-bottom: none; padding-bottom: 8px; }
+
+  /* data-label as left-side field name */
+  .ni-detail-table tbody tr td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--ni-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    flex-shrink: 0;
+    min-width: 105px;
+  }
+
+  /* colspan cells in tax row — full width block */
+  .ni-detail-table tbody tr.tax-detail-row td {
+    display: block;
+    justify-content: unset;
+    border-bottom: none;
+    font-size: 0.78rem;
+    color: var(--ni-text-muted);
+    padding: 4px 0;
+  }
+  .ni-detail-table tbody tr.tax-detail-row td[colspan] { width: 100%; }
+
+  /* Inventory mutations table → cards */
+  .ni-inv-table-wrapper { overflow-x: visible !important; }
+  .ni-inv-table thead { display: none; }
+  .ni-inv-table tbody tr {
+    display: block;
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius);
+    margin-bottom: 8px;
+    padding: 10px 12px 4px;
+    background: var(--ni-bg-card);
+    box-shadow: var(--ni-shadow-sm);
+  }
+  .ni-inv-table tbody tr:last-child { margin-bottom: 0; }
+  .ni-inv-table tbody tr td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--ni-border);
+    text-align: left !important;
+  }
+  .ni-inv-table tbody tr td:last-child { border-bottom: none; }
+  .ni-inv-table tbody tr td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    font-size: 0.7rem; font-weight: 600;
+    color: var(--ni-text-muted); text-transform: uppercase;
+    letter-spacing: 0.03em; flex-shrink: 0; min-width: 100px;
+  }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="ni-page-header">
   <div>
@@ -8,6 +110,9 @@
     <p class="ni-page-header__subtitle">Detail transaksi penjualan</p>
   </div>
   <div class="ni-page-header__actions">
+    <a href="{% url 'sales:invoice' sales.pk %}" class="ni-btn ni-btn--primary" target="_blank">
+      <i data-lucide="printer" style="width:16px;height:16px"></i> Print Invoice
+    </a>
     {% if not sales.is_locked %}
     <a href="{% url 'sales:update' sales.pk %}" class="ni-btn ni-btn--warning">
       <i data-lucide="pencil" style="width:16px;height:16px"></i> Edit
@@ -55,8 +160,8 @@
     <p style="font-size:0.85rem;color:var(--ni-text-muted);margin:0 0 12px;">
       Payment Account: <strong>{{ eg.payment_account|default:'-' }}</strong>
     </p>
-    <div class="ni-table-wrapper">
-      <table class="ni-table">
+    <div class="ni-table-wrapper ni-detail-table-wrapper">
+      <table class="ni-table ni-detail-table">
         <thead>
           <tr>
             <th>Item</th>
@@ -73,26 +178,26 @@
         <tbody>
           {% for si in eg.items.all %}
           <tr>
-            <td>{{ si.item }}</td>
-            <td>{{ si.sub_transaction_type.nama }}</td>
-            <td class="ni-text-right">{% if si.item.tipe_item == 'RMB' or si.item.tipe_item == 'FGB' or si.item.tipe_item == 'ITMB' %}-{% else %}{{ si.quantity|floatformat:0|intcomma }}{% endif %}</td>
-            <td class="ni-text-right">{{ si.selling_price|floatformat:0|intcomma }}</td>
-            <td class="ni-text-right"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
-            <td class="ni-text-right">{{ si.cogs_amount|floatformat:0|intcomma }}</td>
-            <td>{{ si.revenue_account }}</td>
-            <td>{{ si.offset_coa_account }}</td>
-            <td>{{ si.payment_account|default:eg.payment_account|default:'-' }}</td>
+            <td data-label="Item">{{ si.item }}</td>
+            <td data-label="Sub-Trx Type">{{ si.sub_transaction_type.nama }}</td>
+            <td data-label="Qty" class="ni-text-right">{% if si.item.tipe_item == 'RMB' or si.item.tipe_item == 'FGB' or si.item.tipe_item == 'ITMB' %}-{% else %}{{ si.quantity|floatformat:0|intcomma }}{% endif %}</td>
+            <td data-label="Harga Jual" class="ni-text-right">{{ si.selling_price|floatformat:0|intcomma }}</td>
+            <td data-label="Total Sales" class="ni-text-right"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
+            <td data-label="HPP (COGS)" class="ni-text-right">{{ si.cogs_amount|floatformat:0|intcomma }}</td>
+            <td data-label="Revenue Akun">{{ si.revenue_account }}</td>
+            <td data-label="Offset CoA">{{ si.offset_coa_account }}</td>
+            <td data-label="Payment Akun">{{ si.payment_account|default:eg.payment_account|default:'-' }}</td>
           </tr>
           {% if si.tax %}
-          <tr style="background:var(--ni-bg);font-size:0.85rem;">
+          <tr class="tax-detail-row" style="background:var(--ni-bg);font-size:0.85rem;">
             <td colspan="3"></td>
             <td colspan="2" style="color:var(--ni-text-muted);">
               Pajak: {{ si.get_tax_type_display|default:'-' }}
-              {% if si.tax_payment %} — {{ si.get_tax_payment_display }}{% endif %}
+              {% if si.tax_payment %} &mdash; {{ si.get_tax_payment_display }}{% endif %}
             </td>
-            <td class="ni-text-right">{{ si.tax|floatformat:0|intcomma }}</td>
-            <td>{{ si.tax_account|default:'-' }}</td>
-            <td>{{ si.tax_payment_account|default:'-' }}</td>
+            <td data-label="Pajak" class="ni-text-right">{{ si.tax|floatformat:0|intcomma }}</td>
+            <td data-label="Tax Account">{{ si.tax_account|default:'-' }}</td>
+            <td data-label="Tax Pmt Akun">{{ si.tax_payment_account|default:'-' }}</td>
             <td></td>
           </tr>
           {% endif %}
@@ -123,8 +228,8 @@
     <p style="font-size:0.85rem;color:var(--ni-text-muted);margin:0 0 12px;">
       Daftar inventory record yang terpengaruh oleh penjualan ini.
     </p>
-    <div class="ni-table-wrapper">
-      <table class="ni-table">
+    <div class="ni-table-wrapper ni-inv-table-wrapper">
+      <table class="ni-table ni-inv-table">
         <thead>
           <tr>
             <th>Inventory Number</th>
@@ -137,21 +242,21 @@
         <tbody>
           {% for m in inventory_mutations %}
           <tr>
-            <td>
+            <td data-label="Inventory No.">
               <a href="{% url 'inventory:detail' m.inventory_pk %}" style="color:var(--ni-primary);">
                 {{ m.inventory_number }}
               </a>
             </td>
-            <td>{{ m.item }}</td>
-            <td>{{ m.entitas_bisnis }}</td>
-            <td class="ni-text-right">
+            <td data-label="Item">{{ m.item }}</td>
+            <td data-label="Entitas Bisnis">{{ m.entitas_bisnis }}</td>
+            <td data-label="Qty / Nilai" class="ni-text-right">
               {% if m.is_bulk %}
               <span class="ni-badge ni-badge--secondary" title="Nilai Persediaan">{{ m.cogs|floatformat:0 }}</span>
               {% else %}
               {{ m.quantity_sold|floatformat:4 }}
               {% endif %}
             </td>
-            <td class="ni-text-right">{{ m.cogs|floatformat:0 }}</td>
+            <td data-label="COGS" class="ni-text-right">{{ m.cogs|floatformat:0 }}</td>
           </tr>
           {% endfor %}
         </tbody>

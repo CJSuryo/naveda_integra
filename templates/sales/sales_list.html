@@ -1,6 +1,119 @@
 {% extends 'base.html' %}
 {% load humanize %}
 {% block title %}Daftar Penjualan{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Desktop: hide mobile-only elements ── */
+@media (min-width: 768px) {
+  .ni-mobile-card { display: none !important; }
+  .ni-mobile-cards { display: none !important; }
+  .ni-filter-toggle-btn { display: none !important; }
+  .ni-filter-active-badge { display: none !important; }
+}
+
+/* ── Mobile styles ── */
+@media (max-width: 767px) {
+  /* Page header */
+  .ni-page-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .ni-page-header__actions { width: 100%; flex-wrap: wrap; gap: 8px; }
+  .ni-page-header__actions .ni-btn { flex: 1; min-width: 100px; text-align: center; }
+  .ni-page-header__actions .ni-btn--success { order: -1; flex: 100%; }
+
+  /* Filter: hide the card body by default; toggle via JS */
+  .ni-filter-card { margin-bottom: 12px !important; }
+  .ni-filter-card .ni-card__body { display: none; padding-top: 0 !important; }
+  .ni-filter-card.is-open .ni-card__body { display: block; padding-top: 16px !important; }
+
+  /* Filter toggle button row */
+  .ni-filter-toggle-btn {
+    display: flex !important;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--ni-text);
+    font-family: var(--ni-font);
+  }
+  .ni-filter-toggle-btn__left { display: flex; align-items: center; gap: 8px; }
+  .ni-filter-toggle-btn__chevron {
+    width: 16px; height: 16px;
+    transition: transform 200ms ease;
+    color: var(--ni-text-muted);
+  }
+  .ni-filter-card.is-open .ni-filter-toggle-btn__chevron { transform: rotate(180deg); }
+  .ni-filter-active-badge {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 9px;
+    background: var(--ni-primary);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  /* Filter form stacked */
+  .ni-sales-filter-form { flex-direction: column; gap: 10px !important; padding: 0 16px 16px; }
+  .ni-sales-filter-form .ni-form-group { width: 100%; min-width: 100% !important; margin: 0; }
+  .ni-sales-filter-form .ni-form-group label { font-size: 0.75rem; margin-bottom: 4px; }
+  .ni-sales-filter-form .ni-btn { width: 100%; margin-top: 4px; }
+
+  /* Hide desktop table, show mobile cards */
+  .ni-table-wrapper { display: none !important; }
+  .ni-mobile-cards { display: block !important; }
+
+  /* Mobile card styles */
+  .ni-mobile-card {
+    display: flex !important;
+    flex-direction: column;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--ni-border);
+  }
+  .ni-mobile-card:last-child { border-bottom: none; }
+  .ni-mobile-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .ni-mobile-card__id { font-weight: 600; color: var(--ni-primary); font-size: 0.9rem; }
+  .ni-mobile-card__actions { display: flex; gap: 6px; }
+  .ni-mobile-card__actions .ni-btn { min-height: 36px; padding: 6px 12px; }
+  .ni-mobile-card__row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--ni-border);
+  }
+  .ni-mobile-card__row:last-of-type { border-bottom: none; }
+  .ni-mobile-card__label { color: var(--ni-text-muted); flex-shrink: 0; margin-right: 8px; }
+  .ni-mobile-card__value { font-weight: 500; text-align: right; }
+  .ni-mobile-card__footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ni-border);
+  }
+  .ni-mobile-card__eb { font-size: 0.75rem; color: var(--ni-text-muted); }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="ni-page-header">
   <div>
@@ -9,21 +122,34 @@
   </div>
   <div class="ni-page-header__actions">
     <a id="exportXlsxBtn" href="{% url 'sales:export' %}" class="ni-btn ni-btn--secondary">
-      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+      <i data-lucide="download" style="width:16px;height:16px"></i> <span class="ni-hide-mobile">Export XLSX</span>
     </a>
     <a id="exportPdfBtn" href="{% url 'sales:export_pdf' %}" target="_blank" class="ni-btn ni-btn--secondary">
-      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> <span class="ni-hide-mobile">Export PDF</span>
     </a>
     <a href="{% url 'sales:create' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Penjualan
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah
     </a>
   </div>
 </div>
 
 <!-- Filters -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+<div class="ni-card ni-animate-fade-in ni-filter-card{% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter %} is-open{% endif %}" style="margin-bottom:16px;">
+  <!-- Mobile toggle button (hidden on desktop via CSS) -->
+  <button type="button" class="ni-filter-toggle-btn" onclick="toggleFilterCard(this)" aria-expanded="false">
+    <span class="ni-filter-toggle-btn__left">
+      <i data-lucide="filter" style="width:15px;height:15px;color:var(--ni-primary);"></i>
+      Filter &amp; Pencarian
+      {% with active_count=0 %}
+      {% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter %}
+      <span class="ni-filter-active-badge" id="filterActiveBadge">aktif</span>
+      {% endif %}
+      {% endwith %}
+    </span>
+    <svg class="ni-filter-toggle-btn__chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+  </button>
   <div class="ni-card__body" style="padding:16px;">
-    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+    <form method="get" class="ni-sales-filter-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
       <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
         <label class="ni-form-label">Dari Tanggal</label>
         <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -123,6 +249,61 @@
       </tbody>
     </table>
   </div>
+  <!-- Mobile card layout -->
+  <div class="ni-mobile-cards">
+    {% for row in rows %}
+    <div class="ni-mobile-card">
+      <div class="ni-mobile-card__header">
+        <a href="{% url 'sales:detail' row.sales_header.pk %}" class="ni-mobile-card__id">{{ row.sales_header.transaction_id }}</a>
+        <div class="ni-mobile-card__actions">
+          {% if not row.sales_header.is_locked %}
+          <a href="{% url 'sales:update' row.sales_header.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+          <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="openDeleteModal('{% url 'sales:delete' row.sales_header.pk %}', '{{ row.sales_header.transaction_id|escapejs }}')">Hapus</button>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Locked</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Tanggal</span>
+        <span class="ni-mobile-card__value">{{ row.sales_header.tanggal }}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Item</span>
+        <span class="ni-mobile-card__value">{{ row.item.item }}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Sub-Transaction</span>
+        <span class="ni-mobile-card__value">{{ row.item.sub_transaction_type.nama }}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Qty</span>
+        <span class="ni-mobile-card__value">{% if row.item.item.tipe_item == 'RMB' or row.item.item.tipe_item == 'FGB' or row.item.item.tipe_item == 'ITMB' %}-{% else %}{{ row.item.quantity|floatformat:0|intcomma }}{% endif %}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Harga Jual</span>
+        <span class="ni-mobile-card__value">{{ row.item.selling_price|floatformat:0|intcomma }}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Total</span>
+        <span class="ni-mobile-card__value"><strong>{{ row.item.total_sales|floatformat:0|intcomma }}</strong></span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">HPP</span>
+        <span class="ni-mobile-card__value" style="color:var(--ni-danger);">{{ row.hpp|floatformat:0|intcomma }}</span>
+      </div>
+      <div class="ni-mobile-card__row">
+        <span class="ni-mobile-card__label">Profit</span>
+        <span class="ni-mobile-card__value" style="color:{% if row.profit >= 0 %}var(--ni-success){% else %}var(--ni-danger){% endif %};font-weight:500;">{{ row.profit|floatformat:0|intcomma }}</span>
+      </div>
+      <div class="ni-mobile-card__footer">
+        <span class="ni-mobile-card__eb">{{ row.entitas_group.entitas_bisnis.nama }}</span>
+      </div>
+    </div>
+    {% empty %}
+    <div class="ni-mobile-card ni-text-center ni-text-muted">Belum ada transaksi penjualan.</div>
+    {% endfor %}
+  </div>
 </div>
 
 {% include 'components/delete_modal.html' %}
@@ -138,6 +319,20 @@
     if (exportXlsx) exportXlsx.href = exportXlsx.href.split('?')[0] + qs;
     if (exportPdf) exportPdf.href = exportPdf.href.split('?')[0] + qs;
   }
+
+  // Update aria-expanded on filter card if already open (active filters)
+  var filterCard = document.querySelector('.ni-filter-card');
+  var toggleBtn = document.querySelector('.ni-filter-toggle-btn');
+  if (filterCard && filterCard.classList.contains('is-open') && toggleBtn) {
+    toggleBtn.setAttribute('aria-expanded', 'true');
+  }
 })();
+
+window.toggleFilterCard = function(btn) {
+  var card = btn.closest('.ni-filter-card');
+  if (!card) return;
+  var isOpen = card.classList.toggle('is-open');
+  btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+};
 </script>
 {% endblock %}
