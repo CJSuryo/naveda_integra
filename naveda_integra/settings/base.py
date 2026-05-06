@@ -43,6 +43,8 @@ INSTALLED_APPS = [
     'apps.aset_lainnya',
     'apps.ekuitas',
     'apps.manufacturing',
+    'pos_config',
+    'pos_catalog',
 ]
 
 MIDDLEWARE = [
@@ -173,3 +175,8 @@ LOGGING = {
         },
     },
 }
+
+# POS Web Push (VAPID)
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'push@naveda.id')
