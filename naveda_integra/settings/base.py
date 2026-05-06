@@ -3,11 +3,18 @@ Base Django settings for naveda_integra project.
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Allow apps in the `apps/` subdirectory to be imported by their short label
+# (e.g. `pos_config` instead of `apps.pos_config`).
+_APPS_DIR = str(BASE_DIR / 'apps')
+if _APPS_DIR not in sys.path:
+    sys.path.insert(0, _APPS_DIR)
 
 SECRET_KEY = os.environ.get(
     'SECRET_KEY',
