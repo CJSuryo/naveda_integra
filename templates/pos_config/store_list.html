@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Toko — {{ merchant.entitas_bisnis.nama }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Toko POS — {{ merchant.entitas_bisnis.nama }}</h1>
+</div>
+<div class="ni-card">
+  <table class="ni-table">
+    <thead><tr><th>Nama Toko</th><th>Status</th><th>Aksi</th></tr></thead>
+    <tbody>
+      {% for store in stores %}
+      <tr>
+        <td>{{ store.entitas_bisnis_lv2.nama }}</td>
+        <td>{% if store.is_active %}<span class="ni-badge ni-badge-success">Aktif</span>{% else %}<span class="ni-badge ni-badge-danger">Nonaktif</span>{% endif %}</td>
+        <td><a href="{% url 'pos_config:store_form' merchant.pk store.entitas_bisnis_lv2.pk %}" class="ni-btn ni-btn-sm ni-btn-secondary">Edit</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="ni-table-empty">Belum ada toko terdaftar.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

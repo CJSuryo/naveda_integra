@@ -18,6 +18,7 @@ urlpatterns = [
     path('aset-lainnya/', include('apps.aset_lainnya.urls')),
     path('ekuitas/', include('apps.ekuitas.urls')),
     path('manufacturing/', include('apps.manufacturing.urls')),
+    path('pos/', include('pos_config.urls', namespace='pos_config')),
     path('', include('apps.accounts.urls_home')),
 ]
 
