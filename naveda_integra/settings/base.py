@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'pos_orders',
     'apps.pos_crm',
     'apps.pos_promotions',
+    'apps.pos_reports',
 ]
 
 MIDDLEWARE = [
