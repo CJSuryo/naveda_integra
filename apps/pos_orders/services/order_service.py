@@ -24,7 +24,7 @@ def create_order(
         shift_log=shift_log,
         table_number=table_number,
         customer_name=customer_name,
-        order_number='',
+        order_number=None,
         status=Order.STATUS_DRAFT,
     )
 

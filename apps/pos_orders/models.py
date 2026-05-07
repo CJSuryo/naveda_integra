@@ -60,7 +60,7 @@ class Order(models.Model):
         (ORDER_TYPE_DELIVERY, 'Pesan Antar'),
     ]
 
-    order_number = models.CharField(max_length=50, unique=True, blank=True)
+    order_number = models.CharField(max_length=50, unique=True, blank=True, null=True, default=None)
     store = models.ForeignKey(StorePOSConfig, on_delete=models.PROTECT, related_name='orders')
     shift_log = models.ForeignKey(ShiftLog, on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     cashier = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='cashier_orders')

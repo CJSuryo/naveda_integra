@@ -44,7 +44,7 @@ class CreateOrderTest(TestCase):
     def test_create_order_has_no_order_number_yet(self):
         store, method, product, cashier = make_env()
         order = create_order(store, cashier, Order.ORDER_TYPE_DINE_IN, Order.SOURCE_POS)
-        self.assertEqual(order.order_number, '')
+        self.assertIsNone(order.order_number)
 
 
 class AddItemTest(TestCase):
