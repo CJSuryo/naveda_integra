@@ -1,0 +1,50 @@
+<!-- templates/pos_crm/member_detail.html -->
+{% extends "base.html" %}
+{% block title %}{{ member.member_id }} — {{ member.name }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">{{ member.name }}</h1>
+  <p class="ni-page-subtitle">{{ member.member_id }}</p>
+</div>
+
+<div class="ni-grid ni-grid--2col">
+  <div class="ni-card">
+    <div class="ni-card-header"><h2 class="ni-card-title">Info Member</h2></div>
+    <div class="ni-card-body">
+      <dl class="ni-dl">
+        <dt>Telepon</dt><dd>{{ member.phone }}</dd>
+        <dt>Email</dt><dd>{{ member.email|default:"-" }}</dd>
+        <dt>Tanggal Lahir</dt><dd>{{ member.birth_date|date:"d M Y"|default:"-" }}</dd>
+        <dt>Tier</dt><dd><span class="ni-badge ni-badge--{{ member.tier|lower }}">{{ member.tier }}</span></dd>
+        <dt>Poin</dt><dd>{{ member.points }}</dd>
+        <dt>Total Belanja</dt><dd>Rp {{ member.total_spent|floatformat:0 }}</dd>
+        <dt>Total Order</dt><dd>{{ member.total_orders }}</dd>
+        <dt>Bergabung</dt><dd>{{ member.joined_at|date:"d M Y" }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card-header"><h2 class="ni-card-title">Riwayat Poin (50 Terakhir)</h2></div>
+    <div class="ni-card-body">
+      <table class="ni-table ni-table--compact">
+        <thead><tr><th>Poin</th><th>Keterangan</th><th>Tanggal</th></tr></thead>
+        <tbody>
+          {% for log in point_logs %}
+          <tr>
+            <td class="{% if log.points > 0 %}ni-text--success{% else %}ni-text--danger{% endif %}">
+              {% if log.points > 0 %}+{% endif %}{{ log.points }}
+            </td>
+            <td>{{ log.reason }}</td>
+            <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="ni-table__empty">Belum ada riwayat poin.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

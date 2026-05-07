@@ -1,0 +1,39 @@
+<!-- templates/pos_crm/member_list.html -->
+{% extends "base.html" %}
+{% block title %}Daftar Member — POS{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Daftar Member</h1>
+  <div class="ni-page-actions">
+    <a href="{% url 'pos_member_register' %}?merchant={{ request.GET.merchant }}" class="ni-btn ni-btn--primary">
+      <i data-lucide="user-plus"></i> Daftar Member Baru
+    </a>
+  </div>
+</div>
+
+<div class="ni-card">
+  <div class="ni-card-body">
+    <table class="ni-table">
+      <thead>
+        <tr><th>ID</th><th>Nama</th><th>Telepon</th><th>Tier</th><th>Poin</th><th>Total Belanja</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for member in members %}
+        <tr>
+          <td>{{ member.member_id }}</td>
+          <td>{{ member.name }}</td>
+          <td>{{ member.phone }}</td>
+          <td><span class="ni-badge ni-badge--{{ member.tier|lower }}">{{ member.tier }}</span></td>
+          <td>{{ member.points }}</td>
+          <td>Rp {{ member.total_spent|floatformat:0 }}</td>
+          <td><a href="{% url 'pos_member_detail' pk=member.pk %}" class="ni-btn ni-btn--xs">Detail</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-table__empty">Belum ada member.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
