@@ -90,3 +90,54 @@ class ShiftLogTest(TestCase):
             opening_cash=500000, closing_cash=600000,
         )
         self.assertFalse(log.is_active)
+
+
+class MerchantAccountingFieldsTest(TestCase):
+    def setUp(self):
+        from apps.master_data.models import Akun
+        from apps.purchase.models import SubTransactionType
+        tipe = TipeEntitas.objects.create(nama='FnB2')
+        self.eb = EntitasBisnis.objects.create(
+            nama='Test Merchant', tipe_entitas=tipe, relasi='pelanggan'
+        )
+        self.merchant = MerchantPOSConfig.objects.create(
+            entitas_bisnis=self.eb, is_pos_active=True,
+        )
+        self.revenue_account = Akun.objects.create(
+            kode_akun='4-001', nama='Pendapatan POS', kategori_id='pendapatan'
+        )
+        self.hpp_account = Akun.objects.create(
+            kode_akun='5-001', nama='HPP POS', kategori_id='beban'
+        )
+        self.cash_account = Akun.objects.create(
+            kode_akun='1-001', nama='Kas POS', kategori_id='aset'
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan POS', module='sales', direction='outflow',
+            default_offset_account=self.hpp_account,
+        )
+
+    def test_merchant_accounting_fields_exist(self):
+        self.merchant.revenue_account = self.revenue_account
+        self.merchant.offset_coa_account = self.hpp_account
+        self.merchant.default_payment_account = self.cash_account
+        self.merchant.sub_transaction_type = self.stt
+        self.merchant.save()
+        self.merchant.refresh_from_db()
+        self.assertEqual(self.merchant.revenue_account_id, self.revenue_account.pk)
+        self.assertEqual(self.merchant.offset_coa_account_id, self.hpp_account.pk)
+        self.assertEqual(self.merchant.default_payment_account_id, self.cash_account.pk)
+        self.assertEqual(self.merchant.sub_transaction_type_id, self.stt.pk)
+
+    def test_payment_method_payment_account_field_exists(self):
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Toko A')
+        StorePOSConfig.objects.create(
+            entitas_bisnis_lv2=lv2, merchant_config=self.merchant,
+        )
+        pm = PaymentMethod.objects.create(
+            merchant_config=self.merchant, name='QRIS', method_type=PaymentMethod.QRIS,
+        )
+        pm.payment_account = self.cash_account
+        pm.save()
+        pm.refresh_from_db()
+        self.assertEqual(pm.payment_account_id, self.cash_account.pk)

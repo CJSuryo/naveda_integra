@@ -18,7 +18,25 @@ class MerchantPOSConfig(models.Model):
     revenue_account = models.ForeignKey(
         'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
         related_name='pos_revenue_merchant',
-        help_text='Akun pendapatan default untuk penjualan POS'
+        help_text='Akun pendapatan default untuk penjualan POS',
+    )
+    offset_coa_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pos_merchant_offset',
+        verbose_name='HPP Account',
+        help_text='Akun HPP — digunakan sebagai offset_coa_account di SalesItem.',
+    )
+    default_payment_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pos_merchant_payment',
+        verbose_name='Default Payment Account',
+        help_text='Akun kas/piutang default jika PaymentMethod tidak punya payment_account sendiri.',
+    )
+    sub_transaction_type = models.ForeignKey(
+        'purchase.SubTransactionType', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pos_merchant_configs',
+        verbose_name='Sub-Transaction Type',
+        help_text='Sub-tipe transaksi penjualan POS (module=sales, direction=outflow).',
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -93,7 +111,13 @@ class PaymentMethod(models.Model):
     offset_coa_account = models.ForeignKey(
         'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
         related_name='pos_payment_method_offset',
-        help_text='Akun debit saat pembayaran diterima (Kas, Bank, dll)'
+        help_text='Akun debit saat pembayaran diterima (Kas, Bank, dll)',
+    )
+    payment_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pos_payment_method_account',
+        verbose_name='Payment Account',
+        help_text='Akun kas/bank untuk metode ini. Override merchant default_payment_account.',
     )
     is_active = models.BooleanField(default=True)
     display_order = models.IntegerField(default=0)
