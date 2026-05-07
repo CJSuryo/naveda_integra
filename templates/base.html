@@ -315,6 +315,52 @@
           </a>
         </div>
       </div>
+
+      {% if user.has_ni_perm('pos_cashier') or user.has_ni_perm('pos_config_view') %}
+      <span class="ni-nav-label">Point of Sale</span>
+
+      {% if user.has_ni_perm('pos_cashier') %}
+      <div class="ni-nav-item">
+        <a href="#" class="ni-nav-link {% if 'pos/cashier' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Kasir</span>
+        </a>
+      </div>
+      <div class="ni-nav-item">
+        <a href="#" class="ni-nav-link {% if 'pos/queue' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="list-ordered" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Antrian Pesanan</span>
+        </a>
+      </div>
+      {% endif %}
+
+      {% if user.has_ni_perm('pos_catalog_view') %}
+      <div class="ni-nav-item {% if 'pos/catalog' in request.path %}ni-nav-item--open{% endif %}">
+        <a href="#" class="ni-nav-link {% if 'pos/catalog' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="package" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Katalog Produk</span>
+        </a>
+      </div>
+      {% endif %}
+
+      {% if user.has_ni_perm('pos_reports_view') %}
+      <div class="ni-nav-item">
+        <a href="#" class="ni-nav-link {% if 'pos/reports' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="bar-chart-2" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Laporan POS</span>
+        </a>
+      </div>
+      {% endif %}
+
+      {% if user.has_ni_perm('pos_config_view') %}
+      <div class="ni-nav-item">
+        <a href="#" class="ni-nav-link {% if 'pos/config' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="settings" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Konfigurasi POS</span>
+        </a>
+      </div>
+      {% endif %}
+      {% endif %}
     </nav>
 
     <div class="ni-sidebar-user">
