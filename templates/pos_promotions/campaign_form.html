@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{% if campaign %}Edit{% else %}Buat{% endif %} Kampanye{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">{% if campaign %}Edit Kampanye{% else %}Kampanye Baru{% endif %}</h1>
+</div>
+
+<div class="ni-card" style="max-width:720px;">
+  <div class="ni-card-body">
+    <form method="post">
+      {% csrf_token %}
+      {% if not campaign %}<input type="hidden" name="merchant" value="{{ merchant.pk }}">{% endif %}
+      {% for field in form %}
+      <div class="ni-form-group">
+        <label class="ni-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<p class="ni-field-hint">{{ field.help_text }}</p>{% endif %}
+        {% if field.errors %}<p class="ni-field-error">{{ field.errors|first }}</p>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="ni-form-actions">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'pos_campaign_list' %}" class="ni-btn ni-btn--ghost">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

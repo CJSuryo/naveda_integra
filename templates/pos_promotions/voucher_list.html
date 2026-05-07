@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Voucher — {{ campaign.name }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Voucher: {{ campaign.name }}</h1>
+</div>
+
+<div class="ni-card" style="max-width:560px; margin-bottom:1.5rem;">
+  <div class="ni-card-header"><h2 class="ni-card-title">Generate Kode Baru</h2></div>
+  <div class="ni-card-body">
+    <form method="post" action="{% url 'pos_voucher_generate' campaign_pk=campaign.pk %}">
+      {% csrf_token %}
+      <div class="ni-form-group">
+        <label class="ni-label">Prefix (opsional)</label>
+        <input type="text" name="prefix" class="ni-input" maxlength="10" placeholder="cth. SALE">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-label">Jumlah Kode</label>
+        <input type="number" name="count" class="ni-input" value="10" min="1" max="500">
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary">Generate</button>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card">
+  <div class="ni-card-body">
+    <table class="ni-table">
+      <thead><tr><th>Kode</th><th>Status</th><th>Digunakan oleh</th><th>Expired</th></tr></thead>
+      <tbody>
+        {% for v in vouchers %}
+        <tr>
+          <td><code>{{ v.code }}</code></td>
+          <td>{% if v.is_used %}<span class="ni-badge ni-badge--neutral">Terpakai</span>{% else %}<span class="ni-badge ni-badge--success">Aktif</span>{% endif %}</td>
+          <td>{{ v.used_by.name|default:"-" }}</td>
+          <td>{{ v.expires_at|date:"d/m/Y"|default:"∞" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-table__empty">Belum ada voucher.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
