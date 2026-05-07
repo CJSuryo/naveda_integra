@@ -3,6 +3,7 @@ import string
 import datetime
 from decimal import Decimal
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from apps.pos_promotions.models import Campaign, Voucher, OrderPromotion
@@ -69,6 +70,8 @@ def validate_voucher(code: str, order) -> tuple[Voucher | None, str | None]:
         return None, 'Kampanye voucher tidak aktif.'
 
     today = timezone.localdate()
+    if campaign.start_date > today:
+        return None, 'Kampanye voucher belum dimulai.'
     if campaign.end_date and campaign.end_date < today:
         return None, 'Kampanye voucher sudah berakhir.'
 
@@ -101,7 +104,7 @@ def apply_voucher(code: str, order) -> OrderPromotion:
             used_in_order=order,
             used_at=timezone.now(),
         )
-        Campaign.objects.filter(pk=campaign.pk).update(uses_count=campaign.uses_count + 1)
+        Campaign.objects.filter(pk=campaign.pk).update(uses_count=F('uses_count') + 1)
     return promo
 
 
