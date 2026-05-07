@@ -46,6 +46,7 @@ def member_register(request):
                     phone=form.cleaned_data['phone'],
                     email=form.cleaned_data.get('email', ''),
                     birth_date=form.cleaned_data.get('birth_date'),
+                    notes=form.cleaned_data.get('notes', ''),
                 )
                 messages.success(request, f'Member {member.member_id} berhasil didaftarkan.')
                 return redirect('pos_member_detail', pk=member.pk)
@@ -58,6 +59,9 @@ def member_register(request):
 
 def member_lookup_ajax(request):
     """GET /pos/members/lookup/?phone=&merchant="""
+    denied = _check_perm(request.user, 'pos.manage_members')
+    if denied:
+        return JsonResponse({'found': False, 'error': 'Forbidden'}, status=403)
     phone = request.GET.get('phone', '').strip()
     merchant_id = request.GET.get('merchant')
     if not phone or not merchant_id:

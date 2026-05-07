@@ -10,7 +10,7 @@ def lookup_member(phone: str, merchant) -> Member | None:
     ).first()
 
 
-def register_member(merchant, name: str, phone: str, email: str = '', birth_date=None) -> Member:
+def register_member(merchant, name: str, phone: str, email: str = '', birth_date=None, notes: str = '') -> Member:
     if Member.objects.filter(merchant_config=merchant, phone=phone).exists():
         raise ValueError(f'Nomor {phone} sudah terdaftar sebagai member.')
     return Member.objects.create(
@@ -19,6 +19,7 @@ def register_member(merchant, name: str, phone: str, email: str = '', birth_date
         phone=phone,
         email=email,
         birth_date=birth_date,
+        notes=notes,
     )
 
 
