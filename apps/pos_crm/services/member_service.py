@@ -1,5 +1,4 @@
 from decimal import Decimal
-import math
 from django.db import transaction
 
 from apps.pos_crm.models import Member, MemberTierConfig, MemberPointLog
@@ -30,7 +29,7 @@ def add_points(member: Member, order) -> MemberPointLog:
         tier=member.tier,
     ).first()
     ppt = tier_config.points_per_thousand if tier_config else 1
-    points_earned = math.floor(float(order.total_amount) / 1000) * ppt
+    points_earned = int(order.total_amount / Decimal('1000')) * ppt
 
     with transaction.atomic():
         log = MemberPointLog.objects.create(
