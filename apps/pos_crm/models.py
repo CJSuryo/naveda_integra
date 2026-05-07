@@ -77,5 +77,5 @@ class MemberPointLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        sign = '+' if self.points >= 0 else ''
+        sign = '+' if self.points > 0 else ''
         return f'{self.member.member_id} {sign}{self.points} — {self.reason}'
