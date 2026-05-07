@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Pesanan {{ order.order_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Pesanan {{ order.order_number }}</h1>
+  <a href="{% url 'pos_orders:order_list' %}" class="ni-btn ni-btn-secondary">← Kembali</a>
+</div>
+<div class="ni-card">
+  <dl class="ni-dl">
+    <dt>Status</dt><dd><span class="ni-badge">{{ order.get_status_display }}</span></dd>
+    <dt>Sumber</dt><dd>{{ order.get_source_display }}</dd>
+    <dt>Tipe</dt><dd>{{ order.get_order_type_display }}</dd>
+    {% if order.table_number %}<dt>Meja</dt><dd>{{ order.table_number }}</dd>{% endif %}
+    {% if order.customer_name %}<dt>Pelanggan</dt><dd>{{ order.customer_name }}</dd>{% endif %}
+  </dl>
+</div>
+<div class="ni-card">
+  <h3>Item Pesanan</h3>
+  <table class="ni-table">
+    <thead><tr><th>Produk</th><th>Qty</th><th>Harga</th><th>Modifier</th><th>Subtotal</th></tr></thead>
+    <tbody>
+      {% for item in order.items.all %}
+      <tr>
+        <td>{{ item.product.pos_name }}</td>
+        <td>{{ item.quantity|floatformat:0 }}</td>
+        <td>Rp {{ item.unit_price|floatformat:0|intcomma }}</td>
+        <td>{% for mod in item.modifiers.all %}{{ mod.option_name_snapshot }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>Rp {{ item.subtotal|floatformat:0|intcomma }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="ni-card">
+  <dl class="ni-dl">
+    <dt>Subtotal</dt><dd>Rp {{ order.subtotal|floatformat:0|intcomma }}</dd>
+    {% if order.discount_amount %}<dt>Diskon</dt><dd>-Rp {{ order.discount_amount|floatformat:0|intcomma }}</dd>{% endif %}
+    <dt>Pajak</dt><dd>Rp {{ order.tax_amount|floatformat:0|intcomma }}</dd>
+    {% if order.service_charge_amount %}<dt>Service</dt><dd>Rp {{ order.service_charge_amount|floatformat:0|intcomma }}</dd>{% endif %}
+    <dt><strong>Total</strong></dt><dd><strong>Rp {{ order.total_amount|floatformat:0|intcomma }}</strong></dd>
+  </dl>
+</div>
+{% endblock %}

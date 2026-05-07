@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Tutup Shift{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Tutup Shift — {{ store.entitas_bisnis_lv2.nama }}</h1>
+</div>
+{% if active_log %}
+<div class="ni-card" style="max-width:480px">
+  <p>Shift aktif: <strong>{{ active_log.shift.name }}</strong> dibuka {{ active_log.clock_in|date:"d/m/Y H:i" }}</p>
+  <form method="post">
+    {% csrf_token %}
+    <div class="ni-form-group">
+      <label class="ni-label">Kas Akhir (Rp)</label>
+      <input type="number" name="closing_cash" class="ni-input" value="0" min="0" step="1000">
+    </div>
+    <div class="ni-form-group">
+      <label class="ni-label">Catatan</label>
+      <textarea name="notes" class="ni-input" rows="3"></textarea>
+    </div>
+    <button type="submit" class="ni-btn ni-btn-primary">Tutup Shift</button>
+  </form>
+</div>
+{% else %}
+<div class="ni-alert ni-alert-warning">Tidak ada shift aktif saat ini.</div>
+{% endif %}
+{% endblock %}

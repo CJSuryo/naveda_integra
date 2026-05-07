@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Buka Shift{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Buka Shift — {{ store.entitas_bisnis_lv2.nama }}</h1>
+</div>
+<div class="ni-card" style="max-width:480px">
+  <form method="post">
+    {% csrf_token %}
+    <div class="ni-form-group">
+      <label class="ni-label">Shift</label>
+      <select name="shift" class="ni-input" required>
+        <option value="">— Pilih Shift —</option>
+        {% for shift in shifts %}
+        <option value="{{ shift.pk }}">{{ shift.name }} ({{ shift.start_time|time:"H:i" }}–{{ shift.end_time|time:"H:i" }})</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="ni-form-group">
+      <label class="ni-label">Kas Awal (Rp)</label>
+      <input type="number" name="opening_cash" class="ni-input" value="0" min="0" step="1000">
+    </div>
+    <button type="submit" class="ni-btn ni-btn-primary">Buka Shift</button>
+  </form>
+</div>
+{% endblock %}
