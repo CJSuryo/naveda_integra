@@ -71,8 +71,7 @@ class Order(models.Model):
     order_type = models.CharField(max_length=20, choices=ORDER_TYPE_CHOICES, default=ORDER_TYPE_DINE_IN)
     table_number = models.CharField(max_length=20, blank=True)
     customer_name = models.CharField(max_length=200, blank=True)
-    # member FK to pos_crm.Member will be added in Phase 4 migration once pos_crm app is installed
-    # member = models.ForeignKey('pos_crm.Member', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    member = models.ForeignKey('pos_crm.Member', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
     subtotal = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0'))
     discount_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0'))
     tax_amount = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0'))
