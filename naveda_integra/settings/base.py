@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'pos_catalog',
     'pos_orders',
     'apps.pos_crm',
+    'apps.pos_promotions',
 ]
 
 MIDDLEWARE = [
