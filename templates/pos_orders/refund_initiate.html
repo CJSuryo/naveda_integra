@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Ajukan Refund — {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Ajukan Refund</h1>
+  <p class="ni-page-subtitle">Order {{ order.order_number }}</p>
+</div>
+
+<div class="ni-card" style="max-width:640px;">
+  <div class="ni-card-body">
+    <table class="ni-table ni-table--compact" style="margin-bottom:1.5rem;">
+      <thead>
+        <tr><th>Produk</th><th>Qty</th><th>Subtotal</th></tr>
+      </thead>
+      <tbody>
+        {% for item in order.items.all %}
+        <tr>
+          <td>{{ item.product.pos_name }}</td>
+          <td>{{ item.quantity }}</td>
+          <td>Rp {{ item.subtotal|floatformat:0 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2"><strong>Total</strong></td><td><strong>Rp {{ order.total_amount|floatformat:0 }}</strong></td></tr>
+      </tfoot>
+    </table>
+
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-group">
+        <label class="ni-label" for="reason">Alasan Refund <span class="ni-required">*</span></label>
+        <textarea id="reason" name="reason" class="ni-textarea" rows="3" required></textarea>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-label">Tipe Refund</label>
+        <div class="ni-radio-group">
+          <label><input type="radio" name="refund_type" value="FULL" checked> Refund Penuh</label>
+          <label><input type="radio" name="refund_type" value="PARTIAL"> Refund Sebagian</label>
+        </div>
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-label" for="refund_method_id">Metode Pengembalian</label>
+        <select id="refund_method_id" name="refund_method_id" class="ni-select" required>
+          {% for pm in payment_methods %}
+          <option value="{{ pm.pk }}">{{ pm.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-actions">
+        <button type="submit" class="ni-btn ni-btn--danger">Ajukan Refund</button>
+        <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--ghost">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

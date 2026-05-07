@@ -7,10 +7,12 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_GET
 from django.conf import settings
 
+from django.contrib import messages
+
 from apps.accounts.views import _check_perm
 from pos_config.models import StorePOSConfig, PaymentMethod, WebPushSubscription
 from pos_catalog.services.product_service import get_available_products, validate_modifier_selections
-from pos_orders.models import Order, OrderItem, OrderPayment
+from pos_orders.models import Order, OrderItem, OrderPayment, Refund
 from pos_orders.services.order_service import (
     create_order, add_item, remove_item, update_item_quantity,
     submit_order, process_payment, confirm_payment, complete_order, cancel_order,
@@ -344,3 +346,123 @@ def api_transition_order(request, pk):
     except ValueError as e:
         return JsonResponse({'error': str(e)}, status=400)
     return JsonResponse({'status': order.status})
+
+
+# ─── Refund Views ─────────────────────────────────────────────────────────────
+
+@login_required
+def refund_initiate(request, order_pk):
+    denied = _check_perm(request.user, 'pos_orders_manage')
+    if denied:
+        return denied
+    from pos_orders.services.refund_service import initiate_refund
+    order = get_object_or_404(Order, pk=order_pk)
+    if order.status != Order.STATUS_COMPLETED:
+        messages.error(request, 'Hanya order COMPLETED yang bisa direfund.')
+        return redirect('pos_orders:order_detail', pk=order_pk)
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '').strip()
+        refund_type = request.POST.get('refund_type', Refund.REFUND_FULL)
+        refund_method_id = request.POST.get('refund_method_id')
+        if not reason:
+            messages.error(request, 'Alasan refund wajib diisi.')
+            return redirect('pos_orders:refund_initiate', order_pk=order_pk)
+        pm = get_object_or_404(PaymentMethod, pk=refund_method_id)
+        try:
+            refund = initiate_refund(
+                order=order, by_user=request.user, reason=reason,
+                refund_type=refund_type, refund_method=pm,
+            )
+            messages.success(request, f'Refund #{refund.pk} berhasil diajukan.')
+            return redirect('pos_orders:refund_detail', order_pk=order_pk, refund_pk=refund.pk)
+        except ValueError as e:
+            messages.error(request, str(e))
+            return redirect('pos_orders:refund_initiate', order_pk=order_pk)
+    payment_methods = order.store.merchant_config.payment_methods.filter(is_active=True)
+    return render(request, 'pos_orders/refund_initiate.html', {
+        'order': order, 'payment_methods': payment_methods,
+    })
+
+
+@login_required
+def refund_detail(request, order_pk, refund_pk):
+    denied = _check_perm(request.user, 'pos_orders_manage')
+    if denied:
+        return denied
+    order = get_object_or_404(Order, pk=order_pk)
+    refund = get_object_or_404(Refund, pk=refund_pk, order=order)
+    return render(request, 'pos_orders/refund_detail.html', {'order': order, 'refund': refund})
+
+
+@login_required
+@require_POST
+def refund_approve(request, order_pk, refund_pk):
+    denied = _check_perm(request.user, 'pos_refund_approve')
+    if denied:
+        return denied
+    from pos_orders.services.refund_service import approve_refund
+    order = get_object_or_404(Order, pk=order_pk)
+    refund = get_object_or_404(Refund, pk=refund_pk, order=order)
+    try:
+        approve_refund(refund, approved_by=request.user)
+        messages.success(request, 'Refund disetujui.')
+    except ValueError as e:
+        messages.error(request, str(e))
+    return redirect('pos_orders:refund_detail', order_pk=order_pk, refund_pk=refund_pk)
+
+
+@login_required
+@require_POST
+def refund_complete(request, order_pk, refund_pk):
+    denied = _check_perm(request.user, 'pos_refund_approve')
+    if denied:
+        return denied
+    from pos_orders.services.refund_service import complete_refund
+    order = get_object_or_404(Order, pk=order_pk)
+    refund = get_object_or_404(Refund, pk=refund_pk, order=order)
+    try:
+        complete_refund(refund)
+        messages.success(request, 'Refund selesai. Stok dan jurnal sudah dikembalikan.')
+    except ValueError as e:
+        messages.error(request, str(e))
+    return redirect('pos_orders:refund_detail', order_pk=order_pk, refund_pk=refund_pk)
+
+
+@login_required
+def refund_list(request):
+    denied = _check_perm(request.user, 'pos_orders_manage')
+    if denied:
+        return denied
+    store_id = request.GET.get('store')
+    refunds = Refund.objects.select_related(
+        'order__store', 'initiated_by', 'approved_by'
+    ).order_by('-id')
+    if store_id:
+        refunds = refunds.filter(order__store_id=store_id)
+    return render(request, 'pos_orders/refund_list.html', {'refunds': refunds})
+
+
+@login_required
+def receipt_preview(request, order_pk):
+    denied = _check_perm(request.user, 'pos_orders_manage')
+    if denied:
+        return denied
+    from pos_orders.services.receipt_service import generate_receipt_text
+    order = get_object_or_404(Order, pk=order_pk)
+    text = generate_receipt_text(order)
+    return render(request, 'pos_orders/receipt_preview.html', {
+        'order': order, 'receipt_text': text,
+    })
+
+
+@login_required
+@require_POST
+def receipt_print(request, order_pk):
+    denied = _check_perm(request.user, 'pos_orders_manage')
+    if denied:
+        return denied
+    from pos_orders.services.receipt_service import generate_receipt_text, send_to_printer
+    order = get_object_or_404(Order, pk=order_pk)
+    text = generate_receipt_text(order)
+    send_to_printer(order.store, text)
+    return JsonResponse({'ok': True})

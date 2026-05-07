@@ -17,6 +17,17 @@ urlpatterns = [
     path('shifts/<int:store_id>/open/', views.shift_open, name='shift_open'),
     path('shifts/<int:store_id>/close/', views.shift_close, name='shift_close'),
 
+    # Refund management
+    path('orders/<int:order_pk>/refund/initiate/', views.refund_initiate, name='refund_initiate'),
+    path('orders/<int:order_pk>/refund/<int:refund_pk>/', views.refund_detail, name='refund_detail'),
+    path('orders/<int:order_pk>/refund/<int:refund_pk>/approve/', views.refund_approve, name='refund_approve'),
+    path('orders/<int:order_pk>/refund/<int:refund_pk>/complete/', views.refund_complete, name='refund_complete'),
+    path('refunds/', views.refund_list, name='refund_list'),
+
+    # Receipt
+    path('orders/<int:order_pk>/receipt/', views.receipt_preview, name='receipt_preview'),
+    path('orders/<int:order_pk>/print/', views.receipt_print, name='receipt_print'),
+
     # AJAX order management
     path('api/orders/create/', views.api_create_order, name='api_create_order'),
     path('api/orders/<int:pk>/add-item/', views.api_add_item, name='api_add_item'),

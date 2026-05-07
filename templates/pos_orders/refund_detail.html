@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Refund #{{ refund.pk }} — {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Refund #{{ refund.pk }}</h1>
+  <p class="ni-page-subtitle">Order {{ order.order_number }}</p>
+</div>
+
+<div class="ni-card" style="max-width:640px;">
+  <div class="ni-card-body">
+    <dl class="ni-dl">
+      <dt>Status</dt>
+      <dd><span class="ni-badge ni-badge--{{ refund.status|lower }}">{{ refund.status }}</span></dd>
+      <dt>Tipe</dt><dd>{{ refund.get_refund_type_display }}</dd>
+      <dt>Jumlah</dt><dd>Rp {{ refund.amount|floatformat:0 }}</dd>
+      <dt>Alasan</dt><dd>{{ refund.reason }}</dd>
+      <dt>Diajukan oleh</dt><dd>{{ refund.initiated_by.get_full_name|default:refund.initiated_by.email }}</dd>
+      <dt>Disetujui oleh</dt><dd>{{ refund.approved_by.get_full_name|default:"-" }}</dd>
+      <dt>Metode Kembali</dt><dd>{{ refund.refund_method.name }}</dd>
+    </dl>
+
+    <div class="ni-form-actions" style="margin-top:1.5rem;">
+      {% if refund.status == "PENDING" %}
+      <form method="post" action="{% url 'pos_orders:refund_approve' order_pk=order.pk refund_pk=refund.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--warning">Setujui Refund</button>
+      </form>
+      {% endif %}
+      {% if refund.status == "APPROVED" %}
+      <form method="post" action="{% url 'pos_orders:refund_complete' order_pk=order.pk refund_pk=refund.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--danger">Selesaikan Refund</button>
+      </form>
+      {% endif %}
+      <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--ghost">Kembali ke Order</a>
+    </div>
+  </div>
+</div>
+{% endblock %}
