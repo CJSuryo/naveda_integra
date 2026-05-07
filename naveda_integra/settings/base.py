@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'pos_config',
     'pos_catalog',
     'pos_orders',
+    'apps.pos_crm',
 ]
 
 MIDDLEWARE = [
