@@ -19,6 +19,7 @@ urlpatterns = [
     path('ekuitas/', include('apps.ekuitas.urls')),
     path('manufacturing/', include('apps.manufacturing.urls')),
     path('pos/', include('pos_config.urls', namespace='pos_config')),
+    path('pos/catalog/', include('pos_catalog.urls', namespace='pos_catalog')),
     path('', include('apps.accounts.urls_home')),
 ]
 

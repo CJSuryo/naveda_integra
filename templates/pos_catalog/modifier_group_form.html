@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %}</h1>
+</div>
+<div class="ni-card">
+  <form method="post" class="ni-form">
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="ni-form-group">
+      <label class="ni-label">{{ field.label }}</label>
+      {{ field }}
+      {% if field.errors %}<p class="ni-field-error">{{ field.errors|join:", " }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    <div class="ni-form-actions">
+      <button type="submit" class="ni-btn ni-btn-primary">Simpan</button>
+      <a href="{% url 'pos_catalog:modifier_group_list' merchant.pk %}" class="ni-btn ni-btn-secondary">Batal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
