@@ -2,6 +2,7 @@
 {% block title %}Laporan Harian — POS{% endblock %}
 
 {% block content %}
+{% include "pos_reports/_subnav.html" %}
 <div class="ni-page-header">
   <h1 class="ni-page-title">Laporan Harian</h1>
   {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}

@@ -1,0 +1,22 @@
+<nav class="ni-subnav" style="display:flex;gap:0.5rem;margin-bottom:1.5rem;border-bottom:2px solid var(--ni-border);padding-bottom:0.75rem;">
+  {% url 'pos_reports_dashboard' as url_dash %}
+  {% url 'pos_reports_daily' as url_daily %}
+  {% url 'pos_reports_top_products' as url_top %}
+  {% url 'pos_reports_payments' as url_pay %}
+  {% url 'pos_reports_laba_rugi' as url_lr %}
+  <a href="{{ url_dash }}{% if store %}?store={{ store.pk }}{% endif %}"
+     class="ni-subnav__link{% if request.resolver_match.url_name == 'pos_reports_dashboard' %} ni-subnav__link--active{% endif %}">Dashboard</a>
+  <a href="{{ url_daily }}{% if store %}?store={{ store.pk }}{% endif %}"
+     class="ni-subnav__link{% if request.resolver_match.url_name == 'pos_reports_daily' %} ni-subnav__link--active{% endif %}">Harian</a>
+  <a href="{{ url_top }}{% if store %}?store={{ store.pk }}{% endif %}"
+     class="ni-subnav__link{% if request.resolver_match.url_name == 'pos_reports_top_products' %} ni-subnav__link--active{% endif %}">Produk Terlaris</a>
+  <a href="{{ url_pay }}{% if store %}?store={{ store.pk }}{% endif %}"
+     class="ni-subnav__link{% if request.resolver_match.url_name == 'pos_reports_payments' %} ni-subnav__link--active{% endif %}">Pembayaran</a>
+  <a href="{{ url_lr }}{% if store %}?store={{ store.pk }}{% endif %}"
+     class="ni-subnav__link{% if request.resolver_match.url_name == 'pos_reports_laba_rugi' %} ni-subnav__link--active{% endif %}">Laba/Rugi</a>
+</nav>
+<style>
+.ni-subnav__link { padding:0.4rem 0.85rem; border-radius:6px; text-decoration:none; font-size:0.88rem; color:var(--ni-text-muted); font-weight:500; }
+.ni-subnav__link:hover { background:var(--ni-neutral-100,#f1f3f5); color:var(--ni-text); }
+.ni-subnav__link--active { background:var(--ni-primary,#0054a6); color:#fff; }
+</style>

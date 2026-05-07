@@ -51,9 +51,13 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endblock %}
 
 {% block content %}
+{% include "pos_reports/_subnav.html" %}
 <div class="ni-page-header">
   <h1 class="ni-page-title">Dashboard POS</h1>
-  <p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }} · 30 hari terakhir</p>
+  <p class="ni-page-subtitle">
+    {{ store.entitas_bisnis_lv2.nama }} · 30 hari terakhir
+    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--sm" style="margin-left:0.75rem;">Ganti Toko</a>
+  </p>
 </div>
 
 <div class="ni-grid ni-grid--4col" style="margin-bottom:1.5rem;">
@@ -89,7 +93,10 @@ document.addEventListener('DOMContentLoaded', function() {
 </div>
 
 <div class="ni-card">
-  <div class="ni-card-header"><h2 class="ni-card-title">Top 5 Produk</h2></div>
+  <div class="ni-card-header" style="display:flex;justify-content:space-between;align-items:center;">
+    <h2 class="ni-card-title">Top 5 Produk</h2>
+    <a href="{% url 'pos_reports_top_products' %}?store={{ store.pk }}" class="ni-btn ni-btn--sm">Lihat Semua →</a>
+  </div>
   <div class="ni-card-body">
     <table class="ni-table">
       <thead><tr><th>#</th><th>Produk</th><th>Qty Terjual</th><th>Revenue</th></tr></thead>

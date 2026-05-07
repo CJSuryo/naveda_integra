@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', function() {
 {% endblock %}
 
 {% block content %}
+{% include "pos_reports/_subnav.html" %}
 <div class="ni-page-header">
   <h1 class="ni-page-title">Breakdown Pembayaran</h1>
   {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
