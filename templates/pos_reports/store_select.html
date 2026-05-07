@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Pilih Toko — Laporan POS{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Laporan POS</h1>
+  <p class="ni-page-subtitle">Pilih toko untuk melihat laporan</p>
+</div>
+<div class="ni-grid ni-grid--4col">
+  {% for store in stores %}
+  <a href="?store={{ store.pk }}" class="ni-card" style="text-decoration:none;text-align:center;padding:1.5rem;">
+    <div class="ni-kpi-label">{{ store.entitas_bisnis_lv2.nama }}</div>
+  </a>
+  {% empty %}
+  <p class="ni-text--muted">Belum ada toko aktif.</p>
+  {% endfor %}
+</div>
+{% endblock %}

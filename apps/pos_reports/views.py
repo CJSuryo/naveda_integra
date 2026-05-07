@@ -66,6 +66,8 @@ def dashboard(request):
         'chart_labels': json.dumps(chart_labels),
         'chart_net_sales': json.dumps(chart_net_sales),
         'chart_orders': json.dumps(chart_orders),
+        'chart_payment_labels': json.dumps(list(breakdown.keys())),
+        'chart_payment_amounts': json.dumps([_dec(v) for v in breakdown.values()]),
     })
 
 

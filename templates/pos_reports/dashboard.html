@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard POS — {{ store.entitas_bisnis_lv2.nama }}{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const labels = {{ chart_labels|safe }};
+  const netSales = {{ chart_net_sales|safe }};
+
+  new Chart(document.getElementById('salesTrendChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Penjualan Bersih (Rp)',
+        data: netSales,
+        backgroundColor: '#0054a6',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => 'Rp ' + v.toLocaleString('id-ID') } } }
+    }
+  });
+
+  const paymentLabels = {{ chart_payment_labels|safe }};
+  const paymentAmounts = {{ chart_payment_amounts|safe }};
+  const paymentColors = ['#0054a6', '#00a878', '#e87722', '#9b59b6', '#95a5a6'];
+
+  if (paymentLabels.length > 0) {
+    new Chart(document.getElementById('paymentChart'), {
+      type: 'doughnut',
+      data: {
+        labels: paymentLabels,
+        datasets: [{ data: paymentAmounts, backgroundColor: paymentColors }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: { callbacks: { label: ctx => 'Rp ' + ctx.parsed.toLocaleString('id-ID') } }
+        }
+      }
+    });
+  }
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Dashboard POS</h1>
+  <p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }} · 30 hari terakhir</p>
+</div>
+
+<div class="ni-grid ni-grid--4col" style="margin-bottom:1.5rem;">
+  <div class="ni-card ni-card--kpi">
+    <div class="ni-kpi-label">Total Order</div>
+    <div class="ni-kpi-value">{{ summary.total_orders }}</div>
+  </div>
+  <div class="ni-card ni-card--kpi">
+    <div class="ni-kpi-label">Penjualan Bersih</div>
+    <div class="ni-kpi-value">Rp {{ summary.net_sales|floatformat:0 }}</div>
+  </div>
+  <div class="ni-card ni-card--kpi">
+    <div class="ni-kpi-label">Laba Kotor</div>
+    <div class="ni-kpi-value">Rp {{ laba_rugi.gross_profit|floatformat:0 }}</div>
+  </div>
+  <div class="ni-card ni-card--kpi">
+    <div class="ni-kpi-label">Margin Kotor</div>
+    <div class="ni-kpi-value">{{ laba_rugi.gross_margin_pct|floatformat:1 }}%</div>
+  </div>
+</div>
+
+<div class="ni-grid ni-grid--2col" style="margin-bottom:1.5rem;">
+  <div class="ni-card">
+    <div class="ni-card-header"><h2 class="ni-card-title">Tren Penjualan Harian</h2></div>
+    <div class="ni-card-body"><canvas id="salesTrendChart" height="200"></canvas></div>
+  </div>
+  <div class="ni-card">
+    <div class="ni-card-header"><h2 class="ni-card-title">Breakdown Pembayaran</h2></div>
+    <div class="ni-card-body" style="display:flex;align-items:center;justify-content:center;">
+      <canvas id="paymentChart" height="200" style="max-height:250px;"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card">
+  <div class="ni-card-header"><h2 class="ni-card-title">Top 5 Produk</h2></div>
+  <div class="ni-card-body">
+    <table class="ni-table">
+      <thead><tr><th>#</th><th>Produk</th><th>Qty Terjual</th><th>Revenue</th></tr></thead>
+      <tbody>
+        {% for product, qty, revenue in top_products %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ product.pos_name }}</td>
+          <td>{{ qty|floatformat:0 }}</td>
+          <td>Rp {{ revenue|floatformat:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-table__empty">Belum ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

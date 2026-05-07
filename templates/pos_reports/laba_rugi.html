@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Laba/Rugi Kotor — POS{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Laporan Laba/Rugi Kotor</h1>
+  {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+</div>
+
+<form method="get" class="ni-filter-bar">
+  <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+  <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
+  {% if store %}<input type="hidden" name="store" value="{{ store.pk }}">{% endif %}
+  <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+</form>
+
+{% if laba_rugi %}
+<div class="ni-card" style="max-width:480px; margin-top:1rem;">
+  <div class="ni-card-header"><h2 class="ni-card-title">Ringkasan</h2></div>
+  <div class="ni-card-body">
+    <table class="ni-table">
+      <tbody>
+        <tr><td>Penjualan Bersih</td><td class="ni-text-right"><strong>Rp {{ laba_rugi.net_sales|floatformat:0 }}</strong></td></tr>
+        <tr><td>HPP (COGS)</td><td class="ni-text-right" style="color:var(--ni-danger);">- Rp {{ laba_rugi.total_cogs|floatformat:0 }}</td></tr>
+        <tr><td><strong>Laba Kotor</strong></td><td class="ni-text-right"><strong>Rp {{ laba_rugi.gross_profit|floatformat:0 }}</strong></td></tr>
+        <tr><td>Margin Kotor</td><td class="ni-text-right">{{ laba_rugi.gross_margin_pct|floatformat:1 }}%</td></tr>
+      </tbody>
+    </table>
+    <p class="ni-note" style="margin-top:1rem;">
+      Laba/rugi kotor berdasarkan COGS dari alokasi FIFO. Untuk laporan lengkap termasuk biaya operasional, lihat modul Jurnal.
+    </p>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

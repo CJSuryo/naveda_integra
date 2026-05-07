@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Laporan Harian — POS{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Laporan Harian</h1>
+  {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+</div>
+
+<form method="get" class="ni-filter-bar">
+  <div class="ni-form-group ni-form-group--inline">
+    <label class="ni-label">Dari</label>
+    <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+  </div>
+  <div class="ni-form-group ni-form-group--inline">
+    <label class="ni-label">Sampai</label>
+    <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
+  </div>
+  <input type="hidden" name="store" value="{{ store.pk }}">
+  <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+</form>
+
+{% if summary %}
+<div class="ni-grid ni-grid--4col" style="margin:1rem 0;">
+  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Total Order</div><div class="ni-kpi-value">{{ summary.total_orders }}</div></div>
+  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Penjualan Kotor</div><div class="ni-kpi-value">Rp {{ summary.gross_sales|floatformat:0 }}</div></div>
+  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Penjualan Bersih</div><div class="ni-kpi-value">Rp {{ summary.net_sales|floatformat:0 }}</div></div>
+  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Total Diskon</div><div class="ni-kpi-value">Rp {{ summary.total_discount|floatformat:0 }}</div></div>
+</div>
+{% endif %}
+
+<div class="ni-card">
+  <div class="ni-card-body">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th><th>Order</th><th>Penjualan Kotor</th><th>Diskon</th>
+          <th>Pajak</th><th>Penjualan Bersih</th><th>HPP</th><th>Laba Kotor</th>
+          <th>Tunai</th><th>QRIS</th><th>Transfer</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for snap in snapshots %}
+        <tr>
+          <td>{{ snap.date|date:"d/m/Y" }}</td>
+          <td>{{ snap.total_orders }}</td>
+          <td>{{ snap.gross_sales|floatformat:0 }}</td>
+          <td>{{ snap.total_discount|floatformat:0 }}</td>
+          <td>{{ snap.total_tax|floatformat:0 }}</td>
+          <td><strong>{{ snap.net_sales|floatformat:0 }}</strong></td>
+          <td>{{ snap.total_cogs|floatformat:0 }}</td>
+          <td>{{ snap.gross_profit|floatformat:0 }}</td>
+          <td>{{ snap.cash_collected|floatformat:0 }}</td>
+          <td>{{ snap.qris_collected|floatformat:0 }}</td>
+          <td>{{ snap.transfer_collected|floatformat:0 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="11" class="ni-table__empty">Belum ada snapshot. Tutup shift untuk generate otomatis.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
