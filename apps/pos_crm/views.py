@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.contrib import messages
 
 from apps.accounts.views import _check_perm
-from apps.pos_crm.models import Member, MemberPointLog
+from apps.pos_crm.models import Member
 from apps.pos_crm.forms import MemberRegisterForm
 from apps.pos_crm.services.member_service import register_member, lookup_member
 
