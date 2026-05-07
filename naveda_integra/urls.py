@@ -23,6 +23,7 @@ urlpatterns = [
     path('pos/', include('pos_orders.urls', namespace='pos_orders')),
     path('pos/', include('apps.pos_crm.urls')),
     path('pos/', include('apps.pos_promotions.urls')),
+    path('pos/', include('apps.pos_reports.urls')),
     path('', include('apps.accounts.urls_home')),
 ]
 
