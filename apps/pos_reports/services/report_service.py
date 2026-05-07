@@ -75,7 +75,7 @@ def get_payment_breakdown(store, date_from: datetime.date, date_to: datetime.dat
         .values('payment_method__method_type')
         .annotate(total=Sum('amount'))
     )
-    return {r['payment_method__method_type']: r['total'] for r in rows}
+    return {r['payment_method__method_type']: (r['total'] or Decimal('0')) for r in rows}
 
 
 def get_laba_rugi(store, date_from: datetime.date, date_to: datetime.date) -> dict:
