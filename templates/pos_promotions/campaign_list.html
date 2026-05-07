@@ -31,7 +31,7 @@
             {% if c.is_active %}<span class="ni-badge ni-badge--success">Aktif</span>
             {% else %}<span class="ni-badge ni-badge--neutral">Nonaktif</span>{% endif %}
           </td>
-          <td>{{ c.vouchers.count }}</td>
+          <td>{{ c.voucher_count }}</td>
           <td>
             <a href="{% url 'pos_campaign_edit' pk=c.pk %}" class="ni-btn ni-btn--xs">Edit</a>
             {% if c.campaign_type == "VOUCHER" %}

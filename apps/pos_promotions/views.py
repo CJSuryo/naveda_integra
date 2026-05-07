@@ -15,7 +15,10 @@ def campaign_list(request):
     if denied:
         return denied
     merchant_id = request.GET.get('merchant')
-    campaigns = Campaign.objects.select_related('merchant_config').order_by('-id')
+    from django.db.models import Count
+    campaigns = Campaign.objects.select_related('merchant_config').annotate(
+        voucher_count=Count('vouchers')
+    ).order_by('-id')
     if merchant_id:
         campaigns = campaigns.filter(merchant_config_id=merchant_id)
     return render(request, 'pos_promotions/campaign_list.html', {'campaigns': campaigns})
@@ -51,7 +54,7 @@ def voucher_list(request, campaign_pk):
     if denied:
         return denied
     campaign = get_object_or_404(Campaign, pk=campaign_pk)
-    vouchers = campaign.vouchers.order_by('-created_at')
+    vouchers = campaign.vouchers.select_related('used_by').order_by('-created_at')
     return render(request, 'pos_promotions/voucher_list.html', {
         'campaign': campaign, 'vouchers': vouchers,
     })
@@ -63,7 +66,10 @@ def voucher_generate(request, campaign_pk):
         return denied
     campaign = get_object_or_404(Campaign, pk=campaign_pk)
     if request.method == 'POST':
-        count = int(request.POST.get('count', 1))
+        try:
+            count = int(request.POST.get('count', 1))
+        except (ValueError, TypeError):
+            count = 1
         prefix = request.POST.get('prefix', '').upper().strip()
         count = max(1, min(count, 500))
         generate_voucher_codes(campaign, count=count, prefix=prefix)
@@ -92,3 +98,5 @@ def apply_voucher_ajax(request):
         })
     except ValueError as e:
         return JsonResponse({'ok': False, 'error': str(e)})
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'Terjadi kesalahan. Silakan coba lagi.'}, status=500)
