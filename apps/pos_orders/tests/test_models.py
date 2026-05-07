@@ -6,6 +6,7 @@ from pos_config.models import MerchantPOSConfig, StorePOSConfig, PaymentMethod
 from pos_catalog.models import POSProduct
 from pos_orders.models import Order, OrderItem, OrderPayment
 from apps.accounts.models import User, Role
+from pos_orders.services.order_number import generate_order_number
 import datetime
 
 
@@ -139,3 +140,23 @@ class OrderRecalculateTotalsTest(TestCase):
         self.assertEqual(order.tax_amount, Decimal('5500'))
         self.assertEqual(order.service_charge_amount, Decimal('2500'))
         self.assertEqual(order.total_amount, Decimal('58000'))
+
+
+class OrderNumberGenerationTest(TestCase):
+    def test_generates_correct_format(self):
+        store = make_store()
+        number = generate_order_number(store)
+        self.assertRegex(number, r'^ORD-[A-Z]{3}-\d{8}-\d{3}$')
+
+    def test_generates_sequential_numbers(self):
+        store = make_store()
+        cashier = make_cashier()
+        n1 = generate_order_number(store)
+        Order.objects.create(
+            store=store, cashier=cashier, order_number=n1,
+            status=Order.STATUS_DRAFT, order_type=Order.ORDER_TYPE_DINE_IN,
+        )
+        n2 = generate_order_number(store)
+        seq1 = int(n1.rsplit('-', 1)[1])
+        seq2 = int(n2.rsplit('-', 1)[1])
+        self.assertEqual(seq2, seq1 + 1)
