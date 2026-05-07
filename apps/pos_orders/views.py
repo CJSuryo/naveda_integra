@@ -18,6 +18,13 @@ from pos_orders.services.order_service import (
 )
 
 
+def _json_body(request):
+    try:
+        return json.loads(request.body), None
+    except (json.JSONDecodeError, ValueError):
+        return None, JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+
 # ─── Push Notification Endpoints ─────────────────────────────────────────────
 
 @require_GET
@@ -29,7 +36,9 @@ def vapid_public_key(request):
 @require_POST
 def push_subscribe(request, store_id):
     store = get_object_or_404(StorePOSConfig, pk=store_id)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     WebPushSubscription.objects.update_or_create(
         user=request.user,
         endpoint=data['endpoint'],
@@ -48,7 +57,9 @@ def push_subscribe(request, store_id):
 @login_required
 @require_POST
 def push_unsubscribe(request):
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     WebPushSubscription.objects.filter(
         user=request.user, endpoint=data.get('endpoint', '')
     ).update(is_active=False)
@@ -167,7 +178,12 @@ def shift_close(request, store_id):
 @login_required
 @require_POST
 def api_create_order(request):
-    data = json.loads(request.body)
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
+    data, err = _json_body(request)
+    if err:
+        return err
     store = get_object_or_404(StorePOSConfig, pk=data['store_id'])
     order = create_order(
         store, request.user,
@@ -182,8 +198,13 @@ def api_create_order(request):
 @login_required
 @require_POST
 def api_add_item(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk, cashier=request.user)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     from pos_catalog.models import POSProduct
     product = get_object_or_404(POSProduct, pk=data['product_id'])
     errors = validate_modifier_selections(product, data.get('modifier_option_ids', []))
@@ -200,6 +221,9 @@ def api_add_item(request, pk):
 @login_required
 @require_POST
 def api_remove_item(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     item = get_object_or_404(OrderItem, pk=pk, order__cashier=request.user)
     order = item.order
     remove_item(item)
@@ -210,8 +234,13 @@ def api_remove_item(request, pk):
 @login_required
 @require_POST
 def api_update_qty(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     item = get_object_or_404(OrderItem, pk=pk, order__cashier=request.user)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     item = update_item_quantity(item, Decimal(str(data['quantity'])))
     return JsonResponse({'subtotal': str(item.subtotal), 'order_total': str(item.order.total_amount)})
 
@@ -219,6 +248,9 @@ def api_update_qty(request, pk):
 @login_required
 @require_POST
 def api_submit_order(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk, cashier=request.user)
     order = submit_order(order)
     return JsonResponse({'order_number': order.order_number, 'status': order.status})
@@ -227,8 +259,13 @@ def api_submit_order(request, pk):
 @login_required
 @require_POST
 def api_process_payment(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     method = get_object_or_404(PaymentMethod, pk=data['payment_method_id'])
     op = process_payment(order, method, Decimal(str(data['amount'])), data.get('reference_number', ''))
     return JsonResponse({'payment_id': op.pk, 'is_confirmed': op.is_confirmed, 'is_fully_paid': order.is_fully_paid()})
@@ -237,8 +274,14 @@ def api_process_payment(request, pk):
 @login_required
 @require_POST
 def api_confirm_payment(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk)
-    payment_id = json.loads(request.body).get('payment_id')
+    data, err = _json_body(request)
+    if err:
+        return err
+    payment_id = data.get('payment_id')
     op = get_object_or_404(OrderPayment, pk=payment_id, order=order)
     is_paid = confirm_payment(op, request.user)
     return JsonResponse({'is_confirmed': True, 'is_fully_paid': is_paid})
@@ -247,6 +290,9 @@ def api_confirm_payment(request, pk):
 @login_required
 @require_POST
 def api_confirm_single_payment(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     op = get_object_or_404(OrderPayment, pk=pk)
     is_paid = confirm_payment(op, request.user)
     return JsonResponse({'is_confirmed': True, 'is_fully_paid': is_paid})
@@ -255,6 +301,9 @@ def api_confirm_single_payment(request, pk):
 @login_required
 @require_POST
 def api_complete_order(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk)
     try:
         order = complete_order(order)
@@ -266,8 +315,13 @@ def api_complete_order(request, pk):
 @login_required
 @require_POST
 def api_cancel_order(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     try:
         order = cancel_order(order, data.get('reason', ''), request.user)
     except ValueError as e:
@@ -278,8 +332,13 @@ def api_cancel_order(request, pk):
 @login_required
 @require_POST
 def api_transition_order(request, pk):
+    denied = _check_perm(request.user, 'pos_cashier')
+    if denied:
+        return denied
     order = get_object_or_404(Order, pk=pk)
-    data = json.loads(request.body)
+    data, err = _json_body(request)
+    if err:
+        return err
     try:
         order = transition_status(order, data['status'], request.user)
     except ValueError as e:
