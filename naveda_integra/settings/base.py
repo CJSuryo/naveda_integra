@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'apps.manufacturing',
     'pos_config',
     'pos_catalog',
+    'pos_orders',
 ]
 
 MIDDLEWARE = [
@@ -187,3 +188,11 @@ LOGGING = {
 VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
 VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
 VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'push@naveda.id')
+
+# Django Channels — Redis channel layer
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {"hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")]},
+    }
+}
