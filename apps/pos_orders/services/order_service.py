@@ -149,20 +149,19 @@ def complete_order(order: Order) -> Order:
     if not order.can_transition_to(Order.STATUS_COMPLETED):
         raise ValueError(f'Cannot complete order with status {order.status}')
 
-    try:
+    from django.db import transaction as db_transaction
+    with db_transaction.atomic():
+        order.status = Order.STATUS_COMPLETED
+        order.completed_at = timezone.now()
+        order.save(update_fields=['status', 'completed_at', 'updated_at'])
+
         from pos_orders.services.sales_integration import create_sales_from_order
         create_sales_from_order(order)
-    except ImportError:
-        pass
 
-    order.status = Order.STATUS_COMPLETED
-    order.completed_at = timezone.now()
-    order.save(update_fields=['status', 'completed_at', 'updated_at'])
-
-    if order.member_id:
         try:
-            from pos_crm.services.member_service import add_points
-            add_points(order.member, order)
+            if getattr(order, 'member_id', None):
+                from pos_crm.services.member_service import add_points
+                add_points(order.member, order)
         except ImportError:
             pass
 
