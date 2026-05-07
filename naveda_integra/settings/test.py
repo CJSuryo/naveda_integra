@@ -1,6 +1,8 @@
 """Test settings — uses SQLite for fast, zero-config local testing."""
 from .base import *  # noqa: F401, F403
 
+ALLOWED_HOSTS = ['*', 'testserver', 'localhost']
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
