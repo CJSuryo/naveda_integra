@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 def send_push_to_store(store_id: int, role: str, title: str, body: str, data: dict) -> None:
     """Send web push notification to all active subscribers with the given role in a store."""
-    if not getattr(settings, 'VAPID_PRIVATE_KEY', None):
+    if not getattr(settings, 'VAPID_PRIVATE_KEY', None) or not getattr(settings, 'VAPID_CLAIM_EMAIL', None):
         return  # Push not configured
 
     from pywebpush import webpush, WebPushException
