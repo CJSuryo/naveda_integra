@@ -1,5 +1,6 @@
 import datetime
 from decimal import Decimal
+from django.db import IntegrityError
 from django.test import TestCase
 from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, TipeEntitas
 from pos_config.models import MerchantPOSConfig, StorePOSConfig
@@ -23,7 +24,6 @@ class DailySalesSnapshotModelTest(TestCase):
     def test_unique_per_store_date(self):
         today = datetime.date.today()
         DailySalesSnapshot.objects.create(store=self.store, date=today)
-        from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
             DailySalesSnapshot.objects.create(store=self.store, date=today)
 
