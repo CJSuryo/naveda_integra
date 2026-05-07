@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Pesanan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Daftar Pesanan</h1>
+</div>
+<table class="ni-table">
+  <thead>
+    <tr>
+      <th>No. Pesanan</th><th>Toko</th><th>Kasir</th><th>Status</th><th>Sumber</th><th>Total</th><th>Waktu</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for order in orders %}
+    <tr>
+      <td>{{ order.order_number }}</td>
+      <td>{{ order.store.entitas_bisnis_lv2.nama }}</td>
+      <td>{{ order.cashier.name }}</td>
+      <td><span class="ni-badge">{{ order.get_status_display }}</span></td>
+      <td>{{ order.get_source_display }}</td>
+      <td>Rp {{ order.total_amount|floatformat:0 }}</td>
+      <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+      <td><a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn-sm ni-btn-secondary">Detail</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="8" class="ni-text-center">Belum ada pesanan.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

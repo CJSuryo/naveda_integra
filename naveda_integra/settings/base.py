@@ -3,11 +3,18 @@ Base Django settings for naveda_integra project.
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# Allow apps in the `apps/` subdirectory to be imported by their short label
+# (e.g. `pos_config` instead of `apps.pos_config`).
+_APPS_DIR = str(BASE_DIR / 'apps')
+if _APPS_DIR not in sys.path:
+    sys.path.insert(0, _APPS_DIR)
 
 SECRET_KEY = os.environ.get(
     'SECRET_KEY',
@@ -43,6 +50,9 @@ INSTALLED_APPS = [
     'apps.aset_lainnya',
     'apps.ekuitas',
     'apps.manufacturing',
+    'pos_config',
+    'pos_catalog',
+    'pos_orders',
 ]
 
 MIDDLEWARE = [
@@ -172,4 +182,17 @@ LOGGING = {
             'propagate': False,
         },
     },
+}
+
+# POS Web Push (VAPID)
+VAPID_PRIVATE_KEY = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+VAPID_CLAIM_EMAIL = os.environ.get('VAPID_CLAIM_EMAIL', 'push@naveda.id')
+
+# Django Channels — Redis channel layer
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {"hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")]},
+    }
 }

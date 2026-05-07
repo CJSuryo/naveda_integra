@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Preview Struk — {{ order.order_number }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <h1 class="ni-page-title">Preview Struk</h1>
+  <p class="ni-page-subtitle">{{ order.order_number }}</p>
+</div>
+
+<div class="ni-card" style="max-width:420px;">
+  <div class="ni-card-body">
+    <pre style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">{{ receipt_text }}</pre>
+  </div>
+  <div class="ni-card-footer">
+    <form method="post" action="{% url 'pos_orders:receipt_print' order_pk=order.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary">
+        <i data-lucide="printer"></i> Cetak ke Printer
+      </button>
+    </form>
+    <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--ghost">Kembali</a>
+  </div>
+</div>
+{% endblock %}

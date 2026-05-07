@@ -33,6 +33,10 @@ default_permissions = [
     "piutang_view", "piutang_create", "piutang_update", "piutang_delete",
     "report_view",
     "settings_view", "settings_update",
+    "pos_config_view", "pos_config_manage",
+    "pos_catalog_view", "pos_catalog_manage",
+    "pos_cashier", "pos_orders_manage", "pos_refund_approve",
+    "pos_reports_view", "pos_members_manage", "pos_promotions_manage", "pos_aggregators_manage",
 ]
 
 [[roles]]
@@ -49,6 +53,10 @@ default_permissions = [
     "piutang_view", "piutang_create", "piutang_update",
     "report_view",
     "settings_view",
+    "pos_config_view", "pos_config_manage",
+    "pos_catalog_view", "pos_catalog_manage",
+    "pos_cashier", "pos_orders_manage", "pos_refund_approve",
+    "pos_reports_view", "pos_members_manage", "pos_promotions_manage", "pos_aggregators_manage",
 ]
 
 [[roles]]
@@ -64,6 +72,10 @@ default_permissions = [
     "sales_view", "sales_create", "sales_update",
     "piutang_view", "piutang_create", "piutang_update",
     "report_view",
+    "pos_config_view", "pos_config_manage",
+    "pos_catalog_view", "pos_catalog_manage",
+    "pos_cashier", "pos_orders_manage", "pos_refund_approve",
+    "pos_reports_view", "pos_members_manage", "pos_promotions_manage", "pos_aggregators_manage",
 ]
 
 [[roles]]
@@ -79,6 +91,16 @@ default_permissions = [
     "sales_view",
     "piutang_view",
     "report_view",
+    "pos_cashier", "pos_orders_manage",
+]
+
+[[roles]]
+code = "kasir"
+name = "Kasir"
+description = "Akses kasir POS saja. No access to product management, config, reports, or member management."
+default_permissions = [
+    "pos_cashier",
+    "pos_orders_manage",
 ]
 
 
@@ -260,3 +282,59 @@ module = "Settings"
 code = "settings_update"
 name = "Edit Settings"
 module = "Settings"
+
+# POS — Point of Sale
+[[permissions]]
+code = "pos_config_view"
+name = "Lihat Konfigurasi POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_config_manage"
+name = "Kelola Konfigurasi POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_catalog_view"
+name = "Lihat Katalog POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_catalog_manage"
+name = "Kelola Katalog POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_cashier"
+name = "Akses Kasir POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_orders_manage"
+name = "Kelola Pesanan POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_refund_approve"
+name = "Setujui Refund POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_reports_view"
+name = "Lihat Laporan POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_members_manage"
+name = "Kelola Member POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_promotions_manage"
+name = "Kelola Promosi POS"
+module = "POS"
+
+[[permissions]]
+code = "pos_aggregators_manage"
+name = "Kelola Agregator POS"
+module = "POS"

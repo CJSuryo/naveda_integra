@@ -8,10 +8,11 @@ import dj_database_url
 DEBUG = True
 ALLOWED_HOSTS = ['*']
 
-# Use SQLite locally unless DATABASE_URL or DB_ENGINE env var is set.
-if not os.environ.get('DATABASE_URL') and not os.environ.get('DB_ENGINE'):
+# Set DATABASE_URL in your .env file (e.g. a Neon connection string).
+if os.environ.get('DATABASE_URL'):
     DATABASES = {
         'default': dj_database_url.config(
-            default='sqlite:///' + str(Path(__file__).resolve().parent.parent.parent / 'db.sqlite3'),
+            env='DATABASE_URL',
+            conn_max_age=600,
         )
     }

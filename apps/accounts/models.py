@@ -6,17 +6,19 @@ from django.db import models
 # ── Role ─────────────────────────────────────────────────────────────────────
 
 class Role(models.Model):
-    """Lookup table for user roles (Admin, Operator, Pemilik Bisnis, Karyawan Bisnis)."""
+    """Lookup table for user roles (Admin, Operator, Pemilik Bisnis, Karyawan Bisnis, Kasir)."""
     ADMIN = 'admin'
     OPERATOR = 'operator'
     BUSINESS_OWNER = 'business_owner'
     BUSINESS_EMPLOYEE = 'business_employee'
+    KASIR = 'kasir'
 
     ROLE_CHOICES = [
         (ADMIN, 'Admin'),
         (OPERATOR, 'Operator'),
         (BUSINESS_OWNER, 'Pemilik Bisnis'),
         (BUSINESS_EMPLOYEE, 'Karyawan Bisnis'),
+        (KASIR, 'Kasir'),
     ]
 
     kode = models.CharField(max_length=50, unique=True, choices=ROLE_CHOICES)
