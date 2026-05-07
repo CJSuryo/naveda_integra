@@ -179,6 +179,18 @@ def cancel_order(order: Order, reason: str, by_user) -> Order:
     return order
 
 
+def close_shift(shift_log: ShiftLog) -> ShiftLog:
+    """Mark a shift as closed and trigger daily snapshot generation."""
+    shift_log.clock_out = timezone.now()
+    shift_log.save(update_fields=['clock_out'])
+    try:
+        from apps.pos_reports.services.report_service import generate_daily_snapshot
+        generate_daily_snapshot(shift_log.store, timezone.localdate(), shift_log=shift_log)
+    except ImportError:
+        pass
+    return shift_log
+
+
 def _broadcast_order_event(order: Order, event_type: str) -> None:
     try:
         from asgiref.sync import async_to_sync
