@@ -316,10 +316,11 @@
         </div>
       </div>
 
-      {% if user.has_ni_perm('pos_cashier') or user.has_ni_perm('pos_config_view') %}
+      {% load pos_tags %}
+      {% if user|has_ni_perm:"pos_cashier" or user|has_ni_perm:"pos_config_view" %}
       <span class="ni-nav-label">Point of Sale</span>
 
-      {% if user.has_ni_perm('pos_cashier') %}
+      {% if user|has_ni_perm:"pos_cashier" %}
       <div class="ni-nav-item">
         <a href="#" class="ni-nav-link {% if 'pos/cashier' in request.path %}ni-nav-link--active{% endif %}">
           <i data-lucide="shopping-cart" class="ni-nav-link__icon"></i>
@@ -334,7 +335,7 @@
       </div>
       {% endif %}
 
-      {% if user.has_ni_perm('pos_catalog_view') %}
+      {% if user|has_ni_perm:"pos_catalog_view" %}
       <div class="ni-nav-item {% if 'pos/catalog' in request.path %}ni-nav-item--open{% endif %}">
         <a href="#" class="ni-nav-link {% if 'pos/catalog' in request.path %}ni-nav-link--active{% endif %}">
           <i data-lucide="package" class="ni-nav-link__icon"></i>
@@ -343,7 +344,7 @@
       </div>
       {% endif %}
 
-      {% if user.has_ni_perm('pos_reports_view') %}
+      {% if user|has_ni_perm:"pos_reports_view" %}
       <div class="ni-nav-item">
         <a href="#" class="ni-nav-link {% if 'pos/reports' in request.path %}ni-nav-link--active{% endif %}">
           <i data-lucide="bar-chart-2" class="ni-nav-link__icon"></i>
@@ -352,7 +353,7 @@
       </div>
       {% endif %}
 
-      {% if user.has_ni_perm('pos_config_view') %}
+      {% if user|has_ni_perm:"pos_config_view" %}
       <div class="ni-nav-item">
         <a href="#" class="ni-nav-link {% if 'pos/config' in request.path %}ni-nav-link--active{% endif %}">
           <i data-lucide="settings" class="ni-nav-link__icon"></i>
