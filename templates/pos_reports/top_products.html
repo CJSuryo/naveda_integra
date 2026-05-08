@@ -24,37 +24,62 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block content %}
 {% include "pos_reports/_subnav.html" %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Produk Terlaris</h1>
-  {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  <div>
+    <h1 class="ni-page-header__title">Top Produk</h1>
+    {% if store %}<p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--secondary">Ganti Toko</a>
+  </div>
 </div>
 
-<form method="get" class="ni-filter-bar">
-  <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
-  <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
-  {% if store %}<input type="hidden" name="store" value="{{ store.pk }}">{% endif %}
-  <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-</form>
-
-<div class="ni-card" style="margin-bottom:1.5rem;">
-  <div class="ni-card-header"><h2 class="ni-card-title">Revenue per Produk</h2></div>
-  <div class="ni-card-body"><canvas id="topProductsChart" height="200"></canvas></div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
+      </div>
+      {% if store %}<input type="hidden" name="store" value="{{ store.pk }}">{% endif %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm"><i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan</button>
+    </form>
+  </div>
 </div>
 
-<div class="ni-card">
-  <div class="ni-card-body">
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 16px;font-size:1rem;font-weight:600;">Revenue per Produk</h3>
+    <canvas id="topProductsChart" height="200"></canvas>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>#</th><th>Produk</th><th>Qty Terjual</th><th>Revenue</th></tr></thead>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Produk</th>
+          <th class="ni-text-right">Qty Terjual</th>
+          <th class="ni-text-right">Revenue</th>
+        </tr>
+      </thead>
       <tbody>
         {% for product, qty, revenue in top_products %}
         <tr>
           <td>{{ forloop.counter }}</td>
           <td>{{ product.pos_name }}</td>
-          <td>{{ qty|floatformat:0 }}</td>
-          <td>Rp {{ revenue|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ qty|floatformat:0 }}</td>
+          <td class="ni-text-right">Rp {{ revenue|floatformat:0 }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="ni-table__empty">Belum ada data.</td></tr>
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>
         {% endfor %}
       </tbody>
     </table>

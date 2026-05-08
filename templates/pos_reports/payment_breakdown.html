@@ -19,35 +19,61 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block content %}
 {% include "pos_reports/_subnav.html" %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Breakdown Pembayaran</h1>
-  {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  <div>
+    <h1 class="ni-page-header__title">Breakdown Pembayaran</h1>
+    {% if store %}<p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--secondary">Ganti Toko</a>
+  </div>
 </div>
 
-<form method="get" class="ni-filter-bar">
-  <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
-  <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
-  {% if store %}<input type="hidden" name="store" value="{{ store.pk }}">{% endif %}
-  <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-</form>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
+      </div>
+      {% if store %}<input type="hidden" name="store" value="{{ store.pk }}">{% endif %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm"><i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan</button>
+    </form>
+  </div>
+</div>
 
-<div class="ni-grid ni-grid--2col">
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Distribusi Pembayaran</h2></div>
-    <div class="ni-card-body" style="max-height:300px;display:flex;align-items:center;justify-content:center;">
-      <canvas id="paymentDoughnut"></canvas>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h3 style="margin:0 0 16px;font-size:1rem;font-weight:600;">Distribusi Pembayaran</h3>
+      <div style="display:flex;align-items:center;justify-content:center;max-height:300px;">
+        <canvas id="paymentDoughnut"></canvas>
+      </div>
     </div>
   </div>
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Detail</h2></div>
-    <div class="ni-card-body">
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-table-wrapper">
       <table class="ni-table">
-        <thead><tr><th>Metode</th><th>Total</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Metode</th>
+            <th class="ni-text-right">Total</th>
+          </tr>
+        </thead>
         <tbody>
           {% for method, amount in breakdown.items %}
-          <tr><td>{{ method }}</td><td>Rp {{ amount|floatformat:0 }}</td></tr>
+          <tr>
+            <td>{{ method }}</td>
+            <td class="ni-text-right">Rp {{ amount|floatformat:0 }}</td>
+          </tr>
           {% empty %}
-          <tr><td colspan="2" class="ni-table__empty">Belum ada data.</td></tr>
+          <tr><td colspan="2" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>
           {% endfor %}
         </tbody>
       </table>

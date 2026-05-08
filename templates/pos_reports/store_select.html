@@ -2,16 +2,30 @@
 {% block title %}Pilih Toko — Laporan POS{% endblock %}
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Laporan POS</h1>
-  <p class="ni-page-subtitle">Pilih toko untuk melihat laporan</p>
+  <div>
+    <h1 class="ni-page-header__title">Laporan POS</h1>
+    <p class="ni-page-header__subtitle">Pilih toko untuk melihat laporan</p>
+  </div>
 </div>
-<div class="ni-grid ni-grid--4col">
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;">
   {% for store in stores %}
-  <a href="?store={{ store.pk }}" class="ni-card" style="text-decoration:none;text-align:center;padding:1.5rem;">
-    <div class="ni-kpi-label">{{ store.entitas_bisnis_lv2.nama }}</div>
+  <a href="?store={{ store.pk }}" style="text-decoration:none;">
+    <div class="ni-card ni-animate-fade-in" style="cursor:pointer;">
+      <div class="ni-card__body" style="text-align:center;padding:24px 16px;">
+        <p style="font-size:1rem;font-weight:600;margin:0 0 4px;color:var(--ni-text);">{{ store.entitas_bisnis_lv2.nama }}</p>
+        {% if store.entitas_bisnis_lv2.alamat %}
+        <p class="ni-text-muted" style="font-size:0.8rem;margin:0;">{{ store.entitas_bisnis_lv2.alamat }}</p>
+        {% endif %}
+      </div>
+    </div>
   </a>
   {% empty %}
-  <p class="ni-text--muted">Belum ada toko aktif.</p>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <p class="ni-text-muted ni-text-center" style="margin:0;">Belum ada toko aktif.</p>
+    </div>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}

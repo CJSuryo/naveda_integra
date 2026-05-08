@@ -3,60 +3,98 @@
 
 {% block content %}
 {% include "pos_reports/_subnav.html" %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Laporan Harian</h1>
-  {% if store %}<p class="ni-page-subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  <div>
+    <h1 class="ni-page-header__title">Laporan Harian</h1>
+    {% if store %}<p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>{% endif %}
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--secondary">Ganti Toko</a>
+  </div>
 </div>
 
-<form method="get" class="ni-filter-bar">
-  <div class="ni-form-group ni-form-group--inline">
-    <label class="ni-label">Dari</label>
-    <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="date_from" class="ni-input" value="{{ date_from|date:'Y-m-d' }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
+      </div>
+      <input type="hidden" name="store" value="{{ store.pk }}">
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm"><i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan</button>
+    </form>
   </div>
-  <div class="ni-form-group ni-form-group--inline">
-    <label class="ni-label">Sampai</label>
-    <input type="date" name="date_to" class="ni-input" value="{{ date_to|date:'Y-m-d' }}">
-  </div>
-  <input type="hidden" name="store" value="{{ store.pk }}">
-  <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-</form>
+</div>
 
 {% if summary %}
-<div class="ni-grid ni-grid--4col" style="margin:1rem 0;">
-  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Total Order</div><div class="ni-kpi-value">{{ summary.total_orders }}</div></div>
-  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Penjualan Kotor</div><div class="ni-kpi-value">Rp {{ summary.gross_sales|floatformat:0 }}</div></div>
-  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Penjualan Bersih</div><div class="ni-kpi-value">Rp {{ summary.net_sales|floatformat:0 }}</div></div>
-  <div class="ni-card ni-card--kpi"><div class="ni-kpi-label">Total Diskon</div><div class="ni-kpi-value">Rp {{ summary.total_discount|floatformat:0 }}</div></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Total Order</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">{{ summary.total_orders }}</p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Penjualan Kotor</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">Rp {{ summary.gross_sales|floatformat:0 }}</p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Penjualan Bersih</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">Rp {{ summary.net_sales|floatformat:0 }}</p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Total Diskon</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">Rp {{ summary.total_discount|floatformat:0 }}</p>
+    </div>
+  </div>
 </div>
 {% endif %}
 
-<div class="ni-card">
-  <div class="ni-card-body">
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
         <tr>
-          <th>Tanggal</th><th>Order</th><th>Penjualan Kotor</th><th>Diskon</th>
-          <th>Pajak</th><th>Penjualan Bersih</th><th>HPP</th><th>Laba Kotor</th>
-          <th>Tunai</th><th>QRIS</th><th>Transfer</th>
+          <th>Tanggal</th>
+          <th class="ni-text-right">Order</th>
+          <th class="ni-text-right">Penjualan Kotor</th>
+          <th class="ni-text-right">Diskon</th>
+          <th class="ni-text-right">Pajak</th>
+          <th class="ni-text-right">Penjualan Bersih</th>
+          <th class="ni-text-right">HPP</th>
+          <th class="ni-text-right">Laba Kotor</th>
+          <th class="ni-text-right">Tunai</th>
+          <th class="ni-text-right">QRIS</th>
+          <th class="ni-text-right">Transfer</th>
         </tr>
       </thead>
       <tbody>
         {% for snap in snapshots %}
         <tr>
           <td>{{ snap.date|date:"d/m/Y" }}</td>
-          <td>{{ snap.total_orders }}</td>
-          <td>{{ snap.gross_sales|floatformat:0 }}</td>
-          <td>{{ snap.total_discount|floatformat:0 }}</td>
-          <td>{{ snap.total_tax|floatformat:0 }}</td>
-          <td><strong>{{ snap.net_sales|floatformat:0 }}</strong></td>
-          <td>{{ snap.total_cogs|floatformat:0 }}</td>
-          <td>{{ snap.gross_profit|floatformat:0 }}</td>
-          <td>{{ snap.cash_collected|floatformat:0 }}</td>
-          <td>{{ snap.qris_collected|floatformat:0 }}</td>
-          <td>{{ snap.transfer_collected|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.total_orders }}</td>
+          <td class="ni-text-right">{{ snap.gross_sales|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.total_discount|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.total_tax|floatformat:0 }}</td>
+          <td class="ni-text-right"><strong>{{ snap.net_sales|floatformat:0 }}</strong></td>
+          <td class="ni-text-right">{{ snap.total_cogs|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.gross_profit|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.cash_collected|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.qris_collected|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ snap.transfer_collected|floatformat:0 }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="11" class="ni-table__empty">Belum ada snapshot. Tutup shift untuk generate otomatis.</td></tr>
+        <tr><td colspan="11" class="ni-text-center ni-text-muted">Belum ada snapshot. Tutup shift untuk generate otomatis.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -52,64 +52,88 @@ document.addEventListener('DOMContentLoaded', function() {
 
 {% block content %}
 {% include "pos_reports/_subnav.html" %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Dashboard POS</h1>
-  <p class="ni-page-subtitle">
-    {{ store.entitas_bisnis_lv2.nama }} · 30 hari terakhir
-    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--sm" style="margin-left:0.75rem;">Ganti Toko</a>
-  </p>
-</div>
-
-<div class="ni-grid ni-grid--4col" style="margin-bottom:1.5rem;">
-  <div class="ni-card ni-card--kpi">
-    <div class="ni-kpi-label">Total Order</div>
-    <div class="ni-kpi-value">{{ summary.total_orders }}</div>
+  <div>
+    <h1 class="ni-page-header__title">Dashboard POS</h1>
+    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }} &middot; 30 hari terakhir</p>
   </div>
-  <div class="ni-card ni-card--kpi">
-    <div class="ni-kpi-label">Penjualan Bersih</div>
-    <div class="ni-kpi-value">Rp {{ summary.net_sales|floatformat:0 }}</div>
-  </div>
-  <div class="ni-card ni-card--kpi">
-    <div class="ni-kpi-label">Laba Kotor</div>
-    <div class="ni-kpi-value">Rp {{ laba_rugi.gross_profit|floatformat:0 }}</div>
-  </div>
-  <div class="ni-card ni-card--kpi">
-    <div class="ni-kpi-label">Margin Kotor</div>
-    <div class="ni-kpi-value">{{ laba_rugi.gross_margin_pct|floatformat:1 }}%</div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_reports_dashboard' %}" class="ni-btn ni-btn--secondary">Ganti Toko</a>
   </div>
 </div>
 
-<div class="ni-grid ni-grid--2col" style="margin-bottom:1.5rem;">
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Tren Penjualan Harian</h2></div>
-    <div class="ni-card-body"><canvas id="salesTrendChart" height="200"></canvas></div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Total Order</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">{{ summary.total_orders }}</p>
+    </div>
   </div>
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Breakdown Pembayaran</h2></div>
-    <div class="ni-card-body" style="display:flex;align-items:center;justify-content:center;">
-      <canvas id="paymentChart" height="200" style="max-height:250px;"></canvas>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Penjualan Bersih</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">Rp {{ summary.net_sales|floatformat:0 }}</p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Laba Kotor</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">Rp {{ laba_rugi.gross_profit|floatformat:0 }}</p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body" style="text-align:center;">
+      <p class="ni-text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:.05em;margin:0 0 4px;">Margin Kotor</p>
+      <p style="font-size:1.75rem;font-weight:700;margin:0;color:var(--ni-primary);">{{ laba_rugi.gross_margin_pct|floatformat:1 }}%</p>
     </div>
   </div>
 </div>
 
-<div class="ni-card">
-  <div class="ni-card-header" style="display:flex;justify-content:space-between;align-items:center;">
-    <h2 class="ni-card-title">Top 5 Produk</h2>
-    <a href="{% url 'pos_reports_top_products' %}?store={{ store.pk }}" class="ni-btn ni-btn--sm">Lihat Semua →</a>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:24px;">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h3 style="margin:0 0 16px;font-size:1rem;font-weight:600;">Tren Penjualan Harian</h3>
+      <canvas id="salesTrendChart" height="200"></canvas>
+    </div>
   </div>
-  <div class="ni-card-body">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h3 style="margin:0 0 16px;font-size:1rem;font-weight:600;">Breakdown Pembayaran</h3>
+      <div style="display:flex;align-items:center;justify-content:center;">
+        <canvas id="paymentChart" height="200" style="max-height:250px;"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="padding-bottom:8px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 style="margin:0;font-size:1rem;color:var(--ni-primary);">Top 5 Produk</h3>
+      <a href="{% url 'pos_reports_top_products' %}?store={{ store.pk }}" class="ni-btn ni-btn--secondary ni-btn--sm">Lihat Semua &rarr;</a>
+    </div>
+  </div>
+  <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>#</th><th>Produk</th><th>Qty Terjual</th><th>Revenue</th></tr></thead>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Produk</th>
+          <th class="ni-text-right">Qty Terjual</th>
+          <th class="ni-text-right">Revenue</th>
+        </tr>
+      </thead>
       <tbody>
         {% for product, qty, revenue in top_products %}
         <tr>
           <td>{{ forloop.counter }}</td>
           <td>{{ product.pos_name }}</td>
-          <td>{{ qty|floatformat:0 }}</td>
-          <td>Rp {{ revenue|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ qty|floatformat:0 }}</td>
+          <td class="ni-text-right">Rp {{ revenue|floatformat:0 }}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="ni-table__empty">Belum ada data.</td></tr>
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada data.</td></tr>
         {% endfor %}
       </tbody>
     </table>
