@@ -388,7 +388,7 @@
         {% if pos_merchant %}
         <a href="{% url 'pos_config:merchant_config' pos_merchant.entitas_bisnis.pk %}" class="ni-nav-link {% if 'pos/config' in request.path %}ni-nav-link--active{% endif %}">
         {% else %}
-        <a href="#" class="ni-nav-link {% if 'pos/config' in request.path %}ni-nav-link--active{% endif %}">
+        <a href="{% url 'entitas_bisnis:list' %}" class="ni-nav-link {% if 'pos/config' in request.path %}ni-nav-link--active{% endif %}">
         {% endif %}
           <i data-lucide="settings" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Konfigurasi POS</span>
