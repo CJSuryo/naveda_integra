@@ -29,7 +29,7 @@ def campaign_form(request, pk=None):
     if denied:
         return denied
     campaign = get_object_or_404(Campaign, pk=pk) if pk else None
-    from apps.pos_config.models import MerchantPOSConfig
+    from pos_config.models import MerchantPOSConfig
     merchant_id = request.GET.get('merchant') or (campaign.merchant_config_id if campaign else None)
     merchant = get_object_or_404(MerchantPOSConfig, pk=merchant_id) if merchant_id else None
     if request.method == 'POST':
@@ -84,7 +84,7 @@ def apply_voucher_ajax(request):
     denied = _check_perm(request.user, 'pos.manage_promotions')
     if denied:
         return JsonResponse({'ok': False, 'error': 'Forbidden'}, status=403)
-    from apps.pos_orders.models import Order
+    from pos_orders.models import Order
     order_pk = request.POST.get('order_pk')
     code = request.POST.get('code', '').strip()
     order = get_object_or_404(Order, pk=order_pk)

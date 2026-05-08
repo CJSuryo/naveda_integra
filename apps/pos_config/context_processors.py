@@ -4,7 +4,7 @@ def pos_nav_context(request):
     try:
         from pos_config.models import MerchantPOSConfig, StorePOSConfig
         if request.user.is_superuser or getattr(request.user, 'is_admin', False):
-            merchant = MerchantPOSConfig.objects.filter(is_pos_active=True).select_related('entitas_bisnis').first()
+            merchant = MerchantPOSConfig.objects.select_related('entitas_bisnis').first()
         else:
             from apps.accounts.models import UserEntitasBisnis
             ub = (
@@ -16,7 +16,7 @@ def pos_nav_context(request):
             if not ub:
                 return {}
             merchant = MerchantPOSConfig.objects.filter(
-                entitas_bisnis=ub.entitas_bisnis, is_pos_active=True
+                entitas_bisnis=ub.entitas_bisnis
             ).select_related('entitas_bisnis').first()
         if not merchant:
             return {}

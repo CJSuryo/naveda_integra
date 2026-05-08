@@ -33,7 +33,7 @@ def member_register(request):
     denied = _check_perm(request.user, 'pos.manage_members')
     if denied:
         return denied
-    from apps.pos_config.models import MerchantPOSConfig
+    from pos_config.models import MerchantPOSConfig
     merchant_id = request.GET.get('merchant') or request.POST.get('merchant')
     merchant = get_object_or_404(MerchantPOSConfig, pk=merchant_id)
     if request.method == 'POST':
@@ -66,7 +66,7 @@ def member_lookup_ajax(request):
     merchant_id = request.GET.get('merchant')
     if not phone or not merchant_id:
         return JsonResponse({'found': False})
-    from apps.pos_config.models import MerchantPOSConfig
+    from pos_config.models import MerchantPOSConfig
     merchant = get_object_or_404(MerchantPOSConfig, pk=merchant_id)
     member = lookup_member(phone, merchant)
     if member:
