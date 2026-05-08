@@ -13,8 +13,14 @@
       {% if not campaign %}<input type="hidden" name="merchant" value="{{ merchant.pk }}">{% endif %}
       {% for field in form %}
       <div class="ni-form-group">
+        {% if field.field.widget.input_type == 'checkbox' %}
+        <label class="ni-label" for="{{ field.id_for_label }}" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          {{ field }} {{ field.label }}
+        </label>
+        {% else %}
         <label class="ni-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
         {{ field }}
+        {% endif %}
         {% if field.help_text %}<p class="ni-field-hint">{{ field.help_text }}</p>{% endif %}
         {% if field.errors %}<p class="ni-field-error">{{ field.errors|first }}</p>{% endif %}
       </div>

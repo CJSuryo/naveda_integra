@@ -1,6 +1,9 @@
 from django import forms
 from apps.pos_promotions.models import Campaign
 
+NI = {'class': 'ni-input'}
+NI_CB = {'class': 'ni-checkbox'}
+
 
 class CampaignForm(forms.ModelForm):
     class Meta:
@@ -13,14 +16,24 @@ class CampaignForm(forms.ModelForm):
             'requires_member', 'min_tier', 'is_active',
         ]
         widgets = {
-            'name':               forms.TextInput(attrs={'class': 'ni-input'}),
-            'description':        forms.Textarea(attrs={'class': 'ni-textarea', 'rows': 2}),
-            'campaign_type':      forms.Select(attrs={'class': 'ni-select'}),
-            'discount_pct':       forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
-            'discount_amount':    forms.NumberInput(attrs={'class': 'ni-input', 'step': '100'}),
-            'max_discount_cap':   forms.NumberInput(attrs={'class': 'ni-input', 'step': '1000'}),
-            'min_purchase_amount': forms.NumberInput(attrs={'class': 'ni-input', 'step': '1000'}),
-            'start_date':         forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
-            'end_date':           forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
-            'applicable_to':      forms.Select(attrs={'class': 'ni-select'}),
+            'name':                forms.TextInput(attrs=NI),
+            'description':         forms.Textarea(attrs={**NI, 'rows': 2}),
+            'campaign_type':       forms.Select(attrs={'class': 'ni-select'}),
+            'discount_pct':        forms.NumberInput(attrs={**NI, 'step': '0.01'}),
+            'discount_amount':     forms.NumberInput(attrs={**NI, 'step': '100'}),
+            'max_discount_cap':    forms.NumberInput(attrs={**NI, 'step': '1000'}),
+            'min_purchase_amount': forms.NumberInput(attrs={**NI, 'step': '1000'}),
+            'buy_quantity':        forms.NumberInput(attrs=NI),
+            'get_quantity':        forms.NumberInput(attrs=NI),
+            'applicable_to':       forms.Select(attrs={'class': 'ni-select'}),
+            'applicable_products': forms.SelectMultiple(attrs={**NI, 'size': '5'}),
+            'applicable_categories': forms.SelectMultiple(attrs={**NI, 'size': '4'}),
+            'stores':              forms.SelectMultiple(attrs={**NI, 'size': '4'}),
+            'start_date':          forms.DateInput(attrs={**NI, 'type': 'date'}),
+            'end_date':            forms.DateInput(attrs={**NI, 'type': 'date'}),
+            'max_uses':            forms.NumberInput(attrs=NI),
+            'per_member_limit':    forms.NumberInput(attrs=NI),
+            'min_tier':            forms.TextInput(attrs=NI),
+            'requires_member':     forms.CheckboxInput(attrs=NI_CB),
+            'is_active':           forms.CheckboxInput(attrs=NI_CB),
         }
