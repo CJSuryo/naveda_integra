@@ -1,34 +1,76 @@
 {% extends 'base.html' %}
 {% block title %}Metode Pembayaran — {{ store.entitas_bisnis_lv2.nama }}{% endblock %}
 {% block content %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Metode Pembayaran</h1>
+  <div>
+    <h1 class="ni-page-header__title">Metode Pembayaran</h1>
+    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>
+  </div>
 </div>
-<div class="ni-card">
-  <table class="ni-table">
-    <thead><tr><th>Nama</th><th>Tipe</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for method in methods %}
-      <tr>
-        <td>{{ method.name }}</td>
-        <td>{{ method.get_method_type_display }}</td>
-        <td>{% if method.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="3">Belum ada metode pembayaran.</td></tr>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<!-- Inline add form -->
+<div class="ni-card ni-animate-fade-in" style="max-width:720px;margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">Tambah Metode Pembayaran</h3>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
       {% endfor %}
-    </tbody>
-  </table>
-  <hr>
-  <h3>Tambah Metode Pembayaran</h3>
-  <form method="post" class="ni-form">
-    {% csrf_token %}
-    {% for field in form %}
-    <div class="ni-form-group">
-      <label class="ni-label">{{ field.label }}</label>{{ field }}
-    </div>
-    {% endfor %}
-    <button type="submit" class="ni-btn ni-btn-primary">Tambah</button>
-  </form>
+      <div class="ni-btn-row" style="margin-top:16px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Tambah</button>
+      </div>
+    </form>
+  </div>
 </div>
+
+<!-- Method table -->
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Tipe</th>
+          <th>Nomor Rekening</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for method in methods %}
+        <tr>
+          <td>{{ method.name }}</td>
+          <td>{{ method.get_method_type_display }}</td>
+          <td>{{ method.account_number|default:"-" }}</td>
+          <td>
+            {% if method.is_active %}
+              <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+              <span class="ni-badge ni-badge--danger">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_config:payment_method_edit' store.pk method.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada metode pembayaran.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
 {% endblock %}

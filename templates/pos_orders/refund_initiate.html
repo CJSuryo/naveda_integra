@@ -1,56 +1,86 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Ajukan Refund — {{ order.order_number }}{% endblock %}
-
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Ajukan Refund</h1>
-  <p class="ni-page-subtitle">Order {{ order.order_number }}</p>
+  <div>
+    <h1 class="ni-page-header__title">Ajukan Refund</h1>
+    <p class="ni-page-header__subtitle">Order {{ order.order_number }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
 </div>
 
-<div class="ni-card" style="max-width:640px;">
-  <div class="ni-card-body">
-    <table class="ni-table ni-table--compact" style="margin-bottom:1.5rem;">
+{% for msg in messages %}<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>{% endfor %}
+
+<!-- Order Items Summary -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">Item Pesanan</h3>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
       <thead>
-        <tr><th>Produk</th><th>Qty</th><th>Subtotal</th></tr>
+        <tr>
+          <th>Produk</th>
+          <th class="ni-text-right">Qty</th>
+          <th class="ni-text-right">Subtotal</th>
+        </tr>
       </thead>
       <tbody>
         {% for item in order.items.all %}
         <tr>
           <td>{{ item.product.pos_name }}</td>
-          <td>{{ item.quantity }}</td>
-          <td>Rp {{ item.subtotal|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ item.quantity|floatformat:0 }}</td>
+          <td class="ni-text-right">Rp {{ item.subtotal|floatformat:0|intcomma }}</td>
         </tr>
         {% endfor %}
+        <tr style="font-weight:600;border-top:2px solid var(--ni-border);">
+          <td colspan="2">Total</td>
+          <td class="ni-text-right">Rp {{ order.total_amount|floatformat:0|intcomma }}</td>
+        </tr>
       </tbody>
-      <tfoot>
-        <tr><td colspan="2"><strong>Total</strong></td><td><strong>Rp {{ order.total_amount|floatformat:0 }}</strong></td></tr>
-      </tfoot>
     </table>
+  </div>
+</div>
 
+<!-- Refund Form -->
+<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
+  <div class="ni-card__body">
     <form method="post">
       {% csrf_token %}
       <div class="ni-form-group">
-        <label class="ni-label" for="reason">Alasan Refund <span class="ni-required">*</span></label>
-        <textarea id="reason" name="reason" class="ni-textarea" rows="3" required></textarea>
-      </div>
-      <div class="ni-form-group">
-        <label class="ni-label">Tipe Refund</label>
-        <div class="ni-radio-group">
-          <label><input type="radio" name="refund_type" value="FULL" checked> Refund Penuh</label>
-          <label><input type="radio" name="refund_type" value="PARTIAL"> Refund Sebagian</label>
+        <label class="ni-form-label">Tipe Refund</label>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="refund_type" value="FULL" checked> Refund Penuh
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <input type="radio" name="refund_type" value="PARTIAL"> Refund Sebagian
+          </label>
         </div>
       </div>
       <div class="ni-form-group">
-        <label class="ni-label" for="refund_method_id">Metode Pengembalian</label>
-        <select id="refund_method_id" name="refund_method_id" class="ni-select" required>
+        <label class="ni-form-label" for="refund_method_id">Metode Pengembalian <span style="color:var(--ni-danger)">*</span></label>
+        <select id="refund_method_id" name="refund_method_id" class="ni-input" required>
+          <option value="">— Pilih Metode —</option>
           {% for pm in payment_methods %}
           <option value="{{ pm.pk }}">{{ pm.name }}</option>
           {% endfor %}
         </select>
       </div>
-      <div class="ni-form-actions">
-        <button type="submit" class="ni-btn ni-btn--danger">Ajukan Refund</button>
-        <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--ghost">Batal</a>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="reason">Alasan Refund <span style="color:var(--ni-danger)">*</span></label>
+        <textarea id="reason" name="reason" class="ni-input" rows="3" required placeholder="Jelaskan alasan pengajuan refund..."></textarea>
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--danger">
+          <i data-lucide="rotate-ccw" style="width:16px;height:16px"></i> Ajukan Refund
+        </button>
+        <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>

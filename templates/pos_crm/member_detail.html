@@ -1,50 +1,91 @@
-<!-- templates/pos_crm/member_detail.html -->
 {% extends "base.html" %}
 {% block title %}{{ member.member_id }} — {{ member.name }}{% endblock %}
 
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">{{ member.name }}</h1>
-  <p class="ni-page-subtitle">{{ member.member_id }}</p>
+  <div>
+    <h1 class="ni-page-header__title">{{ member.name }}</h1>
+    <p class="ni-page-header__subtitle">{{ member.member_id }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_member_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
 </div>
 
-<div class="ni-grid ni-grid--2col">
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Info Member</h2></div>
-    <div class="ni-card-body">
-      <dl class="ni-dl">
-        <dt>Telepon</dt><dd>{{ member.phone }}</dd>
-        <dt>Email</dt><dd>{{ member.email|default:"-" }}</dd>
-        <dt>Tanggal Lahir</dt><dd>{{ member.birth_date|date:"d M Y"|default:"-" }}</dd>
-        <dt>Tier</dt><dd><span class="ni-badge ni-badge--{{ member.tier|lower }}">{{ member.tier }}</span></dd>
-        <dt>Poin</dt><dd>{{ member.points }}</dd>
-        <dt>Total Belanja</dt><dd>Rp {{ member.total_spent|floatformat:0 }}</dd>
-        <dt>Total Order</dt><dd>{{ member.total_orders }}</dd>
-        <dt>Bergabung</dt><dd>{{ member.joined_at|date:"d M Y" }}</dd>
-      </dl>
-    </div>
-  </div>
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
 
-  <div class="ni-card">
-    <div class="ni-card-header"><h2 class="ni-card-title">Riwayat Poin (50 Terakhir)</h2></div>
-    <div class="ni-card-body">
-      <table class="ni-table ni-table--compact">
-        <thead><tr><th>Poin</th><th>Keterangan</th><th>Tanggal</th></tr></thead>
-        <tbody>
-          {% for log in point_logs %}
-          <tr>
-            <td class="{% if log.points > 0 %}ni-text--success{% else %}ni-text--danger{% endif %}">
-              {% if log.points > 0 %}+{% endif %}{{ log.points }}
-            </td>
-            <td>{{ log.reason }}</td>
-            <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="3" class="ni-table__empty">Belum ada riwayat poin.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">Info Member</h3>
+    <dl class="ni-detail-grid">
+      <dt>Member ID</dt><dd>{{ member.member_id }}</dd>
+      <dt>Nama</dt><dd>{{ member.name }}</dd>
+      <dt>Telepon</dt><dd>{{ member.phone }}</dd>
+      <dt>Email</dt><dd>{{ member.email|default:"-" }}</dd>
+      <dt>Tanggal Lahir</dt><dd>{{ member.birth_date|date:"d M Y"|default:"-" }}</dd>
+      <dt>Tier</dt>
+      <dd>
+        {% if member.tier == "BRONZE" %}
+          <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+        {% elif member.tier == "SILVER" %}
+          <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+        {% elif member.tier == "GOLD" %}
+          <span class="ni-badge ni-badge--warning">{{ member.tier }}</span>
+        {% elif member.tier == "PLATINUM" %}
+          <span class="ni-badge ni-badge--primary">{{ member.tier }}</span>
+        {% else %}
+          <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+        {% endif %}
+      </dd>
+      <dt>Poin</dt><dd>{{ member.points }}</dd>
+      <dt>Total Belanja</dt><dd>Rp {{ member.total_spent|floatformat:0 }}</dd>
+      <dt>Total Order</dt><dd>{{ member.total_orders }}</dd>
+      <dt>Bergabung</dt><dd>{{ member.joined_at|date:"d M Y" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="padding-bottom:0;">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">Riwayat Poin (50 Terakhir)</h3>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Keterangan</th>
+          <th>Order</th>
+          <th class="ni-text-right">Perubahan Poin</th>
+          <th class="ni-text-right">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in point_logs %}
+        <tr>
+          <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+          <td>{{ log.reason }}</td>
+          <td>{{ log.order|default:"-" }}</td>
+          <td class="ni-text-right">
+            {% if log.points > 0 %}
+              <span style="color:var(--ni-success);">+{{ log.points }}</span>
+            {% else %}
+              <span style="color:var(--ni-danger);">{{ log.points }}</span>
+            {% endif %}
+          </td>
+          <td class="ni-text-right">{{ log.balance|default:"-" }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5" class="ni-text-center ni-text-muted">Belum ada data.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}

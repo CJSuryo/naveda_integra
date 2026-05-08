@@ -3,44 +3,69 @@
 
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Kampanye Promosi</h1>
-  <div class="ni-page-actions">
-    <a href="{% url 'pos_campaign_create' %}" class="ni-btn ni-btn--primary">
-      <i data-lucide="plus"></i> Kampanye Baru
+  <div>
+    <h1 class="ni-page-header__title">Kampanye Promosi</h1>
+    <p class="ni-page-header__subtitle">Kelola kampanye diskon dan voucher</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_campaign_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Kampanye Baru
     </a>
   </div>
 </div>
 
-<div class="ni-card">
-  <div class="ni-card-body">
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
-        <tr><th>Nama</th><th>Tipe</th><th>Nilai</th><th>Periode</th><th>Status</th><th>Voucher</th><th>Aksi</th></tr>
+        <tr>
+          <th>Nama</th>
+          <th>Tipe</th>
+          <th>Diskon</th>
+          <th>Periode</th>
+          <th>Status</th>
+          <th class="ni-text-right">Voucher</th>
+          <th>Aksi</th>
+        </tr>
       </thead>
       <tbody>
         {% for c in campaigns %}
         <tr>
           <td>{{ c.name }}</td>
-          <td>{{ c.get_campaign_type_display }}</td>
+          <td><span class="ni-badge ni-badge--primary">{{ c.get_campaign_type_display }}</span></td>
           <td>
             {% if c.discount_pct %}{{ c.discount_pct }}%{% endif %}
             {% if c.discount_amount %}Rp {{ c.discount_amount|floatformat:0 }}{% endif %}
+            {% if not c.discount_pct and not c.discount_amount %}—{% endif %}
           </td>
-          <td>{{ c.start_date|date:"d/m/Y" }} {% if c.end_date %}— {{ c.end_date|date:"d/m/Y" }}{% endif %}</td>
           <td>
-            {% if c.is_active %}<span class="ni-badge ni-badge--success">Aktif</span>
-            {% else %}<span class="ni-badge ni-badge--neutral">Nonaktif</span>{% endif %}
+            {{ c.start_date|date:"d/m/Y" }}{% if c.end_date %} — {{ c.end_date|date:"d/m/Y" }}{% endif %}
           </td>
-          <td>{{ c.voucher_count }}</td>
           <td>
-            <a href="{% url 'pos_campaign_edit' pk=c.pk %}" class="ni-btn ni-btn--xs">Edit</a>
-            {% if c.campaign_type == "VOUCHER" %}
-            <a href="{% url 'pos_voucher_list' campaign_pk=c.pk %}" class="ni-btn ni-btn--xs">Voucher</a>
+            {% if c.is_active %}
+              <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Nonaktif</span>
             {% endif %}
+          </td>
+          <td class="ni-text-right">{{ c.voucher_count }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_campaign_edit' pk=c.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              {% if c.campaign_type == "VOUCHER" %}
+              <a href="{% url 'pos_voucher_list' campaign_pk=c.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Vouchers</a>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="ni-table__empty">Belum ada kampanye.</td></tr>
+        <tr>
+          <td colspan="7" class="ni-text-center ni-text-muted">Belum ada data.</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

@@ -1,30 +1,104 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Daftar Pesanan{% endblock %}
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Daftar Pesanan</h1>
+  <div>
+    <h1 class="ni-page-header__title">Daftar Pesanan</h1>
+    <p class="ni-page-header__subtitle">Daftar semua transaksi POS</p>
+  </div>
 </div>
-<table class="ni-table">
-  <thead>
-    <tr>
-      <th>No. Pesanan</th><th>Toko</th><th>Kasir</th><th>Status</th><th>Sumber</th><th>Total</th><th>Waktu</th><th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for order in orders %}
-    <tr>
-      <td>{{ order.order_number }}</td>
-      <td>{{ order.store.entitas_bisnis_lv2.nama }}</td>
-      <td>{{ order.cashier.name }}</td>
-      <td><span class="ni-badge">{{ order.get_status_display }}</span></td>
-      <td>{{ order.get_source_display }}</td>
-      <td>Rp {{ order.total_amount|floatformat:0 }}</td>
-      <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
-      <td><a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn-sm ni-btn-secondary">Detail</a></td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="8" class="ni-text-center">Belum ada pesanan.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
+
+{% for msg in messages %}<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>{% endfor %}
+
+<!-- Filter Bar -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Status</label>
+        <select name="status" class="ni-input">
+          <option value="">— Semua —</option>
+          <option value="DRAFT"{% if status_filter == "DRAFT" %} selected{% endif %}>Draft</option>
+          <option value="SUBMITTED"{% if status_filter == "SUBMITTED" %} selected{% endif %}>Submitted</option>
+          <option value="PREPARING"{% if status_filter == "PREPARING" %} selected{% endif %}>Preparing</option>
+          <option value="READY"{% if status_filter == "READY" %} selected{% endif %}>Ready</option>
+          <option value="COMPLETED"{% if status_filter == "COMPLETED" %} selected{% endif %}>Completed</option>
+          <option value="CANCELLED"{% if status_filter == "CANCELLED" %} selected{% endif %}>Cancelled</option>
+          <option value="REFUNDED"{% if status_filter == "REFUNDED" %} selected{% endif %}>Refunded</option>
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Toko</label>
+        <select name="store" class="ni-input">
+          <option value="">— Semua —</option>
+          {% for store in stores %}
+          <option value="{{ store.pk }}"{% if store_filter == store.pk|stringformat:'d' %} selected{% endif %}>{{ store.entitas_bisnis_lv2.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'pos_orders:order_list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>No. Pesanan</th>
+          <th>Toko</th>
+          <th>Kasir</th>
+          <th>Status</th>
+          <th>Sumber</th>
+          <th class="ni-text-right">Total</th>
+          <th>Waktu</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in orders %}
+        <tr>
+          <td><a href="{% url 'pos_orders:order_detail' pk=order.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ order.order_number }}</a></td>
+          <td>{{ order.store.entitas_bisnis_lv2.nama }}</td>
+          <td>{{ order.cashier.name }}</td>
+          <td>
+            {% if order.status == "DRAFT" %}<span class="ni-badge ni-badge--secondary">{{ order.get_status_display }}</span>
+            {% elif order.status == "SUBMITTED" %}<span class="ni-badge ni-badge--warning">{{ order.get_status_display }}</span>
+            {% elif order.status == "PREPARING" %}<span class="ni-badge ni-badge--warning">{{ order.get_status_display }}</span>
+            {% elif order.status == "READY" %}<span class="ni-badge ni-badge--primary">{{ order.get_status_display }}</span>
+            {% elif order.status == "COMPLETED" %}<span class="ni-badge ni-badge--success">{{ order.get_status_display }}</span>
+            {% elif order.status == "CANCELLED" %}<span class="ni-badge ni-badge--danger">{{ order.get_status_display }}</span>
+            {% elif order.status == "REFUNDED" %}<span class="ni-badge ni-badge--danger">{{ order.get_status_display }}</span>
+            {% else %}<span class="ni-badge ni-badge--secondary">{{ order.get_status_display }}</span>
+            {% endif %}
+          </td>
+          <td>{{ order.get_source_display }}</td>
+          <td class="ni-text-right">Rp {{ order.total_amount|floatformat:0|intcomma }}</td>
+          <td>{{ order.created_at|date:"d/m/Y H:i" }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Detail</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada pesanan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}

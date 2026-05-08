@@ -1,33 +1,106 @@
 {% extends 'base.html' %}
-{% block title %}Modifier Groups{% endblock %}
+{% block title %}Modifier Groups — {{ merchant.entitas_bisnis.nama }}{% endblock %}
 {% block content %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Modifier Groups</h1>
-  <a href="{% url 'pos_catalog:modifier_group_create' merchant.pk %}" class="ni-btn ni-btn-primary">+ Grup Baru</a>
-</div>
-{% for group in groups %}
-<div class="ni-card" style="margin-bottom:1rem">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h3>{{ group.name }} {% if group.is_required %}<span class="ni-badge ni-badge-warning">Wajib</span>{% endif %}</h3>
-    <a href="{% url 'pos_catalog:modifier_group_edit' merchant.pk group.pk %}" class="ni-btn ni-btn-sm ni-btn-secondary">Edit</a>
+  <div>
+    <h1 class="ni-page-header__title">Modifier Groups</h1>
+    <p class="ni-page-header__subtitle">Kelola grup modifier dan opsi pilihan untuk produk POS</p>
   </div>
-  <p>Min: {{ group.min_selections }} / Maks: {{ group.max_selections }}</p>
-  <table class="ni-table">
-    <thead><tr><th>Opsi</th><th>Harga Tambahan</th><th>Default</th></tr></thead>
-    <tbody>
-      {% for opt in group.options.all %}
-      <tr><td>{{ opt.name }}</td><td>+Rp {{ opt.additional_price|floatformat:0 }}</td><td>{% if opt.is_default %}✓{% endif %}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <form method="post" action="{% url 'pos_catalog:modifier_option_create' merchant.pk group.pk %}" class="ni-form" style="display:flex;gap:.5rem;margin-top:.5rem">
-    {% csrf_token %}
-    <input name="name" class="ni-input" placeholder="Nama opsi" required>
-    <input name="additional_price" class="ni-input" type="number" step="500" placeholder="Harga tambahan" value="0">
-    <button type="submit" class="ni-btn ni-btn-sm ni-btn-primary">+ Opsi</button>
-  </form>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_catalog:modifier_group_create' merchant.pk %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Grup Baru
+    </a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+{% for group in groups %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body">
+
+    <!-- Group Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+      <div>
+        <h3 style="margin:0 0 4px;font-size:1rem;color:var(--ni-primary);">{{ group.name }}</h3>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          {% if group.is_required %}
+          <span class="ni-badge ni-badge--warning">Wajib</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Opsional</span>
+          {% endif %}
+          {% if group.is_active %}
+          <span class="ni-badge ni-badge--success">Aktif</span>
+          {% else %}
+          <span class="ni-badge ni-badge--danger">Nonaktif</span>
+          {% endif %}
+          <span class="ni-text-muted" style="font-size:0.875rem;">Min: {{ group.min_selections }} / Maks: {{ group.max_selections }}</span>
+        </div>
+      </div>
+      <div class="ni-btn-row">
+        <a href="{% url 'pos_catalog:modifier_group_edit' merchant.pk group.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+      </div>
+    </div>
+
+    <!-- Options Table -->
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nama Opsi</th>
+            <th class="ni-text-right">Harga Tambahan</th>
+            <th>Default</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for opt in group.options.all %}
+          <tr>
+            <td>{{ opt.name }}</td>
+            <td class="ni-text-right">+Rp {{ opt.additional_price|floatformat:0 }}</td>
+            <td>
+              {% if opt.is_default %}
+              <span class="ni-badge ni-badge--success">Ya</span>
+              {% else %}
+              <span class="ni-text-muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada opsi.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Inline Add Option Form -->
+    <form method="post" action="{% url 'pos_catalog:modifier_option_create' merchant.pk group.pk %}" style="margin-top:12px;">
+      {% csrf_token %}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+        <div class="ni-form-group" style="margin:0;flex:2;min-width:160px;">
+          <label class="ni-form-label">Nama Opsi</label>
+          <input name="name" class="ni-input" placeholder="Contoh: Pedas, Extra Keju..." required>
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:120px;">
+          <label class="ni-form-label">Harga Tambahan (Rp)</label>
+          <input name="additional_price" class="ni-input" type="number" step="500" min="0" placeholder="0" value="0">
+        </div>
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Opsi
+        </button>
+      </div>
+    </form>
+
+  </div>
 </div>
 {% empty %}
-<div class="ni-card">Belum ada modifier group.</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <p class="ni-text-center ni-text-muted">Belum ada modifier group.</p>
+  </div>
+</div>
 {% endfor %}
+
 {% endblock %}

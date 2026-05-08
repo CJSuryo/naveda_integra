@@ -1,36 +1,54 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Daftar Refund — POS{% endblock %}
-
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Daftar Refund</h1>
+  <div>
+    <h1 class="ni-page-header__title">Daftar Refund</h1>
+    <p class="ni-page-header__subtitle">Daftar semua pengajuan refund POS</p>
+  </div>
 </div>
 
-<div class="ni-card">
-  <div class="ni-card-body">
+{% for msg in messages %}<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
         <tr>
-          <th>#</th><th>Order</th><th>Toko</th><th>Tipe</th>
-          <th>Jumlah</th><th>Status</th><th>Diajukan</th><th>Aksi</th>
+          <th>Order</th>
+          <th>Toko</th>
+          <th>Tipe</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Status</th>
+          <th>Diajukan</th>
+          <th>Aksi</th>
         </tr>
       </thead>
       <tbody>
         {% for refund in refunds %}
         <tr>
-          <td>{{ refund.pk }}</td>
-          <td><a href="{% url 'pos_orders:order_detail' pk=refund.order.pk %}">{{ refund.order.order_number }}</a></td>
+          <td><a href="{% url 'pos_orders:order_detail' pk=refund.order.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ refund.order.order_number }}</a></td>
           <td>{{ refund.order.store.entitas_bisnis_lv2.nama }}</td>
           <td>{{ refund.get_refund_type_display }}</td>
-          <td>Rp {{ refund.amount|floatformat:0 }}</td>
-          <td><span class="ni-badge ni-badge--{{ refund.status|lower }}">{{ refund.status }}</span></td>
+          <td class="ni-text-right">Rp {{ refund.amount|floatformat:0|intcomma }}</td>
+          <td>
+            {% if refund.status == "PENDING" %}<span class="ni-badge ni-badge--warning">{{ refund.status }}</span>
+            {% elif refund.status == "APPROVED" %}<span class="ni-badge ni-badge--primary">{{ refund.status }}</span>
+            {% elif refund.status == "COMPLETED" %}<span class="ni-badge ni-badge--success">{{ refund.status }}</span>
+            {% elif refund.status == "REJECTED" %}<span class="ni-badge ni-badge--danger">{{ refund.status }}</span>
+            {% else %}<span class="ni-badge ni-badge--secondary">{{ refund.status }}</span>
+            {% endif %}
+          </td>
           <td>{{ refund.initiated_by.email }}</td>
           <td>
-            <a href="{% url 'pos_orders:refund_detail' order_pk=refund.order.pk refund_pk=refund.pk %}" class="ni-btn ni-btn--xs">Detail</a>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_orders:refund_detail' order_pk=refund.order.pk refund_pk=refund.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Detail</a>
+            </div>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="ni-table__empty">Belum ada refund.</td></tr>
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada data refund.</td></tr>
         {% endfor %}
       </tbody>
     </table>

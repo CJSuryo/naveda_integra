@@ -1,23 +1,37 @@
 {% extends 'base.html' %}
-{% block title %}{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %}{% endblock %}
+{% block title %}{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %} — {{ merchant.entitas_bisnis.nama }}{% endblock %}
 {% block content %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %}</h1>
+  <div>
+    <h1 class="ni-page-header__title">{% if group %}Edit Modifier Group{% else %}Modifier Group Baru{% endif %}</h1>
+    <p class="ni-page-header__subtitle">{% if group %}Ubah pengaturan grup modifier{% else %}Buat grup modifier baru untuk produk POS{% endif %}</p>
+  </div>
 </div>
-<div class="ni-card">
-  <form method="post" class="ni-form">
-    {% csrf_token %}
-    {% for field in form %}
-    <div class="ni-form-group">
-      <label class="ni-label">{{ field.label }}</label>
-      {{ field }}
-      {% if field.errors %}<p class="ni-field-error">{{ field.errors|join:", " }}</p>{% endif %}
-    </div>
-    {% endfor %}
-    <div class="ni-form-actions">
-      <button type="submit" class="ni-btn ni-btn-primary">Simpan</button>
-      <a href="{% url 'pos_catalog:modifier_group_list' merchant.pk %}" class="ni-btn ni-btn-secondary">Batal</a>
-    </div>
-  </form>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in" style="max-width:720px;">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+
+      {% for field in form %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      </div>
+      {% endfor %}
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'pos_catalog:modifier_group_list' merchant.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
 </div>
+
 {% endblock %}

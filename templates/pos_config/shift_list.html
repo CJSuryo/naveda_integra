@@ -1,24 +1,60 @@
 {% extends 'base.html' %}
 {% block title %}Shift — {{ store.entitas_bisnis_lv2.nama }}{% endblock %}
 {% block content %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Shift Kerja — {{ store.entitas_bisnis_lv2.nama }}</h1>
+  <div>
+    <h1 class="ni-page-header__title">Shift Kerja</h1>
+    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_config:shift_add' store.pk %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Shift
+    </a>
+  </div>
 </div>
-<div class="ni-card">
-  <table class="ni-table">
-    <thead><tr><th>Nama Shift</th><th>Mulai</th><th>Selesai</th><th>Status</th></tr></thead>
-    <tbody>
-      {% for shift in shifts %}
-      <tr>
-        <td>{{ shift.name }}</td>
-        <td>{{ shift.start_time }}</td>
-        <td>{{ shift.end_time }}</td>
-        <td>{% if shift.is_active %}<span class="ni-badge ni-badge-success">Aktif</span>{% else %}<span class="ni-badge ni-badge-danger">Nonaktif</span>{% endif %}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="4" class="ni-table-empty">Belum ada shift.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama Shift</th>
+          <th>Mulai</th>
+          <th>Selesai</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for shift in shifts %}
+        <tr>
+          <td>{{ shift.name }}</td>
+          <td>{{ shift.start_time }}</td>
+          <td>{{ shift.end_time }}</td>
+          <td>
+            {% if shift.is_active %}
+              <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+              <span class="ni-badge ni-badge--danger">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_config:shift_edit' store.pk shift.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada shift terdaftar.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
+
 {% endblock %}

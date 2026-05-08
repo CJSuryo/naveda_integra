@@ -1,24 +1,34 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
 {% block title %}Preview Struk — {{ order.order_number }}{% endblock %}
-
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Preview Struk</h1>
-  <p class="ni-page-subtitle">{{ order.order_number }}</p>
+  <div>
+    <h1 class="ni-page-header__title">Preview Struk</h1>
+    <p class="ni-page-header__subtitle">{{ order.order_number }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
 </div>
 
-<div class="ni-card" style="max-width:420px;">
-  <div class="ni-card-body">
-    <pre style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">{{ receipt_text }}</pre>
+{% for msg in messages %}<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>{% endfor %}
+
+<div class="ni-card ni-animate-fade-in" style="max-width:420px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-primary);">Struk</h3>
+    <pre style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;background:var(--ni-bg);border:1px solid var(--ni-border);border-radius:var(--ni-radius);padding:16px;margin:0;">{{ receipt_text }}</pre>
   </div>
-  <div class="ni-card-footer">
-    <form method="post" action="{% url 'pos_orders:receipt_print' order_pk=order.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="ni-btn ni-btn--primary">
-        <i data-lucide="printer"></i> Cetak ke Printer
-      </button>
-    </form>
-    <a href="{% url 'pos_orders:order_detail' pk=order.pk %}" class="ni-btn ni-btn--ghost">Kembali</a>
+  <div class="ni-card__body" style="border-top:1px solid var(--ni-border);padding-top:16px;">
+    <div class="ni-btn-row">
+      <form method="post" action="{% url 'pos_orders:receipt_print' order_pk=order.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="printer" style="width:16px;height:16px"></i> Cetak ke Printer
+        </button>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}

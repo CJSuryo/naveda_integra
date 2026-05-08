@@ -1,22 +1,55 @@
-<!-- templates/pos_crm/member_list.html -->
 {% extends "base.html" %}
 {% block title %}Daftar Member — POS{% endblock %}
 
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Daftar Member</h1>
-  <div class="ni-page-actions">
-    <a href="{% url 'pos_member_register' %}?merchant={{ request.GET.merchant }}" class="ni-btn ni-btn--primary">
-      <i data-lucide="user-plus"></i> Daftar Member Baru
+  <div>
+    <h1 class="ni-page-header__title">Daftar Member</h1>
+    <p class="ni-page-header__subtitle">Kelola data member dan loyalitas pelanggan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_member_register' %}?merchant={{ request.GET.merchant }}" class="ni-btn ni-btn--success">
+      <i data-lucide="user-plus" style="width:16px;height:16px"></i> Daftar Member Baru
     </a>
   </div>
 </div>
 
-<div class="ni-card">
-  <div class="ni-card-body">
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:200px;">
+        <label class="ni-form-label">Cari</label>
+        <input type="text" name="q" class="ni-input" value="{{ q }}" placeholder="Nama / nomor telepon...">
+      </div>
+      {% if request.GET.merchant %}
+      <input type="hidden" name="merchant" value="{{ request.GET.merchant }}">
+      {% endif %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Cari
+      </button>
+      <a href="{% url 'pos_member_list' %}{% if request.GET.merchant %}?merchant={{ request.GET.merchant }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
-        <tr><th>ID</th><th>Nama</th><th>Telepon</th><th>Tier</th><th>Poin</th><th>Total Belanja</th><th>Aksi</th></tr>
+        <tr>
+          <th>Member ID</th>
+          <th>Nama</th>
+          <th>Telepon</th>
+          <th>Tier</th>
+          <th class="ni-text-right">Poin</th>
+          <th class="ni-text-right">Total Belanja</th>
+          <th>Bergabung</th>
+          <th>Aksi</th>
+        </tr>
       </thead>
       <tbody>
         {% for member in members %}
@@ -24,13 +57,32 @@
           <td>{{ member.member_id }}</td>
           <td>{{ member.name }}</td>
           <td>{{ member.phone }}</td>
-          <td><span class="ni-badge ni-badge--{{ member.tier|lower }}">{{ member.tier }}</span></td>
-          <td>{{ member.points }}</td>
-          <td>Rp {{ member.total_spent|floatformat:0 }}</td>
-          <td><a href="{% url 'pos_member_detail' pk=member.pk %}" class="ni-btn ni-btn--xs">Detail</a></td>
+          <td>
+            {% if member.tier == "BRONZE" %}
+              <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+            {% elif member.tier == "SILVER" %}
+              <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+            {% elif member.tier == "GOLD" %}
+              <span class="ni-badge ni-badge--warning">{{ member.tier }}</span>
+            {% elif member.tier == "PLATINUM" %}
+              <span class="ni-badge ni-badge--primary">{{ member.tier }}</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">{{ member.tier }}</span>
+            {% endif %}
+          </td>
+          <td class="ni-text-right">{{ member.points }}</td>
+          <td class="ni-text-right">Rp {{ member.total_spent|floatformat:0 }}</td>
+          <td>{{ member.joined_at|date:"d/m/Y" }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'pos_member_detail' pk=member.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Detail</a>
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="7" class="ni-table__empty">Belum ada member.</td></tr>
+        <tr>
+          <td colspan="8" class="ni-text-center ni-text-muted">Belum ada data.</td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>

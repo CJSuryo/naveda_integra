@@ -3,31 +3,43 @@
 
 {% block content %}
 <div class="ni-page-header">
-  <h1 class="ni-page-title">{% if campaign %}Edit Kampanye{% else %}Kampanye Baru{% endif %}</h1>
+  <div>
+    <h1 class="ni-page-header__title">{% if campaign %}Edit Kampanye{% else %}Kampanye Baru{% endif %}</h1>
+    <p class="ni-page-header__subtitle">{% if campaign %}Ubah data kampanye promosi{% else %}Buat kampanye promosi baru{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_campaign_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
 </div>
 
-<div class="ni-card" style="max-width:720px;">
-  <div class="ni-card-body">
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in" style="max-width:720px;">
+  <div class="ni-card__body">
     <form method="post">
       {% csrf_token %}
       {% if not campaign %}<input type="hidden" name="merchant" value="{{ merchant.pk }}">{% endif %}
       {% for field in form %}
       <div class="ni-form-group">
         {% if field.field.widget.input_type == 'checkbox' %}
-        <label class="ni-label" for="{{ field.id_for_label }}" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+        <label class="ni-form-label" for="{{ field.id_for_label }}" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
           {{ field }} {{ field.label }}
         </label>
         {% else %}
-        <label class="ni-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        <label class="ni-form-label">{{ field.label }}</label>
         {{ field }}
         {% endif %}
-        {% if field.help_text %}<p class="ni-field-hint">{{ field.help_text }}</p>{% endif %}
-        {% if field.errors %}<p class="ni-field-error">{{ field.errors|first }}</p>{% endif %}
+        {% if field.help_text %}<div class="ni-form-hint">{{ field.help_text }}</div>{% endif %}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
       </div>
       {% endfor %}
-      <div class="ni-form-actions">
+      <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
-        <a href="{% url 'pos_campaign_list' %}" class="ni-btn ni-btn--ghost">Batal</a>
+        <a href="{% url 'pos_campaign_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>

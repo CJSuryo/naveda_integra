@@ -1,23 +1,35 @@
 {% extends 'base.html' %}
 {% block title %}Konfigurasi Toko — {{ lv2.nama }}{% endblock %}
 {% block content %}
+
 <div class="ni-page-header">
-  <h1 class="ni-page-title">Konfigurasi Toko — {{ lv2.nama }}</h1>
+  <div>
+    <h1 class="ni-page-header__title">Konfigurasi Toko</h1>
+    <p class="ni-page-header__subtitle">{{ lv2.nama }}</p>
+  </div>
 </div>
-<div class="ni-card">
-  <form method="post" class="ni-form">
-    {% csrf_token %}
-    {% for field in form %}
-      <div class="ni-form-group">
-        <label class="ni-label">{{ field.label }}</label>
-        {{ field }}
-        {% if field.errors %}<p class="ni-field-error">{{ field.errors|join:", " }}</p>{% endif %}
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in" style="max-width:720px;">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'pos_config:store_list' merchant.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
-    {% endfor %}
-    <div class="ni-form-actions">
-      <button type="submit" class="ni-btn ni-btn-primary">Simpan</button>
-      <a href="{% url 'pos_config:store_list' merchant.pk %}" class="ni-btn ni-btn-secondary">Batal</a>
-    </div>
-  </form>
+    </form>
+  </div>
 </div>
+
 {% endblock %}
