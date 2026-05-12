@@ -344,14 +344,14 @@
       {% endif %}
 
       {% if user|has_ni_perm:"pos_catalog_view" %}
-      <div class="ni-nav-item {% if 'pos/catalog' in request.path or 'pos/modifiers' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'pos/modifiers' in request.path %}ni-nav-item--open{% endif %}">
         {% if pos_merchant %}
-        <a href="{% url 'pos_catalog:product_list' pos_merchant.pk %}" class="ni-nav-link {% if 'pos/catalog' in request.path %}ni-nav-link--active{% endif %}">
+        <a href="{% url 'pos_catalog:modifier_group_list' pos_merchant.pk %}" class="ni-nav-link {% if 'pos/modifiers' in request.path %}ni-nav-link--active{% endif %}">
         {% else %}
-        <a href="#" class="ni-nav-link {% if 'pos/catalog' in request.path %}ni-nav-link--active{% endif %}">
+        <a href="#" class="ni-nav-link {% if 'pos/modifiers' in request.path %}ni-nav-link--active{% endif %}">
         {% endif %}
-          <i data-lucide="package" class="ni-nav-link__icon"></i>
-          <span class="ni-nav-link__text">Katalog Produk</span>
+          <i data-lucide="sliders" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Modifier Group</span>
         </a>
       </div>
       {% endif %}

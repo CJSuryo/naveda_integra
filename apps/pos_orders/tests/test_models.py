@@ -3,7 +3,6 @@ from django.test import TestCase
 from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, TipeEntitas
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from pos_config.models import MerchantPOSConfig, StorePOSConfig, PaymentMethod
-from pos_catalog.models import POSProduct
 from pos_orders.models import Order, OrderItem, OrderPayment
 from apps.accounts.models import User, Role
 from pos_orders.services.order_number import generate_order_number
@@ -116,11 +115,7 @@ class OrderRecalculateTotalsTest(TestCase):
         self.store.save()
         self.cashier = make_cashier()
         kat = KategoriItem.objects.create(nama='Makan', tipe_item='ITM')
-        item = ItemMasterPurchase.objects.create(nama='Nasi', tipe_item='ITM', kategori=kat)
-        self.product = POSProduct.objects.create(
-            item_master=item, merchant_config=self.store.merchant_config,
-            pos_name='Nasi Goreng', selling_price=Decimal('25000'),
-        )
+        self.product = ItemMasterPurchase.objects.create(nama='Nasi', tipe_item='ITM', kategori=kat)
 
     def test_recalculate_totals_tax_exclusive(self):
         order = Order.objects.create(

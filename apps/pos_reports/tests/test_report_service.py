@@ -41,7 +41,6 @@ from django.contrib.auth import get_user_model
 
 from pos_config.models import MerchantPOSConfig, StorePOSConfig, WorkShift, ShiftLog, PaymentMethod
 from pos_orders.models import Order, OrderItem, OrderPayment
-from pos_catalog.models import POSProduct
 from apps.purchase.models import ItemMasterPurchase
 from apps.pos_reports.services.report_service import (
     get_sales_summary, get_top_products, get_payment_breakdown, generate_daily_snapshot,
@@ -65,10 +64,7 @@ def _make_full_setup():
     user, _ = User.objects.get_or_create(email='rpt_kasir@test.com', defaults={'name': 'Kasir Rpt'})
     shift_def = WorkShift.objects.create(store=store, name='Pagi', start_time='08:00', end_time='16:00')
     sl = ShiftLog.objects.create(store=store, shift=shift_def, employee=user, clock_in=timezone.now(), opening_cash=0)
-    im = ItemMasterPurchase.objects.create(nama='Kopi Rpt', tipe_item='FG')
-    product = POSProduct.objects.create(
-        item_master=im, merchant_config=merchant, pos_name='Kopi Rpt', selling_price=Decimal('25000'),
-    )
+    product = ItemMasterPurchase.objects.create(nama='Kopi Rpt', tipe_item='FG')
     return store, sl, user, pm_cash, pm_qris, product
 
 
@@ -79,10 +75,11 @@ def _create_completed_order(store, sl, user, pm, product, total, qty=Decimal('2'
         status=Order.STATUS_COMPLETED,
         subtotal=total, total_amount=total, completed_at=timezone.now(),
     )
+    unit_price = Decimal('25000')
     OrderItem.objects.create(
         order=order, product=product, quantity=qty,
-        unit_price=product.selling_price, modifier_total=Decimal('0'),
-        subtotal=qty * product.selling_price,
+        unit_price=unit_price, modifier_total=Decimal('0'),
+        subtotal=qty * unit_price,
     )
     OrderPayment.objects.create(
         order=order, payment_method=pm, amount=total, is_confirmed=True,

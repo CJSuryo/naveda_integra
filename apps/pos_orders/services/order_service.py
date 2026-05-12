@@ -34,10 +34,10 @@ def add_item(
     order: Order,
     product: ItemMasterPurchase,
     quantity: Decimal,
+    unit_price: Decimal,
     selected_modifier_option_ids: List[int],
     notes: str = '',
 ) -> OrderItem:
-    unit_price = product.unit_price
 
     modifier_total = Decimal('0')
     options = []
@@ -151,9 +151,6 @@ def complete_order(order: Order) -> Order:
         order.status = Order.STATUS_COMPLETED
         order.completed_at = timezone.now()
         order.save(update_fields=['status', 'completed_at', 'updated_at'])
-
-        from pos_orders.services.sales_integration import create_sales_from_order
-        create_sales_from_order(order)
 
         try:
             if getattr(order, 'member_id', None):

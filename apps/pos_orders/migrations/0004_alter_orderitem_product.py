@@ -7,7 +7,6 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('pos_catalog', '0002_remove_pos_product_models'),
         ('pos_orders', '0003_order_member'),
         ('purchase', '0003_add_nilai_residu_to_item_master'),
     ]

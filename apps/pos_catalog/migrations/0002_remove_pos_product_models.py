@@ -12,6 +12,9 @@ class Migration(migrations.Migration):
     dependencies = [
         ('pos_catalog', '0001_initial'),
         ('purchase', '0003_add_nilai_residu_to_item_master'),
+        # All FKs/M2Ms pointing to POSProduct must be removed before we delete the table.
+        ('pos_orders', '0004_alter_orderitem_product'),
+        ('pos_promotions', '0002_remove_campaign_applicable_categories_and_more'),
     ]
 
     operations = [

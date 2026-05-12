@@ -4,7 +4,7 @@ from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from pos_config.models import MerchantPOSConfig, StorePOSConfig
 from apps.entitas_bisnis.models import EntitasBisnisLv2
-from pos_catalog.models import POSCategory, POSProduct, ModifierGroup, ModifierOption, ProductModifierGroup
+from pos_catalog.models import ModifierGroup, ModifierOption, ProductModifierGroup
 
 
 def make_merchant():
@@ -53,28 +53,22 @@ class ModifierGroupValidationTest(TestCase):
         group.clean()  # no exception
 
 
-class POSProductTest(TestCase):
+class ProductModifierGroupTest(TestCase):
     def setUp(self):
         self.merchant = make_merchant()
         self.item = make_item_master()
-
-    def test_create_pos_product(self):
-        product = POSProduct.objects.create(
-            item_master=self.item,
-            merchant_config=self.merchant,
-            pos_name='Nasi Goreng Spesial',
-            selling_price=25000,
+        self.group = ModifierGroup.objects.create(
+            merchant_config=self.merchant, name='Ukuran',
+            is_required=False, min_selections=0, max_selections=1,
         )
-        self.assertEqual(str(product), 'Nasi Goreng Spesial')
 
-    def test_one_item_master_cannot_link_to_two_pos_products(self):
-        POSProduct.objects.create(
-            item_master=self.item, merchant_config=self.merchant,
-            pos_name='Nasi Goreng', selling_price=25000,
-        )
+    def test_create_product_modifier_group(self):
+        link = ProductModifierGroup.objects.create(item=self.item, modifier_group=self.group)
+        self.assertEqual(link.item, self.item)
+        self.assertEqual(link.modifier_group, self.group)
+
+    def test_unique_item_modifier_group(self):
+        ProductModifierGroup.objects.create(item=self.item, modifier_group=self.group)
         from django.db import IntegrityError
         with self.assertRaises(IntegrityError):
-            POSProduct.objects.create(
-                item_master=self.item, merchant_config=self.merchant,
-                pos_name='Duplicate', selling_price=10000,
-            )
+            ProductModifierGroup.objects.create(item=self.item, modifier_group=self.group)
