@@ -392,6 +392,8 @@
         offset_coa_account_id: sttAccounts.offset_account_id,
         revenue_account_id: sttAccounts.revenue_account_id,
         payment_account_id: sttAccounts.payment_account_id,
+        tax_type: sttAccounts.tax_type || '',
+        tax_account_id: sttAccounts.tax_account_id || '',
         is_bulk: row.is_bulk ? '1' : '0',
       };
     });

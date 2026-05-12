@@ -955,7 +955,7 @@ def api_pos_items(request: HttpRequest) -> JsonResponse:
                     'additional_price': str(opt.additional_price),
                     'is_default': opt.is_default,
                 }
-                for opt in pmg.modifier_group.options.filter(is_available=True)
+                for opt in pmg.modifier_group.options.all() if opt.is_available
             ],
         })
 
