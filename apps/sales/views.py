@@ -914,6 +914,7 @@ def api_pos_items(request: HttpRequest) -> JsonResponse:
     inv_qs = (
         InventoryRecord.objects
         .filter(entitas_bisnis_lv3_id=lv3_pk, quantity__gt=0)
+        .exclude(item__tipe_item__in=['RMB', 'FGB', 'ITMB'])
         .select_related('item')
         .order_by('item__nama')
     )
@@ -925,6 +926,7 @@ def api_pos_items(request: HttpRequest) -> JsonResponse:
             inv_qs = (
                 InventoryRecord.objects
                 .filter(entitas_bisnis_id=lv1_id, quantity__gt=0)
+                .exclude(item__tipe_item__in=['RMB', 'FGB', 'ITMB'])
                 .select_related('item')
                 .order_by('item__nama')
             )
@@ -970,7 +972,7 @@ def api_pos_items(request: HttpRequest) -> JsonResponse:
             'kode_item': inv.item.item_id,
             'selling_price': str(inv.selling_price) if inv.selling_price is not None else '0',
             'unit': inv.item.tipe_item,
-            'is_bulk': inv.item.tipe_item in ('RMB', 'FGB', 'ITMB'),
+            'is_bulk': False,
             'modifier_groups': modifier_map.get(inv.item_id, []),
         })
 

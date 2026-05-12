@@ -158,7 +158,7 @@
       pendingItem = item;
       openModifierModal(item);
     } else {
-      addToCart(item, [], 0, '');
+      addToCart(item, 0, '');
     }
   }
 
@@ -228,7 +228,7 @@
     if (!valid) return;
 
     var summary = summaryParts.join(', ');
-    addToCart(pendingItem, [], modifierTotal, summary);
+    addToCart(pendingItem, modifierTotal, summary);
     closeModifierModal();
   }
 
@@ -240,7 +240,7 @@
   });
 
   // ── Cart operations ────────────────────────────────────────────────────────
-  function addToCart(item, _opts, modifierTotal, modifierSummary) {
+  function addToCart(item, modifierTotal, modifierSummary) {
     // For non-bulk items, group by item_pk + modifierSummary
     if (!item.is_bulk) {
       var existing = cart.find(function (r) {
