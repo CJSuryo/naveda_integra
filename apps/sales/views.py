@@ -653,7 +653,7 @@ def api_stt_defaults(request: HttpRequest) -> JsonResponse:
             'tax_account_id': stt.default_tax_account_id or '',
             'tax_type': stt.default_tax_type or '',
         })
-    except SubTransactionType.DoesNotExist:
+    except (SubTransactionType.DoesNotExist, ValueError, TypeError):
         return JsonResponse({'ok': False})
 
 
