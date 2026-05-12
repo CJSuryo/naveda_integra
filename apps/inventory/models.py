@@ -73,6 +73,29 @@ class InventoryRecord(models.Model):
         related_name='inventory_records',
         verbose_name='Entitas Bisnis',
     )
+    entitas_bisnis_lv2 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv2',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='inventory_records_lv2',
+        verbose_name='Entitas Bisnis Lv2',
+    )
+    entitas_bisnis_lv3 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='inventory_records_lv3',
+        verbose_name='Entitas Bisnis Lv3',
+    )
+    selling_price = models.DecimalField(
+        max_digits=15,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        verbose_name='Harga Jual',
+    )
     quantity = models.DecimalField(max_digits=15, decimal_places=4, verbose_name='Quantity')
     unit_price = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Unit Price')
     total_value = models.DecimalField(
@@ -118,6 +141,7 @@ class InventoryRecord(models.Model):
             models.Index(fields=['item', 'tanggal'], name='idx_ir_item_tanggal'),
             models.Index(fields=['entitas_bisnis', 'tanggal'], name='idx_ir_eb_tanggal'),
             models.Index(fields=['inventory_number'], name='idx_ir_inv_number'),
+            models.Index(fields=['entitas_bisnis_lv3'], name='idx_ir_lv3'),
         ]
 
     def __str__(self) -> str:

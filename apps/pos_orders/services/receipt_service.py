@@ -50,7 +50,7 @@ def generate_receipt_text(order) -> str:
     rule()
 
     for item in order.items.exclude(status='CANCELLED').select_related('product'):
-        item_name = item.product.pos_name
+        item_name = item.product.nama
         unit_price = item.unit_price + item.modifier_total
         subtotal = unit_price * item.quantity
         qty_str = f'{item.quantity:g}'

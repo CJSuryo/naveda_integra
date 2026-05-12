@@ -35,8 +35,8 @@ def get_sales_summary(store, date_from: datetime.date, date_to: datetime.date) -
 
 
 def get_top_products(store, date_from: datetime.date, date_to: datetime.date, limit: int = 10):
-    """Return list of (POSProduct, total_qty, total_revenue) sorted by revenue desc."""
-    from pos_catalog.models import POSProduct
+    """Return list of (ItemMasterPurchase, total_qty, total_revenue) sorted by revenue desc."""
+    from apps.purchase.models import ItemMasterPurchase
     rows = (
         OrderItem.objects
         .filter(
@@ -53,7 +53,7 @@ def get_top_products(store, date_from: datetime.date, date_to: datetime.date, li
         .order_by('-total_revenue')[:limit]
     )
     product_ids = [r['product_id'] for r in rows]
-    product_map = {p.pk: p for p in POSProduct.objects.filter(pk__in=product_ids)}
+    product_map = {p.pk: p for p in ItemMasterPurchase.objects.filter(pk__in=product_ids)}
     return [
         (product_map[r['product_id']], r['total_qty'], r['total_revenue'])
         for r in rows

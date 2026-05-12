@@ -630,6 +630,33 @@ def api_stt_offset(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'offset_account_id': '', 'offset_account_text': ''})
 
 
+@login_required
+def api_stt_defaults(request: HttpRequest) -> JsonResponse:
+    """Return all default accounts for a sales SubTransactionType (for POS auto-fill)."""
+    stt_id = request.GET.get('stt_id', '')
+    if not stt_id:
+        return JsonResponse({'ok': False})
+    try:
+        stt = SubTransactionType.objects.select_related(
+            'default_offset_account',
+            'default_revenue_account',
+            'default_payment_account',
+            'default_inventory_account',
+            'default_tax_account',
+        ).get(pk=stt_id, module='sales')
+        return JsonResponse({
+            'ok': True,
+            'offset_account_id': stt.default_offset_account_id or '',
+            'revenue_account_id': stt.default_revenue_account_id or '',
+            'payment_account_id': stt.default_payment_account_id or '',
+            'inventory_account_id': stt.default_inventory_account_id or '',
+            'tax_account_id': stt.default_tax_account_id or '',
+            'tax_type': stt.default_tax_type or '',
+        })
+    except (SubTransactionType.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({'ok': False})
+
+
 # ── Internal Helpers ─────────────────────────────────────────────────────────
 
 def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None) -> HttpResponse:
@@ -851,3 +878,102 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     action = 'diperbarui' if existing else 'dibuat'
     dj_messages.success(request, f'Sales {sales.transaction_id} berhasil {action}.')
     return redirect('sales:detail', pk=sales.pk)
+
+
+# ── POS Cashier ──────────────────────────────────────────────────────────────
+
+@login_required
+def pos_cashier(request: HttpRequest) -> HttpResponse:
+    """POS cashier screen — mobile-friendly sales entry at /sales/pos/."""
+    from apps.entitas_bisnis.models import EntitasBisnisLv3
+    stores = EntitasBisnisLv3.objects.filter(status_aktif=True).select_related(
+        'parent_lv2__entitas_bisnis'
+    ).order_by('nama')
+    return render(request, 'sales/pos_cashier.html', {
+        'stores': stores,
+        'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
+        'today': timezone.now().date(),
+    })
+
+
+@login_required
+def api_pos_items(request: HttpRequest) -> JsonResponse:
+    """Return inventory items for a given Lv3 store (for POS item grid)."""
+    lv3_pk = request.GET.get('lv3_pk', '')
+    if not lv3_pk:
+        return JsonResponse({'items': []})
+    try:
+        lv3_pk = int(lv3_pk)
+    except (ValueError, TypeError):
+        return JsonResponse({'items': []})
+
+    from apps.entitas_bisnis.models import EntitasBisnisLv3
+    from apps.pos_catalog.models import ProductModifierGroup
+
+    # Get inventory records for this store (lv3 specific, then fall back to lv1)
+    inv_qs = (
+        InventoryRecord.objects
+        .filter(entitas_bisnis_lv3_id=lv3_pk, quantity__gt=0)
+        .exclude(item__tipe_item__in=['RMB', 'FGB', 'ITMB'])
+        .select_related('item')
+        .order_by('item__nama')
+    )
+    if not inv_qs.exists():
+        # Fallback: get lv3 → lv2 → lv1, then filter inventory by lv1
+        try:
+            lv3 = EntitasBisnisLv3.objects.select_related('parent_lv2__entitas_bisnis').get(pk=lv3_pk)
+            lv1_id = lv3.parent_lv2.entitas_bisnis_id
+            inv_qs = (
+                InventoryRecord.objects
+                .filter(entitas_bisnis_id=lv1_id, quantity__gt=0)
+                .exclude(item__tipe_item__in=['RMB', 'FGB', 'ITMB'])
+                .select_related('item')
+                .order_by('item__nama')
+            )
+        except EntitasBisnisLv3.DoesNotExist:
+            return JsonResponse({'items': []})
+
+    # Get modifier groups per item
+    item_ids = list(inv_qs.values_list('item_id', flat=True).distinct())
+    modifier_map: dict[int, list] = {}
+    for pmg in (
+        ProductModifierGroup.objects
+        .filter(item_id__in=item_ids)
+        .select_related('modifier_group')
+        .prefetch_related('modifier_group__options')
+    ):
+        modifier_map.setdefault(pmg.item_id, []).append({
+            'pk': pmg.modifier_group_id,
+            'nama': pmg.modifier_group.name,
+            'is_required': pmg.modifier_group.is_required,
+            'min_selections': pmg.modifier_group.min_selections,
+            'max_selections': pmg.modifier_group.max_selections,
+            'options': [
+                {
+                    'pk': opt.pk,
+                    'name': opt.name,
+                    'additional_price': str(opt.additional_price),
+                    'is_default': opt.is_default,
+                }
+                for opt in pmg.modifier_group.options.all() if opt.is_available
+            ],
+        })
+
+    # Deduplicate by item (one entry per item)
+    seen_items: set[int] = set()
+    items_data = []
+    for inv in inv_qs:
+        if inv.item_id in seen_items:
+            continue
+        seen_items.add(inv.item_id)
+        items_data.append({
+            'item_pk': inv.item_id,
+            'name': inv.item.nama,
+            'kode_item': inv.item.item_id,
+            'selling_price': str(inv.selling_price) if inv.selling_price is not None else '0',
+            'unit': inv.item.tipe_item,
+            'is_bulk': False,
+            'modifier_groups': modifier_map.get(inv.item_id, []),
+        })
+
+    return JsonResponse({'items': items_data})

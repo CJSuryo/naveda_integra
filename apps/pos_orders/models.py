@@ -147,7 +147,7 @@ class OrderItem(models.Model):
     ]
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    product = models.ForeignKey('pos_catalog.POSProduct', on_delete=models.PROTECT, related_name='order_items')
+    product = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='order_items')
     quantity = models.DecimalField(max_digits=10, decimal_places=3)
     unit_price = models.DecimalField(max_digits=15, decimal_places=2)
     modifier_total = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0'))
@@ -156,7 +156,7 @@ class OrderItem(models.Model):
     status = models.CharField(max_length=20, choices=ITEM_STATUS_CHOICES, default=ITEM_STATUS_PENDING)
 
     def __str__(self):
-        return f'{self.product.pos_name} x{self.quantity}'
+        return f'{self.product.nama} x{self.quantity}'
 
 
 class OrderItemModifier(models.Model):

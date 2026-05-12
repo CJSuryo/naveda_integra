@@ -11,7 +11,7 @@ class CampaignForm(forms.ModelForm):
         fields = [
             'name', 'description', 'campaign_type', 'discount_pct', 'discount_amount',
             'max_discount_cap', 'min_purchase_amount', 'buy_quantity', 'get_quantity',
-            'applicable_to', 'applicable_products', 'applicable_categories',
+            'applicable_to', 'applicable_products',
             'stores', 'start_date', 'end_date', 'max_uses', 'per_member_limit',
             'requires_member', 'min_tier', 'is_active',
         ]
@@ -27,7 +27,6 @@ class CampaignForm(forms.ModelForm):
             'get_quantity':        forms.NumberInput(attrs=NI),
             'applicable_to':       forms.Select(attrs={'class': 'ni-select'}),
             'applicable_products': forms.SelectMultiple(attrs={**NI, 'size': '5'}),
-            'applicable_categories': forms.SelectMultiple(attrs={**NI, 'size': '4'}),
             'stores':              forms.SelectMultiple(attrs={**NI, 'size': '4'}),
             'start_date':          forms.DateInput(attrs={**NI, 'type': 'date'}),
             'end_date':            forms.DateInput(attrs={**NI, 'type': 'date'}),

@@ -42,8 +42,13 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ] + ['https://navedafinance.com', 'https://www.navedafinance.com']
 
-# ── Static files (WhiteNoise on Render) ──────────────────────────────────────
+# ── Static + media files ─────────────────────────────────────────────────────
+# Render filesystem is ephemeral — media uploads survive only until next deploy.
+# For persistent uploads, replace the 'default' backend with S3/Cloudinary.
 STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
     },

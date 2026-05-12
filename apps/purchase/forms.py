@@ -89,10 +89,23 @@ class ItemMasterPurchaseForm(forms.ModelForm):
 class SubTransactionTypeForm(forms.ModelForm):
     class Meta:
         model = SubTransactionType
-        fields = ('nama', 'module', 'direction', 'default_offset_account')
+        fields = (
+            'nama', 'module', 'direction',
+            'default_offset_account',
+            'default_revenue_account',
+            'default_payment_account',
+            'default_inventory_account',
+            'default_tax_account',
+            'default_tax_type',
+        )
         widgets = {
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
             'module': forms.Select(attrs={'class': 'ni-input'}),
             'direction': forms.Select(attrs={'class': 'ni-input'}),
             'default_offset_account': forms.Select(attrs={'class': 'ni-input'}),
+            'default_revenue_account': forms.Select(attrs={'class': 'ni-input'}),
+            'default_payment_account': forms.Select(attrs={'class': 'ni-input'}),
+            'default_inventory_account': forms.Select(attrs={'class': 'ni-input'}),
+            'default_tax_account': forms.Select(attrs={'class': 'ni-input'}),
+            'default_tax_type': forms.Select(attrs={'class': 'ni-input'}),
         }

@@ -2,7 +2,6 @@ from decimal import Decimal
 from django.db import transaction
 
 from pos_orders.models import Order, Refund, RefundItem
-from pos_orders.services.sales_integration import reverse_sales_for_refund
 
 
 def initiate_refund(
@@ -86,6 +85,7 @@ def complete_refund(refund: Refund) -> Refund:
     if refund.status != Refund.REFUND_STATUS_APPROVED:
         raise ValueError(f'Refund {refund.pk} must be APPROVED before completing')
     with transaction.atomic():
+        from pos_orders.services.sales_integration import reverse_sales_for_refund
         reverse_sales_for_refund(refund)
         refund.status = Refund.REFUND_STATUS_COMPLETED
         refund.save(update_fields=['status'])

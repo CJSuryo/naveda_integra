@@ -8,14 +8,12 @@ class ReceiptTextTest(TestCase):
     def setUp(self):
         from apps.pos_orders.tests.test_sales_integration import _make_accounting_setup
         from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, TipeEntitas
-        from apps.purchase.models import ItemMasterPurchase, FIFOBatch
+        from apps.purchase.models import ItemMasterPurchase
         from apps.accounts.models import User
         from pos_config.models import MerchantPOSConfig, StorePOSConfig, PaymentMethod, WorkShift, ShiftLog
-        from pos_catalog.models import POSProduct
         from pos_orders.models import Order, OrderItem, OrderPayment
         import datetime
         from django.utils import timezone
-        from django.db.models import Sum
 
         revenue_acct, hpp_acct, cash_acct, inventory_acct, stt = _make_accounting_setup()
         tipe = TipeEntitas.objects.create(nama='FnBRcp')
@@ -37,10 +35,6 @@ class ReceiptTextTest(TestCase):
         item_master = ItemMasterPurchase.objects.create(
             nama='Kopi Test', tipe_item='FG', coa_account=inventory_acct,
         )
-        product = POSProduct.objects.create(
-            item_master=item_master, merchant_config=merchant,
-            pos_name='Kopi Test', selling_price=Decimal('25000'), track_inventory=False,
-        )
         user = User.objects.create_user(email='kasir_rcp@test.com', password='pw', name='Kasir Rcp')
         shift_def = WorkShift.objects.create(
             store=self.store, name='Pagi',
@@ -51,21 +45,22 @@ class ReceiptTextTest(TestCase):
             clock_in=timezone.now(), opening_cash=Decimal('500000'),
         )
 
+        selling_price = Decimal('25000')
         qty = Decimal('2')
         self.order = Order.objects.create(
             order_number='ORD-RCP-001', store=self.store, shift_log=shift_log,
             cashier=user, status=Order.STATUS_COMPLETED,
         )
         OrderItem.objects.create(
-            order=self.order, product=product, quantity=qty,
-            unit_price=product.selling_price, modifier_total=Decimal('0'),
-            subtotal=qty * product.selling_price,
+            order=self.order, product=item_master, quantity=qty,
+            unit_price=selling_price, modifier_total=Decimal('0'),
+            subtotal=qty * selling_price,
         )
         OrderPayment.objects.create(
             order=self.order, payment_method=pm,
-            amount=qty * product.selling_price, is_confirmed=True,
+            amount=qty * selling_price, is_confirmed=True,
         )
-        self.order.subtotal = qty * product.selling_price
+        self.order.subtotal = qty * selling_price
         self.order.total_amount = self.order.subtotal
         self.order.save(update_fields=['subtotal', 'total_amount'])
 

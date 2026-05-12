@@ -2,7 +2,8 @@ from decimal import Decimal
 from typing import List, Optional
 from django.utils import timezone
 from pos_config.models import StorePOSConfig, PaymentMethod, ShiftLog
-from pos_catalog.models import POSProduct, ModifierOption
+from pos_catalog.models import ModifierOption
+from apps.purchase.models import ItemMasterPurchase
 from pos_orders.models import Order, OrderItem, OrderItemModifier, OrderPayment
 from pos_orders.services.order_number import generate_order_number
 
@@ -31,16 +32,12 @@ def create_order(
 
 def add_item(
     order: Order,
-    product: POSProduct,
+    product: ItemMasterPurchase,
     quantity: Decimal,
+    unit_price: Decimal,
     selected_modifier_option_ids: List[int],
     notes: str = '',
 ) -> OrderItem:
-    try:
-        override = product.store_availability.get(store=order.store)
-        unit_price = override.selling_price_override or product.selling_price
-    except Exception:
-        unit_price = product.selling_price
 
     modifier_total = Decimal('0')
     options = []
@@ -155,9 +152,6 @@ def complete_order(order: Order) -> Order:
         order.completed_at = timezone.now()
         order.save(update_fields=['status', 'completed_at', 'updated_at'])
 
-        from pos_orders.services.sales_integration import create_sales_from_order
-        create_sales_from_order(order)
-
         try:
             if getattr(order, 'member_id', None):
                 from pos_crm.services.member_service import add_points
@@ -215,7 +209,7 @@ def _push_new_order(order: Order) -> None:
         from pos_config.models import WebPushSubscription
         title = f'Pesanan Baru — {order.order_number}'
         items_preview = ', '.join(
-            f'{i.product.pos_name} x{int(i.quantity)}'
+            f'{i.product.nama} x{int(i.quantity)}'
             for i in order.items.all()[:3]
         )
         body = f'{order.get_source_display()} · {items_preview}'

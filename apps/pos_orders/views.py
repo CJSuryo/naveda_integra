@@ -11,7 +11,7 @@ from django.contrib import messages
 
 from apps.accounts.views import _check_perm
 from pos_config.models import StorePOSConfig, PaymentMethod, WebPushSubscription
-from pos_catalog.services.product_service import get_available_products, validate_modifier_selections
+from pos_catalog.services.product_service import validate_modifier_selections
 from pos_orders.models import Order, OrderItem, OrderPayment, Refund
 from pos_orders.services.order_service import (
     create_order, add_item, remove_item, update_item_quantity,
@@ -76,7 +76,8 @@ def cashier(request, store_id):
     if denied:
         return denied
     store = get_object_or_404(StorePOSConfig, pk=store_id)
-    products = get_available_products(store)
+    from apps.purchase.models import ItemMasterPurchase
+    products = ItemMasterPurchase.objects.all().order_by('nama')
     categories = store.merchant_config.categories.filter(is_active=True).order_by('display_order')
     active_orders = Order.objects.filter(
         store=store,
@@ -207,8 +208,8 @@ def api_add_item(request, pk):
     data, err = _json_body(request)
     if err:
         return err
-    from pos_catalog.models import POSProduct
-    product = get_object_or_404(POSProduct, pk=data['product_id'])
+    from apps.purchase.models import ItemMasterPurchase
+    product = get_object_or_404(ItemMasterPurchase, pk=data['product_id'])
     errors = validate_modifier_selections(product, data.get('modifier_option_ids', []))
     if errors:
         return JsonResponse({'errors': errors}, status=400)

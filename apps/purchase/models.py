@@ -225,6 +225,12 @@ class SubTransactionType(models.Model):
         ('inflow', 'Inflow'),
         ('outflow', 'Outflow'),
     ]
+    TAX_TYPE_CHOICES = [
+        ('ppn_keluaran', 'PPN Keluaran'),
+        ('pph_23', 'PPh 23'),
+        ('pph_21', 'PPh 21'),
+        ('pph_4_2', 'PPh 4(2)'),
+    ]
     nama = models.CharField(max_length=255, verbose_name='Sub-Transaction Type')
     module = models.CharField(
         max_length=20,
@@ -244,6 +250,45 @@ class SubTransactionType(models.Model):
         on_delete=models.PROTECT,
         related_name='sub_transaction_types',
         verbose_name='Default Offset Account',
+    )
+    default_revenue_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='stt_revenue',
+        null=True,
+        blank=True,
+        verbose_name='Default Revenue Account',
+    )
+    default_payment_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='stt_payment',
+        null=True,
+        blank=True,
+        verbose_name='Default Payment Account',
+    )
+    default_inventory_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='stt_inventory',
+        null=True,
+        blank=True,
+        verbose_name='Default Inventory Account',
+    )
+    default_tax_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='stt_tax',
+        null=True,
+        blank=True,
+        verbose_name='Default Tax Account',
+    )
+    default_tax_type = models.CharField(
+        max_length=30,
+        blank=True,
+        default='',
+        choices=TAX_TYPE_CHOICES,
+        verbose_name='Default Tax Type',
     )
 
     class Meta:
