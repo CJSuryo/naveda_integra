@@ -15,8 +15,12 @@ urlpatterns = [
     path('<int:pk>/edit/', views.sales_update, name='update'),
     path('<int:pk>/delete/', views.sales_delete, name='delete'),
 
+    # POS cashier
+    path('pos/', views.pos_cashier, name='pos_cashier'),
+
     # API endpoints
     path('api/stock-check/', views.api_stock_check, name='api_stock_check'),
     path('api/stt-offset/', views.api_stt_offset, name='api_stt_offset'),
     path('api/stt-defaults/', views.api_stt_defaults, name='api_stt_defaults'),
+    path('api/pos-items/', views.api_pos_items, name='api_pos_items'),
 ]

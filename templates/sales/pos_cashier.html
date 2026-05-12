@@ -1,0 +1,503 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}POS Kasir{% endblock %}
+
+{% block extra_css %}
+<style>
+  /* ── POS Layout ── */
+  .ni-pos-layout {
+    display: flex;
+    gap: 16px;
+    height: calc(100vh - 120px);
+    min-height: 500px;
+  }
+
+  /* Left panel: item grid */
+  .ni-pos-left {
+    flex: 1 1 0;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  /* Right panel: cart */
+  .ni-pos-right {
+    width: 340px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+  }
+
+  /* Top bar */
+  .ni-pos-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .ni-pos-topbar select,
+  .ni-pos-topbar input {
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius-sm);
+    background: var(--ni-bg-card);
+    color: var(--ni-text);
+    font-size: 0.9rem;
+  }
+  .ni-pos-store-select { flex: 0 0 220px; }
+  .ni-pos-search { flex: 1 1 160px; }
+  .ni-pos-stt-select { flex: 0 0 200px; }
+
+  /* Item grid */
+  .ni-pos-grid-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .ni-pos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 10px;
+  }
+  .ni-pos-item-card {
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius);
+    padding: 12px 10px;
+    background: var(--ni-bg-card);
+    cursor: pointer;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    user-select: none;
+  }
+  .ni-pos-item-card:hover {
+    border-color: var(--ni-primary);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .ni-pos-item-card__name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--ni-text);
+  }
+  .ni-pos-item-card__code {
+    font-size: 0.72rem;
+    color: var(--ni-text-muted);
+  }
+  .ni-pos-item-card__price {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ni-primary);
+    margin-top: auto;
+  }
+  .ni-pos-empty {
+    text-align: center;
+    color: var(--ni-text-muted);
+    padding: 40px 20px;
+    font-size: 0.9rem;
+  }
+
+  /* Cart panel */
+  .ni-pos-cart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--ni-bg-card);
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius);
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .ni-pos-cart-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ni-pos-cart-item {
+    background: var(--ni-bg-card);
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius-sm);
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .ni-pos-cart-item__top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .ni-pos-cart-item__name {
+    font-size: 0.85rem;
+    font-weight: 600;
+    flex: 1;
+    line-height: 1.3;
+  }
+  .ni-pos-cart-item__del {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--ni-danger, #e53e3e);
+    font-size: 1rem;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .ni-pos-cart-item__modifier {
+    font-size: 0.72rem;
+    color: var(--ni-text-muted);
+  }
+  .ni-pos-cart-item__bottom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+  }
+  .ni-pos-qty-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .ni-pos-qty-btn {
+    width: 26px;
+    height: 26px;
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius-sm);
+    background: var(--ni-bg);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--ni-text);
+  }
+  .ni-pos-qty-btn:hover { background: var(--ni-primary); color: #fff; border-color: var(--ni-primary); }
+  .ni-pos-qty-val {
+    min-width: 28px;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .ni-pos-cart-item__subtotal {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--ni-primary);
+  }
+  .ni-pos-cart-empty {
+    text-align: center;
+    color: var(--ni-text-muted);
+    padding: 24px 8px;
+    font-size: 0.85rem;
+  }
+
+  /* Cart footer */
+  .ni-pos-cart-footer {
+    background: var(--ni-bg-card);
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .ni-pos-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  .ni-pos-total-amount {
+    font-size: 1.2rem;
+    color: var(--ni-primary);
+  }
+  .ni-pos-bayar-btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    font-weight: 700;
+    background: var(--ni-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--ni-radius);
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .ni-pos-bayar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .ni-pos-bayar-btn:not(:disabled):hover { opacity: 0.9; }
+
+  /* ── Modal ── */
+  .ni-pos-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .ni-pos-modal-overlay.ni-hidden { display: none; }
+  .ni-pos-modal {
+    background: var(--ni-bg-card);
+    border-radius: var(--ni-radius);
+    width: 100%;
+    max-width: 440px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  }
+  .ni-pos-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid var(--ni-border);
+  }
+  .ni-pos-modal-title {
+    font-weight: 700;
+    font-size: 1rem;
+  }
+  .ni-pos-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: var(--ni-text-muted);
+    line-height: 1;
+    padding: 0;
+  }
+  .ni-pos-modal-body { padding: 16px 20px; }
+  .ni-pos-modal-footer { padding: 12px 20px 16px; display: flex; gap: 10px; justify-content: flex-end; }
+
+  /* Tabs */
+  .ni-pos-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+  .ni-pos-tab-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--ni-border);
+    border-radius: var(--ni-radius-sm);
+    background: var(--ni-bg);
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--ni-text);
+    transition: background 0.15s;
+  }
+  .ni-pos-tab-btn.active {
+    background: var(--ni-primary);
+    color: #fff;
+    border-color: var(--ni-primary);
+    font-weight: 600;
+  }
+  .ni-pos-tab-pane { display: none; }
+  .ni-pos-tab-pane.active { display: block; }
+
+  /* Modifier option rows */
+  .ni-pos-modifier-group { margin-bottom: 14px; }
+  .ni-pos-modifier-group__label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: var(--ni-text);
+  }
+  .ni-pos-modifier-group__required {
+    font-size: 0.72rem;
+    color: var(--ni-danger, #e53e3e);
+    margin-left: 4px;
+  }
+  .ni-pos-modifier-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--ni-border);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .ni-pos-modifier-option:last-child { border-bottom: none; }
+  .ni-pos-modifier-option__price {
+    margin-left: auto;
+    color: var(--ni-text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* Payment total display */
+  .ni-pos-pay-total {
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--ni-primary);
+    margin: 8px 0 16px;
+  }
+  .ni-pos-change-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: var(--ni-bg);
+    border-radius: var(--ni-radius-sm);
+  }
+  .ni-pos-change-label { font-size: 0.85rem; color: var(--ni-text-muted); }
+  .ni-pos-change-value { font-size: 1rem; font-weight: 700; color: var(--ni-success, #38a169); }
+  .ni-pos-change-value.negative { color: var(--ni-danger, #e53e3e); }
+
+  /* ── Mobile: stack panels vertically ── */
+  @media (max-width: 767px) {
+    .ni-pos-layout {
+      flex-direction: column;
+      height: auto;
+      min-height: unset;
+    }
+    .ni-pos-right {
+      width: 100%;
+    }
+    .ni-pos-grid-wrap {
+      max-height: 55vh;
+    }
+    .ni-pos-cart-body {
+      max-height: 35vh;
+    }
+    .ni-pos-store-select,
+    .ni-pos-stt-select {
+      flex: 1 1 100%;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% load static %}
+<div class="ni-page-header" style="margin-bottom:16px">
+  <div>
+    <h1 class="ni-page-header__title">POS Kasir</h1>
+    <div class="ni-page-header__subtitle">{{ today }}</div>
+  </div>
+</div>
+
+<!-- Top bar: store + STT + search -->
+<div class="ni-pos-topbar" style="margin-bottom:12px">
+  <select id="posStoreSelect" class="ni-pos-store-select">
+    <option value="">-- Pilih Toko --</option>
+    {% for store in stores %}
+    <option value="{{ store.pk }}">{{ store.nama }}</option>
+    {% endfor %}
+  </select>
+
+  <select id="posSttSelect" class="ni-pos-stt-select">
+    <option value="">-- Tipe Transaksi --</option>
+    {% for stt in sub_transaction_types %}
+    <option value="{{ stt.pk }}">{{ stt.nama }}</option>
+    {% endfor %}
+  </select>
+
+  <input type="text" id="posSearch" class="ni-pos-search" placeholder="Cari item..." autocomplete="off">
+</div>
+
+<!-- Main POS layout -->
+<div class="ni-pos-layout">
+  <!-- Left: item grid -->
+  <div class="ni-pos-left">
+    <div class="ni-pos-grid-wrap">
+      <div id="posItemGrid" class="ni-pos-grid">
+        <div class="ni-pos-empty" style="grid-column:1/-1">Pilih toko untuk menampilkan item.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: cart -->
+  <div class="ni-pos-right">
+    <div class="ni-pos-cart-header">
+      <span>Keranjang</span>
+      <span id="posCartCount" style="font-size:0.8rem;color:var(--ni-text-muted)">0 item</span>
+    </div>
+    <div class="ni-pos-cart-body" id="posCartBody">
+      <div class="ni-pos-cart-empty">Belum ada item.</div>
+    </div>
+    <div class="ni-pos-cart-footer">
+      <div class="ni-pos-total-row">
+        <span>Total</span>
+        <span class="ni-pos-total-amount" id="posTotalDisplay">Rp 0</span>
+      </div>
+      <button class="ni-pos-bayar-btn" id="posBayarBtn" disabled>Bayar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Modifier Modal ─── -->
+<div class="ni-pos-modal-overlay ni-hidden" id="modifierModalOverlay">
+  <div class="ni-pos-modal" id="modifierModal" role="dialog" aria-modal="true" aria-labelledby="modifierModalTitle">
+    <div class="ni-pos-modal-header">
+      <span class="ni-pos-modal-title" id="modifierModalTitle">Pilih Opsi</span>
+      <button class="ni-pos-modal-close" id="modifierModalClose" aria-label="Tutup">&times;</button>
+    </div>
+    <div class="ni-pos-modal-body" id="modifierModalBody"></div>
+    <div class="ni-pos-modal-footer">
+      <button class="ni-btn ni-btn-secondary" id="modifierModalCancel">Batal</button>
+      <button class="ni-btn ni-btn-primary" id="modifierModalConfirm">Tambah ke Keranjang</button>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Payment Modal ─── -->
+<div class="ni-pos-modal-overlay ni-hidden" id="paymentModalOverlay">
+  <div class="ni-pos-modal" id="paymentModal" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
+    <div class="ni-pos-modal-header">
+      <span class="ni-pos-modal-title" id="paymentModalTitle">Pembayaran</span>
+      <button class="ni-pos-modal-close" id="paymentModalClose" aria-label="Tutup">&times;</button>
+    </div>
+    <div class="ni-pos-modal-body">
+      <div style="text-align:center;font-size:0.85rem;color:var(--ni-text-muted);margin-bottom:4px">Total Tagihan</div>
+      <div class="ni-pos-pay-total" id="payTotalDisplay">Rp 0</div>
+
+      <div class="ni-pos-tabs">
+        <button class="ni-pos-tab-btn active" data-tab="tunai">Tunai</button>
+        <button class="ni-pos-tab-btn" data-tab="nontunai">Non-Tunai</button>
+      </div>
+
+      <div class="ni-pos-tab-pane active" id="tabTunai">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Uang Diterima</label>
+          <input type="number" id="cashReceived" class="ni-input" placeholder="0" min="0" step="1000">
+        </div>
+        <div class="ni-pos-change-row">
+          <span class="ni-pos-change-label">Kembalian</span>
+          <span class="ni-pos-change-value" id="changeDisplay">Rp 0</span>
+        </div>
+      </div>
+
+      <div class="ni-pos-tab-pane" id="tabNontunai">
+        <p style="font-size:0.88rem;color:var(--ni-text-muted)">Konfirmasi pembayaran non-tunai.</p>
+      </div>
+    </div>
+    <div class="ni-pos-modal-footer">
+      <button class="ni-btn ni-btn-secondary" id="paymentModalCancel">Batal</button>
+      <button class="ni-btn ni-btn-primary" id="paymentConfirmBtn">Proses Bayar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Hidden form for submission -->
+<form id="posSubmitForm" method="post" action="{% url 'sales:create' %}" style="display:none">
+  {% csrf_token %}
+  <input type="hidden" name="tanggal" id="formTanggal" value="{{ today|date:'Y-m-d' }}">
+  <input type="hidden" name="deskripsi" id="formDeskripsi" value="POS Sale">
+  <input type="hidden" name="eb_groups_data" id="formEbGroupsData" value="[]">
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pos/pos-cashier.js' %}"></script>
+{% endblock %}
