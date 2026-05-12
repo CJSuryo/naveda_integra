@@ -1,58 +1,28 @@
 from decimal import Decimal
 from typing import List, Tuple
-from django.db.models import Sum, Q
+from django.db.models import Sum
 from apps.entitas_bisnis.models import EntitasBisnis
-from apps.purchase.models import FIFOBatch
+from apps.purchase.models import FIFOBatch, ItemMasterPurchase
 from pos_config.models import StorePOSConfig
-from pos_catalog.models import POSProduct, ProductStoreAvailability, ProductModifierGroup
+from pos_catalog.models import ProductModifierGroup
 
 
-def get_available_products(store: StorePOSConfig):
+def check_stock(item: ItemMasterPurchase, quantity: Decimal, entitas_bisnis: EntitasBisnis) -> Tuple[bool, Decimal]:
     """
-    Return QuerySet of POSProduct for this store, respecting store-level availability overrides.
-    Logic:
-      - ProductStoreAvailability with is_available=True → available (overrides base)
-      - ProductStoreAvailability with is_available=False → unavailable (overrides base)
-      - No override + POSProduct.is_available=True → available
-    """
-    merchant = store.merchant_config
-
-    overridden_available = ProductStoreAvailability.objects.filter(
-        store=store, is_available=True
-    ).values_list('product_id', flat=True)
-
-    overridden_unavailable = ProductStoreAvailability.objects.filter(
-        store=store, is_available=False
-    ).values_list('product_id', flat=True)
-
-    return POSProduct.objects.filter(
-        merchant_config=merchant
-    ).filter(
-        Q(pk__in=overridden_available) |
-        (Q(is_available=True) & ~Q(pk__in=overridden_unavailable))
-    ).select_related('category', 'item_master').prefetch_related('modifier_links__modifier_group__options')
-
-
-def check_stock(product: POSProduct, quantity: Decimal, entitas_bisnis: EntitasBisnis) -> Tuple[bool, Decimal]:
-    """
-    Check if sufficient stock exists for this product.
+    Check if sufficient stock exists for this item.
     Returns (in_stock: bool, available_qty: Decimal).
-    Non-tracked products (services) always return (True, Decimal('0')).
     """
-    if not product.track_inventory:
-        return True, Decimal('0')
-
     available = FIFOBatch.objects.filter(
-        item=product.item_master,
+        item=item,
         remaining_qty__gt=0,
     ).aggregate(total=Sum('remaining_qty'))['total'] or Decimal('0')
 
     return available >= quantity, available
 
 
-def validate_modifier_selections(product: POSProduct, selected_option_ids: List[int]) -> List[str]:
+def validate_modifier_selections(item: ItemMasterPurchase, selected_option_ids: List[int]) -> List[str]:
     """
-    Validate that selected modifier option IDs satisfy the product's modifier group rules.
+    Validate that selected modifier option IDs satisfy the item's modifier group rules.
     Returns list of error strings (empty list if valid).
     """
     from pos_catalog.models import ModifierOption
@@ -64,7 +34,7 @@ def validate_modifier_selections(product: POSProduct, selected_option_ids: List[
     for opt in options:
         selected_by_group.setdefault(opt.group_id, []).append(opt.pk)
 
-    for link in ProductModifierGroup.objects.filter(product=product).select_related('modifier_group'):
+    for link in ProductModifierGroup.objects.filter(item=item).select_related('modifier_group'):
         group = link.modifier_group
         count = len(selected_by_group.get(group.pk, []))
 
