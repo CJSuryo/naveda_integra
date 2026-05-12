@@ -286,6 +286,7 @@
   var akunAutocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
   var stockCheckUrl = '{% url "sales:api_stock_check" %}';
   var sttOffsetUrl = '{% url "sales:api_stt_offset" %}';
+  var sttDefaultsUrl = '{% url "sales:api_stt_defaults" %}';
   var csrfToken = '{{ csrf_token }}';
 
   var ebGroupCount = 0;
@@ -742,12 +743,24 @@
   window.onSTTChange = function (selectEl, rid) {
     var sttId = selectEl.value;
     if (!sttId) return;
-    fetch(sttOffsetUrl + '?stt_id=' + encodeURIComponent(sttId))
+    fetch(sttDefaultsUrl + '?stt_id=' + encodeURIComponent(sttId))
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        if (data.offset_account_id) {
-          var offsetSel = document.getElementById(rid + '_offset');
-          if (offsetSel) offsetSel.value = data.offset_account_id;
+        if (!data.ok) return;
+        var offsetSel = document.getElementById(rid + '_offset');
+        if (offsetSel && data.offset_account_id) offsetSel.value = data.offset_account_id;
+        var revenueSel = document.getElementById(rid + '_revenue');
+        if (revenueSel && data.revenue_account_id) revenueSel.value = data.revenue_account_id;
+        var paymentSel = document.getElementById(rid + '_payment');
+        if (paymentSel && data.payment_account_id) paymentSel.value = data.payment_account_id;
+        // Tax fields — show advanced row if tax_type is set
+        if (data.tax_type) {
+          var advRow = document.getElementById(rid + '_adv');
+          if (advRow) advRow.style.display = '';
+          var taxTypeSel = document.getElementById(rid + '_tax_type');
+          if (taxTypeSel) taxTypeSel.value = data.tax_type;
+          var taxAccountSel = document.getElementById(rid + '_tax_account');
+          if (taxAccountSel && data.tax_account_id) taxAccountSel.value = data.tax_account_id;
         }
       });
   };
