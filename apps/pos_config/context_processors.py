@@ -21,6 +21,6 @@ def pos_nav_context(request):
         if not merchant:
             return {}
         store = StorePOSConfig.objects.filter(merchant_config=merchant, is_active=True).first()
-        return {'pos_merchant': merchant, 'pos_first_store': store}
+        return {'pos_merchant': merchant, 'pos_first_store': store, 'pos_cashier_url': '/sales/pos/'}
     except Exception:
         return {}
