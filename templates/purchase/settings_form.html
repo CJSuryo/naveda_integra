@@ -11,13 +11,61 @@
   <div class="ni-card__body">
     <form method="post">
       {% csrf_token %}
-      {% for field in form %}
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
-        </div>
-      {% endfor %}
+
+      {# Section 1: Pengaturan Umum #}
+      <h3 class="ni-section-title" style="margin-bottom:12px;">Pengaturan Umum</h3>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.nama.id_for_label }}">{{ form.nama.label }}</label>
+        {{ form.nama }}
+        {% if form.nama.errors %}<div class="ni-form-error">{{ form.nama.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.module.id_for_label }}">{{ form.module.label }}</label>
+        {{ form.module }}
+        {% if form.module.errors %}<div class="ni-form-error">{{ form.module.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.direction.id_for_label }}">{{ form.direction.label }}</label>
+        {{ form.direction }}
+        {% if form.direction.errors %}<div class="ni-form-error">{{ form.direction.errors.0 }}</div>{% endif %}
+      </div>
+
+      {# Section 2: Akun Default #}
+      <h3 class="ni-section-title" style="margin-top:24px;margin-bottom:12px;">Akun Default</h3>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_offset_account.id_for_label }}">Offset Account (HPP)</label>
+        {{ form.default_offset_account }}
+        {% if form.default_offset_account.errors %}<div class="ni-form-error">{{ form.default_offset_account.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_revenue_account.id_for_label }}">{{ form.default_revenue_account.label }}</label>
+        {{ form.default_revenue_account }}
+        {% if form.default_revenue_account.errors %}<div class="ni-form-error">{{ form.default_revenue_account.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_payment_account.id_for_label }}">{{ form.default_payment_account.label }}</label>
+        {{ form.default_payment_account }}
+        {% if form.default_payment_account.errors %}<div class="ni-form-error">{{ form.default_payment_account.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_inventory_account.id_for_label }}">{{ form.default_inventory_account.label }}</label>
+        {{ form.default_inventory_account }}
+        {% if form.default_inventory_account.errors %}<div class="ni-form-error">{{ form.default_inventory_account.errors.0 }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_tax_account.id_for_label }}">{{ form.default_tax_account.label }}</label>
+        {{ form.default_tax_account }}
+        {% if form.default_tax_account.errors %}<div class="ni-form-error">{{ form.default_tax_account.errors.0 }}</div>{% endif %}
+      </div>
+
+      {# Section 3: Pajak Default #}
+      <h3 class="ni-section-title" style="margin-top:24px;margin-bottom:12px;">Pajak Default</h3>
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="{{ form.default_tax_type.id_for_label }}">{{ form.default_tax_type.label }}</label>
+        {{ form.default_tax_type }}
+        {% if form.default_tax_type.errors %}<div class="ni-form-error">{{ form.default_tax_type.errors.0 }}</div>{% endif %}
+      </div>
+
       <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'purchase:settings_list' %}" class="ni-btn ni-btn--secondary">Batal</a>

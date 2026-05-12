@@ -630,6 +630,33 @@ def api_stt_offset(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'offset_account_id': '', 'offset_account_text': ''})
 
 
+@login_required
+def api_stt_defaults(request: HttpRequest) -> JsonResponse:
+    """Return all default accounts for a sales SubTransactionType (for POS auto-fill)."""
+    stt_id = request.GET.get('stt_id', '')
+    if not stt_id:
+        return JsonResponse({'ok': False})
+    try:
+        stt = SubTransactionType.objects.select_related(
+            'default_offset_account',
+            'default_revenue_account',
+            'default_payment_account',
+            'default_inventory_account',
+            'default_tax_account',
+        ).get(pk=stt_id, module='sales')
+        return JsonResponse({
+            'ok': True,
+            'offset_account_id': stt.default_offset_account_id or '',
+            'revenue_account_id': stt.default_revenue_account_id or '',
+            'payment_account_id': stt.default_payment_account_id or '',
+            'inventory_account_id': stt.default_inventory_account_id or '',
+            'tax_account_id': stt.default_tax_account_id or '',
+            'tax_type': stt.default_tax_type or '',
+        })
+    except SubTransactionType.DoesNotExist:
+        return JsonResponse({'ok': False})
+
+
 # ── Internal Helpers ─────────────────────────────────────────────────────────
 
 def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None) -> HttpResponse:
