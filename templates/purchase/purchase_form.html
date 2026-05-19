@@ -6,22 +6,86 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
 <link rel="stylesheet" href="{% static 'css/transaction-forms.css' %}">
 <style>
+  /* ── Card & table ─────────────────────────────────────────────── */
   .ni-purchase-eb-card { border: 1px solid var(--ni-border); border-radius: var(--ni-radius); padding: 16px; margin-bottom: 16px; background: var(--ni-bg-card); }
-  .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
-  .ni-purchase-eb-card__header select { flex: 1; min-width: 0; }
+  .ni-purchase-eb-card__header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ni-purchase-eb-card__header .eb-select-wrap { flex: 1; min-width: 0; }
   .ni-purchase-item-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
   .ni-purchase-item-table th { background: var(--ni-bg); padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--ni-border); font-size: 0.8rem; color: var(--ni-text-muted); }
   .ni-purchase-item-table td { padding: 6px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
-  .ni-purchase-item-table tr:last-child td { border-bottom: none; }
+  .ni-purchase-item-table tbody tr:last-child td { border-bottom: none; }
   .ni-purchase-input { width: 100%; padding: 6px 10px; border: 1px solid var(--ni-border); border-radius: var(--ni-radius-sm); font-size: 0.875rem; background: var(--ni-bg-card); color: var(--ni-text); }
   .ni-purchase-input:focus { outline: none; border-color: var(--ni-primary); }
   .ni-purchase-input[readonly] { background: var(--ni-bg); opacity: 0.7; cursor: default; }
   .ni-purchase-item-table-wrapper { overflow-x: auto; }
-  /* TomSelect dropdown must appear above modal backdrop (z-index: 2000) */
+  /* Subtotal footer */
+  .ni-purchase-item-table tfoot td { background: var(--ni-bg); font-size: 0.82rem; color: var(--ni-text-muted); border-top: 2px solid var(--ni-border); padding: 8px 10px; }
+  /* CoA hint below item / stt */
+  .ni-coa-hint { font-size: 0.72rem; color: var(--ni-text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; line-height: 1.3; }
+  /* Row error highlight */
+  .ni-purchase-item-table tr.has-error td { background: rgba(239,68,68,0.05); }
+  .ni-row-err-msg td { padding: 1px 10px 5px; font-size: 0.72rem; color: var(--ni-danger); border-bottom: none !important; }
+
+  /* ── Sticky bar ────────────────────────────────────────────────── */
+  .ni-sticky-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 1500; background: var(--ni-bg-card); border-top: 2px solid var(--ni-border); box-shadow: 0 -2px 12px rgba(0,0,0,0.08); padding: 10px 24px; display: flex; align-items: center; gap: 16px; }
+  .ni-sticky-bar__stats { display: flex; gap: 20px; flex: 1; flex-wrap: wrap; }
+  .ni-sticky-stat { font-size: 0.8rem; color: var(--ni-text-muted); }
+  .ni-sticky-stat strong { color: var(--ni-text); }
+  body { padding-bottom: 68px; }
+
+  /* ── Journal slide panel ───────────────────────────────────────── */
+  .ni-journal-backdrop { position: fixed; inset: 0; background: rgba(15,23,42,0.3); z-index: 2200; display: none; cursor: pointer; }
+  .ni-journal-backdrop--open { display: block; }
+  .ni-journal-panel { position: fixed; top: 0; right: 0; height: 100%; width: min(520px, 96vw); background: var(--ni-bg-card); border-left: 1px solid var(--ni-border); box-shadow: -4px 0 32px rgba(0,0,0,0.12); z-index: 2201; transform: translateX(100%); transition: transform 0.28s cubic-bezier(0.16,1,0.3,1); display: flex; flex-direction: column; }
+  .ni-journal-panel--open { transform: translateX(0); }
+  .ni-journal-panel__header { padding: 16px 20px; border-bottom: 1px solid var(--ni-border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .ni-journal-panel__body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .ni-journal-panel__footer { padding: 12px 20px; border-top: 1px solid var(--ni-border); background: var(--ni-bg); flex-shrink: 0; display: flex; justify-content: flex-end; }
+
+  /* ── Tooltips ──────────────────────────────────────────────────── */
+  .ni-tip { position: relative; display: inline-flex; align-items: center; gap: 3px; cursor: default; }
+  .ni-tip__icon { width: 13px; height: 13px; color: var(--ni-text-muted); cursor: help; flex-shrink: 0; }
+  .ni-tip__box { display: none; position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #f1f5f9; font-size: 0.72rem; line-height: 1.5; padding: 7px 10px; border-radius: 6px; width: 210px; white-space: normal; z-index: 200; pointer-events: none; font-weight: 400; box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+  .ni-tip__box::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1e293b; }
+  .ni-tip:hover .ni-tip__box { display: block; }
+
+  /* ── Loading spinner ───────────────────────────────────────────── */
+  @keyframes ni-spin { to { transform: rotate(360deg); } }
+  .ni-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #fff; border-radius: 50%; animation: ni-spin 0.7s linear infinite; vertical-align: -2px; margin-right: 4px; }
+
+  /* ── Unverified badge ──────────────────────────────────────────── */
+  .ni-badge-warn { display: inline-block; font-size: 0.68rem; background: var(--ni-warning, #f59e0b); color: #fff; border-radius: 20px; padding: 1px 7px; margin-left: 4px; vertical-align: middle; font-weight: 600; line-height: 1.6; }
+
+  /* ── Empty state ───────────────────────────────────────────────── */
+  .ni-purchase-empty { text-align: center; padding: 40px 20px; color: var(--ni-text-muted); border: 2px dashed var(--ni-border); border-radius: var(--ni-radius); }
+  .ni-purchase-empty svg { width: 48px; height: 48px; margin: 0 auto 12px; display: block; opacity: 0.35; }
+  .ni-purchase-empty__title { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; color: var(--ni-text); }
+  .ni-purchase-empty__sub { font-size: 0.8rem; margin-bottom: 16px; }
+
+  /* ── Wizard ────────────────────────────────────────────────────── */
+  .ni-wizard-bar { display: flex; border-radius: var(--ni-radius); overflow: hidden; border: 1px solid var(--ni-border); margin-bottom: 20px; }
+  .ni-wizard-step { flex: 1; text-align: center; padding: 9px 4px; font-size: 0.8rem; color: var(--ni-text-muted); background: var(--ni-bg); border-right: 1px solid var(--ni-border); }
+  .ni-wizard-step:last-child { border-right: none; }
+  .ni-wizard-step--active { background: var(--ni-primary); color: #fff; font-weight: 600; }
+  .ni-wizard-step--done { color: var(--ni-success, #16a34a); }
+  /* Type cards */
+  .ni-type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 8px 0 4px; }
+  .ni-type-card { padding: 12px 8px; border: 2px solid var(--ni-border); border-radius: var(--ni-radius); text-align: center; cursor: pointer; font-size: 0.8rem; line-height: 1.4; transition: all 0.15s; color: var(--ni-text); }
+  .ni-type-card:hover { border-color: var(--ni-primary); background: rgba(0,84,166,0.04); }
+  .ni-type-card--selected { border-color: var(--ni-primary); background: rgba(0,84,166,0.09); color: var(--ni-primary); font-weight: 600; }
+  .ni-type-card__badge { display: inline-block; font-size: 0.65rem; border-radius: 4px; padding: 1px 5px; margin-top: 4px; background: var(--ni-bg); color: var(--ni-text-muted); }
+
+  /* Grand total bar */
+  #grandTotalBar { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+
+  /* TomSelect above backdrops */
   .ts-dropdown { z-index: 2500 !important; }
+
   @media (max-width: 768px) {
     .ni-purchase-eb-card { padding: 12px; }
-    .ni-purchase-item-table { min-width: 600px; }
+    .ni-purchase-item-table { min-width: 520px; }
+    .ni-sticky-bar { padding: 8px 12px; gap: 8px; }
+    .ni-sticky-bar__stats { gap: 10px; }
   }
 </style>
 {% endblock %}
@@ -36,35 +100,43 @@
 
 {% if errors %}
 <div class="ni-alert ni-alert--danger" style="margin-bottom:16px;">
-  <ul style="margin:0;padding-left:16px;">
-    {% for key, msg in errors.items %}<li>{{ msg }}</li>{% endfor %}
-  </ul>
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  <div>
+    <ul style="margin:0;padding-left:16px;">
+      {% for key, msg in errors.items %}
+      <li><a href="#field-{{ key }}" onclick="scrollToErrorField('{{ key }}')" style="color:inherit;">{{ msg }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
 </div>
 {% endif %}
+
+<div class="ni-alert ni-alert--danger" id="formErrorSummary" style="display:none;margin-bottom:16px;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  <div id="formErrorList"></div>
+</div>
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
     <form id="purchaseForm" method="post">
       {% csrf_token %}
-      <!-- Header fields -->
       <div class="ni-form-row" style="margin-bottom:20px;">
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Transaction ID</label>
-          <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}PUR-XXX-### (auto){% endif %}" readonly style="opacity:0.6;cursor:default;">
+          <input type="text" class="ni-input" value="{% if purchase %}{{ purchase.transaction_id }}{% else %}PUR-XXX-### (auto){% endif %}" readonly tabindex="-1" style="opacity:0.6;cursor:default;">
         </div>
-        <div class="ni-form-group" style="margin:0;">
+        <div class="ni-form-group" style="margin:0;" id="field-tanggal">
           <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
           <input type="date" name="tanggal" id="purchaseTanggal" class="ni-input" value="{{ initial_tanggal|date:'Y-m-d'|default:today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
         </div>
       </div>
-      <div class="ni-form-group" style="margin-bottom:24px;">
+      <div class="ni-form-group" style="margin-bottom:24px;" id="field-deskripsi">
         <label class="ni-form-label">Deskripsi</label>
         <textarea name="deskripsi" class="ni-input" rows="2" placeholder="Deskripsi transaksi pembelian (opsional)">{% if purchase %}{{ purchase.deskripsi }}{% endif %}</textarea>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--ni-border);margin-bottom:20px;">
 
-      <!-- Entitas Bisnis Groups -->
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <h3 style="margin:0;font-size:1rem;color:var(--ni-text);">
           <i data-lucide="building-2" style="width:18px;height:18px;vertical-align:text-bottom;"></i>
@@ -75,45 +147,80 @@
         </button>
       </div>
 
-      <div id="ebGroupsContainer">
-        <!-- EB groups inserted by JS -->
+      <div id="ebEmptyState" class="ni-purchase-empty" style="display:none;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <div class="ni-purchase-empty__title">Belum ada entitas bisnis ditambahkan</div>
+        <div class="ni-purchase-empty__sub">Tambahkan entitas bisnis untuk mulai memasukkan item pembelian</div>
+        <button type="button" class="ni-btn ni-btn--primary" onclick="addEBGroup()">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Entitas Bisnis
+        </button>
       </div>
+
+      <div id="ebGroupsContainer"></div>
 
       <input type="hidden" name="eb_groups_data" id="ebGroupsData">
 
-      <!-- Journal Preview -->
-      <div id="journalPreview" class="ni-journal-preview" style="display:none;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <h4 style="margin:0;font-size:0.9rem;color:var(--ni-text);">
-            <i data-lucide="book-open" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
-            Journal Preview
-          </h4>
-          <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="closeJournalPreview()" style="padding:4px 8px;">
-            <i data-lucide="x" style="width:14px;height:14px"></i> Tutup
-          </button>
-        </div>
-        <table>
-          <thead>
-            <tr><th>No</th><th>Entitas Bisnis</th><th>Akun</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
-          </thead>
-          <tbody id="journalPreviewBody"></tbody>
-        </table>
+      <div id="grandTotalBar" style="display:none;margin-top:16px;padding:12px 16px;background:var(--ni-bg);border-radius:var(--ni-radius);border:1px solid var(--ni-border);">
+        <span style="font-size:0.85rem;color:var(--ni-text-muted);">Grand Total</span>
+        <span id="grandTotalDisplay" style="font-size:1.1rem;font-weight:700;color:var(--ni-primary);">Rp 0</span>
       </div>
 
       <div class="ni-btn-row" style="margin-top:24px;">
-        <button type="button" class="ni-btn ni-btn--secondary" onclick="showJournalPreview()">
+        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="openJournalPanel()">
           <i data-lucide="eye" style="width:16px;height:16px"></i> Journal Preview
         </button>
         <button type="submit" class="ni-btn ni-btn--primary" id="purchaseSubmit">
           <i data-lucide="save" style="width:16px;height:16px"></i> Simpan
+          <span class="ni-badge-warn" id="unverifiedBadge">Belum diverifikasi</span>
         </button>
-        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Item Master Create Modal -->
+<!-- ── Journal slide panel ──────────────────────────────────────── -->
+<div id="journalBackdrop" class="ni-journal-backdrop" onclick="closeJournalPanel()"></div>
+<div id="journalPanel" class="ni-journal-panel">
+  <div class="ni-journal-panel__header">
+    <h4 style="margin:0;font-size:0.95rem;display:flex;align-items:center;gap:8px;">
+      <i data-lucide="book-open" style="width:16px;height:16px;"></i> Journal Preview
+    </h4>
+    <button type="button" class="ni-modal__close" onclick="closeJournalPanel()" aria-label="Tutup">
+      <i data-lucide="x" style="width:18px;height:18px"></i>
+    </button>
+  </div>
+  <div class="ni-journal-panel__body">
+    <div class="ni-journal-preview" style="margin:0;padding:0;background:none;">
+      <table>
+        <thead>
+          <tr><th>No</th><th>Entitas Bisnis</th><th>Akun</th><th class="ni-text-right">Debit (Rp)</th><th class="ni-text-right">Kredit (Rp)</th></tr>
+        </thead>
+        <tbody id="journalPanelBody">
+          <tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);padding:24px;">Klik "Journal Preview" untuk memuat entri.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="ni-journal-panel__footer">
+    <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="closeJournalPanel()">Tutup</button>
+  </div>
+</div>
+
+<!-- ── Sticky progress bar ─────────────────────────────────────── -->
+<div class="ni-sticky-bar" id="purchaseStickyBar">
+  <div class="ni-sticky-bar__stats">
+    <div class="ni-sticky-stat">Tanggal: <strong id="stickyTanggal">—</strong></div>
+    <div class="ni-sticky-stat">Grup: <strong id="stickyGroups">0</strong></div>
+    <div class="ni-sticky-stat">Item: <strong id="stickyItems">0</strong></div>
+    <div class="ni-sticky-stat">Total: <strong id="stickyGrandTotal">Rp 0</strong></div>
+  </div>
+  <button type="button" id="purchaseStickySubmit" class="ni-btn ni-btn--primary ni-btn--sm" onclick="document.getElementById('purchaseForm').requestSubmit()">
+    <i data-lucide="save" style="width:14px;height:14px"></i> Simpan
+  </button>
+</div>
+
+<!-- ── Item Master Modal (wizard) ─────────────────────────────── -->
 <div class="ni-modal-backdrop" id="itemMasterModalBackdrop">
   <div class="ni-modal ni-modal--lg">
     <div class="ni-modal__header">
@@ -123,140 +230,192 @@
       </button>
     </div>
     <div class="ni-modal__body">
-      <div class="ni-form-group">
-        <label class="ni-form-label">Nama Item <span style="color:var(--ni-danger)">*</span></label>
-        <input type="text" id="modal_nama" class="ni-input" placeholder="Nama item">
+      <div class="ni-wizard-bar">
+        <div class="ni-wizard-step ni-wizard-step--active" id="wizStep1">1. Tipe Item</div>
+        <div class="ni-wizard-step" id="wizStep2">2. Detail &amp; Akun</div>
       </div>
-      <div class="ni-form-row">
+
+      <!-- Step 1 -->
+      <div id="modalStep1">
         <div class="ni-form-group">
-          <label class="ni-form-label">Tipe Item</label>
-          <select id="modal_tipe_item" class="ni-input" onchange="onModalTipeItemChange()">
-            <option value="RM">Raw Material (Satuan)</option>
-            <option value="FG">Finished Good (Satuan)</option>
-            <option value="ITM">Item Lainnya (Satuan)</option>
-            <option value="RMB">Raw Material (Bulk)</option>
-            <option value="FGB">Finished Good (Bulk)</option>
-            <option value="ITMB">Item Lainnya (Bulk)</option>
-            <option value="ATP">Aset Tetap</option>
-            <option value="ALL">Aset Lainnya</option>
-          </select>
+          <label class="ni-form-label">Nama Item <span style="color:var(--ni-danger)">*</span></label>
+          <input type="text" id="modal_nama" class="ni-input" placeholder="Nama item">
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Kategori</label>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <select id="modal_kategori" class="ni-input" disabled style="flex:1;">
-              <option value="">— Pilih tipe item dahulu —</option>
-            </select>
-            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="openKategoriModal()" title="Tambah Kategori Baru" style="padding:6px 8px;flex-shrink:0;">
-              <i data-lucide="plus" style="width:16px;height:16px"></i>
-            </button>
+        <div class="ni-form-group" style="margin-bottom:8px;">
+          <label class="ni-form-label">Pilih Tipe Item <span style="color:var(--ni-danger)">*</span></label>
+          <div class="ni-type-grid" id="tipeCardGrid">
+            <div class="ni-type-card ni-type-card--selected" data-tipe="RM" onclick="selectTipeCard(this)">
+              Raw Material<br><span class="ni-type-card__badge">Satuan</span>
+            </div>
+            <div class="ni-type-card" data-tipe="FG" onclick="selectTipeCard(this)">
+              Finished Good<br><span class="ni-type-card__badge">Satuan</span>
+            </div>
+            <div class="ni-type-card" data-tipe="ITM" onclick="selectTipeCard(this)">
+              Item Lainnya<br><span class="ni-type-card__badge">Satuan</span>
+            </div>
+            <div class="ni-type-card" data-tipe="RMB" onclick="selectTipeCard(this)">
+              Raw Material<br><span class="ni-type-card__badge">Bulk</span>
+            </div>
+            <div class="ni-type-card" data-tipe="FGB" onclick="selectTipeCard(this)">
+              Finished Good<br><span class="ni-type-card__badge">Bulk</span>
+            </div>
+            <div class="ni-type-card" data-tipe="ITMB" onclick="selectTipeCard(this)">
+              Item Lainnya<br><span class="ni-type-card__badge">Bulk</span>
+            </div>
+            <div class="ni-type-card" data-tipe="ATP" onclick="selectTipeCard(this)">
+              Aset Tetap
+            </div>
+            <div class="ni-type-card" data-tipe="ALL" onclick="selectTipeCard(this)">
+              Aset Lainnya
+            </div>
           </div>
         </div>
+        <div id="modal_step1_error" class="ni-form-error" style="display:none;margin-top:8px;"></div>
       </div>
-      <!-- Inventory fields (RM/FG/ITM) -->
-      <div id="modal_inventory_fields">
+
+      <!-- Step 2 -->
+      <div id="modalStep2" style="display:none;">
+        <input type="hidden" id="modal_tipe_item" value="RM">
         <div class="ni-form-row">
           <div class="ni-form-group">
-            <label class="ni-form-label">Velocity Category</label>
-            <select id="modal_velocity" class="ni-input">
+            <label class="ni-form-label">Kategori</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <select id="modal_kategori" class="ni-input" disabled style="flex:1;">
+                <option value="">— Pilih tipe item dahulu —</option>
+              </select>
+              <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="openKategoriModal()" title="Tambah Kategori Baru" style="padding:6px 8px;flex-shrink:0;">
+                <i data-lucide="plus" style="width:16px;height:16px"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Inventory fields (RM/FG/ITM/RMB/FGB/ITMB) -->
+        <div id="modal_inventory_fields">
+          <div class="ni-form-row">
+            <div class="ni-form-group">
+              <label class="ni-form-label">
+                <span class="ni-tip">Velocity Category
+                  <svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span class="ni-tip__box">Kecepatan perputaran stok item. Fast Moving = sering terjual, Dead Stock = jarang bergerak.</span>
+                </span>
+              </label>
+              <select id="modal_velocity" class="ni-input">
+                <option value="">— Pilih —</option>
+                <option value="fast">Fast Moving</option>
+                <option value="medium">Medium (B)</option>
+                <option value="slow">Slow (C)</option>
+                <option value="dead">Dead Stock</option>
+              </select>
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">
+                <span class="ni-tip">CoA Account
+                  <svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span class="ni-tip__box">Akun buku besar (Chart of Accounts) untuk mencatat nilai persediaan item ini.</span>
+                </span>
+              </label>
+              <select id="modal_coa_account" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+            </div>
+          </div>
+          <div class="ni-form-row">
+            <div class="ni-form-group">
+              <label class="ni-form-label">Lama Kadaluarsa (Hari)</label>
+              <input type="number" id="modal_lama_kadaluarsa" class="ni-input" min="0" placeholder="Jumlah hari default">
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">
+                <span class="ni-tip">Threshold Days Outstanding
+                  <svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span class="ni-tip__box">Batas hari stok dianggap tidak bergerak sebelum diperlakukan sebagai slow/dead stock.</span>
+                </span>
+              </label>
+              <input type="number" id="modal_threshold" class="ni-input" min="0">
+            </div>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">
+              <span class="ni-tip">Metode Biaya Persediaan
+                <svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <span class="ni-tip__box">Metode perhitungan harga pokok persediaan: FIFO (masuk pertama keluar pertama), Average (rata-rata tertimbang), dll.</span>
+              </span>
+            </label>
+            <select id="modal_metode_biaya" class="ni-input">
               <option value="">— Pilih —</option>
-              <option value="fast">Fast Moving</option>
-              <option value="medium">Medium (B)</option>
-              <option value="slow">Slow (C)</option>
-              <option value="dead">Dead Stock</option>
+              <option value="fifo">FIFO (First In First Out)</option>
+              <option value="lifo">LIFO (Last In First Out)</option>
+              <option value="average">Average (Rata-rata Tertimbang)</option>
+              <option value="weighted_moving_average">Weighted Moving Average</option>
             </select>
           </div>
+        </div>
+        <!-- Aset Tetap fields (ATP) -->
+        <div id="modal_atp_fields" style="display:none;">
+          <div class="ni-form-row">
+            <div class="ni-form-group">
+              <label class="ni-form-label">CoA Account</label>
+              <select id="modal_coa_account_atp" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+              <input type="number" id="modal_masa_manfaat_atp" class="ni-input" min="1">
+            </div>
+          </div>
           <div class="ni-form-group">
-            <label class="ni-form-label">CoA Account</label>
-            <select id="modal_coa_account" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+            <label class="ni-form-label">Metode Penyusutan</label>
+            <select id="modal_metode_penyusutan" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="double_declining">Saldo Menurun Ganda (Double Declining)</option>
+              <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+            </select>
           </div>
         </div>
-        <div class="ni-form-row">
-          <div class="ni-form-group">
-            <label class="ni-form-label">Lama Kadaluarsa (Hari)</label>
-            <input type="number" id="modal_lama_kadaluarsa" class="ni-input" min="0" placeholder="Jumlah hari default">
+        <!-- Aset Lainnya fields (ALL) -->
+        <div id="modal_all_fields" style="display:none;">
+          <div class="ni-form-row">
+            <div class="ni-form-group">
+              <label class="ni-form-label">CoA Account</label>
+              <select id="modal_coa_account_all" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Masa Manfaat (Tahun)</label>
+              <input type="number" id="modal_masa_manfaat_all" class="ni-input" min="1">
+            </div>
           </div>
           <div class="ni-form-group">
-            <label class="ni-form-label">Threshold Days Outstanding</label>
-            <input type="number" id="modal_threshold" class="ni-input" min="0">
-          </div>
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Metode Biaya Persediaan</label>
-          <select id="modal_metode_biaya" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="fifo">FIFO (First In First Out)</option>
-            <option value="lifo">LIFO (Last In First Out)</option>
-            <option value="average">Average (Rata-rata Tertimbang)</option>
-            <option value="weighted_moving_average">Weighted Moving Average</option>
-          </select>
-        </div>
-      </div>
-      <!-- Aset Tetap fields (ATP) -->
-      <div id="modal_atp_fields" style="display:none;">
-        <div class="ni-form-row">
-          <div class="ni-form-group">
-            <label class="ni-form-label">CoA Account</label>
-            <select id="modal_coa_account_atp" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
-          </div>
-          <div class="ni-form-group">
-            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
-            <input type="number" id="modal_masa_manfaat_atp" class="ni-input" min="1">
-          </div>
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Metode Penyusutan</label>
-          <select id="modal_metode_penyusutan" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="straight_line">Garis Lurus (Straight Line)</option>
-            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
-            <option value="double_declining">Saldo Menurun Ganda (Double Declining Balance)</option>
-            <option value="sum_of_years">Jumlah Angka Tahun (Sum of Years Digits)</option>
-            <option value="units_of_production">Unit Produksi (Units of Production)</option>
-          </select>
-        </div>
-      </div>
-      <!-- Aset Lainnya fields (ALL) -->
-      <div id="modal_all_fields" style="display:none;">
-        <div class="ni-form-row">
-          <div class="ni-form-group">
-            <label class="ni-form-label">CoA Account</label>
-            <select id="modal_coa_account_all" class="ni-input" placeholder="Ketik kode/nama akun..."></select>
-          </div>
-          <div class="ni-form-group">
-            <label class="ni-form-label">Masa Manfaat (Tahun)</label>
-            <input type="number" id="modal_masa_manfaat_all" class="ni-input" min="1">
+            <label class="ni-form-label">Metode Amortisasi</label>
+            <select id="modal_metode_amortisasi" class="ni-input">
+              <option value="">— Pilih —</option>
+              <option value="straight_line">Garis Lurus (Straight Line)</option>
+              <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
+              <option value="units_of_production">Unit Produksi (Units of Production)</option>
+              <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
+            </select>
           </div>
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">Metode Amortisasi</label>
-          <select id="modal_metode_amortisasi" class="ni-input">
-            <option value="">— Pilih —</option>
-            <option value="straight_line">Garis Lurus (Straight Line)</option>
-            <option value="declining_balance">Saldo Menurun (Declining Balance)</option>
-            <option value="units_of_production">Unit Produksi (Units of Production)</option>
-            <option value="revenue_based">Berbasis Pendapatan (Revenue Based)</option>
-          </select>
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <div id="modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
+            <em>Akan otomatis di-set dari form purchase</em>
+          </div>
         </div>
+        <div id="modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
       </div>
-      <div class="ni-form-group">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <div id="modal_eb_display" style="padding:8px;background:var(--ni-bg);border-radius:var(--ni-radius-sm);font-size:0.875rem;color:var(--ni-text-muted);">
-          <em>Akan otomatis di-set dari form purchase</em>
-        </div>
-      </div>
-      <div id="modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
     </div>
     <div class="ni-modal__footer">
       <button type="button" class="ni-btn ni-btn--secondary" onclick="closeItemModal()">Batal</button>
-      <button type="button" class="ni-btn ni-btn--primary" onclick="submitItemModal()">
+      <button type="button" class="ni-btn ni-btn--primary" id="modalBtnNext" onclick="modalNextStep()">Lanjut →</button>
+      <button type="button" class="ni-btn ni-btn--secondary" id="modalBtnBack" style="display:none;" onclick="modalBackStep()">← Kembali</button>
+      <button type="button" class="ni-btn ni-btn--primary" id="modalBtnSave" style="display:none;" onclick="submitItemModal()">
         <i data-lucide="save" style="width:16px;height:16px"></i> Simpan Item
       </button>
     </div>
   </div>
 </div>
 
-<!-- Kategori Create Modal -->
+<!-- ── Kategori Create Modal ────────────────────────────────────── -->
 <div class="ni-modal-backdrop" id="kategoriModalBackdrop" style="z-index:2100;">
   <div class="ni-modal ni-modal--sm">
     <div class="ni-modal__header">
@@ -278,7 +437,7 @@
       </div>
       <div class="ni-form-group">
         <label class="ni-form-label">Tipe Item</label>
-        <input type="text" id="kat_modal_tipe_display" class="ni-input" readonly style="opacity:0.6;">
+        <input type="text" id="kat_modal_tipe_display" class="ni-input" readonly tabindex="-1" style="opacity:0.6;">
         <small style="color:var(--ni-text-muted);">Otomatis dari tipe item yang dipilih</small>
       </div>
       <div id="kat_modal_error" class="ni-form-error" style="display:none;margin-bottom:8px;"></div>
@@ -291,7 +450,6 @@
     </div>
   </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
@@ -301,49 +459,43 @@
   'use strict';
 
   var itemAutocompleteUrl = '{% url "purchase:api_item_autocomplete" %}';
-  var itemCreateUrl = '{% url "purchase:api_item_create" %}';
-  var sttOffsetUrl = '{% url "purchase:api_stt_offset" %}';
-  var journalPreviewUrl = '{% url "purchase:api_journal_preview" %}';
-  var kategoriFilterUrl = '{% url "purchase:api_kategori_filter" %}';
-  var kategoriCreateUrl = '{% url "purchase:api_kategori_create" %}';
+  var itemCreateUrl       = '{% url "purchase:api_item_create" %}';
+  var sttOffsetUrl        = '{% url "purchase:api_stt_offset" %}';
+  var journalPreviewUrl   = '{% url "purchase:api_journal_preview" %}';
+  var kategoriFilterUrl   = '{% url "purchase:api_kategori_filter" %}';
+  var kategoriCreateUrl   = '{% url "purchase:api_kategori_create" %}';
   var akunAutocompleteUrl = '{% url "jurnal:akun_autocomplete" %}';
   var csrfToken = '{{ csrf_token }}';
 
-  var ebGroupCount = 0;
-  var itemCounters = {};
+  var ebGroupCount  = 0;
+  var itemCounters  = {};
+  var BULK_TYPES    = ['RMB', 'FGB', 'ITMB'];
 
-  // Data from server (for edit mode)
-  var existingGroups = {{ eb_groups_json|default:"[]"|safe }};
-
-  // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
-  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
-
-  // Sub-transaction type options
-  var sttOptions = [
+  var existingGroups  = {{ eb_groups_json|default:"[]"|safe }};
+  var ebOptions       = {{ eb_options_json|default:"[]"|safe }};
+  var sttOptions      = [
     {% for stt in sub_transaction_types %}
     { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
     {% endfor %}
   ];
 
-  // Item modal state
   var _modalCallbackRid = null;
   var _modalCallbackGid = null;
+  var _journalVerified  = false;
+  var _formDirty        = false;
+  var _wizardTipe       = 'RM';
+  var _previewDebounce  = null;
+
+  // ── Helpers ──────────────────────────────────────────────────────
 
   function formatNum(n) {
     var num = parseFloat(n || 0);
     return num.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
   }
 
-  /**
-   * Resolve the lv1 ID from an EB selection string like "lv1:5", "lv2:3", etc.
-   * Returns the lv1 value portion by looking up ebOptions.
-   */
   function getEBLv1Id(ebValue) {
     if (!ebValue) return '';
-    // For lv1:X, the lv1 id is X directly
     if (ebValue.indexOf('lv1:') === 0) return ebValue.split(':')[1];
-    // For lv2/lv3, we need to find the parent lv1 — traverse ebOptions
-    // ebOptions is ordered hierarchically: each lv2/lv3 follows its parent lv1
     var lastLv1 = '';
     for (var i = 0; i < ebOptions.length; i++) {
       if (ebOptions[i].value.indexOf('lv1:') === 0) lastLv1 = ebOptions[i].value.split(':')[1];
@@ -352,7 +504,150 @@
     return '';
   }
 
-  // ── Add EB Group ──────────────────────────────────────────────────────────
+  function getGidFromRid(rid) {
+    var idx = rid.lastIndexOf('_item_');
+    return idx !== -1 ? rid.substring(0, idx) : '';
+  }
+
+  // ── Currency mask ─────────────────────────────────────────────────
+
+  function initCurrencyMask(input) {
+    input.addEventListener('focus', function () {
+      var raw = this.dataset.rawValue || '';
+      this.value = raw === '0' ? '' : (raw || '');
+      this.select();
+    });
+    input.addEventListener('input', function () {
+      var digits = this.value.replace(/\D/g, '');
+      this.value = digits;
+      this.dataset.rawValue = digits || '0';
+    });
+    input.addEventListener('blur', function () {
+      var raw = parseInt(this.dataset.rawValue || '0') || 0;
+      this.dataset.rawValue = String(raw);
+      this.value = raw > 0 ? raw.toLocaleString('id-ID') : '';
+    });
+  }
+
+  function rawPrice(input) {
+    if (!input) return 0;
+    return parseFloat(input.dataset.rawValue || '0') || 0;
+  }
+
+  // ── Totals ────────────────────────────────────────────────────────
+
+  function getGroupTotal(gid) {
+    var tbody = document.getElementById(gid + '_items');
+    if (!tbody) return 0;
+    var total = 0;
+    tbody.querySelectorAll('tr:not(.advanced-row)').forEach(function (tr) {
+      var rid = tr.id;
+      if (!rid) return;
+      var tipeItem = tr.dataset.tipeItem || '';
+      if (BULK_TYPES.indexOf(tipeItem) !== -1) {
+        var bulkEl = document.getElementById(rid + '_bulk_value');
+        total += parseFloat(bulkEl ? bulkEl.value : 0) || 0;
+      } else {
+        var qty = parseFloat((document.getElementById(rid + '_qty') || {}).value) || 0;
+        total += qty * rawPrice(document.getElementById(rid + '_price'));
+      }
+    });
+    return total;
+  }
+
+  function updateGroupTotal(gid) {
+    var t = getGroupTotal(gid);
+    var el = document.getElementById(gid + '_subtotal');
+    if (el) el.textContent = 'Rp ' + formatNum(t);
+    updateGrandTotal();
+  }
+
+  function updateGrandTotal() {
+    var grand = 0;
+    document.querySelectorAll('.ni-purchase-eb-card').forEach(function (card) {
+      grand += getGroupTotal(card.id);
+    });
+    var fmt = 'Rp ' + formatNum(grand);
+    var el = document.getElementById('grandTotalDisplay');
+    var bar = document.getElementById('grandTotalBar');
+    var sticky = document.getElementById('stickyGrandTotal');
+    if (el) el.textContent = fmt;
+    if (bar) bar.style.display = grand > 0 ? 'flex' : 'none';
+    if (sticky) sticky.textContent = fmt;
+    updateStickyBar();
+  }
+
+  function updateStickyBar() {
+    var tanggal = (document.getElementById('purchaseTanggal') || {}).value || '—';
+    var groups  = document.querySelectorAll('.ni-purchase-eb-card').length;
+    var items   = document.querySelectorAll('#ebGroupsContainer tbody tr:not(.advanced-row)').length;
+    var el = function (id) { return document.getElementById(id); };
+    if (el('stickyTanggal')) el('stickyTanggal').textContent = tanggal;
+    if (el('stickyGroups'))  el('stickyGroups').textContent  = groups;
+    if (el('stickyItems'))   el('stickyItems').textContent   = items;
+  }
+
+  // ── Toast / undo ─────────────────────────────────────────────────
+
+  function getToastContainer() {
+    var c = document.querySelector('.ni-toast-container');
+    if (!c) { c = document.createElement('div'); c.className = 'ni-toast-container'; document.body.appendChild(c); }
+    return c;
+  }
+
+  function dismissToast(toast) {
+    if (!toast || !toast.parentNode) return;
+    toast.classList.add('ni-toast--dismissing');
+    setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 220);
+  }
+
+  function showUndoToast(message, undoFn) {
+    var container = getToastContainer();
+    var toast = document.createElement('div');
+    toast.className = 'ni-toast ni-toast--warning';
+
+    var content = document.createElement('div');
+    content.className = 'ni-toast__content';
+    content.innerHTML = '<div class="ni-toast__message">' + message + '</div>';
+
+    var undoBtn = document.createElement('button');
+    undoBtn.className = 'ni-btn ni-btn--sm ni-btn--secondary';
+    undoBtn.style.cssText = 'flex-shrink:0;font-size:0.75rem;white-space:nowrap;';
+    undoBtn.textContent = 'Batalkan';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'ni-toast__close';
+    closeBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+
+    toast.appendChild(content);
+    toast.appendChild(undoBtn);
+    toast.appendChild(closeBtn);
+    container.appendChild(toast);
+
+    var fired = false;
+    var timer = setTimeout(function () { dismissToast(toast); }, 5000);
+
+    undoBtn.addEventListener('click', function () {
+      if (fired) return;
+      fired = true;
+      clearTimeout(timer);
+      dismissToast(toast);
+      undoFn();
+    });
+    closeBtn.addEventListener('click', function () { clearTimeout(timer); dismissToast(toast); });
+  }
+
+  // ── Empty state ───────────────────────────────────────────────────
+
+  function checkEmptyState() {
+    var groups = document.querySelectorAll('.ni-purchase-eb-card').length;
+    var es = document.getElementById('ebEmptyState');
+    if (es) es.style.display = groups === 0 ? '' : 'none';
+    updateStickyBar();
+  }
+
+  // ── EB Group ──────────────────────────────────────────────────────
+
   window.addEBGroup = function (prefill) {
     ebGroupCount++;
     var gid = 'eb_group_' + ebGroupCount;
@@ -371,122 +666,178 @@
 
     card.innerHTML =
       '<div class="ni-purchase-eb-card__header">' +
-        '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);"></i>' +
-        '<select class="ni-input eb-select" data-gid="' + gid + '" onchange="onEBChange(\'' + gid + '\')">' + ebSelectOptions + '</select>' +
+        '<i data-lucide="building-2" style="width:18px;height:18px;color:var(--ni-primary);flex-shrink:0;"></i>' +
+        '<div class="eb-select-wrap">' +
+          '<select class="ni-input eb-select" data-gid="' + gid + '" onchange="onEBChange(\'' + gid + '\')">' + ebSelectOptions + '</select>' +
+        '</div>' +
+        '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="toggleAdvanced(\'' + gid + '\')" title="Advanced fields untuk semua item" style="white-space:nowrap;">' +
+          '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced' +
+        '</button>' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
           '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
         '</button>' +
       '</div>' +
-      '<div class="ni-table-wrapper">' +
+      '<div class="ni-purchase-item-table-wrapper">' +
         '<table class="ni-purchase-item-table">' +
           '<thead><tr>' +
-            '<th style="width:22%">Item</th>' +
-            '<th style="width:14%">Sub-Trx Type</th>' +
-            '<th style="width:14%">CoA Account</th>' +
-            '<th style="width:14%">Offset CoA</th>' +
-            '<th style="width:8%">Qty</th>' +
-            '<th style="width:10%">Harga Satuan</th>' +
-            '<th style="width:10%">Total</th>' +
-            '<th style="width:4%"></th>' +
+            '<th style="width:28%">Item</th>' +
+            '<th style="width:22%"><span class="ni-tip">Jenis Transaksi' +
+              '<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+              '<span class="ni-tip__box">Tipe sub-transaksi yang menentukan akun jurnal offset (hutang usaha, kas, dll).</span>' +
+            '</span></th>' +
+            '<th style="width:10%">Qty</th>' +
+            '<th style="width:18%">Harga Satuan</th>' +
+            '<th style="width:14%">Total</th>' +
+            '<th style="width:5%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
+          '<tfoot><tr>' +
+            '<td colspan="4" style="text-align:right;">Subtotal grup ini:</td>' +
+            '<td><strong id="' + gid + '_subtotal">Rp 0</strong></td>' +
+            '<td></td>' +
+          '</tr></tfoot>' +
         '</table>' +
       '</div>' +
-      '<div style="margin-top:8px;display:flex;gap:8px;align-items:center;">' +
+      '<div style="margin-top:8px;">' +
         '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addItemRow(\'' + gid + '\')">' +
           '<i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Item' +
         '</button>' +
-        '<span class="ni-advanced-toggle" onclick="toggleAdvanced(\'' + gid + '\')">' +
-          '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced Fields' +
-        '</span>' +
       '</div>';
 
     container.appendChild(card);
     lucide.createIcons();
+    checkEmptyState();
 
-    // Pre-fill items if editing
     if (prefill && prefill.items) {
-      prefill.items.forEach(function (itemData) {
-        addItemRow(gid, itemData);
-      });
+      prefill.items.forEach(function (itemData) { addItemRow(gid, itemData); });
     } else {
       addItemRow(gid);
     }
   };
 
   window.removeEBGroup = function (gid) {
-    var el = document.getElementById(gid);
-    if (el) el.remove();
-  };
-
-  /**
-   * When EB selection changes, clear and reload all TomSelect item dropdowns
-   * in this group so they filter by the new EB.
-   */
-  window.onEBChange = function (gid) {
     var card = document.getElementById(gid);
     if (!card) return;
-    var selects = card.querySelectorAll('.item-select');
-    selects.forEach(function (sel) {
-      if (sel.tomselect) {
-        sel.tomselect.clearOptions();
-        sel.tomselect.clear();
+    var container = card.parentNode;
+    var nextSibling = card.nextSibling;
+    card.remove();
+    checkEmptyState();
+    updateGrandTotal();
+    showUndoToast('Entitas bisnis berhasil dihapus.', function () {
+      if (container && container.isConnected) {
+        if (nextSibling && nextSibling.parentNode === container) {
+          container.insertBefore(card, nextSibling);
+        } else {
+          container.appendChild(card);
+        }
+        checkEmptyState();
+        updateGrandTotal();
       }
     });
   };
 
-  // ── Add Item Row ──────────────────────────────────────────────────────────
+  window.onEBChange = function (gid) {
+    var card = document.getElementById(gid);
+    if (!card) return;
+    card.querySelectorAll('.item-select').forEach(function (sel) {
+      if (sel.tomselect) { sel.tomselect.clearOptions(); sel.tomselect.clear(); }
+    });
+  };
+
+  // ── Item Row ──────────────────────────────────────────────────────
+
   window.addItemRow = function (gid, prefill) {
     itemCounters[gid] = (itemCounters[gid] || 0) + 1;
     var rid = gid + '_item_' + itemCounters[gid];
     var tbody = document.getElementById(gid + '_items');
 
-    var sttSelectOptions = '<option value="">— Pilih —</option>';
+    var sttOpts = '<option value="">— Pilih —</option>';
     sttOptions.forEach(function (stt) {
       var sel = (prefill && prefill.sub_transaction_type_id == stt.id) ? ' selected' : '';
-      sttSelectOptions += '<option value="' + stt.id + '"' + sel + '>' + stt.nama + '</option>';
+      sttOpts += '<option value="' + stt.id + '"' + sel + '>' + stt.nama + '</option>';
     });
+
+    var prefillCoaId   = prefill ? (prefill.coa_account_id || '') : '';
+    var prefillCoaTxt  = prefill ? (prefill.coa_account_text || '') : '';
+    var prefillOffId   = prefill ? (prefill.offset_coa_account_id || '') : '';
+    var prefillOffTxt  = prefill ? (prefill.offset_coa_account_text || '') : '';
 
     var tr = document.createElement('tr');
     tr.id = rid;
     tr.innerHTML =
-      '<td><select id="' + rid + '_item" class="ni-purchase-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select></td>' +
-      '<td><select class="ni-purchase-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
-      '<td><input type="text" id="' + rid + '_coa" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.coa_account_id || '') : '') + '"></td>' +
-      '<td><input type="text" id="' + rid + '_offset" class="ni-purchase-input" readonly value="' + (prefill ? (prefill.offset_coa_account_text || '') : '') + '" data-id="' + (prefill ? (prefill.offset_coa_account_id || '') : '') + '"></td>' +
-      '<td><input type="number" id="' + rid + '_qty" class="ni-purchase-input qty-field" min="0.0001" step="0.0001" value="' + (prefill ? prefill.quantity : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
-      '<td><input type="number" id="' + rid + '_price" class="ni-purchase-input price-field" min="0.01" step="0.01" value="' + (prefill ? prefill.unit_price : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
-      '<td><input type="text" id="' + rid + '_total" class="ni-purchase-input total-field" readonly value="' + (prefill ? formatNum(parseFloat(prefill.quantity || 0) * parseFloat(prefill.unit_price || 0)) : '0') + '"></td>' +
-      '<td><input type="number" id="' + rid + '_bulk_value" class="ni-purchase-input bulk-value-field" min="0.01" step="0.01" value="' + (prefill ? (prefill.bulk_value || '') : '') + '" style="display:none;" placeholder="Jumlah Nilai Barang"></td>' +
+      '<td>' +
+        '<select id="' + rid + '_item" class="ni-purchase-input item-select" data-rid="' + rid + '" data-gid="' + gid + '" placeholder="Pilih item..."></select>' +
+        '<input type="hidden" id="' + rid + '_coa" data-id="' + prefillCoaId + '" value="' + prefillCoaTxt + '">' +
+        '<div id="' + rid + '_coa_hint" class="ni-coa-hint">' + (prefillCoaTxt ? '⟶ ' + prefillCoaTxt : '') + '</div>' +
+      '</td>' +
+      '<td>' +
+        '<select class="ni-purchase-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this,\'' + rid + '\')">' + sttOpts + '</select>' +
+        '<input type="hidden" id="' + rid + '_offset" data-id="' + prefillOffId + '" value="' + prefillOffTxt + '">' +
+        '<div id="' + rid + '_offset_hint" class="ni-coa-hint">' + (prefillOffTxt ? '⟶ ' + prefillOffTxt : '') + '</div>' +
+      '</td>' +
+      '<td class="qty-cell"><input type="number" id="' + rid + '_qty" class="ni-purchase-input qty-field" min="0.0001" step="0.0001" value="' + (prefill ? (prefill.quantity || '') : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td class="price-cell">' +
+        '<input type="text" id="' + rid + '_price" class="ni-purchase-input price-field" inputmode="numeric" placeholder="0">' +
+        '<input type="number" id="' + rid + '_bulk_value" class="ni-purchase-input bulk-value-field" min="0.01" step="0.01" value="' + (prefill ? (prefill.bulk_value || '') : '') + '" style="display:none;" placeholder="Nilai Barang">' +
+      '</td>' +
+      '<td class="total-cell"><input type="text" id="' + rid + '_total" class="ni-purchase-input" readonly tabindex="-1" value="' + (prefill ? formatNum(parseFloat(prefill.quantity || 0) * parseFloat(prefill.unit_price || 0)) : '0') + '"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
 
-    // Advanced fields (hidden row)
+    // Advanced row
     var trAdv = document.createElement('tr');
     trAdv.id = rid + '_adv';
     trAdv.className = 'advanced-row';
     trAdv.style.display = 'none';
     trAdv.innerHTML =
-      '<td colspan="8" style="padding:8px 10px;background:var(--ni-bg);">' +
+      '<td colspan="6" style="padding:8px 10px;background:var(--ni-bg);">' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;font-size:0.8rem;">' +
-          '<div><label style="color:var(--ni-text-muted);">Metode Alokasi Biaya</label><select id="' + rid + '_metode" class="ni-purchase-input"><option value="">— Dari Item —</option><option value="fifo"' + (prefill && prefill.metode_alokasi_biaya === 'fifo' ? ' selected' : '') + '>FIFO</option><option value="lifo"' + (prefill && prefill.metode_alokasi_biaya === 'lifo' ? ' selected' : '') + '>LIFO</option><option value="average"' + (prefill && prefill.metode_alokasi_biaya === 'average' ? ' selected' : '') + '>Average</option><option value="weighted_moving_average"' + (prefill && prefill.metode_alokasi_biaya === 'weighted_moving_average' ? ' selected' : '') + '>WMA</option></select></div>' +
-          '<div><label style="color:var(--ni-text-muted);">Kadaluarsa</label><div style="display:flex;gap:4px;align-items:center;"><select id="' + rid + '_exp_mode" class="ni-purchase-input" style="width:auto;" onchange="toggleExpMode(\'' + rid + '\')"><option value="default"' + (prefill && prefill.tanggal_kadaluarsa ? '' : ' selected') + '>Default</option><option value="manual"' + (prefill && prefill.tanggal_kadaluarsa ? ' selected' : '') + '>Manual</option></select><input type="date" id="' + rid + '_exp_date" class="ni-purchase-input" value="' + (prefill ? (prefill.tanggal_kadaluarsa || '') : '') + '" style="' + (prefill && prefill.tanggal_kadaluarsa ? '' : 'display:none;') + '"></div></div>' +
-          '<div><label style="color:var(--ni-text-muted);">Lead Time (Days)</label><input type="number" id="' + rid + '_lead" class="ni-purchase-input" value="' + (prefill ? (prefill.lead_time_days || '') : '') + '"></div>' +
-          '<div><label style="color:var(--ni-text-muted);">Ordering Cost</label><input type="number" id="' + rid + '_ordcost" class="ni-purchase-input" step="0.01" value="' + (prefill ? (prefill.ordering_cost || '') : '') + '"></div>' +
-          '<div><label style="color:var(--ni-text-muted);">Holding Cost %</label><input type="number" id="' + rid + '_holdcost" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.holding_cost_pct || '') : '') + '"></div>' +
-          '<div><label style="color:var(--ni-text-muted);">MOQ</label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
-          '<div><label style="color:var(--ni-text-muted);">Target Turnover</label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Metode Alokasi Biaya</label>' +
+            '<select id="' + rid + '_metode" class="ni-purchase-input"><option value="">— Dari Item —</option>' +
+            '<option value="fifo"' + (prefill && prefill.metode_alokasi_biaya === 'fifo' ? ' selected' : '') + '>FIFO</option>' +
+            '<option value="lifo"' + (prefill && prefill.metode_alokasi_biaya === 'lifo' ? ' selected' : '') + '>LIFO</option>' +
+            '<option value="average"' + (prefill && prefill.metode_alokasi_biaya === 'average' ? ' selected' : '') + '>Average</option>' +
+            '<option value="weighted_moving_average"' + (prefill && prefill.metode_alokasi_biaya === 'weighted_moving_average' ? ' selected' : '') + '>WMA</option>' +
+          '</select></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Kadaluarsa</label>' +
+            '<div style="display:flex;gap:4px;align-items:center;">' +
+              '<select id="' + rid + '_exp_mode" class="ni-purchase-input" style="width:auto;" onchange="toggleExpMode(\'' + rid + '\')">' +
+                '<option value="default"' + (prefill && prefill.tanggal_kadaluarsa ? '' : ' selected') + '>Default</option>' +
+                '<option value="manual"' + (prefill && prefill.tanggal_kadaluarsa ? ' selected' : '') + '>Manual</option>' +
+              '</select>' +
+              '<input type="date" id="' + rid + '_exp_date" class="ni-purchase-input" value="' + (prefill ? (prefill.tanggal_kadaluarsa || '') : '') + '" style="' + (prefill && prefill.tanggal_kadaluarsa ? '' : 'display:none;') + '">' +
+            '</div></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Lead Time (Hari)</label><input type="number" id="' + rid + '_lead" class="ni-purchase-input" value="' + (prefill ? (prefill.lead_time_days || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Ordering Cost</label><input type="number" id="' + rid + '_ordcost" class="ni-purchase-input" step="0.01" value="' + (prefill ? (prefill.ordering_cost || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Holding Cost %</label><input type="number" id="' + rid + '_holdcost" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.holding_cost_pct || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">MOQ<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Minimum Order Quantity — jumlah minimum per pesanan.</span></span></label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">Target Turnover<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Target perputaran persediaan dalam satu periode.</span></span></label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
         '</div>' +
       '</td>';
 
     tbody.appendChild(tr);
     tbody.appendChild(trAdv);
 
-    // Get the EB lv1 ID for filtering
+    // Currency mask + event listener for price
+    var priceInput = document.getElementById(rid + '_price');
+    var initPriceVal = prefill ? (parseFloat(prefill.unit_price) || 0) : 0;
+    if (initPriceVal > 0) {
+      priceInput.dataset.rawValue = String(Math.round(initPriceVal));
+      priceInput.value = Math.round(initPriceVal).toLocaleString('id-ID');
+    } else {
+      priceInput.dataset.rawValue = '0';
+    }
+    initCurrencyMask(priceInput);
+    priceInput.addEventListener('input', function () { updateTotal(rid); });
+    priceInput.addEventListener('blur',  function () { updateTotal(rid); });
+
+    // Bulk value listener
+    var bulkInput = document.getElementById(rid + '_bulk_value');
+    bulkInput.addEventListener('input', function () { updateGroupTotal(gid); });
+
+    // Get card's EB lv1 for TomSelect autocomplete
     var card = document.getElementById(gid);
     var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
 
-    // Init TomSelect for item with EB-filtered autocomplete
     var itemSelect = new TomSelect('#' + rid + '_item', {
       valueField: 'id',
       labelField: 'text',
@@ -499,40 +850,33 @@
         var currentEbLv1 = ebSelect ? getEBLv1Id(ebSelect.value) : '';
         var url = itemAutocompleteUrl + '?term=' + encodeURIComponent(query);
         if (currentEbLv1) url += '&eb_lv1_id=' + encodeURIComponent(currentEbLv1);
-        fetch(url)
-          .then(function (r) { return r.json(); })
-          .then(function (data) { callback(data); })
-          .catch(function () { callback(); });
+        fetch(url).then(function (r) { return r.json(); }).then(callback).catch(function () { callback(); });
       },
       onChange: function (val) {
         if (!val) return;
         var opt = this.options[val];
+        var coaEl     = document.getElementById(rid + '_coa');
+        var coaHint   = document.getElementById(rid + '_coa_hint');
         if (opt && opt.coa_account_id) {
-          document.getElementById(rid + '_coa').value = opt.coa_account_text;
-          document.getElementById(rid + '_coa').dataset.id = opt.coa_account_id;
+          coaEl.value           = opt.coa_account_text;
+          coaEl.dataset.id      = opt.coa_account_id;
+          if (coaHint) coaHint.textContent = '⟶ ' + opt.coa_account_text;
+        } else {
+          if (coaEl)  { coaEl.value = ''; coaEl.dataset.id = ''; }
+          if (coaHint) coaHint.textContent = '';
         }
-        // Auto-fill metode alokasi biaya from item master if present
         var metodeEl = document.getElementById(rid + '_metode');
-        if (metodeEl && opt && opt.metode_biaya_persediaan) {
-          metodeEl.value = opt.metode_biaya_persediaan;
-        }
-        // Toggle bulk vs unit fields
+        if (metodeEl && opt && opt.metode_biaya_persediaan) metodeEl.value = opt.metode_biaya_persediaan;
         toggleBulkFields(rid, opt ? opt.tipe_item : '');
       },
       create: function (input, callback) {
-        // Open the full item master modal instead of inline create
         _modalCallbackRid = rid;
         _modalCallbackGid = gid;
         openItemModal(input, gid);
-        // Return false — callback will be called from the modal submit
         callback();
       },
-      createFilter: function (input) {
-        return input.trim().length > 0;
-      },
-      shouldLoad: function (query) {
-        return query.length >= 1;
-      },
+      createFilter: function (input) { return input.trim().length > 0; },
+      shouldLoad: function (query) { return query.length >= 1; },
       render: {
         option_create: function (data, escape) {
           return '<div class="create">Tambah item baru: <strong>' + escape(data.input) + '</strong></div>';
@@ -540,7 +884,6 @@
       },
     });
 
-    // Pre-select item if editing
     if (prefill && prefill.item_id) {
       itemSelect.addOption({ id: prefill.item_id, text: prefill.item_name || ('Item ' + prefill.item_id) });
       itemSelect.setValue(prefill.item_id, true);
@@ -548,61 +891,70 @@
 
     lucide.createIcons();
     if (prefill) updateTotal(rid);
+    updateStickyBar();
   };
 
   window.removeItemRow = function (rid) {
-    var tr = document.getElementById(rid);
+    var tr    = document.getElementById(rid);
     var trAdv = document.getElementById(rid + '_adv');
-    if (tr) tr.remove();
+    if (!tr) return;
+    var tbody      = tr.parentNode;
+    var nextSib    = trAdv ? trAdv.nextSibling : tr.nextSibling;
+    var gid        = getGidFromRid(rid);
+    tr.remove();
     if (trAdv) trAdv.remove();
+    if (gid) updateGroupTotal(gid);
+    updateStickyBar();
+    showUndoToast('Item berhasil dihapus.', function () {
+      if (tbody && tbody.isConnected) {
+        if (nextSib && nextSib.parentNode === tbody) {
+          tbody.insertBefore(tr, nextSib);
+          if (trAdv) tbody.insertBefore(trAdv, nextSib);
+        } else {
+          tbody.appendChild(tr);
+          if (trAdv) tbody.appendChild(trAdv);
+        }
+        if (gid) updateGroupTotal(gid);
+        updateStickyBar();
+      }
+    });
   };
 
   window.toggleAdvanced = function (gid) {
     var tbody = document.getElementById(gid + '_items');
     if (!tbody) return;
-    var advRows = tbody.querySelectorAll('.advanced-row');
-    advRows.forEach(function (row) {
+    tbody.querySelectorAll('.advanced-row').forEach(function (row) {
       row.style.display = row.style.display === 'none' ? '' : 'none';
     });
   };
 
   window.updateTotal = function (rid) {
-    var qty = parseFloat(document.getElementById(rid + '_qty').value) || 0;
-    var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
-    var total = qty * price;
-    document.getElementById(rid + '_total').value = formatNum(total);
+    var qty      = parseFloat((document.getElementById(rid + '_qty') || {}).value) || 0;
+    var price    = rawPrice(document.getElementById(rid + '_price'));
+    var totalEl  = document.getElementById(rid + '_total');
+    if (totalEl) totalEl.value = formatNum(qty * price);
+    updateGroupTotal(getGidFromRid(rid));
   };
-
-  var BULK_TYPES = ['RMB', 'FGB', 'ITMB'];
 
   window.toggleBulkFields = function (rid, tipeItem) {
     var isBulk = BULK_TYPES.indexOf(tipeItem) !== -1;
     var tr = document.getElementById(rid);
     if (!tr) return;
-    var qtyFields = tr.querySelectorAll('.qty-field');
-    var priceFields = tr.querySelectorAll('.price-field');
-    var totalFields = tr.querySelectorAll('.total-field');
-    var bulkFields = tr.querySelectorAll('.bulk-value-field');
-    qtyFields.forEach(function (el) {
-      el.parentElement.style.display = isBulk ? 'none' : '';
-    });
-    priceFields.forEach(function (el) {
-      el.parentElement.style.display = isBulk ? 'none' : '';
-    });
-    totalFields.forEach(function (el) {
-      el.parentElement.style.display = isBulk ? 'none' : '';
-    });
-    bulkFields.forEach(function (el) {
-      el.style.display = isBulk ? '' : 'none';
-      if (isBulk) el.parentElement.colSpan = 3;
-      else el.parentElement.colSpan = 1;
-    });
-    // Store tipe_item on the row for data collection
+    var qtyCell   = tr.querySelector('.qty-cell');
+    var priceCell = tr.querySelector('.price-cell');
+    var totalCell = tr.querySelector('.total-cell');
+    var priceInp  = document.getElementById(rid + '_price');
+    var bulkInp   = document.getElementById(rid + '_bulk_value');
+    if (qtyCell)   qtyCell.style.display   = isBulk ? 'none' : '';
+    if (totalCell) totalCell.style.display = isBulk ? 'none' : '';
+    if (priceInp)  priceInp.style.display  = isBulk ? 'none' : '';
+    if (bulkInp)   bulkInp.style.display   = isBulk ? '' : 'none';
+    if (priceCell) priceCell.colSpan       = isBulk ? 3 : 1;
     tr.dataset.tipeItem = tipeItem || '';
   };
 
   window.toggleExpMode = function (rid) {
-    var mode = document.getElementById(rid + '_exp_mode').value;
+    var mode   = document.getElementById(rid + '_exp_mode').value;
     var dateEl = document.getElementById(rid + '_exp_date');
     dateEl.style.display = mode === 'manual' ? '' : 'none';
     if (mode !== 'manual') dateEl.value = '';
@@ -614,145 +966,156 @@
     fetch(sttOffsetUrl + '?stt_id=' + encodeURIComponent(sttId))
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        var offsetEl = document.getElementById(rid + '_offset');
+        var offEl   = document.getElementById(rid + '_offset');
+        var offHint = document.getElementById(rid + '_offset_hint');
         if (data.offset_account_id) {
-          offsetEl.value = data.offset_account_text;
-          offsetEl.dataset.id = data.offset_account_id;
+          offEl.value       = data.offset_account_text;
+          offEl.dataset.id  = data.offset_account_id;
+          if (offHint) offHint.textContent = '⟶ ' + data.offset_account_text;
+        } else {
+          if (offEl)   { offEl.value = ''; offEl.dataset.id = ''; }
+          if (offHint) offHint.textContent = '';
         }
       });
   };
 
-  // ── Item Master Modal ────────────────────────────────────────────────────
+  // ── Item Master Modal — Wizard ─────────────────────────────────
 
-  // TomSelect instances for modal CoA autocomplete
-  var _modalCoaTomSelect = null;
+  var _modalCoaTomSelect    = null;
   var _modalCoaAtpTomSelect = null;
   var _modalCoaAllTomSelect = null;
 
   function initModalCoaTomSelects() {
     var tsConfig = {
-      valueField: 'id',
-      labelField: 'text',
-      searchField: 'text',
+      valueField: 'id', labelField: 'text', searchField: 'text',
       placeholder: 'Ketik kode/nama akun...',
-      dropdownParent: 'body',
-      maxOptions: false,
-      preload: 'focus',
+      dropdownParent: 'body', maxOptions: false, preload: 'focus',
       load: function (query, callback) {
         fetch(akunAutocompleteUrl + '?term=' + encodeURIComponent(query) + '&all=1&prefix=1')
-          .then(function (r) { return r.json(); })
-          .then(function (data) { callback(data); })
-          .catch(function () { callback(); });
+          .then(function (r) { return r.json(); }).then(callback).catch(function () { callback(); });
       },
     };
-    if (!_modalCoaTomSelect) {
-      _modalCoaTomSelect = new TomSelect('#modal_coa_account', Object.assign({}, tsConfig));
-    }
-    if (!_modalCoaAtpTomSelect) {
-      _modalCoaAtpTomSelect = new TomSelect('#modal_coa_account_atp', Object.assign({}, tsConfig));
-    }
-    if (!_modalCoaAllTomSelect) {
-      _modalCoaAllTomSelect = new TomSelect('#modal_coa_account_all', Object.assign({}, tsConfig));
-    }
+    if (!_modalCoaTomSelect)    _modalCoaTomSelect    = new TomSelect('#modal_coa_account',     Object.assign({}, tsConfig));
+    if (!_modalCoaAtpTomSelect) _modalCoaAtpTomSelect = new TomSelect('#modal_coa_account_atp', Object.assign({}, tsConfig));
+    if (!_modalCoaAllTomSelect) _modalCoaAllTomSelect = new TomSelect('#modal_coa_account_all', Object.assign({}, tsConfig));
   }
 
   function loadModalKategori(tipeItem, ebLv1Id) {
-    var kategoriSel = document.getElementById('modal_kategori');
-    kategoriSel.innerHTML = '<option value="">Memuat...</option>';
-    kategoriSel.disabled = true;
-
+    var sel = document.getElementById('modal_kategori');
+    sel.innerHTML = '<option value="">Memuat...</option>';
+    sel.disabled = true;
     var url = kategoriFilterUrl + '?tipe_item=' + encodeURIComponent(tipeItem);
     if (ebLv1Id) url += '&eb_lv1_id=' + encodeURIComponent(ebLv1Id);
-
     fetch(url)
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        kategoriSel.innerHTML = '<option value="">— Pilih —</option>';
+        sel.innerHTML = '<option value="">— Pilih —</option>';
         data.forEach(function (k) {
           var opt = document.createElement('option');
-          opt.value = k.id;
-          opt.textContent = k.nama;
-          kategoriSel.appendChild(opt);
+          opt.value = k.id; opt.textContent = k.nama;
+          sel.appendChild(opt);
         });
-        kategoriSel.disabled = false;
+        sel.disabled = false;
       })
-      .catch(function () {
-        kategoriSel.innerHTML = '<option value="">— Gagal memuat —</option>';
-        kategoriSel.disabled = false;
-      });
+      .catch(function () { sel.innerHTML = '<option value="">— Gagal memuat —</option>'; sel.disabled = false; });
   }
+
+  window.selectTipeCard = function (card) {
+    document.querySelectorAll('.ni-type-card').forEach(function (c) { c.classList.remove('ni-type-card--selected'); });
+    card.classList.add('ni-type-card--selected');
+    _wizardTipe = card.dataset.tipe;
+  };
+
+  window.modalNextStep = function () {
+    var nama  = document.getElementById('modal_nama').value.trim();
+    var errEl = document.getElementById('modal_step1_error');
+    if (!nama) { errEl.textContent = 'Nama item wajib diisi.'; errEl.style.display = ''; return; }
+    if (!_wizardTipe) { errEl.textContent = 'Pilih tipe item terlebih dahulu.'; errEl.style.display = ''; return; }
+    errEl.style.display = 'none';
+
+    document.getElementById('modal_tipe_item').value = _wizardTipe;
+    document.getElementById('modalStep1').style.display = 'none';
+    document.getElementById('modalStep2').style.display = '';
+    document.getElementById('wizStep1').className = 'ni-wizard-step ni-wizard-step--done';
+    document.getElementById('wizStep2').className = 'ni-wizard-step ni-wizard-step--active';
+    document.getElementById('modalBtnNext').style.display = 'none';
+    document.getElementById('modalBtnBack').style.display = '';
+    document.getElementById('modalBtnSave').style.display = '';
+    onModalTipeItemChange();
+  };
+
+  window.modalBackStep = function () {
+    document.getElementById('modalStep1').style.display = '';
+    document.getElementById('modalStep2').style.display = 'none';
+    document.getElementById('wizStep1').className = 'ni-wizard-step ni-wizard-step--active';
+    document.getElementById('wizStep2').className = 'ni-wizard-step';
+    document.getElementById('modalBtnNext').style.display = '';
+    document.getElementById('modalBtnBack').style.display = 'none';
+    document.getElementById('modalBtnSave').style.display = 'none';
+  };
 
   window.onModalTipeItemChange = function () {
     var tipe = document.getElementById('modal_tipe_item').value;
-    // Show/hide fields based on tipe
-    var isInventory = (tipe === 'RM' || tipe === 'FG' || tipe === 'ITM' || tipe === 'RMB' || tipe === 'FGB' || tipe === 'ITMB');
-    document.getElementById('modal_inventory_fields').style.display = isInventory ? '' : 'none';
+    var isInv = ['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'].indexOf(tipe) !== -1;
+    document.getElementById('modal_inventory_fields').style.display = isInv ? '' : 'none';
     document.getElementById('modal_atp_fields').style.display = tipe === 'ATP' ? '' : 'none';
-    document.getElementById('modal_all_fields').style.display = tipe === 'ALL' ? '' : 'none';
-
-    // Update modal title
-    var titles = {
-      RM: 'Tambah Raw Material', FG: 'Tambah Finished Good', ITM: 'Tambah Item Lainnya',
-      RMB: 'Tambah Raw Material Bulk', FGB: 'Tambah Finished Good Bulk', ITMB: 'Tambah Item Lainnya Bulk',
-      ATP: 'Tambah Aset Tetap', ALL: 'Tambah Aset Lainnya',
-    };
-    document.getElementById('itemModalTitle').textContent = titles[tipe] || 'Tambah Item Baru';
-
-    // Reload kategori for the new tipe
-    var gid = _modalCallbackGid;
-    var card = gid ? document.getElementById(gid) : null;
+    document.getElementById('modal_all_fields').style.display  = tipe === 'ALL' ? '' : 'none';
+    var titles = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', RMB: 'Raw Material Bulk', FGB: 'Finished Good Bulk', ITMB: 'Item Lainnya Bulk', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
+    document.getElementById('itemModalTitle').textContent = 'Tambah ' + (titles[tipe] || 'Item Baru');
+    var gid      = _modalCallbackGid;
+    var card     = gid ? document.getElementById(gid) : null;
     var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
-    loadModalKategori(tipe, ebLv1Id);
+    loadModalKategori(tipe, ebSelect ? getEBLv1Id(ebSelect.value) : '');
   };
 
   window.openItemModal = function (prefillNama, gid) {
+    // Reset wizard
+    _wizardTipe = 'RM';
+    document.querySelectorAll('.ni-type-card').forEach(function (c) {
+      c.classList.toggle('ni-type-card--selected', c.dataset.tipe === 'RM');
+    });
     document.getElementById('modal_nama').value = prefillNama || '';
-    document.getElementById('modal_tipe_item').value = 'RM';
+    document.getElementById('modal_step1_error').style.display = 'none';
     document.getElementById('modal_error').style.display = 'none';
+    document.getElementById('modalStep1').style.display = '';
+    document.getElementById('modalStep2').style.display = 'none';
+    document.getElementById('wizStep1').className = 'ni-wizard-step ni-wizard-step--active';
+    document.getElementById('wizStep2').className = 'ni-wizard-step';
+    document.getElementById('modalBtnNext').style.display = '';
+    document.getElementById('modalBtnBack').style.display = 'none';
+    document.getElementById('modalBtnSave').style.display = 'none';
 
-    // Init TomSelect for CoA autocomplete
     initModalCoaTomSelects();
     _modalCoaTomSelect.clear();
     _modalCoaAtpTomSelect.clear();
     _modalCoaAllTomSelect.clear();
 
-    // Reset inventory fields
-    document.getElementById('modal_velocity').value = '';
+    document.getElementById('modal_velocity').value      = '';
     document.getElementById('modal_lama_kadaluarsa').value = '';
-    document.getElementById('modal_threshold').value = '';
-    document.getElementById('modal_metode_biaya').value = '';
-    // Reset ATP fields
+    document.getElementById('modal_threshold').value     = '';
+    document.getElementById('modal_metode_biaya').value  = '';
     document.getElementById('modal_masa_manfaat_atp').value = '';
     document.getElementById('modal_metode_penyusutan').value = '';
-    // Reset ALL fields
-    document.getElementById('modal_masa_manfaat_all').value = '';
+    document.getElementById('modal_masa_manfaat_all').value  = '';
     document.getElementById('modal_metode_amortisasi').value = '';
 
-    // Show EB name from the group
-    var card = document.getElementById(gid);
+    var card     = document.getElementById(gid);
     var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
-    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+    var ebText   = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
     var ebDisplay = document.getElementById('modal_eb_display');
-    if (ebText) {
-      ebDisplay.textContent = '';
-      var strong = document.createElement('strong');
-      strong.textContent = ebText.replace(/^\s+↳\s*/, '');
-      ebDisplay.appendChild(strong);
+    ebDisplay.innerHTML = '';
+    if (ebText && ebText !== '— Pilih Entitas Bisnis —') {
+      var s = document.createElement('strong');
+      s.textContent = ebText.replace(/^\s+↳\s*/, '');
+      ebDisplay.appendChild(s);
       ebDisplay.appendChild(document.createTextNode(' (otomatis dari form)'));
     } else {
-      ebDisplay.textContent = '';
       var em = document.createElement('em');
       em.textContent = 'Entitas bisnis belum dipilih';
       ebDisplay.appendChild(em);
     }
 
-    // Show/hide fields and load kategori
-    onModalTipeItemChange();
-
-    var backdrop = document.getElementById('itemMasterModalBackdrop');
-    backdrop.classList.add('ni-modal-backdrop--visible');
+    document.getElementById('itemMasterModalBackdrop').classList.add('ni-modal-backdrop--visible');
     lucide.createIcons();
   };
 
@@ -762,32 +1125,25 @@
     _modalCallbackGid = null;
   };
 
-  // ── Kategori Create Modal ────────────────────────────────────────────────
+  // ── Kategori Modal ────────────────────────────────────────────────
 
   window.openKategoriModal = function () {
     document.getElementById('kat_modal_nama').value = '';
     document.getElementById('kat_modal_error').style.display = 'none';
-    var tipeItem = document.getElementById('modal_tipe_item').value;
-    var tipeLabels = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', RMB: 'Raw Material Bulk', FGB: 'Finished Good Bulk', ITMB: 'Item Lainnya Bulk', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
-    document.getElementById('kat_modal_tipe_display').value = tipeLabels[tipeItem] || tipeItem;
-
-    // Auto-populate EB display from the purchase form group
-    var gid = _modalCallbackGid;
-    var card = gid ? document.getElementById(gid) : null;
+    var tipe  = document.getElementById('modal_tipe_item').value;
+    var labels = { RM: 'Raw Material', FG: 'Finished Good', ITM: 'Item Lainnya', RMB: 'Raw Material Bulk', FGB: 'Finished Good Bulk', ITMB: 'Item Lainnya Bulk', ATP: 'Aset Tetap', ALL: 'Aset Lainnya' };
+    document.getElementById('kat_modal_tipe_display').value = labels[tipe] || tipe;
+    var gid      = _modalCallbackGid;
+    var card     = gid ? document.getElementById(gid) : null;
     var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebText = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text.replace(/^\s+↳\s*/, '') : '';
+    var ebText   = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text.replace(/^\s+↳\s*/, '') : '';
     var ebDisplay = document.getElementById('kat_modal_eb_display');
-    ebDisplay.textContent = '';
+    ebDisplay.innerHTML = '';
     if (ebText && ebText !== '— Pilih Entitas Bisnis —') {
-      var strong = document.createElement('strong');
-      strong.textContent = ebText;
-      ebDisplay.appendChild(strong);
+      var s = document.createElement('strong'); s.textContent = ebText; ebDisplay.appendChild(s);
     } else {
-      var em = document.createElement('em');
-      em.textContent = 'Entitas bisnis belum dipilih di form purchase';
-      ebDisplay.appendChild(em);
+      var em = document.createElement('em'); em.textContent = 'Entitas bisnis belum dipilih'; ebDisplay.appendChild(em);
     }
-
     document.getElementById('kategoriModalBackdrop').classList.add('ni-modal-backdrop--visible');
     lucide.createIcons();
   };
@@ -800,94 +1156,59 @@
     var nama = document.getElementById('kat_modal_nama').value.trim();
     if (!nama) {
       var errEl = document.getElementById('kat_modal_error');
-      errEl.textContent = 'Nama kategori wajib diisi.';
-      errEl.style.display = '';
-      return;
+      errEl.textContent = 'Nama kategori wajib diisi.'; errEl.style.display = ''; return;
     }
-
-    var tipeItem = document.getElementById('modal_tipe_item').value;
-    var gid = _modalCallbackGid;
-    var card = gid ? document.getElementById(gid) : null;
+    var tipe     = document.getElementById('modal_tipe_item').value;
+    var gid      = _modalCallbackGid;
+    var card     = gid ? document.getElementById(gid) : null;
     var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
-
-    var payload = {
-      nama: nama,
-      tipe_item: tipeItem,
-      entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
-    };
-
+    var ebLv1Id  = ebSelect ? getEBLv1Id(ebSelect.value) : '';
     fetch(kategoriCreateUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ nama: nama, tipe_item: tipe, entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [] }),
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data.error) {
-        var errEl = document.getElementById('kat_modal_error');
-        errEl.textContent = data.error;
-        errEl.style.display = '';
-        return;
-      }
-      // Add the new kategori to the dropdown and select it
-      var kategoriSel = document.getElementById('modal_kategori');
+      if (data.error) { var e = document.getElementById('kat_modal_error'); e.textContent = data.error; e.style.display = ''; return; }
+      var sel = document.getElementById('modal_kategori');
       var opt = document.createElement('option');
-      opt.value = data.id;
-      opt.textContent = data.nama;
-      kategoriSel.appendChild(opt);
-      kategoriSel.value = data.id;
+      opt.value = data.id; opt.textContent = data.nama;
+      sel.appendChild(opt); sel.value = data.id;
       closeKategoriModal();
     })
-    .catch(function () {
-      var errEl = document.getElementById('kat_modal_error');
-      errEl.textContent = 'Gagal menyimpan kategori. Silakan coba lagi.';
-      errEl.style.display = '';
-    });
+    .catch(function () { var e = document.getElementById('kat_modal_error'); e.textContent = 'Gagal menyimpan kategori.'; e.style.display = ''; });
   };
 
   window.submitItemModal = function () {
     var nama = document.getElementById('modal_nama').value.trim();
-    if (!nama) {
-      var errEl = document.getElementById('modal_error');
-      errEl.textContent = 'Nama item wajib diisi.';
-      errEl.style.display = '';
-      return;
-    }
-
-    var gid = _modalCallbackGid;
-    var rid = _modalCallbackRid;
-    var tipeItem = document.getElementById('modal_tipe_item').value;
-
-    // Get EB lv1 ID to auto-assign
-    var card = document.getElementById(gid);
-    var ebSelect = card ? card.querySelector('.eb-select') : null;
-    var ebLv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
-
+    if (!nama) { var e = document.getElementById('modal_error'); e.textContent = 'Nama item wajib diisi.'; e.style.display = ''; return; }
+    var gid     = _modalCallbackGid;
+    var rid     = _modalCallbackRid;
+    var tipe    = document.getElementById('modal_tipe_item').value;
+    var card    = document.getElementById(gid);
+    var ebSel   = card ? card.querySelector('.eb-select') : null;
+    var ebLv1Id = ebSel ? getEBLv1Id(ebSel.value) : '';
     var payload = {
-      nama: nama,
-      tipe_item: tipeItem,
+      nama: nama, tipe_item: tipe,
       kategori_id: document.getElementById('modal_kategori').value || null,
       entitas_bisnis_ids: ebLv1Id ? [parseInt(ebLv1Id)] : [],
     };
-
-    // Gather fields based on tipe_item
-    if (tipeItem === 'RM' || tipeItem === 'FG' || tipeItem === 'ITM' || tipeItem === 'RMB' || tipeItem === 'FGB' || tipeItem === 'ITMB') {
-      payload.velocity_category = document.getElementById('modal_velocity').value;
-      payload.coa_account_id = _modalCoaTomSelect ? _modalCoaTomSelect.getValue() : null;
-      payload.lama_kadaluarsa = document.getElementById('modal_lama_kadaluarsa').value || null;
+    if (['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'].indexOf(tipe) !== -1) {
+      payload.velocity_category         = document.getElementById('modal_velocity').value;
+      payload.coa_account_id            = _modalCoaTomSelect ? _modalCoaTomSelect.getValue() : null;
+      payload.lama_kadaluarsa           = document.getElementById('modal_lama_kadaluarsa').value || null;
       payload.threshold_days_outstanding = document.getElementById('modal_threshold').value || null;
-      payload.metode_biaya_persediaan = document.getElementById('modal_metode_biaya').value || '';
-    } else if (tipeItem === 'ATP') {
-      payload.coa_account_id = _modalCoaAtpTomSelect ? _modalCoaAtpTomSelect.getValue() : null;
-      payload.masa_manfaat = document.getElementById('modal_masa_manfaat_atp').value || null;
+      payload.metode_biaya_persediaan   = document.getElementById('modal_metode_biaya').value || '';
+    } else if (tipe === 'ATP') {
+      payload.coa_account_id   = _modalCoaAtpTomSelect ? _modalCoaAtpTomSelect.getValue() : null;
+      payload.masa_manfaat     = document.getElementById('modal_masa_manfaat_atp').value || null;
       payload.metode_penyusutan = document.getElementById('modal_metode_penyusutan').value || '';
-    } else if (tipeItem === 'ALL') {
-      payload.coa_account_id = _modalCoaAllTomSelect ? _modalCoaAllTomSelect.getValue() : null;
-      payload.masa_manfaat = document.getElementById('modal_masa_manfaat_all').value || null;
+    } else if (tipe === 'ALL') {
+      payload.coa_account_id   = _modalCoaAllTomSelect ? _modalCoaAllTomSelect.getValue() : null;
+      payload.masa_manfaat     = document.getElementById('modal_masa_manfaat_all').value || null;
       payload.metode_amortisasi = document.getElementById('modal_metode_amortisasi').value || '';
     }
-
     fetch(itemCreateUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
@@ -895,48 +1216,29 @@
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      if (data.error) {
-        var errEl = document.getElementById('modal_error');
-        errEl.textContent = data.error;
-        errEl.style.display = '';
-        return;
-      }
-
-      // Add the new item to the TomSelect in the item row
+      if (data.error) { var e = document.getElementById('modal_error'); e.textContent = data.error; e.style.display = ''; return; }
       if (rid) {
         var selEl = document.getElementById(rid + '_item');
         if (selEl && selEl.tomselect) {
-          selEl.tomselect.addOption({
-            id: data.id,
-            text: data.text,
-            coa_account_id: data.coa_account_id,
-            coa_account_text: data.coa_account_text,
-            tipe_item: data.tipe_item,
-          });
+          selEl.tomselect.addOption({ id: data.id, text: data.text, coa_account_id: data.coa_account_id, coa_account_text: data.coa_account_text, tipe_item: data.tipe_item });
           selEl.tomselect.setValue(data.id, true);
         }
-        // Set CoA if available
+        var coaEl   = document.getElementById(rid + '_coa');
+        var coaHint = document.getElementById(rid + '_coa_hint');
         if (data.coa_account_id) {
-          document.getElementById(rid + '_coa').value = data.coa_account_text;
-          document.getElementById(rid + '_coa').dataset.id = data.coa_account_id;
+          if (coaEl)   { coaEl.value = data.coa_account_text; coaEl.dataset.id = data.coa_account_id; }
+          if (coaHint) coaHint.textContent = '⟶ ' + data.coa_account_text;
         }
-        // Toggle bulk vs unit fields for the newly created item
-        if (data.tipe_item) {
-          toggleBulkFields(rid, data.tipe_item);
-        }
+        if (data.tipe_item) toggleBulkFields(rid, data.tipe_item);
       }
-
       closeItemModal();
     })
-    .catch(function () {
-      var errEl = document.getElementById('modal_error');
-      errEl.textContent = 'Gagal menyimpan item. Silakan coba lagi.';
-      errEl.style.display = '';
-    });
+    .catch(function () { var e = document.getElementById('modal_error'); e.textContent = 'Gagal menyimpan item.'; e.style.display = ''; });
   };
 
-  // ── Journal Preview ───────────────────────────────────────────────────────
-  window.showJournalPreview = function () {
+  // ── Journal Panel ─────────────────────────────────────────────────
+
+  function loadJournalPanel(markVerified) {
     var payload = collectFormData();
     fetch(journalPreviewUrl, {
       method: 'POST',
@@ -945,117 +1247,231 @@
     })
     .then(function (r) { return r.json(); })
     .then(function (data) {
-      var tbody = document.getElementById('journalPreviewBody');
+      var tbody = document.getElementById('journalPanelBody');
+      if (!tbody) return;
       tbody.innerHTML = '';
-      if (!data.entries || data.entries.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);">Tidak ada entry.</td></tr>';
+      if (!data.entries || !data.entries.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ni-text-muted);padding:24px;">Tidak ada entry.</td></tr>';
       } else {
         data.entries.forEach(function (e) {
           tbody.innerHTML += '<tr><td>' + (e.no !== '' ? e.no : '') + '</td><td>' + (e.entitas_bisnis || '') + '</td><td>' + e.akun + '</td><td style="text-align:right;">' + (e.debit ? formatNum(e.debit) : '') + '</td><td style="text-align:right;">' + (e.kredit ? formatNum(e.kredit) : '') + '</td></tr>';
         });
       }
-      var preview = document.getElementById('journalPreview');
-      preview.style.display = '';
-      lucide.createIcons();
+      if (markVerified && !_journalVerified) {
+        _journalVerified = true;
+        var badge = document.getElementById('unverifiedBadge');
+        if (badge) badge.remove();
+      }
     });
-  };
-
-  window.closeJournalPreview = function () {
-    document.getElementById('journalPreview').style.display = 'none';
-  };
-
-  // ── Auto-update journal preview when visible ──────────────────────────────
-  var _previewDebounce = null;
-  function schedulePreviewUpdate() {
-    if (document.getElementById('journalPreview').style.display === 'none') return;
-    clearTimeout(_previewDebounce);
-    _previewDebounce = setTimeout(showJournalPreview, 800);
   }
-  // Listen to all form input/change events (covers native inputs + TomSelect)
-  document.getElementById('purchaseForm').addEventListener('input', schedulePreviewUpdate);
-  document.getElementById('purchaseForm').addEventListener('change', schedulePreviewUpdate);
+
+  window.openJournalPanel = function () {
+    document.getElementById('journalPanel').classList.add('ni-journal-panel--open');
+    document.getElementById('journalBackdrop').classList.add('ni-journal-backdrop--open');
+    loadJournalPanel(true);
+  };
+
+  window.closeJournalPanel = function () {
+    document.getElementById('journalPanel').classList.remove('ni-journal-panel--open');
+    document.getElementById('journalBackdrop').classList.remove('ni-journal-backdrop--open');
+  };
+
+  // ── Auto-refresh journal when panel is open ───────────────────────
+
+  document.getElementById('purchaseForm').addEventListener('input',  function () { schedulePreviewUpdate(); markDirty(); });
+  document.getElementById('purchaseForm').addEventListener('change', function () { schedulePreviewUpdate(); markDirty(); });
+
+  function schedulePreviewUpdate() {
+    var panel = document.getElementById('journalPanel');
+    if (!panel || !panel.classList.contains('ni-journal-panel--open')) return;
+    clearTimeout(_previewDebounce);
+    _previewDebounce = setTimeout(function () { loadJournalPanel(false); }, 800);
+  }
+
+  // ── Dirty tracking & beforeunload ─────────────────────────────────
+
+  function markDirty() { _formDirty = true; }
+
+  window.addEventListener('beforeunload', function (e) {
+    if (_formDirty) {
+      e.preventDefault();
+      return (e.returnValue = 'Ada perubahan yang belum disimpan. Yakin ingin meninggalkan halaman?');
+    }
+  });
+
+  // ── Autosave to localStorage ──────────────────────────────────────
+
+  setInterval(function () {
+    if (!_formDirty) return;
+    try {
+      var tanggal  = (document.getElementById('purchaseTanggal') || {}).value || '';
+      var deskrip  = (document.querySelector('[name="deskripsi"]') || {}).value || '';
+      localStorage.setItem('ni_purchase_autosave', JSON.stringify({ tanggal: tanggal, deskripsi: deskrip, t: new Date().toISOString() }));
+    } catch (e) {}
+  }, 30000);
+
+  // ── Inline error handling ─────────────────────────────────────────
+
+  function clearInlineErrors() {
+    document.querySelectorAll('.has-error').forEach(function (el) { el.classList.remove('has-error'); });
+    document.querySelectorAll('.ni-row-err-msg').forEach(function (el) { el.remove(); });
+    var s = document.getElementById('formErrorSummary');
+    if (s) s.style.display = 'none';
+  }
+
+  function showInlineErrors(errors) {
+    var summary = document.getElementById('formErrorSummary');
+    var list    = document.getElementById('formErrorList');
+    list.innerHTML = '<ul style="margin:0;padding-left:16px;">' +
+      errors.map(function (e) { return '<li>' + e.msg + '</li>'; }).join('') + '</ul>';
+    summary.style.display = 'flex';
+    summary.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    errors.forEach(function (err) {
+      if (!err.rid) return;
+      var tr = document.getElementById(err.rid);
+      if (!tr) return;
+      tr.classList.add('has-error');
+      var errTr = document.createElement('tr');
+      errTr.className = 'ni-row-err-msg';
+      errTr.innerHTML = '<td colspan="6" style="padding:2px 10px 6px;font-size:0.72rem;color:var(--ni-danger);">' + err.detail + '</td>';
+      tr.parentNode.insertBefore(errTr, tr.nextSibling);
+    });
+  }
+
+  // ── Server error scroll ────────────────────────────────────────────
+
+  window.scrollToErrorField = function (fieldKey) {
+    var el = document.getElementById('field-' + fieldKey);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    var input = el.querySelector('input,textarea,select');
+    if (input) { input.focus(); el.classList.add('ni-form-group--error'); }
+  };
+
+  // ── Form data collection ──────────────────────────────────────────
+
   function collectFormData() {
     var groups = [];
     document.querySelectorAll('.ni-purchase-eb-card').forEach(function (card) {
-      var gid = card.id;
+      var gid      = card.id;
       var ebSelect = card.querySelector('.eb-select');
-      var ebId = ebSelect ? ebSelect.value : '';
-      var ebName = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
+      var ebId     = ebSelect ? ebSelect.value : '';
+      var ebName   = ebSelect ? ebSelect.options[ebSelect.selectedIndex].text : '';
       if (!ebId) return;
-
       var items = [];
       var tbody = document.getElementById(gid + '_items');
-      var itemRows = tbody.querySelectorAll('tr:not(.advanced-row)');
-      itemRows.forEach(function (tr) {
-        var rid = tr.id;
+      if (!tbody) return;
+      tbody.querySelectorAll('tr:not(.advanced-row)').forEach(function (tr) {
+        var rid    = tr.id;
+        if (!rid) return;
         var itemSel = tr.querySelector('.item-select');
-        var sttSel = tr.querySelector('.stt-select');
-        var itemVal = itemSel ? itemSel.value : '';
+        var sttSel  = tr.querySelector('.stt-select');
+        var itemVal = itemSel ? (itemSel.tomselect ? itemSel.tomselect.getValue() : itemSel.value) : '';
         if (!itemVal) return;
-
         var itemText = '';
         if (itemSel && itemSel.tomselect) {
           var opt = itemSel.tomselect.options[itemVal];
           if (opt) itemText = opt.text || '';
         }
-
+        var coaEl    = document.getElementById(rid + '_coa');
+        var offEl    = document.getElementById(rid + '_offset');
+        var priceEl  = document.getElementById(rid + '_price');
+        var bulkEl   = document.getElementById(rid + '_bulk_value');
+        var tipeItem = tr.dataset.tipeItem || '';
+        var isBulk   = BULK_TYPES.indexOf(tipeItem) !== -1;
+        var qty      = isBulk ? 1 : (parseFloat((document.getElementById(rid + '_qty') || {}).value) || 0);
+        var unitPrice = isBulk ? (parseFloat(bulkEl ? bulkEl.value : 0) || 0) : rawPrice(priceEl);
         items.push({
-          item_id: itemVal,
-          item_name: itemText,
-          sub_transaction_type_id: sttSel ? sttSel.value : '',
-          coa_account_id: document.getElementById(rid + '_coa').dataset.id || '',
-          coa_account_text: document.getElementById(rid + '_coa').value || '',
-          offset_coa_account_id: document.getElementById(rid + '_offset').dataset.id || '',
-          offset_coa_account_text: document.getElementById(rid + '_offset').value || '',
-          quantity: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? '1' : (document.getElementById(rid + '_qty').value || '0'),
-          unit_price: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? (document.getElementById(rid + '_bulk_value').value || '0') : (document.getElementById(rid + '_price').value || '0'),
-          is_bulk: tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1 ? '1' : '0',
-          metode_alokasi_biaya: document.getElementById(rid + '_metode') ? document.getElementById(rid + '_metode').value : '',
-          tanggal_kadaluarsa: document.getElementById(rid + '_exp_date') ? document.getElementById(rid + '_exp_date').value : '',
-          lead_time_days: document.getElementById(rid + '_lead').value || '',
-          ordering_cost: document.getElementById(rid + '_ordcost').value || '',
-          holding_cost_pct: document.getElementById(rid + '_holdcost').value || '',
-          moq: document.getElementById(rid + '_moq').value || '',
-          target_turnover: document.getElementById(rid + '_turnover').value || '',
+          _rid: rid,
+          item_id: itemVal, item_name: itemText,
+          sub_transaction_type_id:  sttSel ? sttSel.value : '',
+          coa_account_id:           coaEl ? (coaEl.dataset.id || '') : '',
+          coa_account_text:         coaEl ? coaEl.value : '',
+          offset_coa_account_id:    offEl ? (offEl.dataset.id || '') : '',
+          offset_coa_account_text:  offEl ? offEl.value : '',
+          quantity:                 String(qty),
+          unit_price:               String(unitPrice),
+          is_bulk:                  isBulk ? '1' : '0',
+          metode_alokasi_biaya:     (document.getElementById(rid + '_metode') || {}).value || '',
+          tanggal_kadaluarsa:       (document.getElementById(rid + '_exp_date') || {}).value || '',
+          lead_time_days:           (document.getElementById(rid + '_lead') || {}).value || '',
+          ordering_cost:            (document.getElementById(rid + '_ordcost') || {}).value || '',
+          holding_cost_pct:         (document.getElementById(rid + '_holdcost') || {}).value || '',
+          moq:                      (document.getElementById(rid + '_moq') || {}).value || '',
+          target_turnover:          (document.getElementById(rid + '_turnover') || {}).value || '',
         });
       });
-
-      groups.push({
-        entitas_bisnis_id: ebId,
-        entitas_bisnis_name: ebName,
-        items: items,
-      });
+      groups.push({ entitas_bisnis_id: ebId, entitas_bisnis_name: ebName, items: items });
     });
     return { eb_groups: groups };
   }
 
+  // ── Form submit ───────────────────────────────────────────────────
+
   document.getElementById('purchaseForm').addEventListener('submit', function (e) {
+    clearInlineErrors();
     var payload = collectFormData();
-    var errorMsgs = [];
+    var errors  = [];
+
     payload.eb_groups.forEach(function (g, gi) {
       g.items.forEach(function (item, ji) {
         if (!item.coa_account_id) {
-          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Akun CoA wajib diisi. Pilih item yang sudah memiliki akun CoA atau atur akun pada master item.');
+          errors.push({
+            rid: item._rid,
+            msg: 'Grup ' + (gi + 1) + ', Item ' + (ji + 1) + ': CoA Account belum terisi. Pastikan item memiliki akun CoA di master item.',
+            detail: 'CoA Account belum terisi.',
+          });
         }
         if (!item.offset_coa_account_id) {
-          errorMsgs.push('Item ' + (ji + 1) + ' group ' + (gi + 1) + ': Akun Offset CoA wajib diisi. Pilih sub-transaction type yang memiliki offset account default.');
+          errors.push({
+            rid: item._rid,
+            msg: 'Grup ' + (gi + 1) + ', Item ' + (ji + 1) + ': Offset CoA belum terisi. Pilih jenis transaksi yang memiliki akun offset.',
+            detail: 'Offset CoA belum terisi.',
+          });
         }
       });
     });
-    if (errorMsgs.length > 0) {
-      alert('Terdapat kesalahan:\n\n' + errorMsgs.join('\n'));
+
+    if (errors.length > 0) {
+      showInlineErrors(errors);
       e.preventDefault();
       return;
     }
-    document.getElementById('ebGroupsData').value = JSON.stringify(payload.eb_groups);
+
+    // Loading state
+    var btn       = document.getElementById('purchaseSubmit');
+    var stickyBtn = document.getElementById('purchaseStickySubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="ni-spinner"></span> Menyimpan...';
+    if (stickyBtn) { stickyBtn.disabled = true; stickyBtn.textContent = 'Menyimpan...'; }
+
+    // Strip internal _rid before sending
+    var cleanGroups = payload.eb_groups.map(function (g) {
+      return {
+        entitas_bisnis_id:   g.entitas_bisnis_id,
+        entitas_bisnis_name: g.entitas_bisnis_name,
+        items: g.items.map(function (item) {
+          var c = Object.assign({}, item);
+          delete c._rid;
+          return c;
+        }),
+      };
+    });
+
+    _formDirty = false;
+    document.getElementById('ebGroupsData').value = JSON.stringify(cleanGroups);
   });
 
-  // ── Init: load existing data or add one empty group ───────────────────────
+  // ── Init ──────────────────────────────────────────────────────────
+
   if (existingGroups.length > 0) {
     existingGroups.forEach(function (g) { addEBGroup(g); });
   } else {
     addEBGroup();
   }
+  checkEmptyState();
+  updateGrandTotal();
+
 })();
 </script>
 {% endblock %}
