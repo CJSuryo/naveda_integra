@@ -111,3 +111,44 @@ class CreateUtangForPurchaseTests(TestCase):
         self.assertEqual(len(headers), 1)
         self.assertEqual(headers[0].details.count(), 2)
         self.assertEqual(headers[0].total_amount, Decimal('150000'))
+
+
+class ReverseUtangTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+
+    def test_reverse_utang_header_writes_utang_terhapus(self):
+        headers = create_utang_for_purchase(self.f['purchase'])
+        utang = headers[0]
+        reverse_utang_header(utang, user=None)
+        self.assertEqual(UtangTerhapus.objects.count(), 1)
+        record = UtangTerhapus.objects.first()
+        self.assertIn('total_amount', record.snapshot)
+        self.assertEqual(record.nomor_utang, utang.nomor_utang)
+
+    def test_reverse_utang_header_deletes_payment_journals_not_purchase_journals(self):
+        from apps.jurnal.models import JurnalHeader
+        create_automated_journals(self.f['purchase'])
+        journal_count_before = JurnalHeader.objects.count()
+        headers = create_utang_for_purchase(self.f['purchase'])
+        utang = headers[0]
+        payment = create_utang_payment(
+            utang,
+            utang_detail=utang.details.first(),
+            tanggal=date(2026, 4, 28),
+            coa_account=self.f['coa_cash'],
+            jumlah=Decimal('10000'),
+            keterangan='Test',
+        )
+        self.assertIsNotNone(payment.jurnal_header)
+        payment_journal_id = payment.jurnal_header_id
+        reverse_utang_header(utang, user=None)
+        self.assertFalse(JurnalHeader.objects.filter(pk=payment_journal_id).exists())
+        self.assertEqual(JurnalHeader.objects.count(), journal_count_before)
+
+    def test_reverse_utang_for_purchase_clears_all_utang(self):
+        create_utang_for_purchase(self.f['purchase'])
+        self.assertEqual(UtangHeader.objects.count(), 1)
+        reverse_utang_for_purchase(self.f['purchase'])
+        self.assertEqual(UtangHeader.objects.count(), 0)
+        self.assertEqual(UtangTerhapus.objects.count(), 1)

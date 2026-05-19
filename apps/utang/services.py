@@ -6,7 +6,7 @@ from django.db.models import Sum
 from apps.jurnal.models import JurnalDetail, JurnalHeader
 from apps.jurnal.utils import log_jurnal_terhapus
 
-from .models import UtangHeader, UtangDetail, UtangPembayaran
+from .models import UtangHeader, UtangDetail, UtangPembayaran, UtangTerhapus
 
 
 def create_manual_utang(
@@ -124,6 +124,44 @@ def create_utang_payment(utang_header: UtangHeader, utang_detail, tanggal, coa_a
 
 
 def reverse_utang_header(utang_header: UtangHeader, user=None):
+    """Delete utang and write audit trail to UtangTerhapus.
+    Deletes only payment journals owned by this module.
+    Does not touch purchase journals.
+    """
+    UtangTerhapus.objects.create(
+        nomor_utang=utang_header.nomor_utang,
+        uraian=utang_header.deskripsi,
+        entitas_bisnis_nama=(
+            str(utang_header.entitas_bisnis) if utang_header.entitas_bisnis else ''
+        ),
+        tanggal=utang_header.tanggal,
+        deleted_by=user,
+        snapshot={
+            'total_amount': str(utang_header.total_amount),
+            'status': utang_header.status,
+            'tanggal_jatuh_tempo': (
+                str(utang_header.tanggal_jatuh_tempo)
+                if utang_header.tanggal_jatuh_tempo else None
+            ),
+            'purchase_header_id': utang_header.purchase_header_id,
+            'details': [
+                {
+                    'coa': str(d.coa_utang_account),
+                    'amount': str(d.amount),
+                    'description': d.description,
+                }
+                for d in utang_header.details.select_related('coa_utang_account').all()
+            ],
+            'pembayaran': [
+                {
+                    'tanggal': str(p.tanggal),
+                    'jumlah': str(p.jumlah),
+                    'keterangan': p.keterangan,
+                }
+                for p in utang_header.pembayaran.all()
+            ],
+        },
+    )
     for payment in utang_header.pembayaran.select_related('jurnal_header').all():
         if payment.jurnal_header_id:
             log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
