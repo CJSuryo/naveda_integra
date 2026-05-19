@@ -264,3 +264,48 @@ class UtangReportingTests(TestCase):
         self.utang.save()
         result = list(get_utang_jatuh_tempo(hari_ke_depan=7))
         self.assertEqual(len(result), 0)
+
+
+class UtangFormTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        headers = create_utang_for_purchase(self.f['purchase'])
+        self.utang = headers[0]
+
+    def test_payment_form_utang_detail_scoped_to_header(self):
+        from .forms import UtangPembayaranForm
+        from apps.purchase.models import PurchaseHeader, PurchaseEntitasBisnis, PurchaseItem
+        purchase2 = PurchaseHeader.objects.create(
+            transaction_id='PUR-INV-0002', tanggal=date(2026, 4, 29), deskripsi='Test2',
+        )
+        pg2 = PurchaseEntitasBisnis.objects.create(
+            purchase_header=purchase2, entitas_bisnis=self.f['eb'],
+        )
+        PurchaseItem.objects.create(
+            purchase_eb=pg2,
+            item=self.f['item'],
+            sub_transaction_type=self.f['sub_type'],
+            coa_account=self.f['coa_cash'],
+            offset_coa_account=self.f['coa_utang'],
+            quantity=Decimal('1'),
+            unit_price=Decimal('1000'),
+        )
+        create_utang_for_purchase(purchase2)
+        form = UtangPembayaranForm(utang_header=self.utang)
+        self.assertEqual(form.fields['utang_detail'].queryset.count(), 1)
+
+    def test_payment_form_coa_filtered_to_aset(self):
+        from .forms import UtangPembayaranForm
+        form = UtangPembayaranForm(utang_header=self.utang)
+        for akun in form.fields['coa_account'].queryset:
+            self.assertEqual(akun.kategori_id, 'aset')
+
+    def test_header_form_filters_entitas_to_pemasok(self):
+        from .forms import UtangHeaderForm
+        tipe = self.f['tipe']
+        EntitasBisnis.objects.create(
+            nama='PT Pelanggan', tipe_entitas=tipe, relasi='pelanggan',
+        )
+        form = UtangHeaderForm()
+        for eb in form.fields['entitas_bisnis'].queryset:
+            self.assertIn(eb.relasi, ['pemasok', 'keduanya'])
