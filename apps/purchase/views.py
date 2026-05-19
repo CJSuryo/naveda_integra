@@ -28,6 +28,7 @@ from .services import (
     reverse_aset_tetap_records, reverse_aset_lainnya_records,
     create_aset_tetap_records, create_aset_lainnya_records,
 )
+from apps.utang.services import create_utang_for_purchase, reverse_utang_for_purchase
 
 
 def _get_eb_dropdown_options() -> list[dict[str, str]]:
@@ -562,6 +563,7 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
             reverse_aset_lainnya_records(purchase)
             reverse_inventory_records(purchase)
             reverse_fifo_batches(purchase)
+            reverse_utang_for_purchase(purchase)
             reverse_automated_journals(purchase)
             purchase.delete()
         dj_messages.success(request, f'Purchase {trx_id} berhasil dihapus.')
@@ -1192,6 +1194,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             reverse_aset_tetap_records(existing)
             reverse_aset_lainnya_records(existing)
             reverse_fifo_batches(existing)
+            reverse_utang_for_purchase(existing)
             reverse_automated_journals(existing)
             existing.entitas_groups.all().delete()
 
@@ -1212,6 +1215,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                 purchase = existing
             else:
                 # Prefix changed — delete old and create new
+                reverse_utang_for_purchase(existing)
                 existing.delete()
                 purchase = PurchaseHeader(tanggal=tanggal, deskripsi=deskripsi)
                 purchase.save(_trx_prefix=new_prefix)
@@ -1245,10 +1249,12 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             create_inventory_records(purchase)
             create_aset_tetap_records(purchase)
             create_aset_lainnya_records(purchase)
+            create_utang_for_purchase(purchase)
             created_purchases.append(purchase)
         else:
             # Delete existing if it exists (we're splitting into multiple)
             if existing:
+                reverse_utang_for_purchase(existing)
                 existing.delete()
 
             # Create one PurchaseHeader per prefix group
@@ -1285,6 +1291,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                 create_inventory_records(purchase)
                 create_aset_tetap_records(purchase)
                 create_aset_lainnya_records(purchase)
+                create_utang_for_purchase(purchase)
                 created_purchases.append(purchase)
 
     if len(created_purchases) == 1:

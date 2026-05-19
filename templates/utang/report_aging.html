@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Aging Utang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Aging Utang</h1>
+    <p class="ni-page-header__subtitle">Klasifikasi keterlambatan pembayaran utang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?format=json" class="ni-btn ni-btn--secondary ni-btn--sm">JSON</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__header"><h2 class="ni-card__title">Belum Jatuh Tempo</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Nomor Utang</th><th>Pemasok</th><th class="ni-text-right">Outstanding</th></tr></thead>
+      <tbody>
+        {% for entry in buckets.current %}
+        <tr>
+          <td><a href="{% url 'utang:detail' entry.utang.pk %}" class="ni-link">{{ entry.utang.nomor_utang }}</a></td>
+          <td>{{ entry.utang.entitas_bisnis }}</td>
+          <td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="3" class="ni-text-center ni-text-muted">-</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__header"><h2 class="ni-card__title" style="color:var(--ni-warning)">Lewat 1–30 Hari</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Nomor Utang</th><th>Pemasok</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">Hari Lewat</th></tr></thead>
+      <tbody>
+        {% for entry in buckets.due_1_30 %}
+        <tr>
+          <td><a href="{% url 'utang:detail' entry.utang.pk %}" class="ni-link">{{ entry.utang.nomor_utang }}</a></td>
+          <td>{{ entry.utang.entitas_bisnis }}</td>
+          <td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ entry.hari }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="ni-text-center ni-text-muted">-</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__header"><h2 class="ni-card__title" style="color:var(--ni-warning)">Lewat 31–60 Hari</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Nomor Utang</th><th>Pemasok</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">Hari Lewat</th></tr></thead>
+      <tbody>
+        {% for entry in buckets.due_31_60 %}
+        <tr>
+          <td><a href="{% url 'utang:detail' entry.utang.pk %}" class="ni-link">{{ entry.utang.nomor_utang }}</a></td>
+          <td>{{ entry.utang.entitas_bisnis }}</td>
+          <td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ entry.hari }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="ni-text-center ni-text-muted">-</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title" style="color:var(--ni-danger)">Lewat >60 Hari</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Nomor Utang</th><th>Pemasok</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">Hari Lewat</th></tr></thead>
+      <tbody>
+        {% for entry in buckets.due_60_plus %}
+        <tr>
+          <td><a href="{% url 'utang:detail' entry.utang.pk %}" class="ni-link">{{ entry.utang.nomor_utang }}</a></td>
+          <td>{{ entry.utang.entitas_bisnis }}</td>
+          <td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ entry.hari }}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="ni-text-center ni-text-muted">-</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

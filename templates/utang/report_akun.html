@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Laporan Utang per Akun{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Utang per Akun</h1>
+    <p class="ni-page-header__subtitle">Total utang terbuka dikelompokkan per akun COA</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?format=json" class="ni-btn ni-btn--secondary ni-btn--sm">JSON</a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Kode Akun</th>
+          <th>Nama Akun</th>
+          <th class="ni-text-right">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.coa_utang_account__kode_akun }}</td>
+          <td>{{ row.coa_utang_account__nama }}</td>
+          <td class="ni-text-right">{{ row.total|floatformat:0|intcomma }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="ni-text-center ni-text-muted">Tidak ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

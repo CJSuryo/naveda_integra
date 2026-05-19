@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Utang Jatuh Tempo{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Utang Jatuh Tempo</h1>
+    <p class="ni-page-header__subtitle">Utang yang jatuh tempo dalam {{ hari }} hari ke depan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?format=json&hari={{ hari }}" class="ni-btn ni-btn--secondary ni-btn--sm">JSON</a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor Utang</th>
+          <th>Pemasok</th>
+          <th>Jatuh Tempo</th>
+          <th class="ni-text-right">Total</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for utang in utangs %}
+        <tr>
+          <td><a href="{% url 'utang:detail' utang.pk %}" class="ni-link">{{ utang.nomor_utang }}</a></td>
+          <td>{{ utang.entitas_bisnis }}</td>
+          <td>{{ utang.tanggal_jatuh_tempo }}</td>
+          <td class="ni-text-right">{{ utang.total_amount|floatformat:0|intcomma }}</td>
+          <td>
+            {% if utang.status == 'partial' %}
+              <span class="ni-badge ni-badge--warning">Sebagian</span>
+            {% else %}
+              <span class="ni-badge ni-badge--secondary">Terbuka</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Tidak ada utang jatuh tempo dalam {{ hari }} hari.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

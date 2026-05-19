@@ -1,7 +1,9 @@
 from django import forms
 
+from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
-from .models import UtangHeader, UtangPembayaran
+
+from .models import UtangDetail, UtangHeader, UtangPembayaran
 
 
 class UtangHeaderForm(forms.ModelForm):
@@ -19,6 +21,10 @@ class UtangHeaderForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['entitas_bisnis'].required = False
         self.fields['deskripsi'].required = False
+        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
+            relasi__in=['pemasok', 'keduanya'],
+            status_aktif=True,
+        )
 
 
 class UtangPembayaranForm(forms.ModelForm):
@@ -32,3 +38,14 @@ class UtangPembayaranForm(forms.ModelForm):
             'jumlah': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
         }
+
+    def __init__(self, *args, utang_header=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['utang_detail'].required = False
+        self.fields['coa_account'].queryset = Akun.objects.filter(kategori_id='aset')
+        if utang_header is not None:
+            self.fields['utang_detail'].queryset = UtangDetail.objects.filter(
+                utang_header=utang_header,
+            )
+        else:
+            self.fields['utang_detail'].queryset = UtangDetail.objects.none()
