@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Batalkan Pembayaran{% endblock %}
+{% block content %}
+<div class="ni-card ni-animate-fade-in" style="max-width:560px; margin:0 auto;">
+  <div class="ni-card__body" style="text-align:center; padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="x-circle" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">Batalkan pembayaran <strong>{{ payment.tanggal }}</strong> sebesar <strong>{{ payment.jumlah|floatformat:0|intcomma }}</strong>?</p>
+    <p style="color:var(--ni-text-muted);margin-bottom:24px;">Jurnal terkait akan ikut dihapus.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Batalkan</button>
+        <a href="{% url 'utang:detail' utang.pk %}" class="ni-btn ni-btn--secondary">Kembali</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

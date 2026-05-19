@@ -11,4 +11,9 @@ urlpatterns = [
     path('<int:pk>/edit/', views.utang_update, name='update'),
     path('<int:pk>/delete/', views.utang_delete, name='delete'),
     path('<int:pk>/bayar/', views.utang_pay, name='pay'),
+    path('<int:pk>/pembayaran/<int:payment_pk>/cancel/', views.utang_payment_cancel, name='payment_cancel'),
+    path('reports/subjek/', views.utang_report_subjek, name='report_subjek'),
+    path('reports/akun/', views.utang_report_akun, name='report_akun'),
+    path('reports/aging/', views.utang_report_aging, name='report_aging'),
+    path('reports/jatuh-tempo/', views.utang_report_jatuh_tempo, name='report_jatuh_tempo'),
 ]
