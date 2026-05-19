@@ -1,7 +1,8 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Sum
+from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
 from apps.jurnal.utils import log_jurnal_terhapus
@@ -251,3 +252,73 @@ def reverse_utang_payment(payment: UtangPembayaran, user=None) -> None:
             payment.jurnal_header.delete()
         payment.delete()
         _update_utang_status(utang_header)
+
+
+def get_utang_per_subjek():
+    """Group open/partial utang by supplier. Returns queryset."""
+    return (
+        UtangHeader.objects
+        .filter(status__in=['open', 'partial'])
+        .values('entitas_bisnis__id', 'entitas_bisnis__nama')
+        .annotate(
+            total_utang=Sum('total_amount'),
+            total_bayar=Sum('pembayaran__jumlah'),
+            jumlah_invoice=Count('id'),
+        )
+        .order_by('-total_utang')
+    )
+
+
+def get_utang_per_group_akun():
+    """Group open/partial utang by COA account. Returns queryset."""
+    return (
+        UtangDetail.objects
+        .filter(utang_header__status__in=['open', 'partial'])
+        .values(
+            'coa_utang_account__kode_akun',
+            'coa_utang_account__nama',
+        )
+        .annotate(total=Sum('amount'))
+        .order_by('coa_utang_account__kode_akun')
+    )
+
+
+def get_utang_aging():
+    """Bucket open/partial utang with jatuh_tempo by days overdue."""
+    today = timezone.now().date()
+    qs = (
+        UtangHeader.objects
+        .filter(status__in=['open', 'partial'], tanggal_jatuh_tempo__isnull=False)
+        .select_related('entitas_bisnis', 'purchase_header')
+        .annotate(total_bayar=Sum('pembayaran__jumlah'))
+    )
+    buckets = {'current': [], 'due_1_30': [], 'due_31_60': [], 'due_60_plus': []}
+    for u in qs:
+        delta = (today - u.tanggal_jatuh_tempo).days
+        outstanding = u.total_amount - (u.total_bayar or Decimal('0'))
+        entry = {'utang': u, 'outstanding': outstanding, 'hari': delta}
+        if delta <= 0:
+            buckets['current'].append(entry)
+        elif delta <= 30:
+            buckets['due_1_30'].append(entry)
+        elif delta <= 60:
+            buckets['due_31_60'].append(entry)
+        else:
+            buckets['due_60_plus'].append(entry)
+    return buckets
+
+
+def get_utang_jatuh_tempo(hari_ke_depan: int = 7):
+    """Return open/partial utang due within hari_ke_depan days. Returns queryset."""
+    from datetime import timedelta
+    batas = timezone.now().date() + timedelta(days=hari_ke_depan)
+    return (
+        UtangHeader.objects
+        .filter(
+            status__in=['open', 'partial'],
+            tanggal_jatuh_tempo__isnull=False,
+            tanggal_jatuh_tempo__lte=batas,
+        )
+        .select_related('entitas_bisnis')
+        .order_by('tanggal_jatuh_tempo')
+    )

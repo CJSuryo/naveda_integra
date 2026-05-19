@@ -219,3 +219,48 @@ class UtangPaymentTests(TestCase):
         )
         self.utang.refresh_from_db()
         self.assertEqual(self.utang.status, 'open')
+
+
+class UtangReportingTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        headers = create_utang_for_purchase(self.f['purchase'])
+        self.utang = headers[0]
+
+    def test_get_utang_per_subjek_returns_open_utang(self):
+        from .services import get_utang_per_subjek
+        result = list(get_utang_per_subjek())
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['entitas_bisnis__nama'], 'PT Demo')
+        self.assertEqual(result[0]['jumlah_invoice'], 1)
+
+    def test_get_utang_per_group_akun_returns_kewajiban_sum(self):
+        from .services import get_utang_per_group_akun
+        result = list(get_utang_per_group_akun())
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]['total'], Decimal('100000'))
+
+    def test_get_utang_aging_buckets_current(self):
+        from .services import get_utang_aging
+        from django.utils import timezone
+        self.utang.tanggal_jatuh_tempo = date(2099, 1, 1)
+        self.utang.save()
+        buckets = get_utang_aging()
+        self.assertEqual(len(buckets['current']), 1)
+        self.assertEqual(len(buckets['due_1_30']), 0)
+
+    def test_get_utang_jatuh_tempo_returns_upcoming(self):
+        from .services import get_utang_jatuh_tempo
+        from django.utils import timezone
+        tomorrow = timezone.now().date() + timedelta(days=1)
+        self.utang.tanggal_jatuh_tempo = tomorrow
+        self.utang.save()
+        result = list(get_utang_jatuh_tempo(hari_ke_depan=7))
+        self.assertEqual(len(result), 1)
+
+    def test_get_utang_jatuh_tempo_excludes_far_future(self):
+        from .services import get_utang_jatuh_tempo
+        self.utang.tanggal_jatuh_tempo = date(2099, 1, 1)
+        self.utang.save()
+        result = list(get_utang_jatuh_tempo(hari_ke_depan=7))
+        self.assertEqual(len(result), 0)
