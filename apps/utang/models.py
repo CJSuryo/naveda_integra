@@ -44,6 +44,11 @@ class UtangHeader(models.Model):
         default='open',
         verbose_name='Status',
     )
+    tanggal_jatuh_tempo = models.DateField(
+        null=True, blank=True, db_index=True,
+        verbose_name='Tanggal Jatuh Tempo',
+    )
+    is_locked = models.BooleanField(default=False, verbose_name='Terkunci')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -95,7 +100,21 @@ class UtangHeader(models.Model):
 
     @property
     def entitas_display(self) -> str:
-        return str(self.entitas_bisnis) if self.entitas_bisnis else '-' 
+        return str(self.entitas_bisnis) if self.entitas_bisnis else '-'
+
+    @property
+    def is_overdue(self) -> bool:
+        from django.utils import timezone
+        if not self.tanggal_jatuh_tempo or self.status == 'paid':
+            return False
+        return timezone.now().date() > self.tanggal_jatuh_tempo
+
+    @property
+    def days_overdue(self) -> int:
+        from django.utils import timezone
+        if not self.tanggal_jatuh_tempo or self.status == 'paid':
+            return 0
+        return max(0, (timezone.now().date() - self.tanggal_jatuh_tempo).days)
 
 
 class UtangDetail(models.Model):

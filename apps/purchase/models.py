@@ -290,6 +290,11 @@ class SubTransactionType(models.Model):
         choices=TAX_TYPE_CHOICES,
         verbose_name='Default Tax Type',
     )
+    payment_term_days = models.PositiveIntegerField(
+        null=True, blank=True,
+        verbose_name='Payment Term (hari)',
+        help_text='Otomatis isi tanggal jatuh tempo utang. Kosongkan jika tidak ada.',
+    )
 
     class Meta:
         verbose_name = 'Sub-Transaction Type'
