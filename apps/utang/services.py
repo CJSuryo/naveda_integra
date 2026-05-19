@@ -32,47 +32,71 @@ def create_manual_utang(
     return utang
 
 
-def create_utang_for_purchase(purchase_header):
-    items = (
-        purchase_header.entitas_groups
-        .prefetch_related('items__offset_coa_account', 'items__item')
-        .all()
-    )
-    credit_items = []
-    for eb_group in items:
-        for item in eb_group.items.all():
-            if item.offset_coa_account and item.offset_coa_account.kategori_id == 'kewajiban':
-                credit_items.append((eb_group, item))
-
-    if not credit_items:
-        return None
-
-    groups: dict[tuple[int, int], list] = {}
-    for eb_group, item in credit_items:
-        key = (item.offset_coa_account_id, eb_group.entitas_bisnis_id)
-        groups.setdefault(key, []).append((eb_group, item))
+def create_utang_for_purchase(purchase_header, tanggal_jatuh_tempo=None):
+    """
+    Build UtangHeader records from a PurchaseHeader.
+    Called after create_automated_journals() — journals already exist,
+    this function only creates the utang recap and does NOT create new journals.
+    Returns list[UtangHeader].
+    """
+    from datetime import timedelta
 
     utang_headers = []
-    for (coa_id, eb_id), entries in groups.items():
-        total_amount = sum(item.total_value for _, item in entries)
-        header = UtangHeader.objects.create(
-            purchase_header=purchase_header,
-            tanggal=purchase_header.tanggal,
-            entitas_bisnis_id=eb_id,
-            deskripsi=f'Utang dari {purchase_header.transaction_id}',
-            total_amount=total_amount,
-            status='open',
-        )
-        for eb_group, item in entries:
-            UtangDetail.objects.create(
-                utang_header=header,
-                purchase_item=item,
-                coa_utang_account=item.offset_coa_account,
-                description=str(item.item),
-                amount=item.total_value,
+    with transaction.atomic():
+        for eb_group in (
+            purchase_header.entitas_groups
+            .select_related('entitas_bisnis')
+            .prefetch_related(
+                'items__offset_coa_account',
+                'items__coa_account',
+                'items__item',
+                'items__sub_transaction_type',
             )
-        utang_headers.append(header)
+            .all()
+        ):
+            utang_items = [
+                item for item in eb_group.items.all()
+                if item.offset_coa_account
+                and item.offset_coa_account.kategori_id == 'kewajiban'
+            ]
+            if not utang_items:
+                continue
 
+            groups: dict[int, list] = {}
+            for item in utang_items:
+                groups.setdefault(item.offset_coa_account_id, []).append(item)
+
+            for coa_id, items in groups.items():
+                total_amount = sum(item.total_value for item in items)
+                stt = items[0].sub_transaction_type
+                jatuh_tempo = None
+                if stt and stt.payment_term_days:
+                    jatuh_tempo = purchase_header.tanggal + timedelta(
+                        days=stt.payment_term_days
+                    )
+                elif tanggal_jatuh_tempo:
+                    jatuh_tempo = tanggal_jatuh_tempo
+
+                header = UtangHeader.objects.create(
+                    purchase_header=purchase_header,
+                    tanggal=purchase_header.tanggal,
+                    tanggal_jatuh_tempo=jatuh_tempo,
+                    entitas_bisnis=eb_group.entitas_bisnis,
+                    deskripsi=f'Utang dari {purchase_header.transaction_id}',
+                    total_amount=total_amount,
+                    status='open',
+                )
+                UtangDetail.objects.bulk_create([
+                    UtangDetail(
+                        utang_header=header,
+                        purchase_item=item,
+                        coa_utang_account_id=coa_id,
+                        description=str(item.item),
+                        amount=item.total_value,
+                    )
+                    for item in items
+                ])
+                utang_headers.append(header)
     return utang_headers
 
 
@@ -159,13 +183,25 @@ def _update_utang_status(utang_header: UtangHeader) -> None:
 
 
 def _next_utang_journal_number() -> str:
-    query = JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-UTG-')
-    seq = 0
-    for nomor in query.values_list('nomor_transaksi', flat=True):
+    last = (
+        JurnalHeader.objects
+        .filter(nomor_transaksi__startswith='TRX-UTG-')
+        .order_by('-nomor_transaksi')
+        .values_list('nomor_transaksi', flat=True)
+        .first()
+    )
+    if last:
         try:
-            candidate = int(nomor.rsplit('-', 1)[1])
-            if candidate > seq:
-                seq = candidate
+            seq = int(last.rsplit('-', 1)[1]) + 1
         except (ValueError, IndexError):
-            continue
-    return f'TRX-UTG-{seq + 1:04d}'
+            seq = 1
+    else:
+        seq = 1
+    return f'TRX-UTG-{seq:04d}'
+
+
+def reverse_utang_payment(payment):
+    if payment.jurnal_header_id:
+        log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
+        payment.jurnal_header.delete()
+    payment.delete()
