@@ -152,3 +152,70 @@ class ReverseUtangTests(TestCase):
         reverse_utang_for_purchase(self.f['purchase'])
         self.assertEqual(UtangHeader.objects.count(), 0)
         self.assertEqual(UtangTerhapus.objects.count(), 1)
+
+
+class UtangPaymentTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        headers = create_utang_for_purchase(self.f['purchase'])
+        self.utang = headers[0]
+        self.detail = self.utang.details.first()
+
+    def test_payment_creates_journal_and_updates_status(self):
+        payment = create_utang_payment(
+            self.utang,
+            utang_detail=self.detail,
+            tanggal=date(2026, 4, 28),
+            coa_account=self.f['coa_cash'],
+            jumlah=Decimal('50000'),
+            keterangan='Bayar parsial',
+        )
+        self.utang.refresh_from_db()
+        self.assertEqual(self.utang.status, 'partial')
+        self.assertIsNotNone(payment.jurnal_header)
+
+    def test_overpayment_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            create_utang_payment(
+                self.utang,
+                utang_detail=self.detail,
+                tanggal=date(2026, 4, 28),
+                coa_account=self.f['coa_cash'],
+                jumlah=Decimal('200000'),
+                keterangan='Overpay',
+            )
+
+    def test_full_payment_sets_paid_status(self):
+        create_utang_payment(
+            self.utang,
+            utang_detail=self.detail,
+            tanggal=date(2026, 4, 28),
+            coa_account=self.f['coa_cash'],
+            jumlah=Decimal('100000'),
+            keterangan='Lunas',
+        )
+        self.utang.refresh_from_db()
+        self.assertEqual(self.utang.status, 'paid')
+
+    def test_reverse_utang_payment_deletes_journal_and_recalculates_status(self):
+        from apps.jurnal.models import JurnalHeader
+        payment = create_utang_payment(
+            self.utang,
+            utang_detail=self.detail,
+            tanggal=date(2026, 4, 28),
+            coa_account=self.f['coa_cash'],
+            jumlah=Decimal('50000'),
+            keterangan='Bayar',
+        )
+        payment_journal_id = payment.jurnal_header_id
+        self.utang.refresh_from_db()
+        self.assertEqual(self.utang.status, 'partial')
+
+        reverse_utang_payment(payment)
+
+        self.assertFalse(JurnalHeader.objects.filter(pk=payment_journal_id).exists())
+        self.assertFalse(
+            self.utang.pembayaran.filter(pk=payment.pk).exists()
+        )
+        self.utang.refresh_from_db()
+        self.assertEqual(self.utang.status, 'open')

@@ -100,16 +100,20 @@ def create_utang_for_purchase(purchase_header, tanggal_jatuh_tempo=None):
     return utang_headers
 
 
-def create_utang_payment(utang_header: UtangHeader, utang_detail, tanggal, coa_account, jumlah, keterangan):
-    outstanding = utang_header.outstanding_amount
+def create_utang_payment(
+    utang_header: UtangHeader, utang_detail, tanggal, coa_account, jumlah, keterangan
+):
     if jumlah <= 0:
         raise ValueError('Jumlah pembayaran harus lebih besar dari 0.')
-    if jumlah > outstanding:
-        raise ValueError('Jumlah pembayaran tidak boleh melebihi sisa utang.')
 
     with transaction.atomic():
+        locked = UtangHeader.objects.select_for_update().get(pk=utang_header.pk)
+        outstanding = locked.outstanding_amount
+        if jumlah > outstanding:
+            raise ValueError('Jumlah pembayaran tidak boleh melebihi sisa utang.')
+
         payment = UtangPembayaran.objects.create(
-            utang_header=utang_header,
+            utang_header=locked,
             utang_detail=utang_detail,
             tanggal=tanggal,
             coa_account=coa_account,
@@ -119,7 +123,7 @@ def create_utang_payment(utang_header: UtangHeader, utang_detail, tanggal, coa_a
         journal = _create_utang_payment_journal(payment)
         payment.jurnal_header = journal
         payment.save(update_fields=['jurnal_header'])
-        _update_utang_status(utang_header)
+        _update_utang_status(locked)
         return payment
 
 
@@ -238,8 +242,12 @@ def _next_utang_journal_number() -> str:
     return f'TRX-UTG-{seq:04d}'
 
 
-def reverse_utang_payment(payment):
-    if payment.jurnal_header_id:
-        log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
-        payment.jurnal_header.delete()
-    payment.delete()
+def reverse_utang_payment(payment: UtangPembayaran, user=None) -> None:
+    """Cancel a single utang payment: delete its journal and recalculate header status."""
+    utang_header = payment.utang_header
+    with transaction.atomic():
+        if payment.jurnal_header_id:
+            log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
+            payment.jurnal_header.delete()
+        payment.delete()
+        _update_utang_status(utang_header)
