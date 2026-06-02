@@ -1,30 +1,80 @@
 from django import forms
+from django.forms import inlineformset_factory
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
 
-from .models import UtangDetail, UtangHeader, UtangPembayaran
+from .models import JENIS_DOKUMEN_CHOICES, UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran
+
+_APPROVAL_DEFAULTS = {'bank', 'leasing', 'pemegang_saham', 'antar_entitas'}
 
 
 class UtangHeaderForm(forms.ModelForm):
     class Meta:
         model = UtangHeader
-        fields = ['tanggal', 'entitas_bisnis', 'total_amount', 'deskripsi']
+        fields = [
+            'tanggal', 'jenis_utang', 'kreditor', 'entitas_bisnis',
+            'nomor_referensi', 'kategori_jangka_waktu',
+            'coa_source_account', 'requires_approval',
+            'tanggal_jatuh_tempo', 'deskripsi',
+        ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'jenis_utang': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_utang'}),
+            'kreditor': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Nama kreditor/pihak yang memberi utang'}),
             'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'total_amount': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
-            'deskripsi': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+            'nomor_referensi': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Misal: PK-2026-001, INV-001'}),
+            'kategori_jangka_waktu': forms.Select(attrs={'class': 'ni-input', 'id': 'id_kategori_jangka_waktu'}),
+            'coa_source_account': forms.Select(attrs={'class': 'ni-input'}),
+            'requires_approval': forms.CheckboxInput(attrs={'class': 'ni-checkbox', 'id': 'id_requires_approval'}),
+            'tanggal_jatuh_tempo': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'deskripsi': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['kreditor'].required = False
         self.fields['entitas_bisnis'].required = False
         self.fields['deskripsi'].required = False
+        self.fields['nomor_referensi'].required = False
+        self.fields['tanggal_jatuh_tempo'].required = False
+        self.fields['coa_source_account'].required = False
         self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
             relasi__in=['pemasok', 'keduanya'],
             status_aktif=True,
         )
+        self.fields['coa_source_account'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['coa_source_account'].empty_label = '— Pilih Akun Asal (opsional) —'
+
+
+class UtangDetailForm(forms.ModelForm):
+    class Meta:
+        model = UtangDetail
+        fields = ['coa_utang_account', 'description', 'amount']
+        widgets = {
+            'coa_utang_account': forms.Select(attrs={'class': 'ni-input ni-input--sm'}),
+            'description': forms.TextInput(attrs={'class': 'ni-input ni-input--sm', 'placeholder': 'Keterangan'}),
+            'amount': forms.NumberInput(attrs={'class': 'ni-input ni-input--sm amount-field', 'step': '0.01', 'min': '0.01'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['description'].required = False
+        self.fields['coa_utang_account'].queryset = Akun.objects.filter(
+            kategori_id='kewajiban'
+        ).order_by('kode_akun')
+
+
+UtangDetailFormSet = inlineformset_factory(
+    UtangHeader,
+    UtangDetail,
+    form=UtangDetailForm,
+    fields=['coa_utang_account', 'description', 'amount'],
+    extra=1,
+    min_num=1,
+    validate_min=True,
+    can_delete=True,
+)
 
 
 class UtangPembayaranForm(forms.ModelForm):
@@ -42,10 +92,18 @@ class UtangPembayaranForm(forms.ModelForm):
     def __init__(self, *args, utang_header=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['utang_detail'].required = False
-        self.fields['coa_account'].queryset = Akun.objects.filter(kategori_id='aset')
+        self.fields['coa_account'].queryset = Akun.objects.filter(kategori_id='aset').order_by('kode_akun')
         if utang_header is not None:
-            self.fields['utang_detail'].queryset = UtangDetail.objects.filter(
-                utang_header=utang_header,
-            )
+            self.fields['utang_detail'].queryset = UtangDetail.objects.filter(utang_header=utang_header)
         else:
             self.fields['utang_detail'].queryset = UtangDetail.objects.none()
+
+
+class UtangAttachmentForm(forms.ModelForm):
+    class Meta:
+        model = UtangAttachment
+        fields = ['file', 'jenis_dokumen']
+        widgets = {
+            'file': forms.FileInput(attrs={'class': 'ni-input'}),
+            'jenis_dokumen': forms.Select(attrs={'class': 'ni-input'}),
+        }

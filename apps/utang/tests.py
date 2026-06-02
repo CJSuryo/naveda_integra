@@ -391,3 +391,19 @@ class UtangServicesV1Test(TestCase):
         utang.refresh_from_db()
         self.assertEqual(utang.approval_status, 'rejected')
         self.assertEqual(utang.status, 'cancelled')
+
+
+from apps.utang.forms import UtangHeaderForm, UtangDetailFormSet
+
+
+class UtangFormsV1Test(TestCase):
+    def test_header_form_has_jenis_utang_field(self):
+        form = UtangHeaderForm()
+        self.assertIn('jenis_utang', form.fields)
+
+    def test_header_form_has_kreditor_field(self):
+        form = UtangHeaderForm()
+        self.assertIn('kreditor', form.fields)
+
+    def test_detail_formset_exists(self):
+        self.assertIsNotNone(UtangDetailFormSet)
