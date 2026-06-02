@@ -19,8 +19,24 @@
 
 <!-- Filters -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
-  <div class="ni-card__body" style="padding:16px;">
+<style>
+  /* Allow TomSelect dropdown to escape filter card */
+  .ni-filter-card,
+  .ni-filter-card .ni-card__body,
+  #purchaseFilterForm,
+  #purchaseFilterForm > div { overflow: visible !important; }
+  #ebFilterSelect + .ts-wrapper { position: relative; }
+  #ebFilterSelect + .ts-wrapper .ts-dropdown {
+    z-index: 1050;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 2px;
+  }
+</style>
+<div class="ni-card ni-filter-card ni-animate-fade-in" style="margin-bottom:16px;overflow:visible;">
+  <div class="ni-card__body" style="padding:16px;overflow:visible;">
     <form id="purchaseFilterForm" method="get">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
         <div class="ni-form-group" style="margin:0;flex:2;min-width:260px;">
