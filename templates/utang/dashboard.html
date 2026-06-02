@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Dashboard Utang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Dashboard Utang</h1>
+    <p class="ni-page-header__subtitle">Ringkasan posisi kewajiban</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">Daftar Utang</a>
+    <a href="{% url 'utang:create' %}" class="ni-btn ni-btn--primary">+ Tambah Utang</a>
+  </div>
+</div>
+
+<div class="ni-kpi-grid">
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Total Outstanding</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_outstanding|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Sisa Belum Dibayar</div>
+    <div class="ni-kpi-card__value">{{ kpi.sisa|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Jatuh Tempo 7 Hari</div>
+    <div class="ni-kpi-card__value">{{ kpi.jatuh_tempo_7 }} dokumen</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Jatuh Tempo 30 Hari</div>
+    <div class="ni-kpi-card__value">{{ kpi.jatuh_tempo_30 }} dokumen</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--danger">
+    <div class="ni-kpi-card__label">Sudah Jatuh Tempo</div>
+    <div class="ni-kpi-card__value">{{ kpi.overdue_count }} dokumen</div>
+  </div>
+  {% if kpi.waiting_approval %}
+  <div class="ni-kpi-card ni-kpi-card--info">
+    <div class="ni-kpi-card__label">Menunggu Persetujuan</div>
+    <div class="ni-kpi-card__value">{{ kpi.waiting_approval }} dokumen</div>
+  </div>
+  {% endif %}
+</div>
+
+<div class="ni-grid ni-grid--2">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Komposisi per Jenis</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead><tr><th>Jenis</th><th class="ni-text-right">Total</th></tr></thead>
+        <tbody>
+          {% for row in kpi.by_jenis %}
+          <tr>
+            <td>{{ row.jenis_utang }}</td>
+            <td class="ni-text-right">{{ row.total|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="2" class="ni-text-muted ni-text-center">Tidak ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Jatuh Tempo (30 Hari)</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead><tr><th>Nomor</th><th>Kreditor</th><th>Jatuh Tempo</th><th class="ni-text-right">Sisa</th></tr></thead>
+        <tbody>
+          {% for u in due_soon %}
+          <tr>
+            <td><a href="{% url 'utang:detail' u.pk %}">{{ u.nomor_utang }}</a></td>
+            <td>{{ u.entitas_display }}</td>
+            <td>{{ u.tanggal_jatuh_tempo }}</td>
+            <td class="ni-text-right">{{ u.outstanding_amount|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="ni-text-muted ni-text-center">Tidak ada dalam 30 hari.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Aging Utang</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor</th><th>Kreditor</th><th>Jatuh Tempo</th>
+          <th class="ni-text-right">Outstanding</th><th>Hari</th><th>Bucket</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in buckets.current %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>Current</td></tr>
+        {% endfor %}
+        {% for entry in buckets.due_1_30 %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>1&#x2013;30 Hari</td></tr>
+        {% endfor %}
+        {% for entry in buckets.due_31_60 %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>31&#x2013;60 Hari</td></tr>
+        {% endfor %}
+        {% for entry in buckets.due_61_90 %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>61&#x2013;90 Hari</td></tr>
+        {% endfor %}
+        {% for entry in buckets.due_91_180 %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>91&#x2013;180 Hari</td></tr>
+        {% endfor %}
+        {% for entry in buckets.due_180_plus %}
+        <tr><td><a href="{% url 'utang:detail' entry.utang.pk %}">{{ entry.utang.nomor_utang }}</a></td><td>{{ entry.utang.entitas_display }}</td><td>{{ entry.utang.tanggal_jatuh_tempo }}</td><td class="ni-text-right">{{ entry.outstanding|floatformat:0|intcomma }}</td><td>{{ entry.hari }}</td><td>&gt; 180 Hari</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
