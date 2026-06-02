@@ -92,7 +92,7 @@ class UtangHeader(models.Model):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name='utang_sources',
-        verbose_name='Akun Asal (Debet)',
+        verbose_name='Akun Debet',
     )
     requires_approval = models.BooleanField(default=False, verbose_name='Perlu Persetujuan')
     approval_status = models.CharField(

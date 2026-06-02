@@ -197,6 +197,28 @@ CSS is split into modular files under `static/css/`. Each file owns a single con
 | `wrapper.css` | `.ni-content-wrapper`, containers, auth layout, two-col/three-col grids |
 | `animation.css` | Keyframe animations: `ni-animate-fade-in`, `ni-animate-slide-up`, skeleton loaders |
 | `utilities.css` | Spacing (`.ni-m-*`, `.ni-p-*`), text (`.ni-text-center`, `.ni-text-muted`, `.ni-text-right`), flex, display |
+| `tomselect.css` | Tom Select theming + dropdown overflow rules. **All TomSelect overrides go here, not in templates.** Apply `.ni-filter-card` on any `.ni-card` that hosts a TS dropdown so the menu isn't clipped. |
+| `transaction-forms.css` | Shared styles for sales/purchase/jurnal multi-row entry forms |
+
+### Styles — STRICT RULES
+
+**Never put styles in HTML files.** This includes:
+
+- ❌ `style="..."` attributes on any element (NO `<div style="...">`, NO `<i style="width:16px;height:16px">`).
+- ❌ `<style>...</style>` blocks inside templates.
+- ❌ `<link rel="stylesheet" href="https://cdn.../some.css">` per-page CDN imports — register globally in `base.html`.
+- ❌ Page-specific hotfix CSS (`#someId .ts-dropdown { z-index: ... }`) — fold into the appropriate global file.
+
+**Where styles live (single source of truth):**
+
+- All styles → `static/css/<file>.css`, picked by concern from the table above.
+- Tom Select theming + dropdown overflow → `static/css/tomselect.css` (loaded globally in `base.html`).
+- Tom Select CDN (CSS + JS) → loaded once in `base.html`. Never re-add per template.
+- Lucide icons are 16px by default via `.ni-btn svg { width: 16px }` — do NOT add `style="width:16px;height:16px"` on `<i data-lucide="...">`.
+
+**In HTML, use class names only.** If a needed class doesn't exist, add it to the right CSS file (utilities for one-offs, the concern file for component bits) and use the class. Reuse before creating.
+
+**When you spot inline styles** in a file you're editing, migrate them to classes in the appropriate CSS file as part of your change. Do not add new ones.
 
 ### Design Tokens (CSS Custom Properties)
 

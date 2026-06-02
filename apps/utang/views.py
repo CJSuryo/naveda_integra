@@ -1,5 +1,5 @@
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
@@ -9,26 +9,27 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
 
-from .forms import UtangHeaderForm, UtangPembayaranForm
-from .models import UtangHeader, UtangPembayaran
+from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, UtangPembayaranForm
+from .models import UtangDetail, UtangHeader, UtangPembayaran, UtangAttachment
 from .services import (
+    approve_utang,
     create_manual_utang,
     create_utang_payment,
+    delete_utang_attachment,
     get_utang_aging,
+    get_utang_dashboard_kpi,
     get_utang_jatuh_tempo,
     get_utang_per_group_akun,
     get_utang_per_subjek,
+    reject_utang,
     reverse_utang_header,
     reverse_utang_payment,
+    submit_utang_for_approval,
+    upload_utang_attachment,
 )
 
 
 def _utang_eb_filter_q(eb_selections: list[str]) -> Q | None:
-    """Resolve hierarchical EB selections to a Q matching UtangHeader.entitas_bisnis (lv1).
-
-    Utang only stores the lv1 EB, so lv2/lv3 selections collapse to their lv1 ancestor.
-    Returns None when no valid selection is provided.
-    """
     lv1_ids: set[int] = set()
     for sel in eb_selections:
         resolved = _resolve_eb_selection(sel)
@@ -41,65 +42,125 @@ def _utang_eb_filter_q(eb_selections: list[str]) -> Q | None:
 
 
 @login_required
+def utang_dashboard(request: HttpRequest) -> HttpResponse:
+    kpi = get_utang_dashboard_kpi()
+    buckets = get_utang_aging()
+    due_soon = list(get_utang_jatuh_tempo(hari_ke_depan=30))
+    return render(request, 'utang/dashboard.html', {
+        'kpi': kpi,
+        'buckets': buckets,
+        'due_soon': due_soon,
+    })
+
+
+@login_required
 def utang_list(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     status_filter = request.GET.get('status', '')
+    jenis_filter = request.GET.get('jenis_utang', '')
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    search = request.GET.get('q', '').strip()
+
+    qs = UtangHeader.objects.select_related('entitas_bisnis').order_by('-tanggal', '-created_at')
 
     eb_q = _utang_eb_filter_q(eb_filter_list)
-    utangs: list[UtangHeader] = []
-
     if eb_q is not None:
-        qs = (
-            UtangHeader.objects
-            .select_related('entitas_bisnis')
-            .filter(eb_q)
-            .order_by('-tanggal', '-created_at')
+        qs = qs.filter(eb_q)
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if status_filter:
+        qs = qs.filter(status=status_filter)
+    if jenis_filter:
+        qs = qs.filter(jenis_utang=jenis_filter)
+    if search:
+        qs = qs.filter(
+            Q(nomor_utang__icontains=search) |
+            Q(kreditor__icontains=search) |
+            Q(nomor_referensi__icontains=search) |
+            Q(deskripsi__icontains=search)
         )
-        if tanggal_dari:
-            qs = qs.filter(tanggal__gte=tanggal_dari)
-        if tanggal_sampai:
-            qs = qs.filter(tanggal__lte=tanggal_sampai)
-        if status_filter:
-            qs = qs.filter(status=status_filter)
-        utangs = list(qs)
 
     return render(request, 'utang/list.html', {
-        'utangs': utangs,
+        'utangs': list(qs),
         'eb_options': _get_eb_dropdown_options(),
         'eb_filter_list': eb_filter_list,
-        'eb_selected': eb_q is not None,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'status_filter': status_filter,
+        'jenis_filter': jenis_filter,
+        'search': search,
         'status_choices': UtangHeader.STATUS_CHOICES,
+        'jenis_choices': UtangHeader._meta.get_field('jenis_utang').choices,
     })
 
 
 @login_required
 def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     utang = get_object_or_404(
-        UtangHeader.objects.select_related('entitas_bisnis').prefetch_related(
-            'details__purchase_item__item', 'pembayaran__coa_account',
+        UtangHeader.objects
+        .select_related('entitas_bisnis', 'coa_source_account', 'jurnal_pembentukan', 'approved_by')
+        .prefetch_related(
+            'details__purchase_item__item', 'details__coa_utang_account',
+            'pembayaran__coa_account', 'pembayaran__jurnal_header',
+            'attachments__uploaded_by', 'audit_logs__user',
         ),
         pk=pk,
     )
     payment_form = UtangPembayaranForm(utang_header=utang, initial={'tanggal': utang.tanggal})
-    return render(request, 'utang/detail.html', {'utang': utang, 'payment_form': payment_form})
+    attachment_form = UtangAttachmentForm()
+    return render(request, 'utang/detail.html', {
+        'utang': utang,
+        'payment_form': payment_form,
+        'attachment_form': attachment_form,
+    })
 
 
 @login_required
 def utang_create(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = UtangHeaderForm(request.POST)
-        if form.is_valid():
-            utang = create_manual_utang(**form.cleaned_data)
-            dj_messages.success(request, f'Utang {utang.nomor_utang} berhasil dibuat.')
-            return redirect('utang:detail', pk=utang.pk)
+        formset = UtangDetailFormSet(request.POST, prefix='details')
+        if form.is_valid() and formset.is_valid():
+            details = []
+            for detail_form in formset:
+                if detail_form.cleaned_data and not detail_form.cleaned_data.get('DELETE', False):
+                    details.append({
+                        'coa_utang_account': detail_form.cleaned_data['coa_utang_account'],
+                        'description': detail_form.cleaned_data.get('description', ''),
+                        'amount': detail_form.cleaned_data['amount'],
+                    })
+            if not details:
+                form.add_error(None, 'Minimal satu detail utang diperlukan.')
+            else:
+                try:
+                    cd = form.cleaned_data
+                    utang = create_manual_utang(
+                        tanggal=cd['tanggal'],
+                        entitas_bisnis=cd.get('entitas_bisnis'),
+                        deskripsi=cd.get('deskripsi', ''),
+                        jenis_utang=cd['jenis_utang'],
+                        kreditor=cd.get('kreditor', ''),
+                        nomor_referensi=cd.get('nomor_referensi', ''),
+                        kategori_jangka_waktu=cd['kategori_jangka_waktu'],
+                        coa_source_account=cd.get('coa_source_account'),
+                        requires_approval=cd.get('requires_approval', False),
+                        tanggal_jatuh_tempo=cd.get('tanggal_jatuh_tempo'),
+                        details=details,
+                        user=request.user,
+                    )
+                    dj_messages.success(request, f'Utang {utang.nomor_utang} berhasil dibuat.')
+                    return redirect('utang:detail', pk=utang.pk)
+                except ValueError as exc:
+                    form.add_error(None, str(exc))
     else:
         form = UtangHeaderForm()
-    return render(request, 'utang/form.html', {'form': form, 'title': 'Tambah Utang'})
+        formset = UtangDetailFormSet(prefix='details', queryset=UtangDetail.objects.none())
+    return render(request, 'utang/form.html', {
+        'form': form, 'formset': formset, 'title': 'Tambah Utang',
+    })
 
 
 @login_required
@@ -108,15 +169,27 @@ def utang_update(request: HttpRequest, pk: int) -> HttpResponse:
     if utang.purchase_header_id:
         dj_messages.error(request, 'Utang dari pembelian tidak dapat diedit manual.')
         return redirect('utang:detail', pk=pk)
+    if not utang.can_edit:
+        dj_messages.error(request, 'Utang ini tidak dapat diedit pada status saat ini.')
+        return redirect('utang:detail', pk=pk)
     if request.method == 'POST':
         form = UtangHeaderForm(request.POST, instance=utang)
-        if form.is_valid():
+        formset = UtangDetailFormSet(request.POST, instance=utang, prefix='details')
+        if form.is_valid() and formset.is_valid():
             form.save()
+            formset.save()
+            utang.total_amount = sum(
+                d.amount for d in utang.details.all()
+            )
+            utang.save(update_fields=['total_amount'])
             dj_messages.success(request, f'Utang {utang.nomor_utang} berhasil diperbarui.')
             return redirect('utang:detail', pk=utang.pk)
     else:
         form = UtangHeaderForm(instance=utang)
-    return render(request, 'utang/form.html', {'form': form, 'title': 'Edit Utang'})
+        formset = UtangDetailFormSet(instance=utang, prefix='details')
+    return render(request, 'utang/form.html', {
+        'form': form, 'formset': formset, 'title': 'Edit Utang', 'utang': utang,
+    })
 
 
 @login_required
@@ -134,23 +207,69 @@ def utang_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+def utang_submit_approval(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    try:
+        submit_utang_for_approval(utang, user=request.user)
+        dj_messages.success(request, f'{utang.nomor_utang} diajukan untuk persetujuan.')
+    except ValueError as exc:
+        dj_messages.error(request, str(exc))
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
+def utang_approve(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    try:
+        approve_utang(utang, user=request.user)
+        dj_messages.success(request, f'{utang.nomor_utang} disetujui dan diposting.')
+    except ValueError as exc:
+        dj_messages.error(request, str(exc))
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
+def utang_reject(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    notes = request.POST.get('notes', '')
+    try:
+        reject_utang(utang, user=request.user, notes=notes)
+        dj_messages.success(request, f'{utang.nomor_utang} ditolak.')
+    except ValueError as exc:
+        dj_messages.error(request, str(exc))
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
 def utang_pay(request: HttpRequest, pk: int) -> HttpResponse:
     utang = get_object_or_404(UtangHeader, pk=pk)
     if utang.is_locked:
-        dj_messages.error(request, 'Utang ini terkunci dan tidak dapat dibayar.')
+        dj_messages.error(request, 'Utang ini terkunci.')
+        return redirect('utang:detail', pk=pk)
+    if not utang.can_pay:
+        dj_messages.error(request, 'Utang ini belum dapat dibayar.')
         return redirect('utang:detail', pk=pk)
     if request.method != 'POST':
         return redirect('utang:detail', pk=pk)
-
     form = UtangPembayaranForm(request.POST, utang_header=utang)
     if form.is_valid():
         try:
-            create_utang_payment(utang, **form.cleaned_data)
+            create_utang_payment(utang, user=request.user, **form.cleaned_data)
             dj_messages.success(request, f'Pembayaran untuk {utang.nomor_utang} berhasil dicatat.')
             return redirect('utang:detail', pk=pk)
         except ValueError as exc:
             form.add_error(None, str(exc))
-    return render(request, 'utang/detail.html', {'utang': utang, 'payment_form': form})
+    return render(request, 'utang/detail.html', {
+        'utang': utang,
+        'payment_form': form,
+        'attachment_form': UtangAttachmentForm(),
+    })
 
 
 @login_required
@@ -158,7 +277,7 @@ def utang_payment_cancel(request: HttpRequest, pk: int, payment_pk: int) -> Http
     utang = get_object_or_404(UtangHeader, pk=pk)
     payment = get_object_or_404(UtangPembayaran, pk=payment_pk, utang_header=utang)
     if utang.is_locked:
-        dj_messages.error(request, 'Utang ini terkunci dan pembayarannya tidak dapat dibatalkan.')
+        dj_messages.error(request, 'Utang ini terkunci.')
         return redirect('utang:detail', pk=pk)
     if request.method == 'POST':
         reverse_utang_payment(payment, user=request.user)
@@ -168,20 +287,52 @@ def utang_payment_cancel(request: HttpRequest, pk: int, payment_pk: int) -> Http
 
 
 @login_required
+def utang_attachment_upload(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    form = UtangAttachmentForm(request.POST, request.FILES)
+    if form.is_valid():
+        upload_utang_attachment(
+            utang=utang,
+            file=form.cleaned_data['file'],
+            jenis_dokumen=form.cleaned_data['jenis_dokumen'],
+            user=request.user,
+        )
+        dj_messages.success(request, 'Dokumen berhasil diupload.')
+    else:
+        dj_messages.error(request, 'Gagal upload dokumen.')
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
+def utang_attachment_delete(request: HttpRequest, pk: int, attachment_pk: int) -> HttpResponse:
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    attachment = get_object_or_404(UtangAttachment, pk=attachment_pk, utang_header=utang)
+    if request.method == 'POST':
+        delete_utang_attachment(attachment, user=request.user)
+        dj_messages.success(request, 'Dokumen berhasil dihapus.')
+    return redirect('utang:detail', pk=pk)
+
+
+# ── Reports ───────────────────────────────────────────────────────────────────
+
+@login_required
 def utang_report_subjek(request: HttpRequest) -> HttpResponse:
     qs = list(get_utang_per_subjek())
     if request.GET.get('format') == 'json':
-        data = [
+        return JsonResponse({'results': [
             {
                 'entitas_bisnis_id': r['entitas_bisnis__id'],
                 'nama': r['entitas_bisnis__nama'],
+                'kreditor': r['kreditor'],
+                'jenis_utang': r['jenis_utang'],
                 'total_utang': str(r['total_utang'] or '0'),
                 'total_bayar': str(r['total_bayar'] or '0'),
                 'jumlah_invoice': r['jumlah_invoice'],
             }
             for r in qs
-        ]
-        return JsonResponse({'results': data})
+        ]})
     return render(request, 'utang/report_subjek.html', {'rows': qs})
 
 
@@ -189,15 +340,10 @@ def utang_report_subjek(request: HttpRequest) -> HttpResponse:
 def utang_report_akun(request: HttpRequest) -> HttpResponse:
     qs = list(get_utang_per_group_akun())
     if request.GET.get('format') == 'json':
-        data = [
-            {
-                'kode_akun': r['coa_utang_account__kode_akun'],
-                'nama': r['coa_utang_account__nama'],
-                'total': str(r['total'] or '0'),
-            }
+        return JsonResponse({'results': [
+            {'kode_akun': r['coa_utang_account__kode_akun'], 'nama': r['coa_utang_account__nama'], 'total': str(r['total'] or '0')}
             for r in qs
-        ]
-        return JsonResponse({'results': data})
+        ]})
     return render(request, 'utang/report_akun.html', {'rows': qs})
 
 
@@ -205,17 +351,9 @@ def utang_report_akun(request: HttpRequest) -> HttpResponse:
 def utang_report_aging(request: HttpRequest) -> HttpResponse:
     buckets = get_utang_aging()
     if request.GET.get('format') == 'json':
-        def _serialize(entries):
-            return [
-                {
-                    'nomor_utang': e['utang'].nomor_utang,
-                    'entitas': str(e['utang'].entitas_bisnis or ''),
-                    'outstanding': str(e['outstanding']),
-                    'hari': e['hari'],
-                }
-                for e in entries
-            ]
-        return JsonResponse({k: _serialize(v) for k, v in buckets.items()})
+        def _s(entries):
+            return [{'nomor_utang': e['utang'].nomor_utang, 'entitas': str(e['utang'].entitas_bisnis or ''), 'outstanding': str(e['outstanding']), 'hari': e['hari']} for e in entries]
+        return JsonResponse({k: _s(v) for k, v in buckets.items()})
     return render(request, 'utang/report_aging.html', {'buckets': buckets})
 
 
@@ -224,15 +362,8 @@ def utang_report_jatuh_tempo(request: HttpRequest) -> HttpResponse:
     hari = int(request.GET.get('hari', 7))
     qs = list(get_utang_jatuh_tempo(hari_ke_depan=hari))
     if request.GET.get('format') == 'json':
-        data = [
-            {
-                'nomor_utang': u.nomor_utang,
-                'entitas': str(u.entitas_bisnis or ''),
-                'tanggal_jatuh_tempo': str(u.tanggal_jatuh_tempo),
-                'total_amount': str(u.total_amount),
-                'status': u.status,
-            }
+        return JsonResponse({'results': [
+            {'nomor_utang': u.nomor_utang, 'entitas': str(u.entitas_bisnis or ''), 'tanggal_jatuh_tempo': str(u.tanggal_jatuh_tempo), 'total_amount': str(u.total_amount), 'status': u.status}
             for u in qs
-        ]
-        return JsonResponse({'results': data})
+        ]})
     return render(request, 'utang/report_jatuh_tempo.html', {'utangs': qs, 'hari': hari})
