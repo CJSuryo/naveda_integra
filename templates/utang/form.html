@@ -22,11 +22,13 @@
           </select>
         </div>
         {% for field in form %}
+          {% if field.name != 'jenis_bunga' and field.name != 'suku_bunga' and field.name != 'jumlah_angsuran' and field.name != 'periode_angsuran' %}
           <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
             <label class="ni-form-label">{{ field.label }}</label>
             {{ field }}
             {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
           </div>
+          {% endif %}
         {% endfor %}
         {% if form.non_field_errors %}
           <div class="ni-form-error ni-form-group--full">{{ form.non_field_errors }}</div>
@@ -74,6 +76,58 @@
             <td></td>
           </tr>
         </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in" id="bunga-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Bunga &amp; Angsuran</h2></div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.jenis_bunga.label }}</label>
+          {{ form.jenis_bunga }}
+          {% if form.jenis_bunga.errors %}<div class="ni-form-error">{{ form.jenis_bunga.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group" id="grup-suku-bunga">
+          <label class="ni-form-label">{{ form.suku_bunga.label }}</label>
+          {{ form.suku_bunga }}
+          {% if form.suku_bunga.errors %}<div class="ni-form-error">{{ form.suku_bunga.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group" id="grup-jumlah-angsuran">
+          <label class="ni-form-label">{{ form.jumlah_angsuran.label }}</label>
+          {{ form.jumlah_angsuran }}
+          {% if form.jumlah_angsuran.errors %}<div class="ni-form-error">{{ form.jumlah_angsuran.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group" id="grup-periode-angsuran">
+          <label class="ni-form-label">{{ form.periode_angsuran.label }}</label>
+          {{ form.periode_angsuran }}
+          {% if form.periode_angsuran.errors %}<div class="ni-form-error">{{ form.periode_angsuran.errors }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in" id="preview-angsuran-card">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Preview Tabel Angsuran</h2>
+      <span class="ni-text-muted" id="preview-summary"></span>
+    </div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" id="preview-table">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Tanggal</th>
+            <th class="ni-text-right">Pokok</th>
+            <th class="ni-text-right">Bunga</th>
+            <th class="ni-text-right">Angsuran</th>
+            <th class="ni-text-right">Sisa Pokok</th>
+          </tr>
+        </thead>
+        <tbody id="preview-tbody">
+          <tr><td colspan="6" class="ni-text-center ni-text-muted">Isi form bunga &amp; angsuran untuk melihat preview.</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
@@ -150,6 +204,137 @@
       attachRowEvents(newRow);
     });
   }
+
+  // ── Bunga & Angsuran Preview ──────────────────────────────────────────
+  var jenisBungaEl = document.getElementById('id_jenis_bunga');
+  var sukuBungaEl = document.getElementById('id_suku_bunga');
+  var jumlahAngsuranEl = document.getElementById('id_jumlah_angsuran');
+  var periodeAngsuranEl = document.getElementById('id_periode_angsuran');
+  var grupSukuBunga = document.getElementById('grup-suku-bunga');
+  var grupJumlah = document.getElementById('grup-jumlah-angsuran');
+  var grupPeriode = document.getElementById('grup-periode-angsuran');
+  var previewCard = document.getElementById('preview-angsuran-card');
+  var previewTbody = document.getElementById('preview-tbody');
+  var previewSummary = document.getElementById('preview-summary');
+
+  var PERIODE_MONTHS = { bulanan: 1, triwulanan: 3, semesteran: 6, tahunan: 12 };
+
+  function fmt(n) {
+    return n.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  }
+
+  function getPokok() {
+    var total = 0;
+    document.querySelectorAll('.amount-field').forEach(function(inp) {
+      var row = inp.closest('tr');
+      var delCb = row ? row.querySelector('input[type=checkbox][name$="-DELETE"]') : null;
+      if (!delCb || !delCb.checked) total += parseFloat(inp.value) || 0;
+    });
+    return total;
+  }
+
+  function getTanggalMulai() {
+    var el = document.getElementById('id_tanggal_jatuh_tempo') || document.getElementById('id_tanggal');
+    if (!el || !el.value) return null;
+    var d = new Date(el.value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function addMonths(date, months) {
+    var d = new Date(date);
+    d.setMonth(d.getMonth() + months);
+    return d;
+  }
+
+  function renderPreview() {
+    var jenis = jenisBungaEl ? jenisBungaEl.value : 'tanpa_bunga';
+    var hasBunga = jenis !== 'tanpa_bunga';
+
+    if (grupSukuBunga) grupSukuBunga.classList.toggle('ni-d-none', !hasBunga);
+    if (grupJumlah) grupJumlah.classList.toggle('ni-hidden', false);
+    if (grupPeriode) grupPeriode.classList.toggle('ni-hidden', false);
+
+    var pokok = getPokok();
+    var n = parseInt(jumlahAngsuranEl ? jumlahAngsuranEl.value : '') || 0;
+    var periodeKey = periodeAngsuranEl ? periodeAngsuranEl.value : 'bulanan';
+    var periodeMonths = PERIODE_MONTHS[periodeKey] || 1;
+    var sukuTahun = parseFloat(sukuBungaEl ? sukuBungaEl.value : '') || 0;
+    var rPeriode = hasBunga ? (sukuTahun / 100 / 12 * periodeMonths) : 0;
+
+    if (!n || !pokok) {
+      previewTbody.innerHTML = '<tr><td colspan="6" class="ni-text-center ni-text-muted">Isi jumlah angsuran dan detail utang untuk melihat preview.</td></tr>';
+      if (previewSummary) previewSummary.textContent = '';
+      return;
+    }
+
+    var rows = [];
+    var sisaPokok = pokok;
+    var tanggalBase = getTanggalMulai() || new Date();
+
+    if (jenis === 'flat') {
+      var pokoksPerPeriod = pokok / n;
+      var bungaPerPeriod = pokok * rPeriode;
+      var angsuranPerPeriod = pokoksPerPeriod + bungaPerPeriod;
+      for (var i = 1; i <= n; i++) {
+        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        sisaPokok -= pokoksPerPeriod;
+        rows.push({ no: i, tgl: tgl, pokok: pokoksPerPeriod, bunga: bungaPerPeriod, angsuran: angsuranPerPeriod, sisa: Math.max(0, sisaPokok) });
+      }
+    } else if (jenis === 'anuitas') {
+      var pmt = rPeriode > 0 ? pokok * rPeriode / (1 - Math.pow(1 + rPeriode, -n)) : pokok / n;
+      for (var i = 1; i <= n; i++) {
+        var bunga = sisaPokok * rPeriode;
+        var pokokPeriod = pmt - bunga;
+        if (i === n) pokokPeriod = sisaPokok;
+        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        sisaPokok -= pokokPeriod;
+        rows.push({ no: i, tgl: tgl, pokok: pokokPeriod, bunga: bunga, angsuran: pokokPeriod + bunga, sisa: Math.max(0, sisaPokok) });
+      }
+    } else {
+      var pokoksPerPeriod = pokok / n;
+      for (var i = 1; i <= n; i++) {
+        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        sisaPokok -= pokoksPerPeriod;
+        rows.push({ no: i, tgl: tgl, pokok: pokoksPerPeriod, bunga: 0, angsuran: pokoksPerPeriod, sisa: Math.max(0, sisaPokok) });
+      }
+    }
+
+    var totalBunga = rows.reduce(function(s, r) { return s + r.bunga; }, 0);
+    var totalAngsuran = rows.reduce(function(s, r) { return s + r.angsuran; }, 0);
+    if (previewSummary) previewSummary.textContent = 'Total bunga: Rp ' + fmt(totalBunga) + ' | Total angsuran: Rp ' + fmt(totalAngsuran);
+
+    var html = rows.map(function(r) {
+      var tglStr = r.tgl.toLocaleDateString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit' });
+      return '<tr><td>' + r.no + '</td><td>' + tglStr + '</td>' +
+        '<td class="ni-text-right">' + fmt(r.pokok) + '</td>' +
+        '<td class="ni-text-right">' + fmt(r.bunga) + '</td>' +
+        '<td class="ni-text-right">' + fmt(r.angsuran) + '</td>' +
+        '<td class="ni-text-right">' + fmt(r.sisa) + '</td></tr>';
+    }).join('');
+    previewTbody.innerHTML = html;
+  }
+
+  [jenisBungaEl, sukuBungaEl, jumlahAngsuranEl, periodeAngsuranEl].forEach(function(el) {
+    if (el) el.addEventListener('change', renderPreview);
+    if (el) el.addEventListener('input', renderPreview);
+  });
+
+  ['id_tanggal', 'id_tanggal_jatuh_tempo'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', renderPreview);
+  });
+
+  var detailTbody = document.getElementById('detail-tbody');
+  if (detailTbody) {
+    detailTbody.addEventListener('input', function(e) {
+      if (e.target.classList.contains('amount-field')) renderPreview();
+    });
+    detailTbody.addEventListener('change', function(e) {
+      if (e.target.name && e.target.name.indexOf('-DELETE') !== -1) renderPreview();
+    });
+  }
+
+  renderPreview();
 
   // ── Entitas Bisnis TomSelect ──────────────────────────────────────────
   var ebOptions = {{ eb_options_json|default:"[]"|safe }};

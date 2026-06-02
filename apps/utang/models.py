@@ -22,6 +22,19 @@ JENIS_JANGKA_WAKTU_CHOICES = [
     ('long_term', 'Jangka Panjang'),
 ]
 
+JENIS_BUNGA_CHOICES = [
+    ('tanpa_bunga', 'Tanpa Bunga'),
+    ('flat', 'Flat'),
+    ('anuitas', 'Anuitas (Efektif)'),
+]
+
+PERIODE_ANGSURAN_CHOICES = [
+    ('bulanan', 'Bulanan'),
+    ('triwulanan', 'Triwulanan (3 Bulan)'),
+    ('semesteran', 'Semesteran (6 Bulan)'),
+    ('tahunan', 'Tahunan'),
+]
+
 JENIS_DOKUMEN_CHOICES = [
     ('invoice', 'Invoice'),
     ('kontrak', 'Kontrak'),
@@ -113,6 +126,24 @@ class UtangHeader(models.Model):
         null=True, blank=True,
         related_name='utang_pembentukan',
         verbose_name='Jurnal Pembentukan',
+    )
+
+    # ── V1.1 Bunga & Angsuran ────────────────────────────────────────────────
+    jenis_bunga = models.CharField(
+        max_length=20, choices=JENIS_BUNGA_CHOICES, default='tanpa_bunga',
+        verbose_name='Jenis Bunga',
+    )
+    suku_bunga = models.DecimalField(
+        max_digits=8, decimal_places=4, default=0,
+        verbose_name='Suku Bunga (% per tahun)',
+    )
+    jumlah_angsuran = models.PositiveSmallIntegerField(
+        null=True, blank=True,
+        verbose_name='Jumlah Angsuran',
+    )
+    periode_angsuran = models.CharField(
+        max_length=20, choices=PERIODE_ANGSURAN_CHOICES, default='bulanan',
+        verbose_name='Periode Angsuran',
     )
 
     class Meta:

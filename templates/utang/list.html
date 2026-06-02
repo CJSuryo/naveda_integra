@@ -12,26 +12,45 @@
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in">
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
   <div class="ni-card__body">
-    <form method="get" class="ni-filter-row">
-      <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Cari nomor, kreditor, referensi...">
-      <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input" placeholder="Dari">
-      <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input" placeholder="Sampai">
-      <select name="status" class="ni-input">
-        <option value="">— Semua Status —</option>
-        {% for val, label in status_choices %}
-          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <select name="jenis_utang" class="ni-input">
-        <option value="">— Semua Jenis —</option>
-        {% for val, label in jenis_choices %}
-          <option value="{{ val }}" {% if jenis_filter == val %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-      <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">Reset</a>
+    <form method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Cari</label>
+          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, kreditor, referensi...">
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Dari Tanggal</label>
+          <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Sampai Tanggal</label>
+          <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Status</label>
+          <select name="status" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Jenis Utang</label>
+          <select name="jenis_utang" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for val, label in jenis_choices %}
+              <option value="{{ val }}" {% if jenis_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--lg">Filter</button>
+        <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary ni-btn--lg">Reset</a>
+      </div>
     </form>
   </div>
 </div>
