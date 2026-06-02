@@ -79,6 +79,25 @@
   </div>
 </div>
 
+{% if bagian_lancar %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Jatuh Tempo / Bagian Lancar</h2></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Bagian Lancar (&lt; 12 bln)</dt>
+      <dd><strong>{{ bagian_lancar.bagian_lancar|floatformat:0|intcomma }}</strong></dd>
+      <dt>Bagian Jangka Panjang (&gt; 12 bln)</dt>
+      <dd><strong>{{ bagian_lancar.bagian_panjang|floatformat:0|intcomma }}</strong></dd>
+      {% if bagian_lancar.has_schedule %}
+      <dt>Dasar Perhitungan</dt><dd>Jadwal angsuran ({{ utang.jumlah_angsuran }}x {{ utang.get_periode_angsuran_display }})</dd>
+      {% else %}
+      <dt>Dasar Perhitungan</dt><dd>Tanggal jatuh tempo</dd>
+      {% endif %}
+    </dl>
+  </div>
+</div>
+{% endif %}
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Detail Utang</h2></div>
   <div class="ni-table-wrapper">

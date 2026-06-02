@@ -14,9 +14,11 @@ from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, Uta
 from .models import UtangDetail, UtangHeader, UtangPembayaran, UtangAttachment
 from .services import (
     approve_utang,
+    compute_bagian_lancar,
     create_manual_utang,
     create_utang_payment,
     delete_utang_attachment,
+    get_bagian_lancar_list,
     get_utang_aging,
     get_utang_dashboard_kpi,
     get_utang_jatuh_tempo,
@@ -47,10 +49,12 @@ def utang_dashboard(request: HttpRequest) -> HttpResponse:
     kpi = get_utang_dashboard_kpi()
     buckets = get_utang_aging()
     due_soon = list(get_utang_jatuh_tempo(hari_ke_depan=30))
+    bagian_lancar_list = get_bagian_lancar_list()
     return render(request, 'utang/dashboard.html', {
         'kpi': kpi,
         'buckets': buckets,
         'due_soon': due_soon,
+        'bagian_lancar_list': bagian_lancar_list,
     })
 
 
@@ -112,10 +116,16 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
     payment_form = UtangPembayaranForm(utang_header=utang, initial={'tanggal': utang.tanggal})
     attachment_form = UtangAttachmentForm()
+    bagian_lancar = (
+        compute_bagian_lancar(utang)
+        if utang.status in ('open', 'partial', 'overdue') and utang.outstanding_amount > 0
+        else None
+    )
     return render(request, 'utang/detail.html', {
         'utang': utang,
         'payment_form': payment_form,
         'attachment_form': attachment_form,
+        'bagian_lancar': bagian_lancar,
     })
 
 
@@ -289,10 +299,16 @@ def utang_pay(request: HttpRequest, pk: int) -> HttpResponse:
             return redirect('utang:detail', pk=pk)
         except ValueError as exc:
             form.add_error(None, str(exc))
+    bagian_lancar = (
+        compute_bagian_lancar(utang)
+        if utang.status in ('open', 'partial', 'overdue') and utang.outstanding_amount > 0
+        else None
+    )
     return render(request, 'utang/detail.html', {
         'utang': utang,
         'payment_form': form,
         'attachment_form': UtangAttachmentForm(),
+        'bagian_lancar': bagian_lancar,
     })
 
 

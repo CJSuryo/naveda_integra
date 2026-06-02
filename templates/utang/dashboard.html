@@ -40,6 +40,12 @@
     <div class="ni-kpi-card__value">{{ kpi.waiting_approval }} dokumen</div>
   </div>
   {% endif %}
+  {% if kpi.bagian_lancar_total %}
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Bagian Lancar JK Panjang</div>
+    <div class="ni-kpi-card__value">{{ kpi.bagian_lancar_total|floatformat:0|intcomma }}</div>
+  </div>
+  {% endif %}
 </div>
 
 <div class="ni-grid ni-grid--2">
@@ -83,6 +89,38 @@
     </div>
   </div>
 </div>
+
+{% if bagian_lancar_list %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">JT Utang Jangka Panjang (Bagian Lancar)</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor</th>
+          <th>Kreditor</th>
+          <th>Jenis</th>
+          <th class="ni-text-right">Outstanding</th>
+          <th class="ni-text-right">Bagian Lancar (&lt;12 bln)</th>
+          <th class="ni-text-right">Bagian JK Panjang (&gt;12 bln)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in bagian_lancar_list %}
+        <tr>
+          <td><a href="{% url 'utang:detail' row.utang.pk %}">{{ row.utang.nomor_utang }}</a></td>
+          <td>{{ row.utang.entitas_display }}</td>
+          <td>{{ row.utang.get_jenis_utang_display }}</td>
+          <td class="ni-text-right">{{ row.utang.outstanding_amount|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right"><strong>{{ row.bagian_lancar|floatformat:0|intcomma }}</strong></td>
+          <td class="ni-text-right">{{ row.bagian_panjang|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Aging Utang</h2></div>

@@ -1,3 +1,5 @@
+import calendar
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
@@ -397,6 +399,98 @@ def _update_utang_status(utang_header: UtangHeader) -> None:
     utang_header.save(update_fields=['status'])
 
 
+# ── Bagian Lancar / JT Utang ─────────────────────────────────────────────────
+
+_PERIODE_MONTHS_MAP = {'bulanan': 1, 'triwulanan': 3, 'semesteran': 6, 'tahunan': 12}
+
+
+def _add_months(d: date, months: int) -> date:
+    month = d.month - 1 + months
+    year = d.year + month // 12
+    month = month % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return d.replace(year=year, month=month, day=day)
+
+
+def _compute_installment_principals(utang: UtangHeader) -> list[tuple[date, Decimal]]:
+    """Returns [(tanggal, principal)] for all n installments based on schedule fields."""
+    n = utang.jumlah_angsuran
+    if not n or not utang.tanggal_jatuh_tempo:
+        return []
+    periode_months = _PERIODE_MONTHS_MAP.get(utang.periode_angsuran, 1)
+    total = float(utang.total_amount)
+    jenis = utang.jenis_bunga
+    r = float(utang.suku_bunga) / 100 / 12 * periode_months if jenis != 'tanpa_bunga' else 0.0
+    base = utang.tanggal_jatuh_tempo
+    schedule = []
+    if jenis == 'anuitas' and r > 0:
+        pmt = total * r / (1 - (1 + r) ** (-n))
+        sisa = total
+        for i in range(n):
+            bunga_i = sisa * r
+            pk_i = pmt - bunga_i
+            if i == n - 1:
+                pk_i = sisa
+            sisa -= pk_i
+            schedule.append((_add_months(base, i * periode_months), Decimal(str(round(pk_i, 4)))))
+    else:
+        pk_i = Decimal(str(round(total / n, 4)))
+        for i in range(n):
+            schedule.append((_add_months(base, i * periode_months), pk_i))
+    return schedule
+
+
+def compute_bagian_lancar(utang: UtangHeader) -> dict:
+    """
+    Returns {'bagian_lancar': Decimal, 'bagian_panjang': Decimal, 'has_schedule': bool}.
+    Bagian lancar = outstanding amount due within next 12 months from today.
+    Uses installment schedule when available, else falls back to tanggal_jatuh_tempo.
+    """
+    outstanding = utang.outstanding_amount
+    if outstanding <= 0:
+        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': Decimal('0'), 'has_schedule': False}
+
+    today = date.today()
+    cutoff = _add_months(today, 12)
+
+    if utang.jumlah_angsuran and utang.tanggal_jatuh_tempo:
+        schedule = _compute_installment_principals(utang)
+        if schedule:
+            future = [(tgl, pk) for tgl, pk in schedule if tgl > today]
+            if not future:
+                return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': True}
+            future_pk = sum(pk for _, pk in future)
+            lancar_pk = sum(pk for tgl, pk in future if tgl <= cutoff)
+            if future_pk > 0:
+                ratio = float(lancar_pk) / float(future_pk)
+                bl = (outstanding * Decimal(str(round(ratio, 8)))).quantize(Decimal('0.01'))
+                bp = (outstanding - bl).quantize(Decimal('0.01'))
+                return {'bagian_lancar': bl, 'bagian_panjang': bp, 'has_schedule': True}
+
+    if utang.tanggal_jatuh_tempo:
+        if utang.tanggal_jatuh_tempo <= cutoff:
+            return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False}
+        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': outstanding, 'has_schedule': False}
+
+    return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False}
+
+
+def get_bagian_lancar_list() -> list[dict]:
+    """All active long-term utang with their bagian_lancar breakdown, sorted by bagian_lancar desc."""
+    qs = list(
+        UtangHeader.objects
+        .filter(status__in=['open', 'partial', 'overdue'], kategori_jangka_waktu='long_term')
+        .select_related('entitas_bisnis')
+        .prefetch_related('pembayaran')
+    )
+    result = []
+    for u in qs:
+        bl = compute_bagian_lancar(u)
+        result.append({'utang': u, **bl})
+    result.sort(key=lambda x: x['bagian_lancar'], reverse=True)
+    return result
+
+
 # ── Reports ───────────────────────────────────────────────────────────────────
 
 def get_utang_per_subjek():
@@ -481,6 +575,13 @@ def get_utang_dashboard_kpi() -> dict:
         .order_by('-total')
     )
 
+    long_term_list = list(
+        UtangHeader.objects
+        .filter(status__in=active_statuses, kategori_jangka_waktu='long_term')
+        .prefetch_related('pembayaran')
+    )
+    bagian_lancar_total = sum(compute_bagian_lancar(u)['bagian_lancar'] for u in long_term_list)
+
     return {
         'total_outstanding': total_outstanding,
         'total_paid': total_paid,
@@ -491,4 +592,6 @@ def get_utang_dashboard_kpi() -> dict:
         'by_jenis': list(by_jenis),
         'waiting_approval': UtangHeader.objects.filter(status='waiting_approval').count(),
         'draft_count': UtangHeader.objects.filter(status='draft').count(),
+        'bagian_lancar_total': bagian_lancar_total,
+        'long_term_count': len(long_term_list),
     }
