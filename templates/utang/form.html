@@ -15,6 +15,12 @@
     <div class="ni-card__header"><h2 class="ni-card__title">Informasi Utang</h2></div>
     <div class="ni-card__body">
       <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="id_eb_selection" name="eb_selection" class="ni-input">
+            <option value="">— Pilih Entitas Bisnis (opsional) —</option>
+          </select>
+        </div>
         {% for field in form %}
           <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
             <label class="ni-form-label">{{ field.label }}</label>
@@ -143,6 +149,30 @@
       totalForms.value = idx + 1;
       attachRowEvents(newRow);
     });
+  }
+
+  // ── Entitas Bisnis TomSelect ──────────────────────────────────────────
+  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
+  var ebSelected = '{{ eb_selected|default:""|escapejs }}';
+
+  var ebSelect = document.getElementById('id_eb_selection');
+  if (ebSelect && ebOptions.length) {
+    // Build options
+    ebOptions.forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === ebSelected) o.selected = true;
+      ebSelect.appendChild(o);
+    });
+    // Init TomSelect if available
+    if (typeof TomSelect !== 'undefined') {
+      new TomSelect(ebSelect, {
+        maxOptions: 500,
+        placeholder: '— Pilih Entitas Bisnis (opsional) —',
+        allowEmptyOption: true,
+      });
+    }
   }
 })();
 </script>

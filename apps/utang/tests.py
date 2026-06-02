@@ -300,15 +300,12 @@ class UtangFormTests(TestCase):
         for akun in form.fields['coa_account'].queryset:
             self.assertEqual(akun.kategori_id, 'aset')
 
-    def test_header_form_filters_entitas_to_pemasok(self):
+    def test_header_form_does_not_include_entitas_bisnis(self):
+        # entitas_bisnis is now handled via a manual TomSelect in the template/view,
+        # not as a ModelChoiceField on UtangHeaderForm.
         from .forms import UtangHeaderForm
-        tipe = self.f['tipe']
-        EntitasBisnis.objects.create(
-            nama='PT Pelanggan', tipe_entitas=tipe, relasi='pelanggan',
-        )
         form = UtangHeaderForm()
-        for eb in form.fields['entitas_bisnis'].queryset:
-            self.assertIn(eb.relasi, ['pemasok', 'keduanya'])
+        self.assertNotIn('entitas_bisnis', form.fields)
 
 
 class UtangModelV1Test(TestCase):

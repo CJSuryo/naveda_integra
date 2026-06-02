@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib import messages as dj_messages
@@ -6,6 +7,7 @@ from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from apps.entitas_bisnis.models import EntitasBisnis as EntitasBisnisModel
 from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
 
 from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, UtangPembayaranForm
@@ -122,6 +124,9 @@ def utang_create(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = UtangHeaderForm(request.POST)
         formset = UtangDetailFormSet(request.POST, prefix='details')
+        eb_selection = request.POST.get('eb_selection', '')
+        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        entitas_bisnis_obj = EntitasBisnisModel.objects.filter(pk=resolved_eb['lv1_id']).first() if resolved_eb else None
         if form.is_valid() and formset.is_valid():
             details = []
             for detail_form in formset:
@@ -138,7 +143,7 @@ def utang_create(request: HttpRequest) -> HttpResponse:
                     cd = form.cleaned_data
                     utang = create_manual_utang(
                         tanggal=cd['tanggal'],
-                        entitas_bisnis=cd.get('entitas_bisnis'),
+                        entitas_bisnis=entitas_bisnis_obj,
                         deskripsi=cd.get('deskripsi', ''),
                         jenis_utang=cd['jenis_utang'],
                         kreditor=cd.get('kreditor', ''),
@@ -154,11 +159,18 @@ def utang_create(request: HttpRequest) -> HttpResponse:
                     return redirect('utang:detail', pk=utang.pk)
                 except ValueError as exc:
                     form.add_error(None, str(exc))
+        return render(request, 'utang/form.html', {
+            'form': form, 'formset': formset, 'title': 'Tambah Utang',
+            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_selected': eb_selection,
+        })
     else:
         form = UtangHeaderForm()
         formset = UtangDetailFormSet(prefix='details', queryset=UtangDetail.objects.none())
     return render(request, 'utang/form.html', {
         'form': form, 'formset': formset, 'title': 'Tambah Utang',
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_selected': '',
     })
 
 
@@ -174,20 +186,33 @@ def utang_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         form = UtangHeaderForm(request.POST, instance=utang)
         formset = UtangDetailFormSet(request.POST, instance=utang, prefix='details')
+        eb_selection = request.POST.get('eb_selection', '')
+        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        entitas_bisnis_obj = EntitasBisnisModel.objects.filter(pk=resolved_eb['lv1_id']).first() if resolved_eb else None
         if form.is_valid() and formset.is_valid():
-            form.save()
+            saved_utang = form.save()
+            saved_utang.entitas_bisnis = entitas_bisnis_obj
+            saved_utang.save(update_fields=['entitas_bisnis'])
             formset.save()
-            utang.total_amount = sum(
-                d.amount for d in utang.details.all()
+            saved_utang.total_amount = sum(
+                d.amount for d in saved_utang.details.all()
             )
-            utang.save(update_fields=['total_amount'])
-            dj_messages.success(request, f'Utang {utang.nomor_utang} berhasil diperbarui.')
-            return redirect('utang:detail', pk=utang.pk)
+            saved_utang.save(update_fields=['total_amount'])
+            dj_messages.success(request, f'Utang {saved_utang.nomor_utang} berhasil diperbarui.')
+            return redirect('utang:detail', pk=saved_utang.pk)
+        return render(request, 'utang/form.html', {
+            'form': form, 'formset': formset, 'title': 'Edit Utang', 'utang': utang,
+            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_selected': eb_selection,
+        })
     else:
+        eb_selected = f'lv1:{utang.entitas_bisnis_id}' if utang.entitas_bisnis_id else ''
         form = UtangHeaderForm(instance=utang)
         formset = UtangDetailFormSet(instance=utang, prefix='details')
     return render(request, 'utang/form.html', {
         'form': form, 'formset': formset, 'title': 'Edit Utang', 'utang': utang,
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_selected': eb_selected,
     })
 
 

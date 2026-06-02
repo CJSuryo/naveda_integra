@@ -1,7 +1,6 @@
 from django import forms
 from django.forms import inlineformset_factory
 
-from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
 
 from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran
@@ -11,7 +10,7 @@ class UtangHeaderForm(forms.ModelForm):
     class Meta:
         model = UtangHeader
         fields = [
-            'tanggal', 'jenis_utang', 'kreditor', 'entitas_bisnis',
+            'tanggal', 'jenis_utang', 'kreditor',
             'nomor_referensi', 'kategori_jangka_waktu',
             'coa_source_account', 'requires_approval',
             'tanggal_jatuh_tempo', 'deskripsi',
@@ -20,7 +19,6 @@ class UtangHeaderForm(forms.ModelForm):
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'jenis_utang': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_utang'}),
             'kreditor': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Nama kreditor/pihak yang memberi utang'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
             'nomor_referensi': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Misal: PK-2026-001, INV-001'}),
             'kategori_jangka_waktu': forms.Select(attrs={'class': 'ni-input', 'id': 'id_kategori_jangka_waktu'}),
             'coa_source_account': forms.Select(attrs={'class': 'ni-input'}),
@@ -32,15 +30,10 @@ class UtangHeaderForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['kreditor'].required = False
-        self.fields['entitas_bisnis'].required = False
         self.fields['deskripsi'].required = False
         self.fields['nomor_referensi'].required = False
         self.fields['tanggal_jatuh_tempo'].required = False
         self.fields['coa_source_account'].required = False
-        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
-            relasi__in=['pemasok', 'keduanya'],
-            status_aktif=True,
-        )
         self.fields['coa_source_account'].queryset = Akun.objects.all().order_by('kode_akun')
         self.fields['coa_source_account'].empty_label = '— Pilih Akun Asal (opsional) —'
 
