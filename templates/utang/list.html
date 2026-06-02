@@ -1,56 +1,37 @@
 {% extends 'base.html' %}
-{% load humanize %}
 {% block title %}Daftar Utang{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Utang</h1>
-    <p class="ni-page-header__subtitle">Daftar kewajiban pembayaran dan status utang</p>
+    <h1 class="ni-page-header__title">Daftar Utang</h1>
+    <p class="ni-page-header__subtitle">Seluruh kewajiban yang tercatat</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'utang:create' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus"></i> Tambah Utang
-    </a>
+    <a href="{% url 'utang:dashboard' %}" class="ni-btn ni-btn--secondary">Dashboard</a>
+    <a href="{% url 'utang:create' %}" class="ni-btn ni-btn--primary">+ Tambah Utang</a>
   </div>
 </div>
 
-<!-- Filters -->
-<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+<div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <form id="utangFilterForm" method="get" class="ni-filter-bar">
-      <div class="ni-filter-bar__row">
-        <div class="ni-form-group ni-form-group--grow">
-          <label class="ni-form-label">Entitas Bisnis</label>
-          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
-            {% for opt in eb_options %}
-            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="ni-form-group ni-form-group--narrow">
-          <label class="ni-form-label">Dari Tanggal</label>
-          <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
-        </div>
-        <div class="ni-form-group ni-form-group--narrow">
-          <label class="ni-form-label">Sampai Tanggal</label>
-          <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Status</label>
-          <select name="status" class="ni-input">
-            <option value="">— Semua —</option>
-            {% for value, label in status_choices %}
-            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-      </div>
-      <div class="ni-filter-bar__actions">
-        <button type="submit" class="ni-btn ni-btn--primary ni-btn--lg">
-          <i data-lucide="search"></i> Filter
-        </button>
-        <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary ni-btn--lg">Reset</a>
-      </div>
+    <form method="get" class="ni-filter-row">
+      <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Cari nomor, kreditor, referensi...">
+      <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input" placeholder="Dari">
+      <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input" placeholder="Sampai">
+      <select name="status" class="ni-input">
+        <option value="">— Semua Status —</option>
+        {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="jenis_utang" class="ni-input">
+        <option value="">— Semua Jenis —</option>
+        {% for val, label in jenis_choices %}
+          <option value="{{ val }}" {% if jenis_filter == val %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+      <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">Reset</a>
     </form>
   </div>
 </div>
@@ -60,70 +41,37 @@
     <table class="ni-table">
       <thead>
         <tr>
-          <th>Nomor Utang</th>
+          <th>Nomor</th>
           <th>Tanggal</th>
-          <th>Entitas Bisnis</th>
+          <th>Jenis</th>
+          <th>Kreditor</th>
           <th class="ni-text-right">Total</th>
-          <th class="ni-text-right">Dibayar</th>
           <th class="ni-text-right">Sisa</th>
+          <th>Jatuh Tempo</th>
           <th>Status</th>
-          <th>Aksi</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
         {% for utang in utangs %}
-        <tr>
-          <td><a href="{% url 'utang:detail' utang.pk %}" class="ni-link">{{ utang.nomor_utang }}</a></td>
+        <tr class="{% if utang.is_overdue %}ni-row--danger{% endif %}">
+          <td><a href="{% url 'utang:detail' utang.pk %}">{{ utang.nomor_utang }}</a></td>
           <td>{{ utang.tanggal }}</td>
+          <td><span class="ni-badge">{{ utang.get_jenis_utang_display }}</span></td>
           <td>{{ utang.entitas_display }}</td>
-          <td class="ni-text-right">{{ utang.total_amount|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ utang.paid_amount|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ utang.outstanding_amount|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ utang.total_amount|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ utang.outstanding_amount|floatformat:0 }}</td>
+          <td>{{ utang.tanggal_jatuh_tempo|default:'-' }}</td>
           <td>
-            {% if utang.status == 'paid' %}
-              <span class="ni-badge ni-badge--success">Lunas</span>
-            {% elif utang.status == 'partial' %}
-              <span class="ni-badge ni-badge--warning">Sebagian</span>
-            {% else %}
-              <span class="ni-badge ni-badge--secondary">Terbuka</span>
-            {% endif %}
+            <span class="ni-badge ni-badge--{{ utang.status }}">{{ utang.get_status_display }}</span>
           </td>
-          <td>
-            <div class="ni-btn-row">
-              <a href="{% url 'utang:detail' utang.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">Lihat</a>
-              <a href="{% url 'utang:update' utang.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-              <a href="{% url 'utang:delete' utang.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
-            </div>
-          </td>
+          <td><a href="{% url 'utang:detail' utang.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="ni-text-center ni-text-muted">{% if not eb_selected %}Pilih entitas bisnis untuk menampilkan utang.{% else %}Belum ada data utang.{% endif %}</td></tr>
+        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada data utang.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
-{% endblock %}
-{% block extra_js %}
-<script>
-(function() {
-  'use strict';
-  var ebSel = document.getElementById('ebFilterSelect');
-  var form = document.getElementById('utangFilterForm');
-  if (ebSel && window.TomSelect) {
-    var ts = new TomSelect(ebSel, {
-      plugins: ['remove_button'],
-      persist: false,
-      maxOptions: 500,
-      placeholder: 'Pilih entitas bisnis...',
-    });
-    var initialized = false;
-    ts.on('change', function() {
-      if (!initialized) { return; }
-      form.submit();
-    });
-    setTimeout(function() { initialized = true; }, 0);
-  }
-})();
-</script>
 {% endblock %}
