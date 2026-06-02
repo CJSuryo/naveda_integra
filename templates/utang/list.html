@@ -9,8 +9,49 @@
   </div>
   <div class="ni-page-header__actions">
     <a href="{% url 'utang:create' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Utang
+      <i data-lucide="plus"></i> Tambah Utang
     </a>
+  </div>
+</div>
+
+<!-- Filters -->
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form id="utangFilterForm" method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
+            {% for opt in eb_options %}
+            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Dari Tanggal</label>
+          <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Sampai Tanggal</label>
+          <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Status</label>
+          <select name="status" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for value, label in status_choices %}
+            <option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--lg">
+          <i data-lucide="search"></i> Filter
+        </button>
+        <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary ni-btn--lg">Reset</a>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -22,9 +63,9 @@
           <th>Nomor Utang</th>
           <th>Tanggal</th>
           <th>Entitas Bisnis</th>
-          <th>Total</th>
-          <th>Dibayar</th>
-          <th>Sisa</th>
+          <th class="ni-text-right">Total</th>
+          <th class="ni-text-right">Dibayar</th>
+          <th class="ni-text-right">Sisa</th>
           <th>Status</th>
           <th>Aksi</th>
         </tr>
@@ -56,10 +97,33 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data utang.</td></tr>
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">{% if not eb_selected %}Pilih entitas bisnis untuk menampilkan utang.{% else %}Belum ada data utang.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+  'use strict';
+  var ebSel = document.getElementById('ebFilterSelect');
+  var form = document.getElementById('utangFilterForm');
+  if (ebSel && window.TomSelect) {
+    var ts = new TomSelect(ebSel, {
+      plugins: ['remove_button'],
+      persist: false,
+      maxOptions: 500,
+      placeholder: 'Pilih entitas bisnis...',
+    });
+    var initialized = false;
+    ts.on('change', function() {
+      if (!initialized) { return; }
+      form.submit();
+    });
+    setTimeout(function() { initialized = true; }, 0);
+  }
+})();
+</script>
 {% endblock %}

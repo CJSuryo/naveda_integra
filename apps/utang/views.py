@@ -3,8 +3,11 @@ from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+
+from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
 
 from .forms import UtangHeaderForm, UtangPembayaranForm
 from .models import UtangHeader, UtangPembayaran
@@ -20,10 +23,58 @@ from .services import (
 )
 
 
+def _utang_eb_filter_q(eb_selections: list[str]) -> Q | None:
+    """Resolve hierarchical EB selections to a Q matching UtangHeader.entitas_bisnis (lv1).
+
+    Utang only stores the lv1 EB, so lv2/lv3 selections collapse to their lv1 ancestor.
+    Returns None when no valid selection is provided.
+    """
+    lv1_ids: set[int] = set()
+    for sel in eb_selections:
+        resolved = _resolve_eb_selection(sel)
+        if not resolved:
+            continue
+        lv1_ids.add(resolved['lv1_id'])
+    if not lv1_ids:
+        return None
+    return Q(entitas_bisnis_id__in=lv1_ids)
+
+
 @login_required
 def utang_list(request: HttpRequest) -> HttpResponse:
-    utangs = UtangHeader.objects.select_related('entitas_bisnis').order_by('-tanggal', '-created_at')
-    return render(request, 'utang/list.html', {'utangs': utangs})
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    status_filter = request.GET.get('status', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+
+    eb_q = _utang_eb_filter_q(eb_filter_list)
+    utangs: list[UtangHeader] = []
+
+    if eb_q is not None:
+        qs = (
+            UtangHeader.objects
+            .select_related('entitas_bisnis')
+            .filter(eb_q)
+            .order_by('-tanggal', '-created_at')
+        )
+        if tanggal_dari:
+            qs = qs.filter(tanggal__gte=tanggal_dari)
+        if tanggal_sampai:
+            qs = qs.filter(tanggal__lte=tanggal_sampai)
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        utangs = list(qs)
+
+    return render(request, 'utang/list.html', {
+        'utangs': utangs,
+        'eb_options': _get_eb_dropdown_options(),
+        'eb_filter_list': eb_filter_list,
+        'eb_selected': eb_q is not None,
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'status_filter': status_filter,
+        'status_choices': UtangHeader.STATUS_CHOICES,
+    })
 
 
 @login_required
