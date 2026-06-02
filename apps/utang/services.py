@@ -74,21 +74,23 @@ def _create_formation_journal(utang: UtangHeader) -> JurnalHeader:
 
 
 def _next_utang_formation_journal_number() -> str:
-    last = (
-        JurnalHeader.objects
-        .filter(nomor_transaksi__startswith='TRX-UTG-F-')
-        .order_by('-nomor_transaksi')
-        .values_list('nomor_transaksi', flat=True)
-        .first()
-    )
-    if last:
-        try:
-            seq = int(last.rsplit('-', 1)[1]) + 1
-        except (ValueError, IndexError):
+    with transaction.atomic():
+        last = (
+            JurnalHeader.objects
+            .select_for_update()
+            .filter(nomor_transaksi__startswith='TRX-UTG-F-')
+            .order_by('-nomor_transaksi')
+            .values_list('nomor_transaksi', flat=True)
+            .first()
+        )
+        if last:
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        else:
             seq = 1
-    else:
-        seq = 1
-    return f'TRX-UTG-F-{seq:04d}'
+        return f'TRX-UTG-F-{seq:04d}'
 
 
 # ── Create Manual Utang ───────────────────────────────────────────────────────
@@ -267,35 +269,36 @@ def create_utang_payment(
 
 def reverse_utang_header(utang_header: UtangHeader, user=None):
     before = _utang_snapshot(utang_header)
-    UtangTerhapus.objects.create(
-        nomor_utang=utang_header.nomor_utang,
-        uraian=utang_header.deskripsi,
-        entitas_bisnis_nama=(str(utang_header.entitas_bisnis) if utang_header.entitas_bisnis else ''),
-        tanggal=utang_header.tanggal,
-        deleted_by=user,
-        snapshot={
-            'total_amount': str(utang_header.total_amount),
-            'status': utang_header.status,
-            'jenis_utang': utang_header.jenis_utang,
-            'kreditor': utang_header.kreditor,
-            'tanggal_jatuh_tempo': (
-                str(utang_header.tanggal_jatuh_tempo) if utang_header.tanggal_jatuh_tempo else None
-            ),
-            'details': [
-                {'coa': str(d.coa_utang_account), 'amount': str(d.amount), 'description': d.description}
-                for d in utang_header.details.select_related('coa_utang_account').all()
-            ],
-        },
-    )
-    if utang_header.jurnal_pembentukan_id:
-        log_jurnal_terhapus(utang_header.jurnal_pembentukan, 'utang', None)
-        utang_header.jurnal_pembentukan.delete()
-    for payment in utang_header.pembayaran.select_related('jurnal_header').all():
-        if payment.jurnal_header_id:
-            log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
-            payment.jurnal_header.delete()
-    _log_audit(utang_header, 'REVERSE', user=user, before=before)
-    utang_header.delete()
+    with transaction.atomic():
+        UtangTerhapus.objects.create(
+            nomor_utang=utang_header.nomor_utang,
+            uraian=utang_header.deskripsi,
+            entitas_bisnis_nama=(str(utang_header.entitas_bisnis) if utang_header.entitas_bisnis else ''),
+            tanggal=utang_header.tanggal,
+            deleted_by=user,
+            snapshot={
+                'total_amount': str(utang_header.total_amount),
+                'status': utang_header.status,
+                'jenis_utang': utang_header.jenis_utang,
+                'kreditor': utang_header.kreditor,
+                'tanggal_jatuh_tempo': (
+                    str(utang_header.tanggal_jatuh_tempo) if utang_header.tanggal_jatuh_tempo else None
+                ),
+                'details': [
+                    {'coa': str(d.coa_utang_account), 'amount': str(d.amount), 'description': d.description}
+                    for d in utang_header.details.select_related('coa_utang_account').all()
+                ],
+            },
+        )
+        if utang_header.jurnal_pembentukan_id:
+            log_jurnal_terhapus(utang_header.jurnal_pembentukan, 'utang', None)
+            utang_header.jurnal_pembentukan.delete()
+        for payment in utang_header.pembayaran.select_related('jurnal_header').all():
+            if payment.jurnal_header_id:
+                log_jurnal_terhapus(payment.jurnal_header, 'utang', None)
+                payment.jurnal_header.delete()
+        _log_audit(utang_header, 'REVERSE', user=user, before=before)
+        utang_header.delete()
 
 
 def reverse_utang_for_purchase(purchase_header):
@@ -363,22 +366,24 @@ def _create_utang_payment_journal(payment: UtangPembayaran) -> JurnalHeader:
 
 
 def _next_utang_payment_journal_number() -> str:
-    last = (
-        JurnalHeader.objects
-        .filter(nomor_transaksi__startswith='TRX-UTG-')
-        .exclude(nomor_transaksi__startswith='TRX-UTG-F-')
-        .order_by('-nomor_transaksi')
-        .values_list('nomor_transaksi', flat=True)
-        .first()
-    )
-    if last:
-        try:
-            seq = int(last.rsplit('-', 1)[1]) + 1
-        except (ValueError, IndexError):
+    with transaction.atomic():
+        last = (
+            JurnalHeader.objects
+            .select_for_update()
+            .filter(nomor_transaksi__startswith='TRX-UTG-')
+            .exclude(nomor_transaksi__startswith='TRX-UTG-F-')
+            .order_by('-nomor_transaksi')
+            .values_list('nomor_transaksi', flat=True)
+            .first()
+        )
+        if last:
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        else:
             seq = 1
-    else:
-        seq = 1
-    return f'TRX-UTG-{seq:04d}'
+        return f'TRX-UTG-{seq:04d}'
 
 
 def _update_utang_status(utang_header: UtangHeader) -> None:
