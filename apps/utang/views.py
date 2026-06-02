@@ -1,5 +1,4 @@
-import json
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
