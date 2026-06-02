@@ -4,9 +4,7 @@ from django.forms import inlineformset_factory
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
 
-from .models import JENIS_DOKUMEN_CHOICES, UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran
-
-_APPROVAL_DEFAULTS = {'bank', 'leasing', 'pemegang_saham', 'antar_entitas'}
+from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran
 
 
 class UtangHeaderForm(forms.ModelForm):
