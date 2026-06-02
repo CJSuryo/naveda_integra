@@ -9,37 +9,20 @@
   </div>
   <div class="ni-page-header__actions">
     <a id="exportXlsxBtn" href="{% url 'purchase:export' %}" class="ni-btn ni-btn--secondary">
-      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+      <i data-lucide="download"></i> Export XLSX
     </a>
     <a id="exportPdfBtn" href="{% url 'purchase:export_pdf' %}" class="ni-btn ni-btn--secondary" target="_blank">
-      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+      <i data-lucide="file-text"></i> Export PDF
     </a>
   </div>
 </div>
 
 <!-- Filters -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
-<style>
-  /* Allow TomSelect dropdown to escape filter card */
-  .ni-filter-card,
-  .ni-filter-card .ni-card__body,
-  #purchaseFilterForm,
-  #purchaseFilterForm > div { overflow: visible !important; }
-  #ebFilterSelect + .ts-wrapper { position: relative; }
-  #ebFilterSelect + .ts-wrapper .ts-dropdown {
-    z-index: 1050;
-    position: absolute;
-    left: 0;
-    right: 0;
-    top: 100%;
-    margin-top: 2px;
-  }
-</style>
-<div class="ni-card ni-filter-card ni-animate-fade-in" style="margin-bottom:16px;overflow:visible;">
-  <div class="ni-card__body" style="padding:16px;overflow:visible;">
-    <form id="purchaseFilterForm" method="get">
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
-        <div class="ni-form-group" style="margin:0;flex:2;min-width:260px;">
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form id="purchaseFilterForm" method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
           <label class="ni-form-label">Entitas Bisnis</label>
           <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
             {% for opt in eb_options %}
@@ -47,15 +30,15 @@
             {% endfor %}
           </select>
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <div class="ni-form-group ni-form-group--narrow">
           <label class="ni-form-label">Dari Tanggal</label>
           <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <div class="ni-form-group ni-form-group--narrow">
           <label class="ni-form-label">Sampai Tanggal</label>
           <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <div class="ni-form-group">
           <label class="ni-form-label">Item</label>
           <select name="item" class="ni-input">
             <option value="">— Semua —</option>
@@ -64,7 +47,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <div class="ni-form-group">
           <label class="ni-form-label">Sub-Transaction Type</label>
           <select name="sub_transaction_type" class="ni-input">
             <option value="">— Semua —</option>
@@ -74,11 +57,11 @@
           </select>
         </div>
       </div>
-      <div style="display:flex;gap:12px;margin-top:14px;">
-        <button type="submit" class="ni-btn ni-btn--primary" style="padding:10px 24px;font-size:15px;">
-          <i data-lucide="search" style="width:16px;height:16px"></i> Filter
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--lg">
+          <i data-lucide="search"></i> Filter
         </button>
-        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary" style="padding:10px 24px;font-size:15px;">Reset</a>
+        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary ni-btn--lg">Reset</a>
       </div>
     </form>
   </div>
@@ -104,11 +87,11 @@
         {% for row in rows %}
         <tr>
           {% if row.show_trx_cell %}
-          <td rowspan="{{ row.trx_rowspan }}" style="vertical-align:top;"><a href="{% url 'purchase:detail' row.purchase_header.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ row.purchase_header.transaction_id }}</a></td>
+          <td rowspan="{{ row.trx_rowspan }}" class="ni-cell-top"><a href="{% url 'purchase:detail' row.purchase_header.pk %}" class="ni-link">{{ row.purchase_header.transaction_id }}</a></td>
           {% endif %}
           <td>{{ row.purchase_header.tanggal }}</td>
           <td>{{ row.eb_display }}</td>
-          <td>{% with inv_rec=row.item.inventory_records.all.0 %}{% if inv_rec %}<a href="{% url 'inventory:detail' inv_rec.pk %}" style="color:var(--ni-primary);text-decoration:none;">{{ row.item.item }}</a>{% else %}{{ row.item.item }}{% endif %}{% endwith %}</td>
+          <td>{% with inv_rec=row.item.inventory_records.all.0 %}{% if inv_rec %}<a href="{% url 'inventory:detail' inv_rec.pk %}" class="ni-link">{{ row.item.item }}</a>{% else %}{{ row.item.item }}{% endif %}{% endwith %}</td>
           <td>{{ row.item.sub_transaction_type.nama }}</td>
           <td class="ni-text-right">{{ row.item.quantity|floatformat:0|intcomma }}</td>
           <td class="ni-text-right">{{ row.item.unit_price|floatformat:0|intcomma }}</td>
@@ -135,7 +118,6 @@
 
 {% endblock %}
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -157,13 +139,11 @@
       maxOptions: 500,
       placeholder: 'Pilih entitas bisnis...',
     });
-    // Auto-submit on EB selection change
     var initialized = false;
     ts.on('change', function() {
       if (!initialized) { return; }
       form.submit();
     });
-    // Mark initialized after current event loop so initial population doesn't trigger submit
     setTimeout(function() { initialized = true; }, 0);
   }
 })();

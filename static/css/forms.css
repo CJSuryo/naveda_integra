@@ -397,6 +397,44 @@ input[type="checkbox"].ni-checkbox:focus-visible {
   }
 }
 
+/* ---------- Filter bar (list-page filter forms) ----------
+   Use inside <form> within a ni-filter-card. Row 1 holds filter fields
+   (flex-wrap), row 2 (.ni-filter-bar__actions) holds the action buttons.
+*/
+.ni-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ni-filter-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.ni-filter-bar__row > .ni-form-group {
+  margin: 0;
+  flex: 1;
+  min-width: 160px;
+}
+
+.ni-filter-bar__row > .ni-form-group--grow {
+  flex: 2;
+  min-width: 260px;
+}
+
+.ni-filter-bar__row > .ni-form-group--narrow {
+  min-width: 140px;
+}
+
+.ni-filter-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 /* ---------- Compact input for inline table editing ---------- */
 .ni-input--table-cell {
   padding: 3px 6px;

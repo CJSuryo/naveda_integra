@@ -1,0 +1,68 @@
+/* ==========================================================================
+   Naveda Integra — tomselect.css
+   Global Tom Select theming + dropdown overflow behavior.
+   Single source of truth — do NOT add inline tomselect styles in templates.
+
+   Covers:
+   - Match Tom Select single control to .ni-input look (border/radius/padding).
+   - Dropdown z-index + absolute positioning so options float ABOVE cards,
+     tables, and modal backdrops (no more clipping by ni-card overflow).
+   - .ni-filter-card utility — apply to any ni-card that hosts a Tom Select
+     dropdown so card body doesn't clip the menu.
+
+   Usage in templates:
+     <div class="ni-card ni-filter-card">
+       <div class="ni-card__body">
+         <select class="ni-input" multiple> ... </select>
+       </div>
+     </div>
+   ========================================================================== */
+
+/* ---------- Single-control: match .ni-input visuals ---------- */
+.ts-wrapper.single .ts-control {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  padding: 6px 10px;
+  font-size: 0.875rem;
+  min-height: unset;
+  background: var(--ni-bg-card);
+  color: var(--ni-text);
+}
+
+.ts-wrapper.single .ts-control:focus,
+.ts-wrapper.single.focus .ts-control {
+  outline: none;
+  border-color: var(--ni-primary);
+}
+
+/* ---------- Dropdown floats above siblings ---------- */
+.ts-wrapper .ts-dropdown {
+  z-index: 2500;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 2px;
+}
+
+/* When TomSelect portals the dropdown to <body> (some configs) */
+body > .ts-dropdown {
+  z-index: 3000;
+}
+
+/* Force-above-modal escape hatch for forms inside modals */
+.ts-dropdown {
+  z-index: 2500;
+}
+
+/* ---------- Filter-card utility: stop ni-card from clipping ---------- */
+.ni-filter-card,
+.ni-filter-card .ni-card__body {
+  overflow: visible;
+}
+
+/* Any direct form child of a filter card also propagates overflow */
+.ni-filter-card form,
+.ni-filter-card form > * {
+  overflow: visible;
+}

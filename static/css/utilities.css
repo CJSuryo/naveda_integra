@@ -28,6 +28,19 @@
 .ni-text-accent  { color: var(--ni-accent); }
 .ni-text-white   { color: #fff; }
 
+/* Inline link styled with brand primary, no underline. Use on <a> inside tables/cards. */
+.ni-link {
+  color: var(--ni-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+.ni-link:hover { text-decoration: underline; }
+
+/* Table-cell vertical-align helpers */
+.ni-cell-top    { vertical-align: top; }
+.ni-cell-middle { vertical-align: middle; }
+.ni-cell-bottom { vertical-align: bottom; }
+
 /* Truncate */
 .ni-truncate {
   overflow: hidden;

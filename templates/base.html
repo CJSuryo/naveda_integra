@@ -23,6 +23,9 @@
   <link rel="stylesheet" href="{% static 'css/wrapper.css' %}">
   <link rel="stylesheet" href="{% static 'css/animation.css' %}">
   <link rel="stylesheet" href="{% static 'css/utilities.css' %}">
+  <!-- Tom Select (searchable/multi selects) — loaded globally so templates only use class names. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
+  <link rel="stylesheet" href="{% static 'css/tomselect.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
 <body>
@@ -446,6 +449,7 @@
 {% endif %}
 
 <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 {% block extra_js %}{% endblock %}
 <script src="{% static 'js/sidebar.js' %}"></script>
 <script src="{% static 'js/toast.js' %}"></script>
