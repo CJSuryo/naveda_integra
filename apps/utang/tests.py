@@ -309,3 +309,22 @@ class UtangFormTests(TestCase):
         form = UtangHeaderForm()
         for eb in form.fields['entitas_bisnis'].queryset:
             self.assertIn(eb.relasi, ['pemasok', 'keduanya'])
+
+
+class UtangModelV1Test(TestCase):
+    def test_utang_header_has_jenis_utang(self):
+        self.assertIn('jenis_utang', [f.name for f in UtangHeader._meta.get_fields()])
+
+    def test_utang_header_has_kreditor(self):
+        self.assertIn('kreditor', [f.name for f in UtangHeader._meta.get_fields()])
+
+    def test_utang_header_has_requires_approval(self):
+        self.assertIn('requires_approval', [f.name for f in UtangHeader._meta.get_fields()])
+
+    def test_utang_attachment_model_exists(self):
+        from apps.utang.models import UtangAttachment
+        self.assertTrue(hasattr(UtangAttachment, 'utang_header'))
+
+    def test_utang_audit_log_model_exists(self):
+        from apps.utang.models import UtangAuditLog
+        self.assertTrue(hasattr(UtangAuditLog, 'action'))
