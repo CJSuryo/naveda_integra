@@ -328,3 +328,66 @@ class UtangModelV1Test(TestCase):
     def test_utang_audit_log_model_exists(self):
         from apps.utang.models import UtangAuditLog
         self.assertTrue(hasattr(UtangAuditLog, 'action'))
+
+
+from decimal import Decimal
+from apps.utang.services import create_manual_utang, approve_utang, reject_utang
+from apps.master_data.models import Akun
+
+
+class UtangServicesV1Test(TestCase):
+    def setUp(self):
+        self.akun_utang = Akun.objects.create(kode_akun='2100', nama='Utang Usaha', kategori_id='kewajiban')
+        self.akun_kas = Akun.objects.create(kode_akun='1100', nama='Kas', kategori_id='aset')
+
+    def _detail(self, amount='100000'):
+        return [{'coa_utang_account': self.akun_utang, 'description': 'Test', 'amount': Decimal(amount)}]
+
+    def test_create_no_approval_goes_to_open(self):
+        utang = create_manual_utang(
+            tanggal='2026-06-02', entitas_bisnis=None, deskripsi='Test',
+            jenis_utang='usaha', kreditor='Vendor A', nomor_referensi='INV-001',
+            kategori_jangka_waktu='short_term', coa_source_account=self.akun_kas,
+            requires_approval=False, tanggal_jatuh_tempo=None,
+            details=self._detail(), user=None,
+        )
+        self.assertEqual(utang.status, 'open')
+        self.assertIsNotNone(utang.jurnal_pembentukan)
+
+    def test_create_with_approval_goes_to_draft(self):
+        utang = create_manual_utang(
+            tanggal='2026-06-02', entitas_bisnis=None, deskripsi='Test',
+            jenis_utang='bank', kreditor='Bank BCA', nomor_referensi='PK-001',
+            kategori_jangka_waktu='long_term', coa_source_account=self.akun_kas,
+            requires_approval=True, tanggal_jatuh_tempo=None,
+            details=self._detail('500000000'), user=None,
+        )
+        self.assertEqual(utang.status, 'draft')
+        self.assertIsNone(utang.jurnal_pembentukan)
+
+    def test_approve_utang(self):
+        utang = create_manual_utang(
+            tanggal='2026-06-02', entitas_bisnis=None, deskripsi='Test',
+            jenis_utang='bank', kreditor='Bank BCA', nomor_referensi='PK-001',
+            kategori_jangka_waktu='long_term', coa_source_account=self.akun_kas,
+            requires_approval=True, tanggal_jatuh_tempo=None,
+            details=self._detail('500000000'), user=None,
+        )
+        approve_utang(utang, user=None)
+        utang.refresh_from_db()
+        self.assertEqual(utang.approval_status, 'approved')
+        self.assertEqual(utang.status, 'open')
+        self.assertIsNotNone(utang.jurnal_pembentukan)
+
+    def test_reject_utang(self):
+        utang = create_manual_utang(
+            tanggal='2026-06-02', entitas_bisnis=None, deskripsi='Test',
+            jenis_utang='bank', kreditor='Bank BCA', nomor_referensi='PK-002',
+            kategori_jangka_waktu='long_term', coa_source_account=self.akun_kas,
+            requires_approval=True, tanggal_jatuh_tempo=None,
+            details=self._detail('500000000'), user=None,
+        )
+        reject_utang(utang, user=None, notes='Data tidak lengkap')
+        utang.refresh_from_db()
+        self.assertEqual(utang.approval_status, 'rejected')
+        self.assertEqual(utang.status, 'cancelled')
