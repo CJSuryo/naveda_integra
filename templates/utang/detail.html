@@ -1,98 +1,107 @@
 {% extends 'base.html' %}
 {% load humanize %}
-{% block title %}Detail Utang{% endblock %}
+{% block title %}{{ utang.nomor_utang }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">{{ utang.nomor_utang }}</h1>
-    <p class="ni-page-header__subtitle">Detail utang dan riwayat pembayaran</p>
+    <p class="ni-page-header__subtitle">{{ utang.get_jenis_utang_display }} — {{ utang.entitas_display }}</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'utang:update' utang.pk %}" class="ni-btn ni-btn--warning">
-      <i data-lucide="edit" style="width:16px;height:16px"></i> Edit
-    </a>
+    {% if utang.can_edit %}
+      <a href="{% url 'utang:update' utang.pk %}" class="ni-btn ni-btn--warning">Edit</a>
+    {% endif %}
+    {% if utang.status == 'draft' %}
+      <form method="post" action="{% url 'utang:submit_approval' utang.pk %}" class="ni-form-inline">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--primary">Ajukan Persetujuan</button>
+      </form>
+    {% endif %}
+    {% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
+      <form method="post" action="{% url 'utang:approve' utang.pk %}" class="ni-form-inline">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui dan posting utang ini?')">Setujui &amp; Post</button>
+      </form>
+      <button type="button" class="ni-btn ni-btn--danger" id="open-reject-modal">Tolak</button>
+    {% endif %}
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+{% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
+<div class="ni-modal" id="reject-modal" hidden>
+  <div class="ni-modal__overlay" id="close-reject-modal"></div>
+  <div class="ni-modal__box">
+    <div class="ni-card__header"><h3 class="ni-card__title">Tolak Utang</h3></div>
+    <div class="ni-card__body">
+      <form method="post" action="{% url 'utang:reject' utang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Alasan penolakan</label>
+          <textarea name="notes" class="ni-input" rows="3"></textarea>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--danger">Tolak</button>
+          <button type="button" class="ni-btn ni-btn--secondary" id="close-reject-btn">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
     <dl class="ni-detail-grid">
       <dt>Nomor Utang</dt><dd>{{ utang.nomor_utang }}</dd>
+      <dt>Jenis Utang</dt><dd>{{ utang.get_jenis_utang_display }}</dd>
+      <dt>Kreditor</dt><dd>{{ utang.kreditor|default:'-' }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ utang.entitas_bisnis|default:'-' }}</dd>
+      <dt>Nomor Referensi</dt><dd>{{ utang.nomor_referensi|default:'-' }}</dd>
       <dt>Tanggal</dt><dd>{{ utang.tanggal }}</dd>
-      <dt>Entitas Bisnis</dt><dd>{{ utang.entitas_display }}</dd>
-      <dt>Total Utang</dt><dd>{{ utang.total_amount|floatformat:0|intcomma }}</dd>
+      <dt>Jatuh Tempo</dt><dd>{{ utang.tanggal_jatuh_tempo|default:'-' }}{% if utang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ utang.days_overdue }} hari</span>{% endif %}</dd>
+      <dt>Jangka Waktu</dt><dd>{{ utang.get_kategori_jangka_waktu_display }}</dd>
+      <dt>Total Utang</dt><dd><strong>{{ utang.total_amount|floatformat:0|intcomma }}</strong></dd>
       <dt>Dibayar</dt><dd>{{ utang.paid_amount|floatformat:0|intcomma }}</dd>
-      <dt>Sisa</dt><dd>{{ utang.outstanding_amount|floatformat:0|intcomma }}</dd>
-      <dt>Status</dt><dd>{{ utang.get_status_display }}</dd>
+      <dt>Sisa</dt><dd><strong>{{ utang.outstanding_amount|floatformat:0|intcomma }}</strong></dd>
+      <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ utang.status }}">{{ utang.get_status_display }}</span></dd>
+      {% if utang.requires_approval %}
+      <dt>Status Persetujuan</dt><dd>{{ utang.get_approval_status_display|default:'-' }}</dd>
+      <dt>Disetujui Oleh</dt><dd>{{ utang.approved_by|default:'-' }}</dd>
+      <dt>Disetujui Pada</dt><dd>{{ utang.approved_at|default:'-' }}</dd>
+      {% endif %}
+      {% if utang.jurnal_pembentukan %}
+      <dt>Jurnal Pembentukan</dt>
+      <dd><a href="{% url 'jurnal:detail' utang.jurnal_pembentukan.pk %}">{{ utang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
+      {% endif %}
+      <dt>Akun Debet</dt><dd>{{ utang.coa_source_account|default:'-' }}</dd>
       <dt>Deskripsi</dt><dd>{{ utang.deskripsi|default:'-' }}</dd>
     </dl>
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
-  <div class="ni-card__header">
-    <h2 class="ni-card__title">Detail Utang</h2>
-  </div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Detail Utang</h2></div>
   <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead>
-        <tr>
-          <th>Keterangan</th>
-          <th>Akun Utang</th>
-          <th class="ni-text-right">Jumlah</th>
-          <th>Purchase Item</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Keterangan</th><th>Akun Utang</th><th class="ni-text-right">Jumlah</th></tr></thead>
       <tbody>
         {% for detail in utang.details.all %}
         <tr>
           <td>{{ detail.description|default:'-' }}</td>
           <td>{{ detail.coa_utang_account }}</td>
           <td class="ni-text-right">{{ detail.amount|floatformat:0|intcomma }}</td>
-          <td>{% if detail.purchase_item %}{{ detail.purchase_item.item }}{% else %}-{% endif %}</td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada detail utang.</td></tr>
+        <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
-  <div class="ni-card__header">
-    <h2 class="ni-card__title">Riwayat Pembayaran</h2>
-  </div>
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead>
-        <tr>
-          <th>Tanggal</th>
-          <th>Akun Pembayaran</th>
-          <th class="ni-text-right">Jumlah</th>
-          <th>Keterangan</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for payment in utang.pembayaran.all %}
-        <tr>
-          <td>{{ payment.tanggal }}</td>
-          <td>{{ payment.coa_account }}</td>
-          <td class="ni-text-right">{{ payment.jumlah|floatformat:0|intcomma }}</td>
-          <td>{{ payment.keterangan|default:'-' }}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada pembayaran.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
-  <div class="ni-card__header">
-    <h2 class="ni-card__title">Bayar Utang</h2>
-  </div>
+{% if utang.can_pay %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Bayar Utang</h2></div>
   <div class="ni-card__body">
     <form method="post" action="{% url 'utang:pay' utang.pk %}">
       {% csrf_token %}
@@ -103,14 +112,123 @@
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
       {% endfor %}
-      {% if payment_form.non_field_errors %}
-        <div class="ni-form-error">{{ payment_form.non_field_errors }}</div>
-      {% endif %}
-      <div class="ni-btn-row" style="margin-top:24px;">
+      {% if payment_form.non_field_errors %}<div class="ni-form-error">{{ payment_form.non_field_errors }}</div>{% endif %}
+      <div class="ni-btn-row">
         <button type="submit" class="ni-btn ni-btn--primary">Bayar</button>
-        <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
       </div>
     </form>
   </div>
 </div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Pembayaran</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Akun</th><th class="ni-text-right">Jumlah</th><th>Keterangan</th><th>Jurnal</th><th></th></tr></thead>
+      <tbody>
+        {% for payment in utang.pembayaran.all %}
+        <tr>
+          <td>{{ payment.tanggal }}</td>
+          <td>{{ payment.coa_account }}</td>
+          <td class="ni-text-right">{{ payment.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ payment.keterangan|default:'-' }}</td>
+          <td>{% if payment.jurnal_header %}<a href="{% url 'jurnal:detail' payment.jurnal_header.pk %}">{{ payment.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
+          <td>
+            {% if not utang.is_locked %}
+            <form method="post" action="{% url 'utang:payment_cancel' utang.pk payment.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan pembayaran ini?')">Batal</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada pembayaran.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Dokumen Pendukung</h2></div>
+  <div class="ni-card__body">
+    <form method="post" action="{% url 'utang:attachment_upload' utang.pk %}" enctype="multipart/form-data" class="ni-form-row">
+      {% csrf_token %}
+      {% for field in attachment_form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+        </div>
+      {% endfor %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Upload</button>
+    </form>
+  </div>
+  {% if utang.attachments.all %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>File</th><th>Jenis</th><th>Diupload</th><th>Oleh</th><th></th></tr></thead>
+      <tbody>
+        {% for att in utang.attachments.all %}
+        <tr>
+          <td><a href="{{ att.file.url }}" target="_blank">{{ att.file_name }}</a></td>
+          <td>{{ att.get_jenis_dokumen_display }}</td>
+          <td>{{ att.uploaded_at|date:"d M Y H:i" }}</td>
+          <td>{{ att.uploaded_by|default:'-' }}</td>
+          <td>
+            <form method="post" action="{% url 'utang:attachment_delete' utang.pk att.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Hapus dokumen ini?')">Hapus</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Audit Log</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Waktu</th><th>Aksi</th><th>User</th><th>Catatan</th></tr></thead>
+      <tbody>
+        {% for log in utang.audit_logs.all %}
+        <tr>
+          <td>{{ log.timestamp|date:"d M Y H:i" }}</td>
+          <td>{{ log.get_action_display }}</td>
+          <td>{{ log.user|default:'-' }}</td>
+          <td>{{ log.notes|default:'-' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada log.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-btn-row">
+  <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  {% if not utang.is_locked and not utang.purchase_header_id %}
+  <a href="{% url 'utang:delete' utang.pk %}" class="ni-btn ni-btn--danger">Hapus</a>
+  {% endif %}
+</div>
+
+{% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
+<script>
+(function() {
+  const modal = document.getElementById('reject-modal');
+  const openBtn = document.getElementById('open-reject-modal');
+  const closeOverlay = document.getElementById('close-reject-modal');
+  const closeBtn = document.getElementById('close-reject-btn');
+  if (openBtn) openBtn.addEventListener('click', function() { modal.hidden = false; });
+  if (closeOverlay) closeOverlay.addEventListener('click', function() { modal.hidden = true; });
+  if (closeBtn) closeBtn.addEventListener('click', function() { modal.hidden = true; });
+})();
+</script>
+{% endif %}
 {% endblock %}
