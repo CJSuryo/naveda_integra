@@ -71,7 +71,7 @@
       {% endif %}
       {% if utang.jurnal_pembentukan %}
       <dt>Jurnal Pembentukan</dt>
-      <dd><a href="{% url 'jurnal:detail' utang.jurnal_pembentukan.pk %}">{{ utang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
+      <dd><a href="{% url 'jurnal:header_detail' utang.jurnal_pembentukan.pk %}">{{ utang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
       {% endif %}
       <dt>Akun Debet</dt><dd>{{ utang.coa_source_account|default:'-' }}</dd>
       <dt>Deskripsi</dt><dd>{{ utang.deskripsi|default:'-' }}</dd>
@@ -133,7 +133,7 @@
           <td>{{ payment.coa_account }}</td>
           <td class="ni-text-right">{{ payment.jumlah|floatformat:0|intcomma }}</td>
           <td>{{ payment.keterangan|default:'-' }}</td>
-          <td>{% if payment.jurnal_header %}<a href="{% url 'jurnal:detail' payment.jurnal_header.pk %}">{{ payment.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
+          <td>{% if payment.jurnal_header %}<a href="{% url 'jurnal:header_detail' payment.jurnal_header.pk %}">{{ payment.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
           <td>
             {% if not utang.is_locked %}
             <form method="post" action="{% url 'utang:payment_cancel' utang.pk payment.pk %}" class="ni-form-inline">
