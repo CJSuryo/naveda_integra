@@ -14,55 +14,56 @@
     <a id="exportPdfBtn" href="{% url 'purchase:export_pdf' %}" class="ni-btn ni-btn--secondary" target="_blank">
       <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
     </a>
-    <a href="{% url 'purchase:create' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Purchase
-    </a>
   </div>
 </div>
 
 <!-- Filters -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css">
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:16px;">
-    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
-        <label class="ni-form-label">Dari Tanggal</label>
-        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+    <form id="purchaseFilterForm" method="get">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+        <div class="ni-form-group" style="margin:0;flex:2;min-width:260px;">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
+            {% for opt in eb_options %}
+            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+          <label class="ni-form-label">Dari Tanggal</label>
+          <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+          <label class="ni-form-label">Sampai Tanggal</label>
+          <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+          <label class="ni-form-label">Item</label>
+          <select name="item" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for item in items %}
+            <option value="{{ item.pk }}"{% if item_filter == item.pk|stringformat:'d' %} selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+          <label class="ni-form-label">Sub-Transaction Type</label>
+          <select name="sub_transaction_type" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for stt in sub_transaction_types %}
+            <option value="{{ stt.pk }}"{% if stt_filter == stt.pk|stringformat:'d' %} selected{% endif %}>{{ stt.nama }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
-        <label class="ni-form-label">Sampai Tanggal</label>
-        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      <div style="display:flex;gap:12px;margin-top:14px;">
+        <button type="submit" class="ni-btn ni-btn--primary" style="padding:10px 24px;font-size:15px;">
+          <i data-lucide="search" style="width:16px;height:16px"></i> Filter
+        </button>
+        <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary" style="padding:10px 24px;font-size:15px;">Reset</a>
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Item</label>
-        <select name="item" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for item in items %}
-          <option value="{{ item.pk }}"{% if item_filter == item.pk|stringformat:'d' %} selected{% endif %}>{{ item }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Sub-Transaction Type</label>
-        <select name="sub_transaction_type" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for stt in sub_transaction_types %}
-          <option value="{{ stt.pk }}"{% if stt_filter == stt.pk|stringformat:'d' %} selected{% endif %}>{{ stt.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <select name="entitas_bisnis" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for eb in entitas_list %}
-          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
-        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
-      </button>
-      <a href="{% url 'purchase:list' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
     </form>
   </div>
 </div>
@@ -109,7 +110,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada data purchase.</td></tr>
+        <tr><td colspan="9" class="ni-text-center ni-text-muted">{% if not eb_selected %}Pilih entitas bisnis untuk menampilkan transaksi.{% else %}Belum ada data purchase.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -118,6 +119,7 @@
 
 {% endblock %}
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
 <script>
 (function() {
   'use strict';
@@ -128,6 +130,25 @@
   var pdfBtn = document.getElementById('exportPdfBtn');
   if (pdfBtn && window.location.search) {
     pdfBtn.href = pdfBtn.href.split('?')[0] + window.location.search;
+  }
+
+  var ebSel = document.getElementById('ebFilterSelect');
+  var form = document.getElementById('purchaseFilterForm');
+  if (ebSel && window.TomSelect) {
+    var ts = new TomSelect(ebSel, {
+      plugins: ['remove_button'],
+      persist: false,
+      maxOptions: 500,
+      placeholder: 'Pilih entitas bisnis...',
+    });
+    // Auto-submit on EB selection change
+    var initialized = false;
+    ts.on('change', function() {
+      if (!initialized) { return; }
+      form.submit();
+    });
+    // Mark initialized after current event loop so initial population doesn't trigger submit
+    setTimeout(function() { initialized = true; }, 0);
   }
 })();
 </script>

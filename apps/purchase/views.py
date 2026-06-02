@@ -111,84 +111,131 @@ def _resolve_eb_selection(selection: str | int | None) -> dict | None:
 
 # ── Purchase List ────────────────────────────────────────────────────────────
 
+def _build_eb_filter_q(eb_selections: list[str]) -> Q | None:
+    """Build a Q expression filtering PurchaseEntitasBisnis by hierarchical EB selections.
+
+    Selections are prefixed strings (``lv1:X``/``lv2:Y``/``lv3:Z``). lv1 matches all
+    descendants (lv2/lv3), lv2 matches its lv3 children, lv3 matches itself only.
+    Returns None when no valid selection is provided.
+    """
+    q = Q()
+    has_any = False
+    for sel in eb_selections:
+        resolved = _resolve_eb_selection(sel)
+        if not resolved:
+            continue
+        # Most-specific level dictates matching column
+        if resolved.get('lv3_id'):
+            q |= Q(entitas_groups__entitas_bisnis_lv3_id=resolved['lv3_id'])
+        elif resolved.get('lv2_id'):
+            q |= Q(entitas_groups__entitas_bisnis_lv2_id=resolved['lv2_id'])
+        else:
+            q |= Q(entitas_groups__entitas_bisnis_id=resolved['lv1_id'])
+        has_any = True
+    return q if has_any else None
+
+
+def _eb_row_matches(eg, eb_selections: list[str]) -> bool:
+    """Check if a PurchaseEntitasBisnis row matches any of the given EB selections."""
+    if not eb_selections:
+        return True
+    for sel in eb_selections:
+        resolved = _resolve_eb_selection(sel)
+        if not resolved:
+            continue
+        if resolved.get('lv3_id'):
+            if eg.entitas_bisnis_lv3_id == resolved['lv3_id']:
+                return True
+        elif resolved.get('lv2_id'):
+            if eg.entitas_bisnis_lv2_id == resolved['lv2_id']:
+                return True
+        else:
+            if eg.entitas_bisnis_id == resolved['lv1_id']:
+                return True
+    return False
+
+
 @login_required
 def purchase_list(request: HttpRequest) -> HttpResponse:
     """List all purchase transactions with filtering."""
-    qs = (
-        PurchaseHeader.objects
-        .prefetch_related(
-            'entitas_groups__entitas_bisnis',
-            'entitas_groups__entitas_bisnis_lv2',
-            'entitas_groups__entitas_bisnis_lv3',
-            'entitas_groups__items__item',
-            'entitas_groups__items__sub_transaction_type',
-            'entitas_groups__items__inventory_records',
-        )
-        .order_by('-tanggal', '-created_at')
-    )
-
     # Filters
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
     stt_filter = request.GET.get('sub_transaction_type', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
-    if tanggal_dari:
-        qs = qs.filter(tanggal__gte=tanggal_dari)
-    if tanggal_sampai:
-        qs = qs.filter(tanggal__lte=tanggal_sampai)
-    if item_filter:
-        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
-    if stt_filter:
-        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
-    if eb_filter:
-        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+    eb_q = _build_eb_filter_q(eb_filter_list)
+    rows: list[dict] = []
+    purchases: list[PurchaseHeader] = []
 
-    purchases = list(qs)
+    # No EB selected → hide all rows (require explicit selection)
+    if eb_q is not None:
+        qs = (
+            PurchaseHeader.objects
+            .prefetch_related(
+                'entitas_groups__entitas_bisnis',
+                'entitas_groups__entitas_bisnis_lv2',
+                'entitas_groups__entitas_bisnis_lv3',
+                'entitas_groups__items__item',
+                'entitas_groups__items__sub_transaction_type',
+                'entitas_groups__items__inventory_records',
+            )
+            .order_by('-tanggal', '-created_at')
+        )
 
-    # Build flat rows for the table — apply item-level filters
-    rows = []
-    for ph in purchases:
-        for eg in ph.entitas_groups.all():
-            # Build display name at the most specific level
-            if eg.entitas_bisnis_lv3_id:
-                eb_display = (
-                    f'{eg.entitas_bisnis.nama} / '
-                    f'{eg.entitas_bisnis_lv2.nama} / '
-                    f'{eg.entitas_bisnis_lv3.nama}'
-                )
-            elif eg.entitas_bisnis_lv2_id:
-                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+        if tanggal_dari:
+            qs = qs.filter(tanggal__gte=tanggal_dari)
+        if tanggal_sampai:
+            qs = qs.filter(tanggal__lte=tanggal_sampai)
+        if item_filter:
+            qs = qs.filter(entitas_groups__items__item_id=item_filter)
+        if stt_filter:
+            qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter)
+        qs = qs.filter(eb_q).distinct()
+
+        purchases = list(qs)
+
+        for ph in purchases:
+            for eg in ph.entitas_groups.all():
+                if not _eb_row_matches(eg, eb_filter_list):
+                    continue
+                if eg.entitas_bisnis_lv3_id:
+                    eb_display = (
+                        f'{eg.entitas_bisnis.nama} / '
+                        f'{eg.entitas_bisnis_lv2.nama} / '
+                        f'{eg.entitas_bisnis_lv3.nama}'
+                    )
+                elif eg.entitas_bisnis_lv2_id:
+                    eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+                else:
+                    eb_display = eg.entitas_bisnis.nama
+                for pi in eg.items.all():
+                    if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
+                        continue
+                    if item_filter and str(pi.item_id) != str(item_filter):
+                        continue
+                    rows.append({
+                        'purchase_header': ph,
+                        'eb_display': eb_display,
+                        'item': pi,
+                    })
+
+        # Compute rowspan for merging Transaction ID cells
+        trx_rowspan: dict[str, int] = {}
+        trx_seen: dict[str, bool] = {}
+        for row in rows:
+            tid = row['purchase_header'].transaction_id
+            trx_rowspan[tid] = trx_rowspan.get(tid, 0) + 1
+        for row in rows:
+            tid = row['purchase_header'].transaction_id
+            if tid not in trx_seen:
+                trx_seen[tid] = True
+                row['show_trx_cell'] = True
+                row['trx_rowspan'] = trx_rowspan[tid]
             else:
-                eb_display = eg.entitas_bisnis.nama
-            for pi in eg.items.all():
-                # Item-level row filtering
-                if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
-                    continue
-                if item_filter and str(pi.item_id) != str(item_filter):
-                    continue
-                rows.append({
-                    'purchase_header': ph,
-                    'eb_display': eb_display,
-                    'item': pi,
-                })
-
-    # Compute rowspan for merging Transaction ID cells
-    trx_rowspan: dict[str, int] = {}
-    trx_seen: dict[str, bool] = {}
-    for row in rows:
-        tid = row['purchase_header'].transaction_id
-        trx_rowspan[tid] = trx_rowspan.get(tid, 0) + 1
-    for row in rows:
-        tid = row['purchase_header'].transaction_id
-        if tid not in trx_seen:
-            trx_seen[tid] = True
-            row['show_trx_cell'] = True
-            row['trx_rowspan'] = trx_rowspan[tid]
-        else:
-            row['show_trx_cell'] = False
-            row['trx_rowspan'] = 0
+                row['show_trx_cell'] = False
+                row['trx_rowspan'] = 0
 
     return render(request, 'purchase/purchase_list.html', {
         'rows': rows,
@@ -197,10 +244,11 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'items': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_options': _get_eb_dropdown_options(),
         'item_filter': item_filter,
         'stt_filter': stt_filter,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
+        'eb_selected': bool(eb_q is not None),
     })
 
 
@@ -226,44 +274,49 @@ def purchase_export(request: HttpRequest) -> HttpResponse:
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
     stt_filter = request.GET.get('sub_transaction_type', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    eb_q = _build_eb_filter_q(eb_filter_list)
 
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
     if item_filter:
-        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
+        qs = qs.filter(entitas_groups__items__item_id=item_filter)
     if stt_filter:
-        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
-    if eb_filter:
-        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter)
+    if eb_q is not None:
+        qs = qs.filter(eb_q)
+    qs = qs.distinct()
 
-    # Build flat rows
+    # Build flat rows — no EB selected → empty result
     rows = []
-    for ph in qs:
-        for eg in ph.entitas_groups.all():
-            if eg.entitas_bisnis_lv3_id:
-                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama} / {eg.entitas_bisnis_lv3.nama}'
-            elif eg.entitas_bisnis_lv2_id:
-                eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
-            else:
-                eb_display = eg.entitas_bisnis.nama
-            for pi in eg.items.all():
-                if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
+    if eb_q is not None:
+        for ph in qs:
+            for eg in ph.entitas_groups.all():
+                if not _eb_row_matches(eg, eb_filter_list):
                     continue
-                if item_filter and str(pi.item_id) != str(item_filter):
-                    continue
-                rows.append({
-                    'transaction_id': ph.transaction_id,
-                    'tanggal': ph.tanggal,
-                    'eb_display': eb_display,
-                    'item': str(pi.item) if pi.item else '-',
-                    'stt': pi.sub_transaction_type.nama if pi.sub_transaction_type else '-',
-                    'qty': pi.quantity or 0,
-                    'unit_price': pi.unit_price or 0,
-                    'total': pi.total_value or 0,
-                })
+                if eg.entitas_bisnis_lv3_id:
+                    eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama} / {eg.entitas_bisnis_lv3.nama}'
+                elif eg.entitas_bisnis_lv2_id:
+                    eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama}'
+                else:
+                    eb_display = eg.entitas_bisnis.nama
+                for pi in eg.items.all():
+                    if stt_filter and str(pi.sub_transaction_type_id) != str(stt_filter):
+                        continue
+                    if item_filter and str(pi.item_id) != str(item_filter):
+                        continue
+                    rows.append({
+                        'transaction_id': ph.transaction_id,
+                        'tanggal': ph.tanggal,
+                        'eb_display': eb_display,
+                        'item': str(pi.item) if pi.item else '-',
+                        'stt': pi.sub_transaction_type.nama if pi.sub_transaction_type else '-',
+                        'qty': pi.quantity or 0,
+                        'unit_price': pi.unit_price or 0,
+                        'total': pi.total_value or 0,
+                    })
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -326,23 +379,29 @@ def purchase_export_pdf(request: HttpRequest) -> HttpResponse:
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
     stt_filter = request.GET.get('sub_transaction_type', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    eb_q = _build_eb_filter_q(eb_filter_list)
 
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
     if item_filter:
-        qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
+        qs = qs.filter(entitas_groups__items__item_id=item_filter)
     if stt_filter:
-        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
-    if eb_filter:
-        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+        qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter)
+    if eb_q is not None:
+        qs = qs.filter(eb_q)
+    qs = qs.distinct()
 
     rows = []
     total_nilai = Decimal('0')
+    if eb_q is None:
+        qs = qs.none()
     for ph in qs:
         for eg in ph.entitas_groups.all():
+            if not _eb_row_matches(eg, eb_filter_list):
+                continue
             if eg.entitas_bisnis_lv3_id:
                 eb_display = f'{eg.entitas_bisnis.nama} / {eg.entitas_bisnis_lv2.nama} / {eg.entitas_bisnis_lv3.nama}'
             elif eg.entitas_bisnis_lv2_id:
