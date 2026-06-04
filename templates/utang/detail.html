@@ -289,7 +289,7 @@
   </div>
 </div>
 
-<div class="ni-btn-row">
+<div class="ni-page-actions">
   <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
   {% if not utang.is_locked and not utang.purchase_header_id %}
   <a href="{% url 'utang:delete' utang.pk %}" class="ni-btn ni-btn--danger">Hapus</a>

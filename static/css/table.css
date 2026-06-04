@@ -98,6 +98,18 @@
   background: var(--ni-primary-light);
 }
 
+/* ---------- Row state variants ---------- */
+.ni-table tbody tr.ni-row--success,
+.ni-table tbody tr.ni-row--success:hover { background: rgba(209, 250, 229, 0.45); }
+
+.ni-table tbody tr.ni-row--danger,
+.ni-table tbody tr.ni-row--danger:hover  { background: rgba(254, 226, 226, 0.45); }
+
+.ni-table tbody tr.ni-row--warning,
+.ni-table tbody tr.ni-row--warning:hover { background: rgba(254, 243, 199, 0.45); }
+
+.ni-table tbody tr.ni-row--deleted td { opacity: 0.45; text-decoration: line-through; }
+
 /* Clickable row */
 .ni-table--clickable tbody tr {
   cursor: pointer;

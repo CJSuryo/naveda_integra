@@ -10,9 +10,16 @@
   border-radius: var(--ni-radius-lg);
   box-shadow: var(--ni-shadow-sm);
   overflow: hidden;
+  margin-bottom: 20px;
   transition:
     box-shadow var(--ni-transition),
     transform var(--ni-transition);
+}
+
+/* Grids manage their own internal gap; reset card margin inside them */
+.ni-card-grid .ni-card,
+.ni-kpi-grid .ni-card {
+  margin-bottom: 0;
 }
 
 .ni-card--hover:hover {
@@ -178,6 +185,7 @@
 /* ---------- Card grid ---------- */
 .ni-card-grid {
   display: grid;
+  margin-bottom: 20px;
   gap: 20px;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }

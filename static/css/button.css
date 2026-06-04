@@ -233,6 +233,17 @@
   flex-wrap: wrap;
 }
 
+/* Page-level bottom action row (follows a card) */
+.ni-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ni-border);
+}
+
 /* ---------- Loading state ---------- */
 .ni-btn--loading {
   pointer-events: none;
