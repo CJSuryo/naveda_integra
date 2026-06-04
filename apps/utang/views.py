@@ -11,7 +11,7 @@ from apps.entitas_bisnis.models import EntitasBisnis as EntitasBisnisModel
 from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
 
 from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, UtangPembayaranForm
-from .models import UtangDetail, UtangHeader, UtangPembayaran, UtangAttachment
+from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran, UtangReklasifikasi
 from .services import (
     approve_utang,
     compute_bagian_lancar,
@@ -26,7 +26,7 @@ from .services import (
     get_utang_per_group_akun,
     get_utang_per_subjek,
     reject_utang,
-    reverse_reklasifikasi_journal,
+    reverse_reklasifikasi_entry,
     reverse_utang_header,
     reverse_utang_payment,
     submit_utang_for_approval,
@@ -109,14 +109,13 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.master_data.models import Akun
     utang = get_object_or_404(
         UtangHeader.objects
-        .select_related(
-            'entitas_bisnis', 'coa_source_account',
-            'jurnal_pembentukan', 'jurnal_reklasifikasi', 'approved_by',
-        )
+        .select_related('entitas_bisnis', 'coa_source_account', 'jurnal_pembentukan', 'approved_by')
         .prefetch_related(
             'details__purchase_item__item', 'details__coa_utang_account',
             'pembayaran__coa_account', 'pembayaran__jurnal_header',
             'attachments__uploaded_by', 'audit_logs__user',
+            'reklasifikasi_entries__jurnal',
+            'reklasifikasi_entries__created_by',
         ),
         pk=pk,
     )
@@ -294,6 +293,8 @@ def utang_reject(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def utang_pay(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
     utang = get_object_or_404(UtangHeader, pk=pk)
     if utang.is_locked:
         dj_messages.error(request, 'Utang ini terkunci.')
@@ -301,27 +302,20 @@ def utang_pay(request: HttpRequest, pk: int) -> HttpResponse:
     if not utang.can_pay:
         dj_messages.error(request, 'Utang ini belum dapat dibayar.')
         return redirect('utang:detail', pk=pk)
-    if request.method != 'POST':
-        return redirect('utang:detail', pk=pk)
     form = UtangPembayaranForm(request.POST, utang_header=utang)
     if form.is_valid():
         try:
             create_utang_payment(utang, user=request.user, **form.cleaned_data)
             dj_messages.success(request, f'Pembayaran untuk {utang.nomor_utang} berhasil dicatat.')
-            return redirect('utang:detail', pk=pk)
         except ValueError as exc:
-            form.add_error(None, str(exc))
-    bagian_lancar = (
-        compute_bagian_lancar(utang)
-        if utang.status in ('open', 'partial', 'overdue') and utang.outstanding_amount > 0
-        else None
-    )
-    return render(request, 'utang/detail.html', {
-        'utang': utang,
-        'payment_form': form,
-        'attachment_form': UtangAttachmentForm(),
-        'bagian_lancar': bagian_lancar,
-    })
+            dj_messages.error(request, str(exc))
+    else:
+        for field in form:
+            for err in field.errors:
+                dj_messages.error(request, f'{field.label}: {err}')
+        for err in form.non_field_errors():
+            dj_messages.error(request, err)
+    return redirect('utang:detail', pk=pk)
 
 
 @login_required
@@ -376,13 +370,14 @@ def utang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
     utang = get_object_or_404(UtangHeader, pk=pk)
     coa_id = request.POST.get('coa_bagian_lancar')
     tanggal_str = request.POST.get('tanggal', '').strip()
+    catatan = request.POST.get('catatan', '').strip()
     if not coa_id:
         dj_messages.error(request, 'Pilih akun bagian lancar.')
         return redirect('utang:detail', pk=pk)
     try:
         coa = Akun.objects.get(pk=coa_id)
         tanggal = _date.fromisoformat(tanggal_str) if tanggal_str else None
-        create_reklasifikasi_journal(utang, coa, tanggal=tanggal, user=request.user)
+        create_reklasifikasi_journal(utang, coa, tanggal=tanggal, catatan=catatan, user=request.user)
         dj_messages.success(request, f'Jurnal reklasifikasi berhasil dibuat untuk {utang.nomor_utang}.')
     except (ValueError, Akun.DoesNotExist) as exc:
         dj_messages.error(request, str(exc))
@@ -390,13 +385,14 @@ def utang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
-def utang_reklasifikasi_reverse(request: HttpRequest, pk: int) -> HttpResponse:
+def utang_reklasifikasi_reverse(request: HttpRequest, pk: int, rkl_pk: int) -> HttpResponse:
     if request.method != 'POST':
         return redirect('utang:detail', pk=pk)
     utang = get_object_or_404(UtangHeader, pk=pk)
+    entry = get_object_or_404(UtangReklasifikasi, pk=rkl_pk, utang_header=utang)
     try:
-        reverse_reklasifikasi_journal(utang, user=request.user)
-        dj_messages.success(request, f'Jurnal reklasifikasi {utang.nomor_utang} berhasil dibatalkan.')
+        reverse_reklasifikasi_entry(entry, user=request.user)
+        dj_messages.success(request, 'Jurnal reklasifikasi berhasil dibatalkan.')
     except ValueError as exc:
         dj_messages.error(request, str(exc))
     return redirect('utang:detail', pk=pk)

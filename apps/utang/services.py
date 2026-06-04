@@ -12,7 +12,7 @@ from apps.jurnal.utils import log_jurnal_terhapus
 
 from .models import (
     UtangAuditLog, UtangAttachment, UtangDetail, UtangHeader,
-    UtangPembayaran, UtangTerhapus,
+    UtangPembayaran, UtangReklasifikasi, UtangTerhapus,
 )
 
 
@@ -519,15 +519,13 @@ def _next_utang_reklasifikasi_journal_number() -> str:
 
 
 def create_reklasifikasi_journal(
-    utang: UtangHeader, coa_bagian_lancar, tanggal=None, user=None,
-) -> None:
+    utang: UtangHeader, coa_bagian_lancar, tanggal=None, catatan: str = '', user=None,
+) -> UtangReklasifikasi:
     """
     Dr utang.detail[largest].coa_utang_account  bagian_lancar
     Cr coa_bagian_lancar                         bagian_lancar
-    Marks as is_penyesuaian=True.
+    Creates UtangReklasifikasi entry. Multiple per utang allowed (one per period).
     """
-    if utang.jurnal_reklasifikasi_id:
-        raise ValueError('Jurnal reklasifikasi sudah ada. Batalkan dulu sebelum membuat baru.')
     bl = compute_bagian_lancar(utang)
     jumlah = bl['bagian_lancar']
     if jumlah <= 0:
@@ -551,21 +549,25 @@ def create_reklasifikasi_journal(
             JurnalDetail(jurnal_header=header, akun=detail.coa_utang_account, debit=jumlah, kredit=Decimal('0')),
             JurnalDetail(jurnal_header=header, akun=coa_bagian_lancar, debit=Decimal('0'), kredit=jumlah),
         ])
-        utang.jurnal_reklasifikasi = header
-        utang.save(update_fields=['jurnal_reklasifikasi'])
+        entry = UtangReklasifikasi.objects.create(
+            utang_header=utang,
+            jurnal=header,
+            jumlah=jumlah,
+            tanggal=tanggal_jurnal,
+            catatan=catatan,
+            created_by=user,
+        )
         _log_audit(utang, 'EDIT', user=user, notes=f'Jurnal reklasifikasi dibuat: {nomor}, Rp {jumlah}')
+    return entry
 
 
-def reverse_reklasifikasi_journal(utang: UtangHeader, user=None) -> None:
-    if not utang.jurnal_reklasifikasi_id:
-        raise ValueError('Tidak ada jurnal reklasifikasi untuk dibatalkan.')
+def reverse_reklasifikasi_entry(entry: UtangReklasifikasi, user=None) -> None:
+    utang = entry.utang_header
     with transaction.atomic():
-        jurnal = utang.jurnal_reklasifikasi
+        jurnal = entry.jurnal
         nomor = jurnal.nomor_transaksi
         log_jurnal_terhapus(jurnal, 'utang', None)
-        jurnal.delete()
-        utang.jurnal_reklasifikasi = None
-        utang.save(update_fields=['jurnal_reklasifikasi'])
+        jurnal.delete()  # cascades: deletes entry via OneToOne CASCADE
         _log_audit(utang, 'EDIT', user=user, notes=f'Jurnal reklasifikasi dibatalkan: {nomor}')
 
 

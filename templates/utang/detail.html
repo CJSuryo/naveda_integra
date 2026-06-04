@@ -14,7 +14,7 @@
     {% if utang.status == 'draft' %}
       <form method="post" action="{% url 'utang:submit_approval' utang.pk %}" class="ni-form-inline">
         {% csrf_token %}
-        <button type="submit" class="ni-btn ni-btn--primary">Ajukan Persetujuan</button>
+        <button type="submit" class="ni-btn ni-btn--secondary">Ajukan Persetujuan</button>
       </form>
     {% endif %}
     {% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
@@ -22,60 +22,56 @@
         {% csrf_token %}
         <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui dan posting utang ini?')">Setujui &amp; Post</button>
       </form>
-      <button type="button" class="ni-btn ni-btn--danger" id="open-reject-modal">Tolak</button>
+      <button type="button" class="ni-btn ni-btn--danger" onclick="openModal('rejectModal')">Tolak</button>
+    {% endif %}
+    {% if utang.can_pay %}
+      <button type="button" class="ni-btn ni-btn--primary" onclick="openModal('payModal')">Bayar Utang</button>
     {% endif %}
   </div>
 </div>
 
-{% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
-<div class="ni-modal" id="reject-modal" hidden>
-  <div class="ni-modal__overlay" id="close-reject-modal"></div>
-  <div class="ni-modal__box">
-    <div class="ni-card__header"><h3 class="ni-card__title">Tolak Utang</h3></div>
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Utang</h2></div>
     <div class="ni-card__body">
-      <form method="post" action="{% url 'utang:reject' utang.pk %}">
-        {% csrf_token %}
-        <div class="ni-form-group">
-          <label class="ni-form-label">Alasan penolakan</label>
-          <textarea name="notes" class="ni-input" rows="3"></textarea>
-        </div>
-        <div class="ni-btn-row">
-          <button type="submit" class="ni-btn ni-btn--danger">Tolak</button>
-          <button type="button" class="ni-btn ni-btn--secondary" id="close-reject-btn">Batal</button>
-        </div>
-      </form>
+      <dl class="ni-detail-grid">
+        <dt>Nomor Utang</dt><dd>{{ utang.nomor_utang }}</dd>
+        <dt>Jenis Utang</dt><dd>{{ utang.get_jenis_utang_display }}</dd>
+        <dt>Kreditor</dt><dd>{{ utang.kreditor|default:'-' }}</dd>
+        <dt>Entitas Bisnis</dt><dd>{{ utang.entitas_bisnis|default:'-' }}</dd>
+        <dt>Nomor Referensi</dt><dd>{{ utang.nomor_referensi|default:'-' }}</dd>
+        <dt>Tanggal</dt><dd>{{ utang.tanggal }}</dd>
+        <dt>Jatuh Tempo</dt><dd>{{ utang.tanggal_jatuh_tempo|default:'-' }}{% if utang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ utang.days_overdue }} hari</span>{% endif %}</dd>
+        <dt>Jangka Waktu</dt><dd>{{ utang.get_kategori_jangka_waktu_display }}</dd>
+        <dt>Akun Debet</dt><dd>{{ utang.coa_source_account|default:'-' }}</dd>
+        <dt>Deskripsi</dt><dd>{{ utang.deskripsi|default:'-' }}</dd>
+        {% if utang.requires_approval %}
+        <dt>Status Persetujuan</dt><dd>{{ utang.get_approval_status_display|default:'-' }}</dd>
+        <dt>Disetujui Oleh</dt><dd>{{ utang.approved_by|default:'-' }}</dd>
+        {% endif %}
+        {% if utang.jurnal_pembentukan %}
+        <dt>Jurnal Pembentukan</dt>
+        <dd><a href="{% url 'jurnal:header_detail' utang.jurnal_pembentukan.pk %}">{{ utang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
+        {% endif %}
+      </dl>
     </div>
   </div>
-</div>
-{% endif %}
 
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__body">
-    <dl class="ni-detail-grid">
-      <dt>Nomor Utang</dt><dd>{{ utang.nomor_utang }}</dd>
-      <dt>Jenis Utang</dt><dd>{{ utang.get_jenis_utang_display }}</dd>
-      <dt>Kreditor</dt><dd>{{ utang.kreditor|default:'-' }}</dd>
-      <dt>Entitas Bisnis</dt><dd>{{ utang.entitas_bisnis|default:'-' }}</dd>
-      <dt>Nomor Referensi</dt><dd>{{ utang.nomor_referensi|default:'-' }}</dd>
-      <dt>Tanggal</dt><dd>{{ utang.tanggal }}</dd>
-      <dt>Jatuh Tempo</dt><dd>{{ utang.tanggal_jatuh_tempo|default:'-' }}{% if utang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ utang.days_overdue }} hari</span>{% endif %}</dd>
-      <dt>Jangka Waktu</dt><dd>{{ utang.get_kategori_jangka_waktu_display }}</dd>
-      <dt>Total Utang</dt><dd><strong>{{ utang.total_amount|floatformat:0|intcomma }}</strong></dd>
-      <dt>Dibayar</dt><dd>{{ utang.paid_amount|floatformat:0|intcomma }}</dd>
-      <dt>Sisa</dt><dd><strong>{{ utang.outstanding_amount|floatformat:0|intcomma }}</strong></dd>
-      <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ utang.status }}">{{ utang.get_status_display }}</span></dd>
-      {% if utang.requires_approval %}
-      <dt>Status Persetujuan</dt><dd>{{ utang.get_approval_status_display|default:'-' }}</dd>
-      <dt>Disetujui Oleh</dt><dd>{{ utang.approved_by|default:'-' }}</dd>
-      <dt>Disetujui Pada</dt><dd>{{ utang.approved_at|default:'-' }}</dd>
-      {% endif %}
-      {% if utang.jurnal_pembentukan %}
-      <dt>Jurnal Pembentukan</dt>
-      <dd><a href="{% url 'jurnal:header_detail' utang.jurnal_pembentukan.pk %}">{{ utang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
-      {% endif %}
-      <dt>Akun Debet</dt><dd>{{ utang.coa_source_account|default:'-' }}</dd>
-      <dt>Deskripsi</dt><dd>{{ utang.deskripsi|default:'-' }}</dd>
-    </dl>
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Posisi Keuangan</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Total Utang</dt><dd><strong>{{ utang.total_amount|floatformat:0|intcomma }}</strong></dd>
+        <dt>Dibayar</dt><dd>{{ utang.paid_amount|floatformat:0|intcomma }}</dd>
+        <dt>Sisa</dt><dd><strong>{{ utang.outstanding_amount|floatformat:0|intcomma }}</strong></dd>
+        <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ utang.status }}">{{ utang.get_status_display }}</span></dd>
+        {% if utang.jenis_bunga != 'tanpa_bunga' %}
+        <dt>Jenis Bunga</dt><dd>{{ utang.get_jenis_bunga_display }}</dd>
+        <dt>Suku Bunga</dt><dd>{{ utang.suku_bunga }}% / tahun</dd>
+        {% endif %}
+        <dt>Periode Angsuran</dt><dd>{{ utang.get_periode_angsuran_display }}</dd>
+      </dl>
+    </div>
   </div>
 </div>
 
@@ -83,17 +79,9 @@
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header">
     <h2 class="ni-card__title">Jatuh Tempo / Bagian Lancar</h2>
-    <div class="ni-btn-row">
-      {% if utang.jurnal_reklasifikasi %}
-        <a href="{% url 'jurnal:header_detail' utang.jurnal_reklasifikasi.pk %}" class="ni-btn ni-btn--sm ni-btn--secondary">{{ utang.jurnal_reklasifikasi.nomor_transaksi }}</a>
-        <form method="post" action="{% url 'utang:reklasifikasi_reverse' utang.pk %}" class="ni-form-inline">
-          {% csrf_token %}
-          <button type="submit" class="ni-btn ni-btn--sm ni-btn--danger" onclick="return confirm('Batalkan jurnal reklasifikasi {{ utang.jurnal_reklasifikasi.nomor_transaksi }}?')">Batalkan Reklasifikasi</button>
-        </form>
-      {% elif utang.can_reklasifikasi and bagian_lancar.bagian_lancar > 0 %}
-        <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" id="open-reklasifikasi-modal">Buat Jurnal Reklasifikasi</button>
-      {% endif %}
-    </div>
+    {% if utang.can_reklasifikasi and bagian_lancar.bagian_lancar > 0 %}
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('reklasifikasiModal')">+ Buat Jurnal Reklasifikasi</button>
+    {% endif %}
   </div>
   <div class="ni-card__body">
     <dl class="ni-detail-grid">
@@ -106,64 +94,32 @@
       {% else %}
       <dt>Dasar Perhitungan</dt><dd>Tanggal jatuh tempo</dd>
       {% endif %}
-      {% if utang.jurnal_reklasifikasi %}
-      <dt>Jurnal Reklasifikasi</dt><dd><span class="ni-badge ni-badge--success">Sudah Direklasifikasi</span></dd>
-      {% endif %}
     </dl>
   </div>
-</div>
-{% endif %}
-
-{% if utang.can_reklasifikasi and bagian_lancar and bagian_lancar.bagian_lancar > 0 %}
-<div class="ni-modal" id="reklasifikasi-modal" hidden>
-  <div class="ni-modal__overlay" id="close-reklasifikasi-overlay"></div>
-  <div class="ni-modal__box">
-    <div class="ni-card__header"><h3 class="ni-card__title">Buat Jurnal Reklasifikasi</h3></div>
-    <div class="ni-card__body">
-      <p class="ni-text-muted">Jurnal penyesuaian untuk mereklasifikasi bagian lancar utang jangka panjang ke kewajiban lancar.</p>
-      <div class="ni-card ni-card--flat">
-        <div class="ni-table-wrapper">
-          <table class="ni-table">
-            <thead><tr><th>Akun</th><th class="ni-text-right">Debit</th><th class="ni-text-right">Kredit</th></tr></thead>
-            <tbody>
-              <tr>
-                <td>{{ utang.details.first.coa_utang_account }} <span class="ni-text-muted">(utang JK panjang)</span></td>
-                <td class="ni-text-right">{{ bagian_lancar.bagian_lancar|floatformat:0|intcomma }}</td>
-                <td class="ni-text-right">—</td>
-              </tr>
-              <tr>
-                <td><em id="preview-coa-kredit">— pilih akun di bawah —</em> <span class="ni-text-muted">(bagian lancar)</span></td>
-                <td class="ni-text-right">—</td>
-                <td class="ni-text-right">{{ bagian_lancar.bagian_lancar|floatformat:0|intcomma }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <form method="post" action="{% url 'utang:reklasifikasi_post' utang.pk %}">
-        {% csrf_token %}
-        <div class="ni-form-grid ni-form-grid--2">
-          <div class="ni-form-group">
-            <label class="ni-form-label">Tanggal Jurnal</label>
-            <input type="date" name="tanggal" class="ni-input" value="{% now 'Y-m-d' %}">
-          </div>
-          <div class="ni-form-group">
-            <label class="ni-form-label">Akun Bagian Lancar (Kredit)</label>
-            <select name="coa_bagian_lancar" class="ni-input" id="rklselect-coa" required>
-              <option value="">— Pilih Akun Kewajiban Lancar —</option>
-              {% for akun in akun_kewajiban %}
-              <option value="{{ akun.pk }}">{{ akun.kode_akun }} — {{ akun.nama }}</option>
-              {% endfor %}
-            </select>
-          </div>
-        </div>
-        <div class="ni-btn-row">
-          <button type="submit" class="ni-btn ni-btn--primary">Konfirmasi &amp; Post</button>
-          <button type="button" class="ni-btn ni-btn--secondary" id="close-reklasifikasi-btn">Batal</button>
-        </div>
-      </form>
-    </div>
+  {% if utang.reklasifikasi_entries.all %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Nomor Jurnal</th><th class="ni-text-right">Jumlah</th><th>Catatan</th><th>Dibuat Oleh</th><th></th></tr></thead>
+      <tbody>
+        {% for rkl in utang.reklasifikasi_entries.all %}
+        <tr>
+          <td>{{ rkl.tanggal }}</td>
+          <td><a href="{% url 'jurnal:header_detail' rkl.jurnal.pk %}">{{ rkl.jurnal.nomor_transaksi }}</a></td>
+          <td class="ni-text-right">{{ rkl.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ rkl.catatan|default:'-' }}</td>
+          <td>{{ rkl.created_by|default:'-' }}</td>
+          <td>
+            <form method="post" action="{% url 'utang:reklasifikasi_reverse' utang.pk rkl.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan jurnal {{ rkl.jurnal.nomor_transaksi }}?')">Batalkan</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
+  {% endif %}
 </div>
 {% endif %}
 
@@ -186,28 +142,6 @@
     </table>
   </div>
 </div>
-
-{% if utang.can_pay %}
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__header"><h2 class="ni-card__title">Bayar Utang</h2></div>
-  <div class="ni-card__body">
-    <form method="post" action="{% url 'utang:pay' utang.pk %}">
-      {% csrf_token %}
-      {% for field in payment_form %}
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
-        </div>
-      {% endfor %}
-      {% if payment_form.non_field_errors %}<div class="ni-form-error">{{ payment_form.non_field_errors }}</div>{% endif %}
-      <div class="ni-btn-row">
-        <button type="submit" class="ni-btn ni-btn--primary">Bayar</button>
-      </div>
-    </form>
-  </div>
-</div>
-{% endif %}
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Pembayaran</h2></div>
@@ -306,38 +240,142 @@
   {% endif %}
 </div>
 
+<!-- ── Reject Modal ────────────────────────────────────────────── -->
 {% if utang.status == 'draft' or utang.status == 'waiting_approval' %}
-<script>
-(function() {
-  const modal = document.getElementById('reject-modal');
-  const openBtn = document.getElementById('open-reject-modal');
-  const closeOverlay = document.getElementById('close-reject-modal');
-  const closeBtn = document.getElementById('close-reject-btn');
-  if (openBtn) openBtn.addEventListener('click', function() { modal.hidden = false; });
-  if (closeOverlay) closeOverlay.addEventListener('click', function() { modal.hidden = true; });
-  if (closeBtn) closeBtn.addEventListener('click', function() { modal.hidden = true; });
-})();
-</script>
+<div class="ni-modal-backdrop" id="rejectModal">
+  <div class="ni-modal">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tolak Utang</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('rejectModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <form method="post" action="{% url 'utang:reject' utang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Alasan penolakan</label>
+          <textarea name="notes" class="ni-input" rows="3"></textarea>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--danger">Tolak</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('rejectModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endif %}
-{% if utang.can_reklasifikasi %}
-<script>
-(function() {
-  const modal = document.getElementById('reklasifikasi-modal');
-  const openBtn = document.getElementById('open-reklasifikasi-modal');
-  const closeOverlay = document.getElementById('close-reklasifikasi-overlay');
-  const closeBtn = document.getElementById('close-reklasifikasi-btn');
-  const coaSelect = document.getElementById('rklselect-coa');
-  const previewKredit = document.getElementById('preview-coa-kredit');
-  if (openBtn) openBtn.addEventListener('click', function() { modal.hidden = false; });
-  if (closeOverlay) closeOverlay.addEventListener('click', function() { modal.hidden = true; });
-  if (closeBtn) closeBtn.addEventListener('click', function() { modal.hidden = true; });
-  if (coaSelect && previewKredit) {
-    coaSelect.addEventListener('change', function() {
-      var opt = this.options[this.selectedIndex];
-      previewKredit.textContent = opt.value ? opt.text : '— pilih akun di bawah —';
-    });
-  }
-})();
-</script>
+
+<!-- ── Payment Modal ──────────────────────────────────────────── -->
+{% if utang.can_pay %}
+<div class="ni-modal-backdrop" id="payModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Bayar Utang — {{ utang.nomor_utang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('payModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p class="ni-text-muted">Sisa: <strong>Rp {{ utang.outstanding_amount|floatformat:0|intcomma }}</strong></p>
+      <form method="post" action="{% url 'utang:pay' utang.pk %}">
+        {% csrf_token %}
+        {% for field in payment_form %}
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+          </div>
+        {% endfor %}
+        {% if payment_form.non_field_errors %}<div class="ni-form-error">{{ payment_form.non_field_errors }}</div>{% endif %}
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Catat Pembayaran</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('payModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endif %}
+
+<!-- ── Reklasifikasi Modal ────────────────────────────────────── -->
+{% if utang.can_reklasifikasi and bagian_lancar and bagian_lancar.bagian_lancar > 0 %}
+<div class="ni-modal-backdrop" id="reklasifikasiModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Buat Jurnal Reklasifikasi</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('reklasifikasiModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p class="ni-text-muted">Reklasifikasi bagian lancar utang jangka panjang ke kewajiban lancar.</p>
+      <div class="ni-table-wrapper">
+        <table class="ni-table">
+          <thead><tr><th>Pos</th><th>Akun</th><th class="ni-text-right">Debit</th><th class="ni-text-right">Kredit</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Debit</td>
+              <td>{{ utang.details.first.coa_utang_account }} <span class="ni-text-muted">(JK Panjang)</span></td>
+              <td class="ni-text-right">{{ bagian_lancar.bagian_lancar|floatformat:0|intcomma }}</td>
+              <td class="ni-text-right">—</td>
+            </tr>
+            <tr>
+              <td>Kredit</td>
+              <td><em id="rkl-preview-kredit">— pilih akun di bawah —</em></td>
+              <td class="ni-text-right">—</td>
+              <td class="ni-text-right">{{ bagian_lancar.bagian_lancar|floatformat:0|intcomma }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <form method="post" action="{% url 'utang:reklasifikasi_post' utang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-grid ni-form-grid--2">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Tanggal Jurnal</label>
+            <input type="date" name="tanggal" class="ni-input" value="{% now 'Y-m-d' %}">
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Akun Bagian Lancar (Kredit)</label>
+            <select name="coa_bagian_lancar" class="ni-input" id="rkl-coa-select" required>
+              <option value="">— Pilih Akun Kewajiban —</option>
+              {% for akun in akun_kewajiban %}
+              <option value="{{ akun.pk }}">{{ akun.kode_akun }} — {{ akun.nama }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="ni-form-group ni-form-group--full">
+            <label class="ni-form-label">Catatan (opsional, misal: Tahun Buku 2026)</label>
+            <input type="text" name="catatan" class="ni-input" placeholder="e.g. Tahun Buku 2026">
+          </div>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Konfirmasi &amp; Post</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('reklasifikasiModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function openModal(id) {
+  document.getElementById(id).classList.add('ni-modal-backdrop--visible');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
+}
+// Close on backdrop click
+document.querySelectorAll('.ni-modal-backdrop').forEach(function(backdrop) {
+  backdrop.addEventListener('click', function(e) {
+    if (e.target === backdrop) closeModal(backdrop.id);
+  });
+});
+// Reklasifikasi: update kredit account preview
+var rklSelect = document.getElementById('rkl-coa-select');
+var rklPreview = document.getElementById('rkl-preview-kredit');
+if (rklSelect && rklPreview) {
+  rklSelect.addEventListener('change', function() {
+    var opt = this.options[this.selectedIndex];
+    rklPreview.textContent = opt.value ? opt.text : '— pilih akun di bawah —';
+  });
+}
+</script>
 {% endblock %}

@@ -127,13 +127,6 @@ class UtangHeader(models.Model):
         related_name='utang_pembentukan',
         verbose_name='Jurnal Pembentukan',
     )
-    jurnal_reklasifikasi = models.ForeignKey(
-        'jurnal.JurnalHeader',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        related_name='utang_reklasifikasi',
-        verbose_name='Jurnal Reklasifikasi',
-    )
 
     # ── V1.1 Bunga & Angsuran ────────────────────────────────────────────────
     jenis_bunga = models.CharField(
@@ -230,7 +223,6 @@ class UtangHeader(models.Model):
             self.status in ('open', 'partial', 'overdue')
             and self.kategori_jangka_waktu == 'long_term'
             and self.tanggal_jatuh_tempo is not None
-            and not self.jurnal_reklasifikasi_id
         )
 
 
@@ -391,3 +383,31 @@ class UtangTerhapus(models.Model):
 
     def __str__(self) -> str:
         return f'{self.nomor_utang} (dihapus {self.deleted_at.date()})'
+
+
+class UtangReklasifikasi(models.Model):
+    utang_header = models.ForeignKey(
+        UtangHeader, on_delete=models.CASCADE, related_name='reklasifikasi_entries',
+        verbose_name='Utang Header',
+    )
+    jurnal = models.OneToOneField(
+        'jurnal.JurnalHeader', on_delete=models.CASCADE,
+        related_name='utang_reklasifikasi_entry',
+        verbose_name='Jurnal Reklasifikasi',
+    )
+    jumlah = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah')
+    tanggal = models.DateField(verbose_name='Tanggal')
+    catatan = models.CharField(max_length=255, blank=True, default='', verbose_name='Catatan')
+    created_by = models.ForeignKey(
+        'accounts.User', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='utang_reklasifikasi_created', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Reklasifikasi Utang'
+        verbose_name_plural = 'Reklasifikasi Utang'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return f'Reklasifikasi {self.utang_header.nomor_utang} — {self.tanggal}'
