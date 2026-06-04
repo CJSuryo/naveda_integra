@@ -534,7 +534,7 @@ if (rklSelect && rklPreview) {
     var paidRemaining = PAID;
     var paidCount = 0;
     schedule.forEach(function(row) {
-      if (paidRemaining >= row.angsuran - 0.01) {
+      if (paidRemaining >= row.angsuran - 1.0) {
         paidRemaining -= row.angsuran;
         paidCount++;
         return;  // skip — already covered by payments

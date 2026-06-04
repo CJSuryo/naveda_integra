@@ -372,8 +372,7 @@ def _next_utang_payment_journal_number() -> str:
         last = (
             JurnalHeader.objects
             .select_for_update()
-            .filter(nomor_transaksi__startswith='TRX-UTG-')
-            .exclude(nomor_transaksi__startswith='TRX-UTG-F-')
+            .filter(nomor_transaksi__regex=r'^TRX-UTG-\d+$')
             .order_by('-nomor_transaksi')
             .values_list('nomor_transaksi', flat=True)
             .first()
@@ -543,14 +542,15 @@ def compute_angsuran_schedule(utang: UtangHeader) -> list[dict]:
                 'sisa_pokok': Decimal(str(int(round(max(0.0, sisa), 0)))),
             })
 
-    # Mark status: cumulative angsuran vs paid_amount
+    # Mark status: cumulative angsuran vs paid_amount.
+    # Tolerance = 1.0 absorbs 2-decimal-place JS rounding (e.g. 3448275.86 vs 3448276).
     today = date.today()
     paid_remaining = float(utang.paid_amount)
     for row in rows:
         ang = float(row['angsuran'])
-        if paid_remaining >= ang - 0.01:
+        if paid_remaining >= ang - 1.0:
             row['status'] = 'lunas'
-            paid_remaining -= ang
+            paid_remaining = max(0.0, paid_remaining - ang)
         elif row['tanggal'] < today:
             row['status'] = 'jatuh_tempo'
         else:
