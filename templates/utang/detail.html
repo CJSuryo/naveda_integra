@@ -510,10 +510,13 @@ if (rklSelect && rklPreview) {
         schedule.push({ no: i, tgl: addMonths(TANGGAL, i * pm), pokok: pokok, bunga: bunga, angsuran: angsuran });
       }
     } else {
-      var pokok = TOTAL / n;
-      var bunga = (JENIS_BUNGA === 'flat') ? (TOTAL * (SUKU_BUNGA / 100 / 12 * pm)) : 0;
+      var pkUnit = Math.round(TOTAL / n);
+      var bngUnit = (JENIS_BUNGA === 'flat') ? Math.round(TOTAL * (SUKU_BUNGA / 100 / 12 * pm)) : 0;
+      var cumPk = 0;
       for (var i = 1; i <= n; i++) {
-        schedule.push({ no: i, tgl: addMonths(TANGGAL, i * pm), pokok: pokok, bunga: bunga, angsuran: pokok + bunga });
+        var pkI = (i === n) ? Math.round(TOTAL - cumPk) : pkUnit;
+        cumPk += pkI;
+        schedule.push({ no: i, tgl: addMonths(TANGGAL, i * pm), pokok: pkI, bunga: bngUnit, angsuran: pkI + bngUnit });
       }
     }
     return schedule;
@@ -528,19 +531,26 @@ if (rklSelect && rklPreview) {
     sel.innerHTML = '<option value="">— Pilih angsuran —</option>';
     var today = new Date();
     today.setHours(0,0,0,0);
-    var cumulativePaid = PAID;
+    var paidRemaining = PAID;
+    var paidCount = 0;
     schedule.forEach(function(row) {
+      if (paidRemaining >= row.angsuran - 0.01) {
+        paidRemaining -= row.angsuran;
+        paidCount++;
+        return;  // skip — already covered by payments
+      }
       var isPast = row.tgl < today;
       var label = 'Angsuran ' + row.no + ' — ' + row.tgl.toLocaleDateString('id-ID') +
                   ' — Rp ' + fmt(row.angsuran);
-      if (row.bunga > 0) label += ' (pokok Rp ' + fmt(row.pokok) + ' + bunga Rp ' + fmt(row.bunga) + ')';
+      if (row.bunga > 0) label += ' (pokok ' + fmt(row.pokok) + ' + bunga ' + fmt(row.bunga) + ')';
       if (isPast) label += ' ⚠ Lewat JT';
       var opt = document.createElement('option');
       opt.value = JSON.stringify({ tgl: row.tgl.toISOString().slice(0,10), jumlah: row.angsuran, no: row.no });
       opt.textContent = label;
       sel.appendChild(opt);
     });
-    if (hint) hint.textContent = schedule.length + ' angsuran | Paid: Rp ' + fmt(PAID) + ' | Sisa: Rp ' + fmt(TOTAL - PAID);
+    var remaining = schedule.length - paidCount;
+    if (hint) hint.textContent = remaining + ' angsuran belum dibayar (' + paidCount + ' lunas) | Sisa: Rp ' + fmt(TOTAL - PAID);
   }
 
   function onAngsuranSelect() {
