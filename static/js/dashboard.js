@@ -5,6 +5,29 @@
 (function () {
   'use strict';
 
+  // ── EB state (set from template via window._dashEbInit) ──────────────────
+  var ebState = {
+    eb_id: null,
+    eb_lv2_id: null,
+    eb_lv3_id: null
+  };
+
+  function getEbParams() {
+    var p = '';
+    if (ebState.eb_id)     p += '&eb_id='     + ebState.eb_id;
+    if (ebState.eb_lv2_id) p += '&eb_lv2_id=' + ebState.eb_lv2_id;
+    if (ebState.eb_lv3_id) p += '&eb_lv3_id=' + ebState.eb_lv3_id;
+    return p;
+  }
+
+  function initEbState() {
+    var init = window._dashEbInit;
+    if (!init) return;
+    ebState.eb_id     = init.eb_id     || null;
+    ebState.eb_lv2_id = init.eb_lv2_id || null;
+    ebState.eb_lv3_id = init.eb_lv3_id || null;
+  }
+
   // ── Colors ────────────────────────────────────────────────────────────────
   var C = {
     blue:   '#0054a6',
@@ -236,7 +259,7 @@
   // ── Widget: Penjualan Harian ───────────────────────────────────────────────
   function loadPenjualan(days) {
     showLoading('penjualan');
-    fetch('/dashboard/api/penjualan/?days=' + days)
+    fetch('/dashboard/api/penjualan/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('penjualan');
@@ -280,7 +303,7 @@
   // ── Widget: Profit Harian ─────────────────────────────────────────────────
   function loadProfit(days) {
     showLoading('profit');
-    fetch('/dashboard/api/profit/?days=' + days)
+    fetch('/dashboard/api/profit/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('profit');
@@ -311,7 +334,7 @@
   // ── Widget: Pengeluaran Kas ───────────────────────────────────────────────
   function loadPengeluaran(days) {
     showLoading('pengeluaran');
-    fetch('/dashboard/api/pengeluaran/?days=' + days)
+    fetch('/dashboard/api/pengeluaran/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('pengeluaran');
@@ -347,7 +370,7 @@
   // ── Widget: Rata-rata Pengeluaran ─────────────────────────────────────────
   function loadRataPengeluaran(days) {
     showLoading('rata-pengeluaran');
-    fetch('/dashboard/api/rata-pengeluaran/?days=' + days)
+    fetch('/dashboard/api/rata-pengeluaran/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('rata-pengeluaran');
@@ -363,7 +386,7 @@
   // ── Widget: Top 5 Persediaan ──────────────────────────────────────────────
   function loadTopPersediaan(days) {
     showLoading('top-persediaan');
-    fetch('/dashboard/api/top-persediaan/?days=' + days)
+    fetch('/dashboard/api/top-persediaan/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('top-persediaan');
@@ -445,7 +468,7 @@
 
   function loadSaldoPersediaan(days) {
     showLoading('saldo');
-    fetch('/dashboard/api/saldo-persediaan/?days=' + days)
+    fetch('/dashboard/api/saldo-persediaan/?days=' + days + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('saldo');
@@ -462,7 +485,7 @@
   function loadUtang(page) {
     utangPage = page;
     showLoading('utang');
-    fetch('/dashboard/api/utang/?page=' + page)
+    fetch('/dashboard/api/utang/?page=' + page + getEbParams())
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('utang');
@@ -692,15 +715,156 @@
     }
   }
 
+  // ── EB selector ───────────────────────────────────────────────────────────
+  function showEbUpdating(show) {
+    var el = document.getElementById('eb-updating');
+    if (el) el.style.display = show ? 'flex' : 'none';
+  }
+
+  function reloadAllWidgets() {
+    var days7  = getActiveDays('penjualan') || 7;
+    var days7p = getActiveDays('profit')    || 7;
+    var days7e = getActiveDays('pengeluaran') || 7;
+    var days30r = getActiveDays('rata-pengeluaran') || 30;
+    var days30t = getActiveDays('top-persediaan')   || 30;
+    var days30s = getActiveDays('saldo')             || 30;
+    loadPenjualan(days7);
+    loadProfit(days7p);
+    loadPengeluaran(days7e);
+    loadRataPengeluaran(days30r);
+    loadTopPersediaan(days30t);
+    saldoData = null; loadSaldoPersediaan(days30s);
+    loadUtang(1);
+  }
+
+  function getActiveDays(widget) {
+    var container = document.querySelector('.ni-chart-periods[data-widget="' + widget + '"]');
+    if (!container) return null;
+    var btn = container.querySelector('.ni-chart-period--active');
+    return btn ? parseInt(btn.dataset.days) : null;
+  }
+
+  function setEbSession(ebId, lv2Id, lv3Id, onDone) {
+    fetch('/dashboard/api/set-eb/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+      body: JSON.stringify({ eb_id: ebId, eb_lv2_id: lv2Id, eb_lv3_id: lv3Id })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function () { if (onDone) onDone(); })
+      .catch(function () { if (onDone) onDone(); });
+  }
+
+  function loadLv2Options(ebId, selectedLv2, callback) {
+    fetch('/dashboard/api/eb-options/?eb_id=' + ebId)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var wrap = document.getElementById('lv2-wrap');
+        var sel  = document.getElementById('eb-select-lv2');
+        if (!wrap || !sel || !d.lv2) return;
+        if (d.lv2.length === 0) {
+          wrap.style.display = 'none';
+          return;
+        }
+        sel.innerHTML = '<option value="">— Semua Cabang —</option>' +
+          d.lv2.map(function (o) {
+            return '<option value="' + o.id + '"' + (o.id === selectedLv2 ? ' selected' : '') + '>' + o.nama + '</option>';
+          }).join('');
+        wrap.style.display = '';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        if (callback) callback();
+      });
+  }
+
+  function loadLv3Options(lv2Id, selectedLv3) {
+    fetch('/dashboard/api/eb-options/?eb_lv2_id=' + lv2Id)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var wrap = document.getElementById('lv3-wrap');
+        var sel  = document.getElementById('eb-select-lv3');
+        if (!wrap || !sel || !d.lv3) return;
+        if (d.lv3.length === 0) {
+          wrap.style.display = 'none';
+          return;
+        }
+        sel.innerHTML = '<option value="">— Semua Sub-cabang —</option>' +
+          d.lv3.map(function (o) {
+            return '<option value="' + o.id + '"' + (o.id === selectedLv3 ? ' selected' : '') + '>' + o.nama + '</option>';
+          }).join('');
+        wrap.style.display = '';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+  }
+
+  function bindEbSelector() {
+    var lv1 = document.getElementById('eb-select-lv1');
+    var lv2 = document.getElementById('eb-select-lv2');
+    var lv3 = document.getElementById('eb-select-lv3');
+
+    if (lv1) {
+      lv1.addEventListener('change', function () {
+        var ebId = parseInt(lv1.value) || null;
+        ebState.eb_id     = ebId;
+        ebState.eb_lv2_id = null;
+        ebState.eb_lv3_id = null;
+
+        // Hide Lv2/Lv3 until loaded
+        var lv2wrap = document.getElementById('lv2-wrap');
+        var lv3wrap = document.getElementById('lv3-wrap');
+        if (lv2wrap) lv2wrap.style.display = 'none';
+        if (lv3wrap) lv3wrap.style.display = 'none';
+
+        showEbUpdating(true);
+        setEbSession(ebId, null, null, function () {
+          loadLv2Options(ebId, null, null);
+          reloadAllWidgets();
+          showEbUpdating(false);
+        });
+      });
+    }
+
+    if (lv2) {
+      lv2.addEventListener('change', function () {
+        var lv2Id = parseInt(lv2.value) || null;
+        ebState.eb_lv2_id = lv2Id;
+        ebState.eb_lv3_id = null;
+
+        var lv3wrap = document.getElementById('lv3-wrap');
+        if (lv3wrap) lv3wrap.style.display = 'none';
+
+        showEbUpdating(true);
+        setEbSession(ebState.eb_id, lv2Id, null, function () {
+          if (lv2Id) loadLv3Options(lv2Id, null);
+          reloadAllWidgets();
+          showEbUpdating(false);
+        });
+      });
+    }
+
+    if (lv3) {
+      lv3.addEventListener('change', function () {
+        var lv3Id = parseInt(lv3.value) || null;
+        ebState.eb_lv3_id = lv3Id;
+        showEbUpdating(true);
+        setEbSession(ebState.eb_id, ebState.eb_lv2_id, lv3Id, function () {
+          reloadAllWidgets();
+          showEbUpdating(false);
+        });
+      });
+    }
+  }
+
   // ── Init ──────────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', function () {
+    initEbState();
     setGreeting();
     bindChips();
     bindSaldoTabs();
     bindUtangPagination();
     bindTagPanel();
+    bindEbSelector();
 
-    // Initial loads
+    // Initial loads — EB params already in ebState from initEbState()
     loadPenjualan(7);
     loadProfit(7);
     loadPengeluaran(7);

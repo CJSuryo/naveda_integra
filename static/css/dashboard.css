@@ -3,6 +3,104 @@
    Home dashboard: grid, widgets, KPI chips, tag panel, utang table
    ========================================================================== */
 
+/* ---------- EB selector bar ---------- */
+.dash-eb-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--ni-bg-card);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.dash-eb-bar__label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ni-text-muted);
+  white-space: nowrap;
+}
+
+.dash-eb-bar__selectors {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.dash-eb-bar__updating {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dash-eb-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dash-eb-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 6px 30px 6px 12px;
+  border: 1.5px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  background: var(--ni-bg-card);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--ni-text);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--ni-transition), box-shadow var(--ni-transition);
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.dash-eb-select:focus {
+  border-color: var(--ni-primary);
+  box-shadow: 0 0 0 3px var(--ni-primary-light);
+}
+
+.dash-eb-select__caret {
+  position: absolute;
+  right: 8px;
+  width: 14px;
+  height: 14px;
+  color: var(--ni-text-muted);
+  pointer-events: none;
+}
+
+.dash-eb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+  border-radius: var(--ni-radius-sm);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .dash-eb-bar {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .dash-eb-select {
+    min-width: 100px;
+    max-width: 100%;
+    font-size: 0.75rem;
+  }
+}
+
 /* ---------- Dashboard header ---------- */
 .dash-header {
   display: flex;

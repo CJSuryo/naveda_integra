@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Detail User — {{ user_obj.email }}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -60,21 +61,111 @@
 </div>
 
 <!-- Entitas Bisnis Access -->
+{% csrf_token %}
 <div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__body">
-    <h3 style="margin:0 0 12px;font-size:1rem;color:var(--ni-text);">
+  <div class="ni-card__header">
+    <h3 class="ni-card__title">
       <i data-lucide="building-2" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
       Akses Entitas Bisnis
     </h3>
-    {% if user_ebs %}
-    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+    <p class="ni-card__subtitle">Dashboard hanya menampilkan data entitas yang terdaftar di sini</p>
+  </div>
+  <div class="ni-card__body">
+    <div id="eb-tags" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;min-height:32px;">
       {% for ueb in user_ebs %}
-      <span class="ni-badge ni-badge--primary" style="font-size:0.8rem;">{{ ueb.entitas_bisnis.nama }}</span>
+      <span class="ni-badge ni-badge--primary" style="font-size:0.8rem;display:inline-flex;align-items:center;gap:6px;" id="eb-tag-{{ ueb.entitas_bisnis.pk }}">
+        {{ ueb.entitas_bisnis.nama }}
+        <button type="button" onclick="ebRemove({{ ueb.entitas_bisnis.pk }}, this)" style="background:none;border:none;cursor:pointer;padding:0;line-height:1;color:inherit;opacity:0.7;" title="Hapus akses">
+          <i data-lucide="x" style="width:12px;height:12px"></i>
+        </button>
+      </span>
+      {% empty %}
+      <p class="ni-text-muted" style="margin:0;font-size:0.875rem;" id="eb-empty-msg">Belum ada akses entitas bisnis — user tidak bisa login ke dashboard.</p>
       {% endfor %}
     </div>
-    {% else %}
-    <p class="ni-text-muted" style="margin:0;">Belum ada akses entitas bisnis.</p>
-    {% endif %}
+
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select id="eb-add-select" class="ni-input" style="min-width:200px;max-width:320px;font-size:0.875rem;">
+        <option value="">— Pilih Entitas Bisnis —</option>
+        {% for eb in all_ebs %}
+        <option value="{{ eb.pk }}"{% if eb.pk in linked_eb_ids %} disabled style="color:var(--ni-text-muted);"{% endif %}>
+          {{ eb.nama }}{% if eb.pk in linked_eb_ids %} (sudah ditambahkan){% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <button type="button" class="ni-btn ni-btn--primary ni-btn--sm" onclick="ebAdd()">
+        <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Akses
+      </button>
+    </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var _ebAccessUrl = '{% url "accounts:user_eb_access" user_obj.pk %}';
+var _csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+function ebAdd() {
+  var sel = document.getElementById('eb-add-select');
+  var ebId = sel.value;
+  var ebName = sel.options[sel.selectedIndex].text.replace(' (sudah ditambahkan)', '');
+  if (!ebId) return;
+  fetch(_ebAccessUrl, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf},
+    body: JSON.stringify({action: 'add', eb_id: parseInt(ebId)})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.status === 'added') {
+      var container = document.getElementById('eb-tags');
+      var empty = document.getElementById('eb-empty-msg');
+      if (empty) empty.remove();
+      var tag = document.createElement('span');
+      tag.className = 'ni-badge ni-badge--primary';
+      tag.id = 'eb-tag-' + ebId;
+      tag.style.cssText = 'font-size:0.8rem;display:inline-flex;align-items:center;gap:6px;';
+      tag.innerHTML = ebName +
+        ' <button type="button" onclick="ebRemove(' + ebId + ', this)" style="background:none;border:none;cursor:pointer;padding:0;line-height:1;color:inherit;opacity:0.7;" title="Hapus akses">' +
+        '<i data-lucide="x" style="width:12px;height:12px"></i></button>';
+      container.appendChild(tag);
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+      // Disable option in select
+      sel.options[sel.selectedIndex].disabled = true;
+      sel.options[sel.selectedIndex].text += ' (sudah ditambahkan)';
+      sel.value = '';
+    }
+  });
+}
+
+function ebRemove(ebId, btn) {
+  fetch(_ebAccessUrl, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': _csrf},
+    body: JSON.stringify({action: 'remove', eb_id: ebId})
+  }).then(function(r) { return r.json(); }).then(function(d) {
+    if (d.status === 'removed') {
+      var tag = document.getElementById('eb-tag-' + ebId);
+      if (tag) tag.remove();
+      // Re-enable option
+      var sel = document.getElementById('eb-add-select');
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value == ebId) {
+          sel.options[i].disabled = false;
+          sel.options[i].text = sel.options[i].text.replace(' (sudah ditambahkan)', '');
+        }
+      }
+      // Show empty message if no tags
+      var tags = document.getElementById('eb-tags').querySelectorAll('.ni-badge');
+      if (tags.length === 0) {
+        var msg = document.createElement('p');
+        msg.id = 'eb-empty-msg';
+        msg.className = 'ni-text-muted';
+        msg.style.cssText = 'margin:0;font-size:0.875rem;';
+        msg.textContent = 'Belum ada akses entitas bisnis — user tidak bisa login ke dashboard.';
+        document.getElementById('eb-tags').appendChild(msg);
+      }
+    }
+  });
+}
+</script>
 {% endblock %}

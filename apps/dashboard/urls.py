@@ -12,4 +12,6 @@ urlpatterns = [
     path('api/saldo-persediaan/', views.api_saldo_persediaan, name='api_saldo_persediaan'),
     path('api/utang/', views.api_utang, name='api_utang'),
     path('api/tag-item/', views.api_tag_item, name='api_tag_item'),
+    path('api/set-eb/', views.api_set_eb, name='api_set_eb'),
+    path('api/eb-options/', views.api_eb_options, name='api_eb_options'),
 ]

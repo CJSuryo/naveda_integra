@@ -15,4 +15,5 @@ urlpatterns = [
     path('users/<int:pk>/edit/', views.user_update, name='user_update'),
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('users/<int:pk>/permissions/', views.user_permissions, name='user_permissions'),
+    path('users/<int:pk>/eb-access/', views.user_eb_access, name='user_eb_access'),
 ]

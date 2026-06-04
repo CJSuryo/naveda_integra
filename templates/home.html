@@ -9,6 +9,15 @@
 {% block content %}
 {% csrf_token %}
 
+{% if no_eb_access %}
+<div class="ni-card" style="padding:40px;text-align:center;">
+  <div style="font-size:2.5rem;margin-bottom:12px;">🏢</div>
+  <h2 style="margin:0 0 8px;font-size:1.125rem;">Akun Anda belum dikaitkan ke Entitas Bisnis</h2>
+  <p style="color:var(--ni-text-muted);margin:0 0 20px;font-size:0.9375rem;">Minta admin untuk menambahkan akses Entitas Bisnis ke akun Anda.</p>
+  <a href="{% url 'accounts:user_list' %}" class="ni-btn ni-btn--primary">Kelola User</a>
+</div>
+{% else %}
+
 <!-- ── Header ──────────────────────────────────────────────────────────── -->
 <div class="dash-header">
   <div>
@@ -16,6 +25,62 @@
     <p class="dash-header__date" id="dash-date"></p>
   </div>
 </div>
+
+<!-- ── EB Selector ─────────────────────────────────────────────────────── -->
+<div class="dash-eb-bar">
+  <span class="dash-eb-bar__label">Lihat data untuk:</span>
+  <div class="dash-eb-bar__selectors">
+    {% if is_single_eb %}
+    <div class="dash-eb-chip">
+      <i data-lucide="building-2" style="width:14px;height:14px;flex-shrink:0;"></i>
+      <span>{{ selected_eb.nama }}</span>
+    </div>
+    {% else %}
+    <div class="dash-eb-select-wrap">
+      <select class="dash-eb-select" id="eb-select-lv1">
+        {% for eb in eb_list %}
+        <option value="{{ eb.pk }}"{% if eb.pk == selected_eb.pk %} selected{% endif %}>{{ eb.nama }}</option>
+        {% endfor %}
+      </select>
+      <i data-lucide="chevron-down" class="dash-eb-select__caret"></i>
+    </div>
+    {% endif %}
+
+    <div class="dash-eb-select-wrap" id="lv2-wrap"{% if not lv2_list %} style="display:none;"{% endif %}>
+      <select class="dash-eb-select" id="eb-select-lv2">
+        <option value="">— Semua Cabang —</option>
+        {% for lv2 in lv2_list %}
+        <option value="{{ lv2.pk }}"{% if lv2.pk|stringformat:"d" == eb_lv2_id|stringformat:"d" %} selected{% endif %}>{{ lv2.nama }}</option>
+        {% endfor %}
+      </select>
+      <i data-lucide="chevron-down" class="dash-eb-select__caret"></i>
+    </div>
+
+    <div class="dash-eb-select-wrap" id="lv3-wrap"{% if not lv3_list %} style="display:none;"{% endif %}>
+      <select class="dash-eb-select" id="eb-select-lv3">
+        <option value="">— Semua Sub-cabang —</option>
+        {% for lv3 in lv3_list %}
+        <option value="{{ lv3.pk }}"{% if lv3.pk|stringformat:"d" == eb_lv3_id|stringformat:"d" %} selected{% endif %}>{{ lv3.nama }}</option>
+        {% endfor %}
+      </select>
+      <i data-lucide="chevron-down" class="dash-eb-select__caret"></i>
+    </div>
+  </div>
+  <span class="dash-eb-bar__updating" id="eb-updating" style="display:none;">
+    <span class="ni-chart-loading__spinner" style="width:14px;height:14px;border-width:2px;display:inline-block;vertical-align:middle;"></span>
+    memperbarui…
+  </span>
+</div>
+
+<!-- Pass initial EB state to JS -->
+<script>
+  window._dashEbInit = {
+    eb_id: {{ selected_eb.pk }},
+    eb_lv2_id: {{ eb_lv2_id|default:"null" }},
+    eb_lv3_id: {{ eb_lv3_id|default:"null" }},
+    is_single_eb: {{ is_single_eb|yesno:"true,false" }}
+  };
+</script>
 
 <!-- ── Row 1: Penjualan (2/3) + Profit (1/3) ───────────────────────────── -->
 <div class="dash-grid dash-grid--row1">
@@ -290,9 +355,13 @@
   </div>
 </div>
 
+{% endif %}{# end no_eb_access #}
+
 {% endblock %}
 
 {% block extra_js %}
+{% if not no_eb_access %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script src="{% static 'js/dashboard.js' %}"></script>
+{% endif %}
 {% endblock %}

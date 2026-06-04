@@ -76,7 +76,57 @@ def register_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def home_view(request: HttpRequest) -> HttpResponse:
-    return render(request, 'home.html')
+    from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
+
+    user = request.user
+
+    if user.is_superuser or getattr(user, 'is_admin', False):
+        eb_qs = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+    else:
+        linked_ids = UserEntitasBisnis.objects.filter(user=user).values_list('entitas_bisnis_id', flat=True)
+        eb_qs = EntitasBisnis.objects.filter(pk__in=linked_ids, status_aktif=True).order_by('nama')
+
+    eb_list = list(eb_qs)
+
+    if not eb_list:
+        return render(request, 'home.html', {'no_eb_access': True})
+
+    is_single_eb = len(eb_list) == 1
+
+    if is_single_eb:
+        selected_eb = eb_list[0]
+        request.session['dashboard_eb_id'] = selected_eb.pk
+        request.session['dashboard_eb_lv2_id'] = None
+        request.session['dashboard_eb_lv3_id'] = None
+    else:
+        session_eb_id = request.session.get('dashboard_eb_id')
+        valid_ids = {eb.pk for eb in eb_list}
+        if session_eb_id not in valid_ids:
+            request.session['dashboard_eb_id'] = eb_list[0].pk
+            request.session['dashboard_eb_lv2_id'] = None
+            request.session['dashboard_eb_lv3_id'] = None
+        try:
+            selected_eb = next(eb for eb in eb_list if eb.pk == request.session['dashboard_eb_id'])
+        except StopIteration:
+            selected_eb = eb_list[0]
+
+    eb_lv2_id = request.session.get('dashboard_eb_lv2_id')
+    eb_lv3_id = request.session.get('dashboard_eb_lv3_id')
+
+    lv2_list = list(EntitasBisnisLv2.objects.filter(entitas_bisnis=selected_eb).order_by('nama'))
+    lv3_list = list(
+        EntitasBisnisLv3.objects.filter(parent_lv2_id=eb_lv2_id).order_by('nama')
+    ) if eb_lv2_id else []
+
+    return render(request, 'home.html', {
+        'eb_list': eb_list,
+        'selected_eb': selected_eb,
+        'eb_lv2_id': eb_lv2_id,
+        'eb_lv3_id': eb_lv3_id,
+        'lv2_list': lv2_list,
+        'lv3_list': lv3_list,
+        'is_single_eb': is_single_eb,
+    })
 
 
 # ── User CRUD ────────────────────────────────────────────────────────────────
@@ -109,13 +159,18 @@ def user_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'has': perm.code in user_perms,
         })
 
-    # User's entitas bisnis links
+    from apps.entitas_bisnis.models import EntitasBisnis
+
     user_ebs = UserEntitasBisnis.objects.filter(user=user_obj).select_related('entitas_bisnis')
+    linked_eb_ids = set(user_ebs.values_list('entitas_bisnis_id', flat=True))
+    all_ebs = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
 
     return render(request, 'accounts/user_detail.html', {
         'user_obj': user_obj,
         'perm_groups': perm_groups,
         'user_ebs': user_ebs,
+        'all_ebs': all_ebs,
+        'linked_eb_ids': linked_eb_ids,
     })
 
 
@@ -195,3 +250,39 @@ def user_permissions(request: HttpRequest, pk: int) -> HttpResponse:
         'perm_groups': perm_groups,
         'form': form,
     })
+
+
+@login_required
+def user_eb_access(request: HttpRequest, pk: int) -> HttpResponse:
+    """Add or remove EntitasBisnis access for a user. POST only."""
+    import json as _json
+    from apps.entitas_bisnis.models import EntitasBisnis
+
+    denied = _check_perm(request.user, 'user_manage_permissions')
+    if denied:
+        return denied
+    if request.method != 'POST':
+        return HttpResponseForbidden('Method not allowed')
+
+    user_obj = get_object_or_404(User, pk=pk)
+
+    try:
+        body = _json.loads(request.body)
+        action = body.get('action')
+        eb_id = int(body.get('eb_id', 0))
+    except (ValueError, TypeError, KeyError, _json.JSONDecodeError):
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'Invalid request'}, status=400)
+
+    from django.http import JsonResponse
+    eb = get_object_or_404(EntitasBisnis, pk=eb_id)
+
+    if action == 'add':
+        UserEntitasBisnis.objects.get_or_create(user=user_obj, entitas_bisnis=eb)
+        return JsonResponse({'status': 'added', 'eb_id': eb_id, 'eb_nama': eb.nama})
+
+    if action == 'remove':
+        UserEntitasBisnis.objects.filter(user=user_obj, entitas_bisnis=eb).delete()
+        return JsonResponse({'status': 'removed', 'eb_id': eb_id})
+
+    return JsonResponse({'error': 'Unknown action'}, status=400)
