@@ -14,6 +14,7 @@ from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, Uta
 from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran, UtangReklasifikasi
 from .services import (
     approve_utang,
+    compute_angsuran_schedule,
     compute_bagian_lancar,
     create_manual_utang,
     create_reklasifikasi_journal,
@@ -127,12 +128,20 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         else None
     )
     akun_kewajiban = list(Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'))
+    angsuran_schedule = compute_angsuran_schedule(utang) if utang.tanggal_jatuh_tempo else []
+    angsuran_totals = {
+        'total_pokok': sum(r['pokok'] for r in angsuran_schedule),
+        'total_bunga': sum(r['bunga'] for r in angsuran_schedule),
+        'total_angsuran': sum(r['angsuran'] for r in angsuran_schedule),
+    } if angsuran_schedule else None
     return render(request, 'utang/detail.html', {
         'utang': utang,
         'payment_form': payment_form,
         'attachment_form': attachment_form,
         'bagian_lancar': bagian_lancar,
         'akun_kewajiban': akun_kewajiban,
+        'angsuran_schedule': angsuran_schedule,
+        'angsuran_totals': angsuran_totals,
     })
 
 

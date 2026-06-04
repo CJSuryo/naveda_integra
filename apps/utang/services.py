@@ -483,6 +483,76 @@ def compute_bagian_lancar(utang: UtangHeader) -> dict:
     return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False, 'n_angsuran': 0}
 
 
+def compute_angsuran_schedule(utang: UtangHeader) -> list[dict]:
+    """
+    Returns full installment schedule as list of dicts:
+    {no, tanggal, pokok, bunga, angsuran, sisa_pokok, status}
+    status: 'lunas' | 'jatuh_tempo' | 'akan_datang'
+    """
+    if not utang.tanggal_jatuh_tempo:
+        return []
+    periode_months = _PERIODE_MONTHS_MAP.get(utang.periode_angsuran, 1)
+    total_months = (
+        (utang.tanggal_jatuh_tempo.year - utang.tanggal.year) * 12
+        + (utang.tanggal_jatuh_tempo.month - utang.tanggal.month)
+    )
+    if total_months <= 0:
+        return []
+    n = max(1, round(total_months / periode_months))
+    total = float(utang.total_amount)
+    jenis = utang.jenis_bunga
+    r = float(utang.suku_bunga) / 100 / 12 * periode_months if jenis != 'tanpa_bunga' else 0.0
+
+    rows = []
+    sisa = total
+    if jenis == 'anuitas' and r > 0:
+        pmt = total * r / (1 - (1 + r) ** (-n))
+        for i in range(n):
+            bunga_i = sisa * r
+            pokok_i = pmt - bunga_i
+            if i == n - 1:
+                pokok_i = sisa
+            angsuran_i = pokok_i + bunga_i
+            sisa -= pokok_i
+            rows.append({
+                'no': i + 1,
+                'tanggal': _add_months(utang.tanggal, (i + 1) * periode_months),
+                'pokok': Decimal(str(round(pokok_i, 0))),
+                'bunga': Decimal(str(round(bunga_i, 0))),
+                'angsuran': Decimal(str(round(angsuran_i, 0))),
+                'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
+            })
+    else:
+        pk_i = total / n
+        bng_i = (total * r) if jenis == 'flat' else 0.0
+        ang_i = pk_i + bng_i
+        for i in range(n):
+            sisa -= pk_i
+            rows.append({
+                'no': i + 1,
+                'tanggal': _add_months(utang.tanggal, (i + 1) * periode_months),
+                'pokok': Decimal(str(round(pk_i, 0))),
+                'bunga': Decimal(str(round(bng_i, 0))),
+                'angsuran': Decimal(str(round(ang_i, 0))),
+                'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
+            })
+
+    # Mark status: cumulative angsuran vs paid_amount
+    today = date.today()
+    paid_remaining = float(utang.paid_amount)
+    for row in rows:
+        ang = float(row['angsuran'])
+        if paid_remaining >= ang - 0.01:
+            row['status'] = 'lunas'
+            paid_remaining -= ang
+        elif row['tanggal'] < today:
+            row['status'] = 'jatuh_tempo'
+        else:
+            row['status'] = 'akan_datang'
+
+    return rows
+
+
 def get_bagian_lancar_list() -> list[dict]:
     """All active long-term utang with their bagian_lancar breakdown, sorted by bagian_lancar desc."""
     qs = list(

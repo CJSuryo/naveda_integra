@@ -123,6 +123,60 @@
 </div>
 {% endif %}
 
+{% if angsuran_schedule %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Tabel Angsuran</h2>
+    <span class="ni-text-muted">{{ angsuran_schedule|length }} angsuran &mdash; {{ utang.get_periode_angsuran_display }}</span>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Tanggal</th>
+          <th class="ni-text-right">Pokok</th>
+          <th class="ni-text-right">Bunga</th>
+          <th class="ni-text-right">Angsuran</th>
+          <th class="ni-text-right">Sisa Pokok</th>
+          <th class="ni-text-center">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in angsuran_schedule %}
+        <tr class="{% if row.status == 'lunas' %}ni-row--success{% elif row.status == 'jatuh_tempo' %}ni-row--danger{% endif %}">
+          <td>{{ row.no }}</td>
+          <td>{{ row.tanggal }}</td>
+          <td class="ni-text-right">{{ row.pokok|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ row.bunga|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right"><strong>{{ row.angsuran|floatformat:0|intcomma }}</strong></td>
+          <td class="ni-text-right">{{ row.sisa_pokok|floatformat:0|intcomma }}</td>
+          <td class="ni-text-center">
+            {% if row.status == 'lunas' %}
+              <span class="ni-badge ni-badge--success">Lunas</span>
+            {% elif row.status == 'jatuh_tempo' %}
+              <span class="ni-badge ni-badge--danger">Jatuh Tempo</span>
+            {% else %}
+              <span class="ni-badge">Akan Datang</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="2"><strong>Total</strong></td>
+          <td class="ni-text-right"><strong>{{ angsuran_totals.total_pokok|floatformat:0|intcomma }}</strong></td>
+          <td class="ni-text-right"><strong>{{ angsuran_totals.total_bunga|floatformat:0|intcomma }}</strong></td>
+          <td class="ni-text-right"><strong>{{ angsuran_totals.total_angsuran|floatformat:0|intcomma }}</strong></td>
+          <td colspan="2"></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Detail Utang</h2></div>
   <div class="ni-table-wrapper">
@@ -275,16 +329,51 @@
     </div>
     <div class="ni-modal__body">
       <p class="ni-text-muted">Sisa: <strong>Rp {{ utang.outstanding_amount|floatformat:0|intcomma }}</strong></p>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label">Mode Pembayaran</label>
+        <div class="ni-btn-row">
+          <button type="button" id="pay-mode-angsuran" class="ni-btn ni-btn--sm ni-btn--secondary" onclick="setPayMode('angsuran')">Sesuai Angsuran</button>
+          <button type="button" id="pay-mode-manual" class="ni-btn ni-btn--sm ni-btn--secondary" onclick="setPayMode('manual')">Manual</button>
+        </div>
+      </div>
+
+      <div id="pay-angsuran-section" class="ni-d-none">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Pilih Angsuran</label>
+          <select id="pay-angsuran-select" class="ni-input">
+            <option value="">— Tidak ada jadwal angsuran —</option>
+          </select>
+          <small class="ni-text-muted" id="pay-angsuran-hint"></small>
+        </div>
+      </div>
+
       <form method="post" action="{% url 'utang:pay' utang.pk %}">
         {% csrf_token %}
-        {% for field in payment_form %}
+        <div class="ni-form-grid ni-form-grid--2">
           <div class="ni-form-group">
-            <label class="ni-form-label">{{ field.label }}</label>
-            {{ field }}
-            {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+            <label class="ni-form-label">{{ payment_form.tanggal.label }}</label>
+            {{ payment_form.tanggal }}
+            {% if payment_form.tanggal.errors %}<div class="ni-form-error">{{ payment_form.tanggal.errors }}</div>{% endif %}
           </div>
-        {% endfor %}
-        {% if payment_form.non_field_errors %}<div class="ni-form-error">{{ payment_form.non_field_errors }}</div>{% endif %}
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ payment_form.jumlah.label }}</label>
+            {{ payment_form.jumlah }}
+            {% if payment_form.jumlah.errors %}<div class="ni-form-error">{{ payment_form.jumlah.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ payment_form.coa_account.label }}</label>
+            {{ payment_form.coa_account }}
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ payment_form.utang_detail.label }}</label>
+            {{ payment_form.utang_detail }}
+          </div>
+          <div class="ni-form-group ni-form-group--full">
+            <label class="ni-form-label">{{ payment_form.keterangan.label }}</label>
+            {{ payment_form.keterangan }}
+          </div>
+        </div>
         <div class="ni-btn-row">
           <button type="submit" class="ni-btn ni-btn--primary">Catat Pembayaran</button>
           <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('payModal')">Batal</button>
@@ -356,19 +445,20 @@
 {% endif %}
 
 <script>
+// ── Modal helpers ─────────────────────────────────────────────
 function openModal(id) {
   document.getElementById(id).classList.add('ni-modal-backdrop--visible');
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
 }
-// Close on backdrop click
 document.querySelectorAll('.ni-modal-backdrop').forEach(function(backdrop) {
   backdrop.addEventListener('click', function(e) {
     if (e.target === backdrop) closeModal(backdrop.id);
   });
 });
-// Reklasifikasi: update kredit account preview
+
+// ── Reklasifikasi: kredit account preview ────────────────────
 var rklSelect = document.getElementById('rkl-coa-select');
 var rklPreview = document.getElementById('rkl-preview-kredit');
 if (rklSelect && rklPreview) {
@@ -377,5 +467,121 @@ if (rklSelect && rklPreview) {
     rklPreview.textContent = opt.value ? opt.text : '— pilih akun di bawah —';
   });
 }
+
+// ── Payment: angsuran schedule ────────────────────────────────
+{% if utang.can_pay and utang.tanggal_jatuh_tempo %}
+(function() {
+  var TANGGAL       = new Date('{{ utang.tanggal|date:"Y-m-d" }}');
+  var JT            = new Date('{{ utang.tanggal_jatuh_tempo|date:"Y-m-d" }}');
+  var TOTAL         = parseFloat('{{ utang.total_amount|floatformat:4 }}');
+  var PAID          = parseFloat('{{ utang.paid_amount|floatformat:4 }}');
+  var JENIS_BUNGA   = '{{ utang.jenis_bunga }}';
+  var SUKU_BUNGA    = parseFloat('{{ utang.suku_bunga|floatformat:4 }}') || 0;
+  var PERIODE       = '{{ utang.periode_angsuran }}';
+  var PERIODE_MONTHS = { bulanan:1, triwulanan:3, semesteran:6, tahunan:12 };
+
+  function addMonths(date, months) {
+    var d = new Date(date);
+    var t = d.getMonth() + months;
+    d.setFullYear(d.getFullYear() + Math.floor(t / 12));
+    d.setMonth(((t % 12) + 12) % 12);
+    return d;
+  }
+
+  function fmt(n) {
+    return Math.round(n).toLocaleString('id-ID');
+  }
+
+  function computeSchedule() {
+    var pm = PERIODE_MONTHS[PERIODE] || 1;
+    var totalMonths = (JT.getFullYear() - TANGGAL.getFullYear()) * 12 + (JT.getMonth() - TANGGAL.getMonth());
+    var n = Math.max(1, Math.round(totalMonths / pm));
+    var r = (JENIS_BUNGA !== 'tanpa_bunga') ? (SUKU_BUNGA / 100 / 12 * pm) : 0;
+    var schedule = [];
+    if (JENIS_BUNGA === 'anuitas' && r > 0) {
+      var pmt = TOTAL * r / (1 - Math.pow(1 + r, -n));
+      var sisa = TOTAL;
+      for (var i = 1; i <= n; i++) {
+        var bunga = sisa * r;
+        var pokok = pmt - bunga;
+        if (i === n) pokok = sisa;
+        var angsuran = pokok + bunga;
+        sisa -= pokok;
+        schedule.push({ no: i, tgl: addMonths(TANGGAL, i * pm), pokok: pokok, bunga: bunga, angsuran: angsuran });
+      }
+    } else {
+      var pokok = TOTAL / n;
+      var bunga = (JENIS_BUNGA === 'flat') ? (TOTAL * (SUKU_BUNGA / 100 / 12 * pm)) : 0;
+      for (var i = 1; i <= n; i++) {
+        schedule.push({ no: i, tgl: addMonths(TANGGAL, i * pm), pokok: pokok, bunga: bunga, angsuran: pokok + bunga });
+      }
+    }
+    return schedule;
+  }
+
+  var schedule = computeSchedule();
+
+  function populateAngsuranSelect() {
+    var sel = document.getElementById('pay-angsuran-select');
+    var hint = document.getElementById('pay-angsuran-hint');
+    if (!sel || !schedule.length) return;
+    sel.innerHTML = '<option value="">— Pilih angsuran —</option>';
+    var today = new Date();
+    today.setHours(0,0,0,0);
+    var cumulativePaid = PAID;
+    schedule.forEach(function(row) {
+      var isPast = row.tgl < today;
+      var label = 'Angsuran ' + row.no + ' — ' + row.tgl.toLocaleDateString('id-ID') +
+                  ' — Rp ' + fmt(row.angsuran);
+      if (row.bunga > 0) label += ' (pokok Rp ' + fmt(row.pokok) + ' + bunga Rp ' + fmt(row.bunga) + ')';
+      if (isPast) label += ' ⚠ Lewat JT';
+      var opt = document.createElement('option');
+      opt.value = JSON.stringify({ tgl: row.tgl.toISOString().slice(0,10), jumlah: row.angsuran, no: row.no });
+      opt.textContent = label;
+      sel.appendChild(opt);
+    });
+    if (hint) hint.textContent = schedule.length + ' angsuran | Paid: Rp ' + fmt(PAID) + ' | Sisa: Rp ' + fmt(TOTAL - PAID);
+  }
+
+  function onAngsuranSelect() {
+    var sel = document.getElementById('pay-angsuran-select');
+    if (!sel || !sel.value) return;
+    var data = JSON.parse(sel.value);
+    var tglEl = document.getElementById('id_tanggal');
+    var jumlahEl = document.getElementById('id_jumlah');
+    var ketEl = document.getElementById('id_keterangan');
+    if (tglEl) tglEl.value = data.tgl;
+    if (jumlahEl) jumlahEl.value = Math.round(data.jumlah * 100) / 100;
+    if (ketEl && !ketEl.value) ketEl.value = 'Angsuran ke-' + data.no;
+  }
+
+  var angsuranSelect = document.getElementById('pay-angsuran-select');
+  if (angsuranSelect) angsuranSelect.addEventListener('change', onAngsuranSelect);
+
+  var currentMode = 'manual';
+
+  window.setPayMode = function(mode) {
+    currentMode = mode;
+    var section = document.getElementById('pay-angsuran-section');
+    var btnA = document.getElementById('pay-mode-angsuran');
+    var btnM = document.getElementById('pay-mode-manual');
+    if (mode === 'angsuran') {
+      if (section) section.classList.remove('ni-d-none');
+      if (btnA) { btnA.classList.remove('ni-btn--secondary'); btnA.classList.add('ni-btn--primary'); }
+      if (btnM) { btnM.classList.remove('ni-btn--primary'); btnM.classList.add('ni-btn--secondary'); }
+      populateAngsuranSelect();
+    } else {
+      if (section) section.classList.add('ni-d-none');
+      if (btnA) { btnA.classList.remove('ni-btn--primary'); btnA.classList.add('ni-btn--secondary'); }
+      if (btnM) { btnM.classList.remove('ni-btn--secondary'); btnM.classList.add('ni-btn--primary'); }
+    }
+  };
+
+  // Default to angsuran mode if schedule exists
+  if (schedule.length > 0) setPayMode('angsuran');
+})();
+{% else %}
+window.setPayMode = function() {};
+{% endif %}
 </script>
 {% endblock %}
