@@ -442,9 +442,12 @@ def _compute_installment_principals(utang: UtangHeader) -> list[tuple[date, Deci
             sisa -= pk_i
             schedule.append((_add_months(utang.tanggal, (i + 1) * periode_months), Decimal(str(round(pk_i, 4)))))
     else:
-        pk_i = Decimal(str(round(total / n, 4)))
+        pk_unit = round(total / n, 4)
+        cumulative = 0.0
         for i in range(n):
-            schedule.append((_add_months(utang.tanggal, (i + 1) * periode_months), pk_i))
+            pk_i = round(total - cumulative, 4) if i == n - 1 else pk_unit
+            cumulative += pk_i
+            schedule.append((_add_months(utang.tanggal, (i + 1) * periode_months), Decimal(str(pk_i))))
     return schedule
 
 
@@ -523,18 +526,21 @@ def compute_angsuran_schedule(utang: UtangHeader) -> list[dict]:
                 'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
             })
     else:
-        pk_i = total / n
-        bng_i = (total * r) if jenis == 'flat' else 0.0
-        ang_i = pk_i + bng_i
+        pk_unit = round(total / n, 0)
+        bng_unit = round(total * r, 0) if jenis == 'flat' else 0.0
+        cumulative_pk = 0.0
         for i in range(n):
+            pk_i = round(total - cumulative_pk, 0) if i == n - 1 else pk_unit
+            cumulative_pk += pk_i
             sisa -= pk_i
+            ang_i = pk_i + bng_unit
             rows.append({
                 'no': i + 1,
                 'tanggal': _add_months(utang.tanggal, (i + 1) * periode_months),
-                'pokok': Decimal(str(round(pk_i, 0))),
-                'bunga': Decimal(str(round(bng_i, 0))),
-                'angsuran': Decimal(str(round(ang_i, 0))),
-                'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
+                'pokok': Decimal(str(int(pk_i))),
+                'bunga': Decimal(str(int(bng_unit))),
+                'angsuran': Decimal(str(int(ang_i))),
+                'sisa_pokok': Decimal(str(int(round(max(0.0, sisa), 0)))),
             })
 
     # Mark status: cumulative angsuran vs paid_amount
