@@ -499,6 +499,76 @@ def get_bagian_lancar_list() -> list[dict]:
     return result
 
 
+# ── Reklasifikasi Journal ─────────────────────────────────────────────────────
+
+def _next_utang_reklasifikasi_journal_number() -> str:
+    with transaction.atomic():
+        last = (
+            JurnalHeader.objects
+            .select_for_update()
+            .filter(nomor_transaksi__startswith='TRX-UTG-RKL-')
+            .order_by('-nomor_transaksi')
+            .values_list('nomor_transaksi', flat=True)
+            .first()
+        )
+        try:
+            seq = int(last.rsplit('-', 1)[1]) + 1 if last else 1
+        except (ValueError, IndexError):
+            seq = 1
+        return f'TRX-UTG-RKL-{seq:04d}'
+
+
+def create_reklasifikasi_journal(
+    utang: UtangHeader, coa_bagian_lancar, tanggal=None, user=None,
+) -> None:
+    """
+    Dr utang.detail[largest].coa_utang_account  bagian_lancar
+    Cr coa_bagian_lancar                         bagian_lancar
+    Marks as is_penyesuaian=True.
+    """
+    if utang.jurnal_reklasifikasi_id:
+        raise ValueError('Jurnal reklasifikasi sudah ada. Batalkan dulu sebelum membuat baru.')
+    bl = compute_bagian_lancar(utang)
+    jumlah = bl['bagian_lancar']
+    if jumlah <= 0:
+        raise ValueError('Bagian lancar adalah 0, tidak perlu jurnal reklasifikasi.')
+
+    detail = utang.details.order_by('-amount').select_related('coa_utang_account').first()
+    if not detail:
+        raise ValueError('Tidak ada detail utang.')
+    tanggal_jurnal = tanggal or date.today()
+
+    with transaction.atomic():
+        nomor = _next_utang_reklasifikasi_journal_number()
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal_jurnal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Reklasifikasi Bagian Lancar {utang.nomor_utang}',
+            entitas_bisnis=utang.entitas_bisnis,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=header, akun=detail.coa_utang_account, debit=jumlah, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=header, akun=coa_bagian_lancar, debit=Decimal('0'), kredit=jumlah),
+        ])
+        utang.jurnal_reklasifikasi = header
+        utang.save(update_fields=['jurnal_reklasifikasi'])
+        _log_audit(utang, 'EDIT', user=user, notes=f'Jurnal reklasifikasi dibuat: {nomor}, Rp {jumlah}')
+
+
+def reverse_reklasifikasi_journal(utang: UtangHeader, user=None) -> None:
+    if not utang.jurnal_reklasifikasi_id:
+        raise ValueError('Tidak ada jurnal reklasifikasi untuk dibatalkan.')
+    with transaction.atomic():
+        jurnal = utang.jurnal_reklasifikasi
+        nomor = jurnal.nomor_transaksi
+        log_jurnal_terhapus(jurnal, 'utang', None)
+        jurnal.delete()
+        utang.jurnal_reklasifikasi = None
+        utang.save(update_fields=['jurnal_reklasifikasi'])
+        _log_audit(utang, 'EDIT', user=user, notes=f'Jurnal reklasifikasi dibatalkan: {nomor}')
+
+
 # ── Reports ───────────────────────────────────────────────────────────────────
 
 def get_utang_per_subjek():

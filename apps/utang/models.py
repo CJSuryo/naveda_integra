@@ -127,6 +127,13 @@ class UtangHeader(models.Model):
         related_name='utang_pembentukan',
         verbose_name='Jurnal Pembentukan',
     )
+    jurnal_reklasifikasi = models.ForeignKey(
+        'jurnal.JurnalHeader',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='utang_reklasifikasi',
+        verbose_name='Jurnal Reklasifikasi',
+    )
 
     # ── V1.1 Bunga & Angsuran ────────────────────────────────────────────────
     jenis_bunga = models.CharField(
@@ -216,6 +223,15 @@ class UtangHeader(models.Model):
     @property
     def can_pay(self) -> bool:
         return self.status in ('open', 'partial', 'overdue') and not self.is_locked
+
+    @property
+    def can_reklasifikasi(self) -> bool:
+        return (
+            self.status in ('open', 'partial', 'overdue')
+            and self.kategori_jangka_waktu == 'long_term'
+            and self.tanggal_jatuh_tempo is not None
+            and not self.jurnal_reklasifikasi_id
+        )
 
 
 class UtangDetail(models.Model):

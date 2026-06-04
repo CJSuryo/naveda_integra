@@ -16,6 +16,7 @@ from .services import (
     approve_utang,
     compute_bagian_lancar,
     create_manual_utang,
+    create_reklasifikasi_journal,
     create_utang_payment,
     delete_utang_attachment,
     get_bagian_lancar_list,
@@ -25,6 +26,7 @@ from .services import (
     get_utang_per_group_akun,
     get_utang_per_subjek,
     reject_utang,
+    reverse_reklasifikasi_journal,
     reverse_utang_header,
     reverse_utang_payment,
     submit_utang_for_approval,
@@ -104,9 +106,13 @@ def utang_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    from apps.master_data.models import Akun
     utang = get_object_or_404(
         UtangHeader.objects
-        .select_related('entitas_bisnis', 'coa_source_account', 'jurnal_pembentukan', 'approved_by')
+        .select_related(
+            'entitas_bisnis', 'coa_source_account',
+            'jurnal_pembentukan', 'jurnal_reklasifikasi', 'approved_by',
+        )
         .prefetch_related(
             'details__purchase_item__item', 'details__coa_utang_account',
             'pembayaran__coa_account', 'pembayaran__jurnal_header',
@@ -121,11 +127,13 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         if utang.status in ('open', 'partial', 'overdue') and utang.outstanding_amount > 0
         else None
     )
+    akun_kewajiban = list(Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'))
     return render(request, 'utang/detail.html', {
         'utang': utang,
         'payment_form': payment_form,
         'attachment_form': attachment_form,
         'bagian_lancar': bagian_lancar,
+        'akun_kewajiban': akun_kewajiban,
     })
 
 
@@ -356,6 +364,41 @@ def utang_attachment_delete(request: HttpRequest, pk: int, attachment_pk: int) -
     if request.method == 'POST':
         delete_utang_attachment(attachment, user=request.user)
         dj_messages.success(request, 'Dokumen berhasil dihapus.')
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
+def utang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    from datetime import date as _date
+    from apps.master_data.models import Akun
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    coa_id = request.POST.get('coa_bagian_lancar')
+    tanggal_str = request.POST.get('tanggal', '').strip()
+    if not coa_id:
+        dj_messages.error(request, 'Pilih akun bagian lancar.')
+        return redirect('utang:detail', pk=pk)
+    try:
+        coa = Akun.objects.get(pk=coa_id)
+        tanggal = _date.fromisoformat(tanggal_str) if tanggal_str else None
+        create_reklasifikasi_journal(utang, coa, tanggal=tanggal, user=request.user)
+        dj_messages.success(request, f'Jurnal reklasifikasi berhasil dibuat untuk {utang.nomor_utang}.')
+    except (ValueError, Akun.DoesNotExist) as exc:
+        dj_messages.error(request, str(exc))
+    return redirect('utang:detail', pk=pk)
+
+
+@login_required
+def utang_reklasifikasi_reverse(request: HttpRequest, pk: int) -> HttpResponse:
+    if request.method != 'POST':
+        return redirect('utang:detail', pk=pk)
+    utang = get_object_or_404(UtangHeader, pk=pk)
+    try:
+        reverse_reklasifikasi_journal(utang, user=request.user)
+        dj_messages.success(request, f'Jurnal reklasifikasi {utang.nomor_utang} berhasil dibatalkan.')
+    except ValueError as exc:
+        dj_messages.error(request, str(exc))
     return redirect('utang:detail', pk=pk)
 
 
