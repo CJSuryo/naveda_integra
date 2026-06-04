@@ -165,6 +165,10 @@ def utang_create(request: HttpRequest) -> HttpResponse:
                         details=details,
                         user=request.user,
                     )
+                    utang.jenis_bunga = cd.get('jenis_bunga', 'tanpa_bunga')
+                    utang.suku_bunga = cd.get('suku_bunga') or Decimal('0')
+                    utang.periode_angsuran = cd.get('periode_angsuran', 'bulanan')
+                    utang.save(update_fields=['jenis_bunga', 'suku_bunga', 'periode_angsuran'])
                     dj_messages.success(request, f'Utang {utang.nomor_utang} berhasil dibuat.')
                     return redirect('utang:detail', pk=utang.pk)
                 except ValueError as exc:

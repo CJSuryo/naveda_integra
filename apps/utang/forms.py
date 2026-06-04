@@ -14,7 +14,7 @@ class UtangHeaderForm(forms.ModelForm):
             'nomor_referensi', 'kategori_jangka_waktu',
             'coa_source_account', 'requires_approval',
             'tanggal_jatuh_tempo', 'deskripsi',
-            'jenis_bunga', 'suku_bunga', 'jumlah_angsuran', 'periode_angsuran',
+            'jenis_bunga', 'suku_bunga', 'periode_angsuran',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -28,7 +28,6 @@ class UtangHeaderForm(forms.ModelForm):
             'deskripsi': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
             'jenis_bunga': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_bunga'}),
             'suku_bunga': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0', 'id': 'id_suku_bunga'}),
-            'jumlah_angsuran': forms.NumberInput(attrs={'class': 'ni-input', 'step': '1', 'min': '1', 'id': 'id_jumlah_angsuran'}),
             'periode_angsuran': forms.Select(attrs={'class': 'ni-input', 'id': 'id_periode_angsuran'}),
         }
 
@@ -42,7 +41,6 @@ class UtangHeaderForm(forms.ModelForm):
         self.fields['coa_source_account'].queryset = Akun.objects.all().order_by('kode_akun')
         self.fields['coa_source_account'].empty_label = '— Pilih Akun Asal (opsional) —'
         self.fields['suku_bunga'].required = False
-        self.fields['jumlah_angsuran'].required = False
 
 
 class UtangDetailForm(forms.ModelForm):

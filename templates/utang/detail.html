@@ -89,7 +89,7 @@
       <dt>Bagian Jangka Panjang (&gt; 12 bln)</dt>
       <dd><strong>{{ bagian_lancar.bagian_panjang|floatformat:0|intcomma }}</strong></dd>
       {% if bagian_lancar.has_schedule %}
-      <dt>Dasar Perhitungan</dt><dd>Jadwal angsuran ({{ utang.jumlah_angsuran }}x {{ utang.get_periode_angsuran_display }})</dd>
+      <dt>Dasar Perhitungan</dt><dd>Jadwal angsuran ({{ bagian_lancar.n_angsuran }}x {{ utang.get_periode_angsuran_display }})</dd>
       {% else %}
       <dt>Dasar Perhitungan</dt><dd>Tanggal jatuh tempo</dd>
       {% endif %}

@@ -95,9 +95,8 @@
           {% if form.suku_bunga.errors %}<div class="ni-form-error">{{ form.suku_bunga.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group" id="grup-jumlah-angsuran">
-          <label class="ni-form-label">{{ form.jumlah_angsuran.label }}</label>
-          {{ form.jumlah_angsuran }}
-          {% if form.jumlah_angsuran.errors %}<div class="ni-form-error">{{ form.jumlah_angsuran.errors }}</div>{% endif %}
+          <label class="ni-form-label">Jumlah Angsuran (Otomatis)</label>
+          <p class="ni-text-muted" id="jumlah-angsuran-info">— Isi tanggal &amp; jatuh tempo —</p>
         </div>
         <div class="ni-form-group" id="grup-periode-angsuran">
           <label class="ni-form-label">{{ form.periode_angsuran.label }}</label>
@@ -208,14 +207,11 @@
   // ── Bunga & Angsuran Preview ──────────────────────────────────────────
   var jenisBungaEl = document.getElementById('id_jenis_bunga');
   var sukuBungaEl = document.getElementById('id_suku_bunga');
-  var jumlahAngsuranEl = document.getElementById('id_jumlah_angsuran');
   var periodeAngsuranEl = document.getElementById('id_periode_angsuran');
   var grupSukuBunga = document.getElementById('grup-suku-bunga');
-  var grupJumlah = document.getElementById('grup-jumlah-angsuran');
-  var grupPeriode = document.getElementById('grup-periode-angsuran');
-  var previewCard = document.getElementById('preview-angsuran-card');
   var previewTbody = document.getElementById('preview-tbody');
   var previewSummary = document.getElementById('preview-summary');
+  var jumlahAngsuranInfo = document.getElementById('jumlah-angsuran-info');
 
   var PERIODE_MONTHS = { bulanan: 1, triwulanan: 3, semesteran: 6, tahunan: 12 };
 
@@ -233,8 +229,8 @@
     return total;
   }
 
-  function getTanggalMulai() {
-    var el = document.getElementById('id_tanggal_jatuh_tempo') || document.getElementById('id_tanggal');
+  function getDateVal(id) {
+    var el = document.getElementById(id);
     if (!el || !el.value) return null;
     var d = new Date(el.value);
     return isNaN(d.getTime()) ? null : d;
@@ -242,41 +238,53 @@
 
   function addMonths(date, months) {
     var d = new Date(date);
-    d.setMonth(d.getMonth() + months);
+    var targetMonth = d.getMonth() + months;
+    d.setFullYear(d.getFullYear() + Math.floor(targetMonth / 12));
+    d.setMonth(((targetMonth % 12) + 12) % 12);
     return d;
+  }
+
+  function computeN(tglStart, tglEnd, periodeMonths) {
+    if (!tglStart || !tglEnd || tglEnd <= tglStart) return 0;
+    var totalMonths = (tglEnd.getFullYear() - tglStart.getFullYear()) * 12
+                    + (tglEnd.getMonth() - tglStart.getMonth());
+    return Math.max(1, Math.round(totalMonths / periodeMonths));
   }
 
   function renderPreview() {
     var jenis = jenisBungaEl ? jenisBungaEl.value : 'tanpa_bunga';
     var hasBunga = jenis !== 'tanpa_bunga';
-
     if (grupSukuBunga) grupSukuBunga.classList.toggle('ni-d-none', !hasBunga);
-    if (grupJumlah) grupJumlah.classList.toggle('ni-hidden', false);
-    if (grupPeriode) grupPeriode.classList.toggle('ni-hidden', false);
 
-    var pokok = getPokok();
-    var n = parseInt(jumlahAngsuranEl ? jumlahAngsuranEl.value : '') || 0;
+    var tglStart = getDateVal('id_tanggal');
+    var tglEnd = getDateVal('id_tanggal_jatuh_tempo');
     var periodeKey = periodeAngsuranEl ? periodeAngsuranEl.value : 'bulanan';
     var periodeMonths = PERIODE_MONTHS[periodeKey] || 1;
+    var n = computeN(tglStart, tglEnd, periodeMonths);
+
+    if (jumlahAngsuranInfo) {
+      jumlahAngsuranInfo.textContent = n > 0 ? n + ' kali' : '— Isi tanggal & jatuh tempo —';
+    }
+
+    var pokok = getPokok();
     var sukuTahun = parseFloat(sukuBungaEl ? sukuBungaEl.value : '') || 0;
     var rPeriode = hasBunga ? (sukuTahun / 100 / 12 * periodeMonths) : 0;
 
-    if (!n || !pokok) {
-      previewTbody.innerHTML = '<tr><td colspan="6" class="ni-text-center ni-text-muted">Isi jumlah angsuran dan detail utang untuk melihat preview.</td></tr>';
+    if (!n || !pokok || !tglStart) {
+      previewTbody.innerHTML = '<tr><td colspan="6" class="ni-text-center ni-text-muted">Isi tanggal hutang, jatuh tempo, dan detail utang untuk melihat preview.</td></tr>';
       if (previewSummary) previewSummary.textContent = '';
       return;
     }
 
     var rows = [];
     var sisaPokok = pokok;
-    var tanggalBase = getTanggalMulai() || new Date();
 
     if (jenis === 'flat') {
       var pokoksPerPeriod = pokok / n;
       var bungaPerPeriod = pokok * rPeriode;
       var angsuranPerPeriod = pokoksPerPeriod + bungaPerPeriod;
       for (var i = 1; i <= n; i++) {
-        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        var tgl = addMonths(tglStart, i * periodeMonths);
         sisaPokok -= pokoksPerPeriod;
         rows.push({ no: i, tgl: tgl, pokok: pokoksPerPeriod, bunga: bungaPerPeriod, angsuran: angsuranPerPeriod, sisa: Math.max(0, sisaPokok) });
       }
@@ -286,14 +294,14 @@
         var bunga = sisaPokok * rPeriode;
         var pokokPeriod = pmt - bunga;
         if (i === n) pokokPeriod = sisaPokok;
-        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        var tgl = addMonths(tglStart, i * periodeMonths);
         sisaPokok -= pokokPeriod;
         rows.push({ no: i, tgl: tgl, pokok: pokokPeriod, bunga: bunga, angsuran: pokokPeriod + bunga, sisa: Math.max(0, sisaPokok) });
       }
     } else {
       var pokoksPerPeriod = pokok / n;
       for (var i = 1; i <= n; i++) {
-        var tgl = addMonths(tanggalBase, (i - 1) * periodeMonths);
+        var tgl = addMonths(tglStart, i * periodeMonths);
         sisaPokok -= pokoksPerPeriod;
         rows.push({ no: i, tgl: tgl, pokok: pokoksPerPeriod, bunga: 0, angsuran: pokoksPerPeriod, sisa: Math.max(0, sisaPokok) });
       }
@@ -301,7 +309,7 @@
 
     var totalBunga = rows.reduce(function(s, r) { return s + r.bunga; }, 0);
     var totalAngsuran = rows.reduce(function(s, r) { return s + r.angsuran; }, 0);
-    if (previewSummary) previewSummary.textContent = 'Total bunga: Rp ' + fmt(totalBunga) + ' | Total angsuran: Rp ' + fmt(totalAngsuran);
+    if (previewSummary) previewSummary.textContent = n + ' angsuran | Total bunga: Rp ' + fmt(totalBunga) + ' | Total angsuran: Rp ' + fmt(totalAngsuran);
 
     var html = rows.map(function(r) {
       var tglStr = r.tgl.toLocaleDateString('id-ID', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -314,7 +322,7 @@
     previewTbody.innerHTML = html;
   }
 
-  [jenisBungaEl, sukuBungaEl, jumlahAngsuranEl, periodeAngsuranEl].forEach(function(el) {
+  [jenisBungaEl, sukuBungaEl, periodeAngsuranEl].forEach(function(el) {
     if (el) el.addEventListener('change', renderPreview);
     if (el) el.addEventListener('input', renderPreview);
   });

@@ -413,15 +413,23 @@ def _add_months(d: date, months: int) -> date:
 
 
 def _compute_installment_principals(utang: UtangHeader) -> list[tuple[date, Decimal]]:
-    """Returns [(tanggal, principal)] for all n installments based on schedule fields."""
-    n = utang.jumlah_angsuran
-    if not n or not utang.tanggal_jatuh_tempo:
+    """
+    Returns [(tanggal, principal)] for all installments.
+    Dates start from utang.tanggal + 1 period; n is auto-computed from date range.
+    """
+    if not utang.tanggal_jatuh_tempo:
         return []
     periode_months = _PERIODE_MONTHS_MAP.get(utang.periode_angsuran, 1)
+    total_months = (
+        (utang.tanggal_jatuh_tempo.year - utang.tanggal.year) * 12
+        + (utang.tanggal_jatuh_tempo.month - utang.tanggal.month)
+    )
+    if total_months <= 0:
+        return []
+    n = max(1, round(total_months / periode_months))
     total = float(utang.total_amount)
     jenis = utang.jenis_bunga
     r = float(utang.suku_bunga) / 100 / 12 * periode_months if jenis != 'tanpa_bunga' else 0.0
-    base = utang.tanggal_jatuh_tempo
     schedule = []
     if jenis == 'anuitas' and r > 0:
         pmt = total * r / (1 - (1 + r) ** (-n))
@@ -432,47 +440,47 @@ def _compute_installment_principals(utang: UtangHeader) -> list[tuple[date, Deci
             if i == n - 1:
                 pk_i = sisa
             sisa -= pk_i
-            schedule.append((_add_months(base, i * periode_months), Decimal(str(round(pk_i, 4)))))
+            schedule.append((_add_months(utang.tanggal, (i + 1) * periode_months), Decimal(str(round(pk_i, 4)))))
     else:
         pk_i = Decimal(str(round(total / n, 4)))
         for i in range(n):
-            schedule.append((_add_months(base, i * periode_months), pk_i))
+            schedule.append((_add_months(utang.tanggal, (i + 1) * periode_months), pk_i))
     return schedule
 
 
 def compute_bagian_lancar(utang: UtangHeader) -> dict:
     """
-    Returns {'bagian_lancar': Decimal, 'bagian_panjang': Decimal, 'has_schedule': bool}.
+    Returns {'bagian_lancar': Decimal, 'bagian_panjang': Decimal, 'has_schedule': bool, 'n_angsuran': int}.
     Bagian lancar = outstanding amount due within next 12 months from today.
-    Uses installment schedule when available, else falls back to tanggal_jatuh_tempo.
+    Always computes installment schedule from tanggal → tanggal_jatuh_tempo when both are set.
     """
     outstanding = utang.outstanding_amount
     if outstanding <= 0:
-        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': Decimal('0'), 'has_schedule': False}
+        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': Decimal('0'), 'has_schedule': False, 'n_angsuran': 0}
 
     today = date.today()
     cutoff = _add_months(today, 12)
 
-    if utang.jumlah_angsuran and utang.tanggal_jatuh_tempo:
+    if utang.tanggal_jatuh_tempo:
         schedule = _compute_installment_principals(utang)
         if schedule:
             future = [(tgl, pk) for tgl, pk in schedule if tgl > today]
             if not future:
-                return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': True}
+                return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': True, 'n_angsuran': len(schedule)}
             future_pk = sum(pk for _, pk in future)
             lancar_pk = sum(pk for tgl, pk in future if tgl <= cutoff)
             if future_pk > 0:
                 ratio = float(lancar_pk) / float(future_pk)
                 bl = (outstanding * Decimal(str(round(ratio, 8)))).quantize(Decimal('0.01'))
                 bp = (outstanding - bl).quantize(Decimal('0.01'))
-                return {'bagian_lancar': bl, 'bagian_panjang': bp, 'has_schedule': True}
+                return {'bagian_lancar': bl, 'bagian_panjang': bp, 'has_schedule': True, 'n_angsuran': len(schedule)}
 
-    if utang.tanggal_jatuh_tempo:
+        # Fallback: bullet repayment on single due date
         if utang.tanggal_jatuh_tempo <= cutoff:
-            return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False}
-        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': outstanding, 'has_schedule': False}
+            return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False, 'n_angsuran': 0}
+        return {'bagian_lancar': Decimal('0'), 'bagian_panjang': outstanding, 'has_schedule': False, 'n_angsuran': 0}
 
-    return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False}
+    return {'bagian_lancar': outstanding, 'bagian_panjang': Decimal('0'), 'has_schedule': False, 'n_angsuran': 0}
 
 
 def get_bagian_lancar_list() -> list[dict]:
