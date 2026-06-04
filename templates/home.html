@@ -1,90 +1,298 @@
 {% extends 'base.html' %}
 {% load static %}
-{% block title %}Dashboard - Naveda Integra{% endblock %}
-{% block content %}
-<div class="ni-page-header">
-  <div>
-    <h1 class="ni-page-header__title">Dashboard</h1>
-    <p class="ni-page-header__subtitle">Selamat datang di Naveda Integra</p>
-  </div>
-</div>
+{% block title %}Dashboard — Naveda Integra{% endblock %}
 
-<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; margin-bottom: 28px;">
-  <a href="{% url 'entitas_bisnis:list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;">
-    <div class="ni-stat-card__icon" style="background:var(--ni-primary-light);color:var(--ni-primary);">
-      <i data-lucide="building-2"></i>
-    </div>
-    <div>
-      <div class="ni-stat-card__label">Entitas Bisnis</div>
-      <div class="ni-stat-card__value">Kelola</div>
-    </div>
-  </a>
-  <a href="{% url 'master_data:chart_of_accounts' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:50ms;">
-    <div class="ni-stat-card__icon" style="background:#ecfdf5;color:var(--ni-success);">
-      <i data-lucide="wallet"></i>
-    </div>
-    <div>
-      <div class="ni-stat-card__label">Chart of Accounts</div>
-      <div class="ni-stat-card__value">Kelola</div>
-    </div>
-  </a>
-  <a href="{% url 'master_data:tipe_transaksi_list' %}" class="ni-stat-card ni-animate-fade-in" style="text-decoration:none;animation-delay:200ms;">
-    <div class="ni-stat-card__icon" style="background:#ecfeff;color:var(--ni-info);">
-      <i data-lucide="tags"></i>
-    </div>
-    <div>
-      <div class="ni-stat-card__label">Tipe Transaksi</div>
-      <div class="ni-stat-card__value">Kelola</div>
-    </div>
-  </a>
-</div>
-
-<div style="display:grid; grid-template-columns: 2fr 1fr; gap: 24px;">
-  <div class="ni-card ni-animate-fade-in" style="animation-delay:250ms;">
-    <div class="ni-card__header">
-      <h3 class="ni-card__title">Ringkasan Jurnal</h3>
-    </div>
-    <div class="ni-card__body">
-      <div class="ni-chart-container" style="height:300px;">
-        <canvas id="jurnalChart"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="ni-card ni-animate-fade-in" style="animation-delay:300ms;">
-    <div class="ni-card__header">
-      <h3 class="ni-card__title">Komposisi Akun</h3>
-    </div>
-    <div class="ni-card__body">
-      <div class="ni-chart-container" style="height:300px;">
-        <canvas id="akunChart"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
 {% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<div class="dash-header">
+  <div>
+    <h1 class="dash-header__greeting" id="dash-greeting">Selamat datang 👋</h1>
+    <p class="dash-header__date" id="dash-date"></p>
+  </div>
+</div>
+
+<!-- ── Row 1: Penjualan (2/3) + Profit (1/3) ───────────────────────────── -->
+<div class="dash-grid dash-grid--row1">
+
+  <!-- Widget 1: Penjualan Harian -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">Penjualan Harian</h3>
+        <p class="ni-card__subtitle">Total uang masuk &amp; laba kotor per hari (setelah HPP)</p>
+      </div>
+      <div class="ni-chart-periods" data-widget="penjualan">
+        <button class="ni-chart-period ni-chart-period--active" data-days="7">7 hari</button>
+        <button class="ni-chart-period" data-days="30">30 hari</button>
+        <button class="ni-chart-period" data-days="90">90 hari</button>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div class="dash-kpi-row" id="kpi-penjualan">
+        <div class="dash-kpi">
+          <span class="dash-kpi__dot dash-skeleton" style="width:10px;height:10px;border-radius:3px;"></span>
+          <div>
+            <div class="dash-kpi__label" style="width:80px;" class="dash-skeleton">&nbsp;</div>
+            <div class="dash-kpi__value dash-skeleton" style="width:100px;height:18px;border-radius:4px;">&nbsp;</div>
+          </div>
+        </div>
+      </div>
+      <div class="ni-chart-wrapper" style="height:220px;position:relative;">
+        <div class="ni-chart-loading" id="loading-penjualan">
+          <div class="ni-chart-loading__spinner"></div>
+        </div>
+        <canvas id="chart-penjualan"></canvas>
+      </div>
+      <p class="dash-legend-guide">
+        <strong>Cara baca:</strong> Biru = total uang masuk dari penjualan. Hijau = setelah dikurangi harga pokok barang (HPP). Selisih antara keduanya adalah biaya barang yang dijual.
+      </p>
+    </div>
+  </div>
+
+  <!-- Widget 2: Profit Harian -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">Laba per Hari</h3>
+        <p class="ni-card__subtitle">Pendapatan bersih setelah HPP</p>
+      </div>
+      <div class="ni-chart-periods" data-widget="profit">
+        <button class="ni-chart-period ni-chart-period--active" data-days="7">7 hari</button>
+        <button class="ni-chart-period" data-days="30">30 hari</button>
+        <button class="ni-chart-period" data-days="90">90 hari</button>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div class="dash-kpi-row" id="kpi-profit"></div>
+      <div class="ni-chart-wrapper" style="height:220px;position:relative;">
+        <div class="ni-chart-loading" id="loading-profit">
+          <div class="ni-chart-loading__spinner"></div>
+        </div>
+        <canvas id="chart-profit"></canvas>
+      </div>
+      <p class="dash-legend-guide">
+        <strong>Cara baca:</strong> Tinggi bar = banyak laba hari itu. Hover untuk lihat % margin. Hari tanpa bar = tidak ada penjualan tercatat.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 2: Pengeluaran Kas + Rata-rata ───────────────────────────────── -->
+<div class="dash-grid dash-grid--row2">
+
+  <!-- Widget 3: Pengeluaran Kas Harian -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">Pengeluaran Kas Harian</h3>
+        <p class="ni-card__subtitle">Uang keluar dari akun Kas &amp; Bank per hari</p>
+      </div>
+      <div class="ni-chart-periods" data-widget="pengeluaran">
+        <button class="ni-chart-period ni-chart-period--active" data-days="7">7 hari</button>
+        <button class="ni-chart-period" data-days="30">30 hari</button>
+        <button class="ni-chart-period" data-days="90">90 hari</button>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div class="dash-kpi-row" id="kpi-pengeluaran"></div>
+      <div class="ni-chart-wrapper" style="height:200px;position:relative;">
+        <div class="ni-chart-loading" id="loading-pengeluaran">
+          <div class="ni-chart-loading__spinner"></div>
+        </div>
+        <canvas id="chart-pengeluaran"></canvas>
+      </div>
+      <p class="dash-legend-guide">
+        <strong>Cara baca:</strong> Bar merah = uang keluar dari Kas/Bank hari itu. Bar lebih gelap = hari dengan pengeluaran tertinggi. Hover untuk lihat perbandingan vs rata-rata.
+      </p>
+    </div>
+  </div>
+
+  <!-- Widget 4: Rata-rata Pengeluaran -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">Ringkasan Pengeluaran</h3>
+        <p class="ni-card__subtitle">Rata-rata dan total dalam rentang waktu</p>
+      </div>
+      <div class="ni-chart-periods" data-widget="rata-pengeluaran">
+        <button class="ni-chart-period" data-days="7">7 hari</button>
+        <button class="ni-chart-period ni-chart-period--active" data-days="30">30 hari</button>
+        <button class="ni-chart-period" data-days="90">90 hari</button>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div class="ni-chart-loading" id="loading-rata-pengeluaran" style="display:none;">
+        <div class="ni-chart-loading__spinner"></div>
+      </div>
+      <div class="dash-stat-grid">
+        <div class="dash-stat dash-stat--highlight">
+          <div class="dash-stat__label">Rata-rata per Hari</div>
+          <div class="dash-stat__value" id="stat-avg">—</div>
+          <div class="dash-stat__sub" id="stat-days-label">dari 30 hari</div>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat__label">Total Pengeluaran</div>
+          <div class="dash-stat__value" id="stat-total">—</div>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat__label">Hari Terbesar</div>
+          <div class="dash-stat__value" id="stat-max">—</div>
+        </div>
+        <div class="dash-stat">
+          <div class="dash-stat__label">Hari Ada Pengeluaran</div>
+          <div class="dash-stat__value" id="stat-aktif">—</div>
+        </div>
+      </div>
+      <p class="dash-legend-guide" style="margin-top:14px;">
+        <strong>Cara baca:</strong> "Rata-rata per hari" = total dibagi semua hari dalam periode (termasuk hari kosong). Berguna untuk proyeksi biaya ke depan.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 3: Top 5 + Saldo Persediaan ──────────────────────────────────── -->
+<div class="dash-grid dash-grid--row3">
+
+  <!-- Widget 5: Top 5 Paling Laku -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">5 Barang Paling Laku</h3>
+        <p class="ni-card__subtitle">Berdasarkan total qty terjual</p>
+      </div>
+      <div class="ni-chart-periods" data-widget="top-persediaan">
+        <button class="ni-chart-period" data-days="7">7 hari</button>
+        <button class="ni-chart-period" data-days="30">30 hari</button>
+        <button class="ni-chart-period ni-chart-period--active" data-days="90">90 hari</button>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div id="chart-top-persediaan-wrap" style="position:relative;height:220px;">
+        <div class="ni-chart-loading" id="loading-top-persediaan">
+          <div class="ni-chart-loading__spinner"></div>
+        </div>
+        <canvas id="chart-top-persediaan"></canvas>
+      </div>
+      <p class="dash-legend-guide">
+        <strong>Cara baca:</strong> Bar terpanjang = item terlaris. Biru tua = #1 terlaris periode ini. Hover untuk lihat total nilai jual &amp; jumlah transaksi.
+      </p>
+    </div>
+  </div>
+
+  <!-- Widget 6: Saldo Persediaan Bertag -->
+  <div class="ni-card dash-widget">
+    <div class="ni-card__header">
+      <div>
+        <h3 class="ni-card__title">Saldo Persediaan Dipantau</h3>
+        <p class="ni-card__subtitle">Hanya item yang kamu tandai di bawah</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <div class="dash-tabs">
+          <button class="dash-tab dash-tab--active" data-view="idr">Nilai (Rp)</button>
+          <button class="dash-tab" data-view="qty">Qty</button>
+        </div>
+        <div class="ni-chart-periods" data-widget="saldo">
+          <button class="ni-chart-period" data-days="7">7 hari</button>
+          <button class="ni-chart-period ni-chart-period--active" data-days="30">30 hari</button>
+          <button class="ni-chart-period" data-days="90">90 hari</button>
+        </div>
+      </div>
+    </div>
+    <div class="ni-card__body">
+      <div id="chart-saldo-wrap" style="position:relative;height:200px;">
+        <div class="ni-chart-loading" id="loading-saldo">
+          <div class="ni-chart-loading__spinner"></div>
+        </div>
+        <canvas id="chart-saldo"></canvas>
+      </div>
+      <p class="dash-legend-guide">
+        <strong>Cara baca:</strong> Setiap garis = satu item. Turun = ada penjualan. Naik = ada pembelian baru masuk. Pilih "Rp" untuk nilai atau "Qty" untuk jumlah unit.
+      </p>
+
+      <!-- Inventory tag panel -->
+      <div class="dash-tag-panel">
+        <div class="dash-tag-panel__header">
+          <span class="dash-tag-panel__title">Item yang dipantau</span>
+          <button class="ni-btn ni-btn--secondary ni-btn--sm" id="tag-panel-toggle" style="font-size:0.75rem;">
+            <i data-lucide="tag" style="width:14px;height:14px"></i> Tandai Item
+          </button>
+        </div>
+        <div id="tag-panel-body" style="display:none;">
+          <div class="dash-tag-panel__search">
+            <input type="text" id="tag-search" placeholder="Cari nama atau kode item…" autocomplete="off">
+          </div>
+          <div class="dash-tag-list" id="tag-list">
+            <div style="padding:16px;text-align:center;color:var(--ni-text-muted);font-size:0.8125rem;">Memuat…</div>
+          </div>
+          <p style="font-size:0.6875rem;color:var(--ni-text-muted);margin:8px 0 0;">Klik item untuk menambah atau menghapus dari pantauan. Perubahan langsung terlihat di grafik di atas.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Row 4: Utang Jatuh Tempo (full width) ────────────────────────────── -->
+<div class="ni-card dash-widget" style="margin-bottom:0;">
+  <div class="ni-card__header">
+    <div>
+      <h3 class="ni-card__title">Utang Jatuh Tempo</h3>
+      <p class="ni-card__subtitle">Status open, sebagian dibayar, atau sudah lewat jatuh tempo</p>
+    </div>
+    <a href="{% url 'utang:list' %}" class="ni-btn ni-btn--secondary ni-btn--sm" style="font-size:0.75rem;">
+      Lihat Semua
+    </a>
+  </div>
+  <div style="position:relative;">
+    <div class="ni-chart-loading" id="loading-utang" style="display:none;">
+      <div class="ni-chart-loading__spinner"></div>
+    </div>
+    <div class="ni-scroll--x">
+      <table class="dash-utang-table">
+        <thead>
+          <tr>
+            <th>Nomor Utang</th>
+            <th>Kepada</th>
+            <th>Status</th>
+            <th style="text-align:right;">Total</th>
+            <th style="text-align:right;">Sisa Bayar</th>
+            <th style="text-align:right;"></th>
+          </tr>
+        </thead>
+        <tbody id="utang-tbody">
+          <tr>
+            <td colspan="6" style="text-align:center;padding:24px;color:var(--ni-text-muted);">
+              <div class="ni-chart-loading__spinner" style="margin:0 auto;"></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="dash-utang-pagination">
+    <span class="dash-utang-pagination__info" id="utang-info"></span>
+    <div class="dash-utang-pagination__btns">
+      <button class="dash-utang-pagination__btn" id="utang-prev" disabled title="Halaman sebelumnya">
+        <i data-lucide="chevron-left" style="width:14px;height:14px"></i>
+      </button>
+      <button class="dash-utang-pagination__btn" id="utang-next" disabled title="Halaman berikutnya">
+        <i data-lucide="chevron-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-<script src="{% static 'js/chart-init.js' %}"></script>
-<script>
-  niCharts.line('jurnalChart',
-    ['Jan','Feb','Mar','Apr','Mei','Jun'],
-    [{
-      label: 'Debit',
-      data: [0,0,0,0,0,0],
-      borderColor: niCharts.COLORS.primary,
-      backgroundColor: 'rgba(0,84,166,0.1)',
-      fill: true
-    },{
-      label: 'Kredit',
-      data: [0,0,0,0,0,0],
-      borderColor: niCharts.COLORS.accent,
-      backgroundColor: 'rgba(99,102,241,0.1)',
-      fill: true
-    }]
-  );
-  niCharts.doughnut('akunChart',
-    ['Aset','Kewajiban','Ekuitas'],
-    [1,1,1]
-  );
-</script>
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %}

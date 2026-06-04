@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'apps.aset_lainnya',
     'apps.ekuitas',
     'apps.manufacturing',
+    'apps.dashboard',
     'pos_config',
     'pos_catalog',
     'pos_orders',

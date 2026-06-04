@@ -1,7 +1,11 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load static humanize %}
 {% block title %}Inventory{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+{% endblock %}
 {% block content %}
+{% csrf_token %}
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Inventory</h1>
@@ -93,7 +97,22 @@
           {% for record in records_satuan %}
           <tr>
             <td><a href="{% url 'inventory:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.inventory_number }}</a></td>
-            <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
+            <td>
+              {{ record.item.item_id }} - {{ record.item.nama }}
+              {% if record.item.pk in tagged_item_ids %}
+              <button class="dash-tag-btn dash-tag-btn--active" title="Di-pantau di Dashboard — klik untuk batalkan"
+                onclick="niDashTagToggle({{ record.item.pk }}, this)">
+                <i data-lucide="bookmark-check" style="width:11px;height:11px"></i>
+                <span>Di Dashboard</span>
+              </button>
+              {% else %}
+              <button class="dash-tag-btn" title="Pantau di Dashboard"
+                onclick="niDashTagToggle({{ record.item.pk }}, this)">
+                <i data-lucide="bookmark-plus" style="width:11px;height:11px"></i>
+                <span>Pantau</span>
+              </button>
+              {% endif %}
+            </td>
             <td>{{ record.entitas_bisnis.nama }}</td>
             <td>{{ record.tanggal }}</td>
             <td class="ni-text-right">{{ record.quantity|floatformat:0|intcomma }}</td>
@@ -169,6 +188,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'js/dashboard.js' %}"></script>
 <script>
 (function () {
   'use strict';

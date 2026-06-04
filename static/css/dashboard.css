@@ -1,0 +1,521 @@
+/* ==========================================================================
+   Naveda Integra — dashboard.css
+   Home dashboard: grid, widgets, KPI chips, tag panel, utang table
+   ========================================================================== */
+
+/* ---------- Dashboard header ---------- */
+.dash-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.dash-header__greeting {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  margin: 0 0 4px;
+  letter-spacing: -0.02em;
+}
+
+.dash-header__date {
+  font-size: 0.875rem;
+  color: var(--ni-text-muted);
+  margin: 0;
+}
+
+/* ---------- Dashboard widget grid ---------- */
+.dash-grid {
+  display: grid;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.dash-grid--row1 {
+  grid-template-columns: 2fr 1fr;
+}
+
+.dash-grid--row2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.dash-grid--row3 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 960px) {
+  .dash-grid--row1,
+  .dash-grid--row2,
+  .dash-grid--row3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Widget card ---------- */
+.dash-widget {
+  margin-bottom: 0;
+  overflow: visible;
+}
+
+.dash-widget .ni-card__header {
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 20px 12px;
+}
+
+.dash-widget .ni-card__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+}
+
+.dash-widget .ni-card__subtitle {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  margin-top: 2px;
+}
+
+.dash-widget .ni-card__body {
+  padding: 16px 20px 20px;
+}
+
+/* ---------- KPI chips above charts ---------- */
+.dash-kpi-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.dash-kpi {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dash-kpi__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.dash-kpi__label {
+  font-size: 0.6875rem;
+  color: var(--ni-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.dash-kpi__value {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* ---------- Rata-rata pengeluaran stat cards ---------- */
+.dash-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.dash-stat {
+  background: var(--ni-bg);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  padding: 14px 16px;
+}
+
+.dash-stat__label {
+  font-size: 0.6875rem;
+  color: var(--ni-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.dash-stat__value {
+  font-size: 1.1875rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  letter-spacing: -0.02em;
+}
+
+.dash-stat__sub {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  margin-top: 4px;
+}
+
+.dash-stat--highlight .dash-stat__value {
+  color: var(--ni-primary);
+}
+
+/* ---------- Saldo persediaan tab switcher ---------- */
+.dash-tabs {
+  display: inline-flex;
+  background: var(--ni-bg);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.dash-tab {
+  padding: 5px 14px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ni-text-muted);
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--ni-transition);
+}
+
+.dash-tab:hover {
+  color: var(--ni-text);
+}
+
+.dash-tab--active {
+  background: var(--ni-bg-card);
+  color: var(--ni-text);
+  box-shadow: var(--ni-shadow-sm);
+}
+
+/* ---------- Inventory tag panel ---------- */
+.dash-tag-panel {
+  border-top: 1px solid var(--ni-border);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.dash-tag-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.dash-tag-panel__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ni-text);
+}
+
+.dash-tag-panel__search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.dash-tag-panel__search input {
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  font-size: 0.8125rem;
+  background: var(--ni-bg-card);
+  color: var(--ni-text);
+  outline: none;
+  transition: border-color var(--ni-transition);
+}
+
+.dash-tag-panel__search input:focus {
+  border-color: var(--ni-primary);
+}
+
+.dash-tag-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  background: var(--ni-bg-card);
+}
+
+.dash-tag-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ni-border);
+  cursor: pointer;
+  transition: background var(--ni-transition);
+  user-select: none;
+}
+
+.dash-tag-item:last-child {
+  border-bottom: none;
+}
+
+.dash-tag-item:hover {
+  background: var(--ni-bg);
+}
+
+.dash-tag-item__check {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--ni-border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--ni-transition);
+}
+
+.dash-tag-item--tagged .dash-tag-item__check {
+  background: var(--ni-primary);
+  border-color: var(--ni-primary);
+  color: #fff;
+}
+
+.dash-tag-item__name {
+  font-size: 0.8125rem;
+  color: var(--ni-text);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-tag-item__id {
+  font-size: 0.6875rem;
+  color: var(--ni-text-muted);
+  flex-shrink: 0;
+}
+
+/* ---------- Utang table ---------- */
+.dash-utang-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.dash-utang-table th {
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ni-text-muted);
+  border-bottom: 1px solid var(--ni-border);
+  white-space: nowrap;
+}
+
+.dash-utang-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ni-border);
+  vertical-align: middle;
+}
+
+.dash-utang-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.dash-utang-table tbody tr:hover td {
+  background: var(--ni-bg);
+}
+
+.dash-utang-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dash-utang-badge--overdue {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.dash-utang-badge--due-soon {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.dash-utang-badge--open {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary);
+}
+
+.dash-utang-amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-utang-amount--danger {
+  color: var(--ni-danger);
+}
+
+/* ---------- Utang pagination ---------- */
+.dash-utang-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--ni-border);
+  background: var(--ni-bg);
+}
+
+.dash-utang-pagination__info {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+}
+
+.dash-utang-pagination__btns {
+  display: flex;
+  gap: 4px;
+}
+
+.dash-utang-pagination__btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-sm);
+  background: var(--ni-bg-card);
+  color: var(--ni-text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--ni-transition);
+}
+
+.dash-utang-pagination__btn:hover:not(:disabled) {
+  border-color: var(--ni-primary);
+  color: var(--ni-primary);
+}
+
+.dash-utang-pagination__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ---------- Chart legend reading guide ---------- */
+.dash-legend-guide {
+  font-size: 0.6875rem;
+  color: var(--ni-text-muted);
+  margin-top: 10px;
+  padding: 8px 10px;
+  background: var(--ni-bg);
+  border-radius: var(--ni-radius-sm);
+  line-height: 1.5;
+}
+
+/* ---------- Empty state inside widget ---------- */
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--ni-text-muted);
+}
+
+.dash-empty__icon {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.dash-empty__text {
+  font-size: 0.875rem;
+  margin: 0 0 4px;
+}
+
+.dash-empty__sub {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  opacity: 0.7;
+}
+
+/* ---------- Loading skeleton ---------- */
+.dash-skeleton {
+  background: linear-gradient(90deg, var(--ni-border) 25%, var(--ni-bg) 50%, var(--ni-border) 75%);
+  background-size: 200% 100%;
+  animation: dash-shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+
+@keyframes dash-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* ---------- Tag toggle button (inline in inventory list) ---------- */
+.dash-tag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  border: 1.5px solid var(--ni-border);
+  background: var(--ni-bg-card);
+  color: var(--ni-text-muted);
+  cursor: pointer;
+  transition: all var(--ni-transition);
+  white-space: nowrap;
+}
+
+.dash-tag-btn:hover {
+  border-color: var(--ni-primary);
+  color: var(--ni-primary);
+}
+
+.dash-tag-btn--active {
+  background: var(--ni-primary-light);
+  border-color: var(--ni-primary);
+  color: var(--ni-primary);
+}
+
+.dash-tag-btn svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* ---------- Responsive adjustments ---------- */
+@media (max-width: 640px) {
+  .dash-header {
+    flex-direction: column;
+    margin-bottom: 20px;
+  }
+
+  .dash-header__greeting {
+    font-size: 1.125rem;
+  }
+
+  .dash-kpi-row {
+    gap: 12px;
+  }
+
+  .dash-stat-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .dash-utang-table th:nth-child(3),
+  .dash-utang-table td:nth-child(3) {
+    display: none;
+  }
+
+  .dash-widget .ni-card__body {
+    padding: 12px 14px 16px;
+  }
+}
