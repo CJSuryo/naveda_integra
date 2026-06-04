@@ -76,18 +76,20 @@ UtangDetailFormSet = inlineformset_factory(
 class UtangPembayaranForm(forms.ModelForm):
     class Meta:
         model = UtangPembayaran
-        fields = ['utang_detail', 'tanggal', 'coa_account', 'jumlah', 'keterangan']
+        fields = ['utang_detail', 'tanggal', 'coa_account', 'jumlah', 'keterangan', 'angsuran_no']
         widgets = {
             'utang_detail': forms.Select(attrs={'class': 'ni-input'}),
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
             'jumlah': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+            'angsuran_no': forms.HiddenInput(),
         }
 
     def __init__(self, *args, utang_header=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['utang_detail'].required = False
+        self.fields['angsuran_no'].required = False
         self.fields['coa_account'].queryset = Akun.objects.filter(kategori_id='aset').order_by('kode_akun')
         if utang_header is not None:
             self.fields['utang_detail'].queryset = UtangDetail.objects.filter(utang_header=utang_header)

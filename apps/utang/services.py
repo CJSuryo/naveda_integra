@@ -247,7 +247,7 @@ def create_utang_for_purchase(purchase_header, tanggal_jatuh_tempo=None):
 # ── Payment ───────────────────────────────────────────────────────────────────
 
 def create_utang_payment(
-    utang_header: UtangHeader, utang_detail, tanggal, coa_account, jumlah, keterangan, user=None,
+    utang_header: UtangHeader, utang_detail, tanggal, coa_account, jumlah, keterangan, angsuran_no=None, user=None,
 ):
     if jumlah <= 0:
         raise ValueError('Jumlah pembayaran harus lebih besar dari 0.')
@@ -260,6 +260,7 @@ def create_utang_payment(
             utang_header=locked, utang_detail=utang_detail,
             tanggal=tanggal, coa_account=coa_account,
             jumlah=jumlah, keterangan=keterangan,
+            angsuran_no=angsuran_no,
         )
         journal = _create_utang_payment_journal(payment)
         payment.jurnal_header = journal
@@ -542,15 +543,36 @@ def compute_angsuran_schedule(utang: UtangHeader) -> list[dict]:
                 'sisa_pokok': Decimal(str(int(round(max(0.0, sisa), 0)))),
             })
 
-    # Mark status: cumulative angsuran vs paid_amount.
-    # Tolerance = 1.0 absorbs 2-decimal-place JS rounding (e.g. 3448275.86 vs 3448276).
+    # Build per-installment payment map.
+    # Payments with angsuran_no → direct match; others → unallocated pool (fills in order).
+    direct_paid: dict[int, float] = {}
+    unallocated = 0.0
+    for p in utang.pembayaran.all():
+        if p.angsuran_no:
+            direct_paid[p.angsuran_no] = direct_paid.get(p.angsuran_no, 0.0) + float(p.jumlah)
+        else:
+            unallocated += float(p.jumlah)
+
     today = date.today()
-    paid_remaining = float(utang.paid_amount)
     for row in rows:
         ang = float(row['angsuran'])
-        if paid_remaining >= ang - 1.0:
+        no = row['no']
+        paid = direct_paid.get(no, 0.0)
+
+        # Apply unallocated pool to rows without direct payment, in order.
+        if paid < ang - 1.0 and unallocated > 0:
+            apply = min(unallocated, max(0.0, ang - paid))
+            paid += apply
+            unallocated = max(0.0, unallocated - apply)
+
+        row['paid'] = Decimal(str(round(paid, 0)))
+        row['sisa_bayar'] = Decimal(str(round(max(0.0, ang - paid), 0)))
+
+        if paid >= ang - 1.0:
             row['status'] = 'lunas'
-            paid_remaining = max(0.0, paid_remaining - ang)
+            row['sisa_bayar'] = Decimal('0')
+        elif paid > 1.0:
+            row['status'] = 'sebagian'
         elif row['tanggal'] < today:
             row['status'] = 'jatuh_tempo'
         else:

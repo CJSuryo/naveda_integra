@@ -271,6 +271,7 @@ class UtangPembayaran(models.Model):
     )
     jumlah = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah Pembayaran')
     keterangan = models.CharField(max_length=512, blank=True, default='', verbose_name='Keterangan')
+    angsuran_no = models.PositiveSmallIntegerField(null=True, blank=True, verbose_name='Nomor Angsuran')
     jurnal_header = models.ForeignKey(
         'jurnal.JurnalHeader', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='utang_payments',

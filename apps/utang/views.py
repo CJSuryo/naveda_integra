@@ -134,6 +134,12 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'total_bunga': sum(r['bunga'] for r in angsuran_schedule),
         'total_angsuran': sum(r['angsuran'] for r in angsuran_schedule),
     } if angsuran_schedule else None
+    # Per-installment paid amounts for JS payment modal
+    angsuran_paid_map: dict[str, float] = {}
+    for p in utang.pembayaran.all():
+        if p.angsuran_no:
+            key = str(p.angsuran_no)
+            angsuran_paid_map[key] = angsuran_paid_map.get(key, 0.0) + float(p.jumlah)
     return render(request, 'utang/detail.html', {
         'utang': utang,
         'payment_form': payment_form,
@@ -142,6 +148,7 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'akun_kewajiban': akun_kewajiban,
         'angsuran_schedule': angsuran_schedule,
         'angsuran_totals': angsuran_totals,
+        'angsuran_paid_map_json': json.dumps(angsuran_paid_map),
     })
 
 

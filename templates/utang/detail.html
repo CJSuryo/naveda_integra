@@ -154,6 +154,8 @@
           <td class="ni-text-center">
             {% if row.status == 'lunas' %}
               <span class="ni-badge ni-badge--success">Lunas</span>
+            {% elif row.status == 'sebagian' %}
+              <span class="ni-badge ni-badge--warning">Sebagian (sisa {{ row.sisa_bayar|floatformat:0|intcomma }})</span>
             {% elif row.status == 'jatuh_tempo' %}
               <span class="ni-badge ni-badge--danger">Jatuh Tempo</span>
             {% else %}
@@ -350,6 +352,7 @@
 
       <form method="post" action="{% url 'utang:pay' utang.pk %}">
         {% csrf_token %}
+        {{ payment_form.angsuran_no }}
         <div class="ni-form-grid ni-form-grid--2">
           <div class="ni-form-group">
             <label class="ni-form-label">{{ payment_form.tanggal.label }}</label>
@@ -479,6 +482,7 @@ if (rklSelect && rklPreview) {
   var SUKU_BUNGA    = parseFloat('{{ utang.suku_bunga|floatformat:4 }}') || 0;
   var PERIODE       = '{{ utang.periode_angsuran }}';
   var PERIODE_MONTHS = { bulanan:1, triwulanan:3, semesteran:6, tahunan:12 };
+  var ANGSURAN_PAID = {{ angsuran_paid_map_json|default:"{}"|safe }};
 
   function addMonths(date, months) {
     var d = new Date(date);
@@ -531,26 +535,51 @@ if (rklSelect && rklPreview) {
     sel.innerHTML = '<option value="">— Pilih angsuran —</option>';
     var today = new Date();
     today.setHours(0,0,0,0);
-    var paidRemaining = PAID;
+
+    // Compute per-installment paid, mirroring server logic
+    var totalDirectPaid = Object.values(ANGSURAN_PAID).reduce(function(s, v) { return s + v; }, 0);
+    var unallocated = Math.max(0, PAID - totalDirectPaid);
     var paidCount = 0;
+
     schedule.forEach(function(row) {
-      if (paidRemaining >= row.angsuran - 1.0) {
-        paidRemaining -= row.angsuran;
-        paidCount++;
-        return;  // skip — already covered by payments
+      var directPaid = ANGSURAN_PAID[String(row.no)] || 0;
+      var paid = directPaid;
+
+      // Apply unallocated pool to rows without full direct payment, in order
+      if (paid < row.angsuran - 1.0 && unallocated > 0) {
+        var apply = Math.min(unallocated, Math.max(0, row.angsuran - paid));
+        paid += apply;
+        unallocated = Math.max(0, unallocated - apply);
       }
+
+      var sisa = Math.max(0, row.angsuran - paid);
+
+      if (paid >= row.angsuran - 1.0) {
+        paidCount++;
+        return;  // fully lunas — skip
+      }
+
       var isPast = row.tgl < today;
-      var label = 'Angsuran ' + row.no + ' — ' + row.tgl.toLocaleDateString('id-ID') +
-                  ' — Rp ' + fmt(row.angsuran);
-      if (row.bunga > 0) label += ' (pokok ' + fmt(row.pokok) + ' + bunga ' + fmt(row.bunga) + ')';
+      var jumlah = Math.round(sisa);
+      var label = 'Angsuran ' + row.no;
+
+      if (paid > 1.0) {
+        // Sebagian — show remaining amount
+        label += ' — sisa Rp ' + fmt(sisa) + ' dari Rp ' + fmt(row.angsuran);
+      } else {
+        label += ' — ' + row.tgl.toLocaleDateString('id-ID') + ' — Rp ' + fmt(row.angsuran);
+        if (row.bunga > 0) label += ' (pokok ' + fmt(row.pokok) + ' + bunga ' + fmt(row.bunga) + ')';
+      }
       if (isPast) label += ' ⚠ Lewat JT';
+
       var opt = document.createElement('option');
-      opt.value = JSON.stringify({ tgl: row.tgl.toISOString().slice(0,10), jumlah: row.angsuran, no: row.no });
+      opt.value = JSON.stringify({ tgl: row.tgl.toISOString().slice(0,10), jumlah: jumlah, no: row.no });
       opt.textContent = label;
       sel.appendChild(opt);
     });
+
     var remaining = schedule.length - paidCount;
-    if (hint) hint.textContent = remaining + ' angsuran belum dibayar (' + paidCount + ' lunas) | Sisa: Rp ' + fmt(TOTAL - PAID);
+    if (hint) hint.textContent = remaining + ' angsuran belum lunas (' + paidCount + ' lunas) | Sisa: Rp ' + fmt(TOTAL - PAID);
   }
 
   function onAngsuranSelect() {
@@ -560,8 +589,10 @@ if (rklSelect && rklPreview) {
     var tglEl = document.getElementById('id_tanggal');
     var jumlahEl = document.getElementById('id_jumlah');
     var ketEl = document.getElementById('id_keterangan');
+    var noEl = document.getElementById('id_angsuran_no');
     if (tglEl) tglEl.value = data.tgl;
-    if (jumlahEl) jumlahEl.value = Math.round(data.jumlah * 100) / 100;
+    if (jumlahEl) jumlahEl.value = data.jumlah;
+    if (noEl) noEl.value = data.no;
     if (ketEl && !ketEl.value) ketEl.value = 'Angsuran ke-' + data.no;
   }
 
