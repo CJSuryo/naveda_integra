@@ -479,6 +479,57 @@
       .catch(function() { hideLoading('saldo'); });
   }
 
+  // ── Widget: Recent Sales ─────────────────────────────────────────────────
+  var recentSalesPage = 1;
+  var recentSalesDays = 7;
+
+  function loadRecentSales(days, page) {
+    recentSalesDays = days || recentSalesDays;
+    recentSalesPage = page || 1;
+    showLoading('recent-sales');
+    fetch('/dashboard/api/recent-sales/?days=' + recentSalesDays + '&page=' + recentSalesPage + getEbParams())
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        hideLoading('recent-sales');
+        var tbody = document.getElementById('recent-sales-tbody');
+        var infoEl = document.getElementById('recent-sales-info');
+        if (!tbody) return;
+
+        if (!d.rows || d.rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--ni-text-muted);">' +
+            '<span style="font-size:1.5rem;display:block;margin-bottom:6px;">🛒</span>' +
+            'Belum ada penjualan di periode ini</td></tr>';
+        } else {
+          tbody.innerHTML = d.rows.map(function (row) {
+            var profitClass = row.profit < 0 ? ' dash-utang-amount--danger' : '';
+            return '<tr>' +
+              '<td style="white-space:nowrap;color:var(--ni-text-muted);font-size:0.75rem;">' + row.tanggal + '</td>' +
+              '<td><div style="font-weight:500;font-size:0.8125rem;">' + row.item + '</div>' +
+              '<div style="font-size:0.6875rem;color:var(--ni-text-muted);">' + row.item_id + '</div></td>' +
+              '<td style="font-size:0.75rem;color:var(--ni-text-muted);max-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + row.entitas_bisnis + '</td>' +
+              '<td style="text-align:right;font-size:0.8125rem;">' + fmtNum(row.qty) + '</td>' +
+              '<td class="dash-utang-amount" style="text-align:right;">' + fmtIDR(row.total) + '</td>' +
+              '<td style="text-align:right;color:var(--ni-text-muted);font-size:0.8125rem;">' + fmtIDR(row.hpp) + '</td>' +
+              '<td class="dash-utang-amount' + profitClass + '" style="text-align:right;font-weight:700;">' + fmtIDR(row.profit) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
+
+        var p = d.pagination;
+        if (infoEl) {
+          infoEl.textContent = p.total > 0
+            ? 'Menampilkan ' + Math.min((p.page-1)*10+1, p.total) + '–' + Math.min(p.page*10, p.total) + ' dari ' + p.total + ' item'
+            : '';
+        }
+        var prev = document.getElementById('recent-sales-prev');
+        var next = document.getElementById('recent-sales-next');
+        if (prev) prev.disabled = p.page <= 1;
+        if (next) next.disabled = p.page >= p.total_pages;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      })
+      .catch(function () { hideLoading('recent-sales'); });
+  }
+
   // ── Widget: Utang Jatuh Tempo ─────────────────────────────────────────────
   var utangPage = 1;
 
@@ -674,6 +725,7 @@
           case 'rata-pengeluaran':loadRataPengeluaran(days);  break;
           case 'top-persediaan':  loadTopPersediaan(days);    break;
           case 'saldo':           saldoData=null; loadSaldoPersediaan(days); break;
+          case 'recent-sales':    loadRecentSales(days, 1); break;
         }
       });
     });
@@ -699,6 +751,14 @@
     if (next) next.addEventListener('click', function() { loadUtang(utangPage + 1); });
   }
 
+  // ── Recent Sales pagination ───────────────────────────────────────────────
+  function bindRecentSalesPagination() {
+    var prev = document.getElementById('recent-sales-prev');
+    var next = document.getElementById('recent-sales-next');
+    if (prev) prev.addEventListener('click', function() { if (recentSalesPage > 1) loadRecentSales(recentSalesDays, recentSalesPage - 1); });
+    if (next) next.addEventListener('click', function() { loadRecentSales(recentSalesDays, recentSalesPage + 1); });
+  }
+
   // ── Tag panel toggle ──────────────────────────────────────────────────────
   function bindTagPanel() {
     var btn = document.getElementById('tag-panel-toggle');
@@ -722,12 +782,14 @@
   }
 
   function reloadAllWidgets() {
+    var daysRS = getActiveDays('recent-sales') || 7;
     var days7  = getActiveDays('penjualan') || 7;
     var days7p = getActiveDays('profit')    || 7;
     var days7e = getActiveDays('pengeluaran') || 7;
     var days30r = getActiveDays('rata-pengeluaran') || 30;
     var days30t = getActiveDays('top-persediaan')   || 30;
     var days30s = getActiveDays('saldo')             || 30;
+    loadRecentSales(daysRS, 1);
     loadPenjualan(days7);
     loadProfit(days7p);
     loadPengeluaran(days7e);
@@ -863,8 +925,10 @@
     bindUtangPagination();
     bindTagPanel();
     bindEbSelector();
+    bindRecentSalesPagination();
 
     // Initial loads — EB params already in ebState from initEbState()
+    loadRecentSales(7, 1);
     loadPenjualan(7);
     loadProfit(7);
     loadPengeluaran(7);

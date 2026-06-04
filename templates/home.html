@@ -82,6 +82,59 @@
   };
 </script>
 
+<!-- ── Tabel Penjualan Terbaru ───────────────────────────────────────────── -->
+<div class="ni-card dash-widget" style="margin-bottom:20px;">
+  <div class="ni-card__header">
+    <div>
+      <h3 class="ni-card__title">Penjualan Terbaru</h3>
+      <p class="ni-card__subtitle">Daftar transaksi item paling baru</p>
+    </div>
+    <div class="ni-chart-periods" data-widget="recent-sales">
+      <button class="ni-chart-period ni-chart-period--active" data-days="7">7 hari</button>
+      <button class="ni-chart-period" data-days="30">30 hari</button>
+      <button class="ni-chart-period" data-days="90">90 hari</button>
+    </div>
+  </div>
+  <div style="position:relative;">
+    <div class="ni-chart-loading" id="loading-recent-sales" style="display:none;">
+      <div class="ni-chart-loading__spinner"></div>
+    </div>
+    <div class="ni-scroll--x">
+      <table class="dash-utang-table">
+        <thead>
+          <tr>
+            <th>Tanggal</th>
+            <th>Item</th>
+            <th>Entitas Bisnis</th>
+            <th style="text-align:right;">Qty</th>
+            <th style="text-align:right;">Total</th>
+            <th style="text-align:right;">HPP</th>
+            <th style="text-align:right;">Profit</th>
+          </tr>
+        </thead>
+        <tbody id="recent-sales-tbody">
+          <tr>
+            <td colspan="7" style="text-align:center;padding:20px;color:var(--ni-text-muted);">
+              <div class="ni-chart-loading__spinner" style="margin:0 auto;"></div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="dash-utang-pagination">
+    <span class="dash-utang-pagination__info" id="recent-sales-info"></span>
+    <div class="dash-utang-pagination__btns">
+      <button class="dash-utang-pagination__btn" id="recent-sales-prev" disabled>
+        <i data-lucide="chevron-left" style="width:14px;height:14px"></i>
+      </button>
+      <button class="dash-utang-pagination__btn" id="recent-sales-next" disabled>
+        <i data-lucide="chevron-right" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Row 1: Penjualan (2/3) + Profit (1/3) ───────────────────────────── -->
 <div class="dash-grid dash-grid--row1">
 

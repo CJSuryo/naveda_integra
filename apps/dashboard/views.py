@@ -407,6 +407,65 @@ def api_utang(request: HttpRequest) -> JsonResponse:
 # ── Tag Item ─────────────────────────────────────────────────────────────────
 
 @login_required
+def api_recent_sales(request: HttpRequest) -> JsonResponse:
+    days = _parse_days(request, 7)
+    start, end = _date_range(days)
+    eb_id, eb_lv2_id, eb_lv3_id = _parse_eb(request)
+    page = max(1, int(request.GET.get('page', 1)))
+    per_page = 10
+
+    qs = (
+        SalesItem.objects
+        .select_related(
+            'sales_eb__sales_header',
+            'sales_eb__entitas_bisnis',
+            'sales_eb__entitas_bisnis_lv2',
+            'sales_eb__entitas_bisnis_lv3',
+            'item',
+        )
+        .filter(
+            sales_eb__sales_header__tanggal__gte=start,
+            sales_eb__sales_header__tanggal__lte=end,
+        )
+        .filter(_sales_q(eb_id, eb_lv2_id, eb_lv3_id))
+        .order_by('-sales_eb__sales_header__tanggal', '-id')
+    )
+
+    total = qs.count()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    offset = (page - 1) * per_page
+
+    rows = []
+    for si in qs[offset:offset + per_page]:
+        eb = si.sales_eb
+        if eb.entitas_bisnis_lv3:
+            eb_label = eb.entitas_bisnis_lv3.nama
+        elif eb.entitas_bisnis_lv2:
+            eb_label = f'{eb.entitas_bisnis.nama} / {eb.entitas_bisnis_lv2.nama}'
+        else:
+            eb_label = eb.entitas_bisnis.nama if eb.entitas_bisnis else '-'
+
+        total_sales = float(si.total_sales or 0)
+        cogs = float(si.cogs_amount or 0)
+        rows.append({
+            'tanggal': si.sales_eb.sales_header.tanggal.strftime('%d %b %Y'),
+            'item': si.item.nama,
+            'item_id': si.item.item_id,
+            'qty': float(si.quantity),
+            'total': total_sales,
+            'hpp': cogs,
+            'profit': total_sales - cogs,
+            'entitas_bisnis': eb_label,
+            'transaction_id': si.sales_eb.sales_header.transaction_id,
+        })
+
+    return JsonResponse({
+        'rows': rows,
+        'pagination': {'page': page, 'total_pages': total_pages, 'total': total},
+    })
+
+
+@login_required
 def api_tag_item(request: HttpRequest) -> JsonResponse:
     if request.method == 'POST':
         try:
