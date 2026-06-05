@@ -19,12 +19,7 @@
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <div class="ni-d-flex ni-items-center ni-gap-3 ni-mb-3">
-      <button type="button" class="ni-btn ni-btn--primary" id="btnTambah">
-        <i data-lucide="plus"></i> Tambah Harga Jual
-      </button>
-    </div>
-    <div id="categoryButtons" class="ni-d-flex ni-gap-2 ni-flex-wrap ni-mb-4 ni-d-none">
+    <div id="categoryButtons" class="ni-d-flex ni-gap-2 ni-flex-wrap ni-mb-4">
       {% for tipe in tipe_choices %}
       <button type="button"
               class="ni-btn ni-btn--secondary ni-btn--sm ni-category-btn"
@@ -72,11 +67,6 @@
   var ITEMS_URL  = '{% url "pos_catalog:catalog_items_ajax" eb.pk %}';
   var csrfToken  = document.querySelector('[name=csrfmiddlewaretoken]').value;
   var activeRow  = null;
-
-  // Show category buttons on "Tambah Harga Jual" click
-  document.getElementById('btnTambah').addEventListener('click', function () {
-    document.getElementById('categoryButtons').classList.remove('ni-d-none');
-  });
 
   // Load items when a category button is clicked
   document.querySelectorAll('.ni-category-btn').forEach(function (btn) {
