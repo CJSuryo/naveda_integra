@@ -426,54 +426,30 @@
       .catch(function() { hideLoading('top-persediaan'); });
   }
 
-  // ── Widget: Saldo Persediaan ──────────────────────────────────────────────
-  var saldoData = null;
-  var saldoView = 'idr';
-
-  function renderSaldoChart() {
-    if (!saldoData) return;
-    var d = saldoData;
-    if (!d.items || d.items.length === 0) {
-      document.getElementById('chart-saldo-wrap').innerHTML =
-        '<div class="dash-empty"><div class="dash-empty__icon">🏷️</div>' +
-        '<p class="dash-empty__text">Belum ada item ditandai</p>' +
-        '<p class="dash-empty__sub">Klik "Tandai Item" di bawah untuk mulai memantau persediaan</p></div>';
-      return;
-    }
-
-    var series = saldoView === 'idr' ? d.idr_series : d.qty_series;
-    var datasets = Object.keys(series).map(function(name, idx) {
-      var color = C.multi[idx % C.multi.length];
-      return {
-        label: name,
-        data: series[name],
-        borderColor: color,
-        backgroundColor: color + '11',
-        fill: false,
-        tension: 0.3,
-        borderWidth: 2,
-        pointRadius: 2,
-        pointHoverRadius: 5
-      };
-    });
-
-    var isIDR = saldoView === 'idr';
-    renderLineChart('chart-saldo', d.labels, datasets, {
-      tooltipHandler: makeTooltipHandler(function(rows) {
-        return rows.length > 1 ? rows.length + ' item dipantau' : '';
-      }),
-      yCallback: isIDR ? function(v){return fmtIDR(v);} : function(v){return fmtNum(v);}
-    });
-  }
-
-  function loadSaldoPersediaan(days) {
+  // ── Widget: Saldo Persediaan (tabel) ─────────────────────────────────────
+  function loadSaldoPersediaan() {
     showLoading('saldo');
-    fetch('/dashboard/api/saldo-persediaan/?days=' + days + getEbParams())
+    fetch('/dashboard/api/saldo-persediaan/' + getEbParams().replace('&','?'))
       .then(function (r) { return r.json(); })
       .then(function (d) {
         hideLoading('saldo');
-        saldoData = d;
-        renderSaldoChart();
+        var tbody = document.getElementById('saldo-tbody');
+        if (!tbody) return;
+
+        if (!d.rows || d.rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:24px;color:var(--ni-text-muted);">' +
+            '<span style="font-size:1.5rem;display:block;margin-bottom:6px;">🏷️</span>' +
+            'Belum ada item ditandai — klik <strong>Tandai Item</strong> untuk mulai</td></tr>';
+        } else {
+          tbody.innerHTML = d.rows.map(function(row) {
+            return '<tr>' +
+              '<td><div style="font-weight:500;font-size:0.8125rem;">' + row.nama + '</div>' +
+              '<div style="font-size:0.6875rem;color:var(--ni-text-muted);">' + row.item_id + '</div></td>' +
+              '<td class="dash-utang-amount" style="text-align:right;">' + fmtIDR(row.nilai) + '</td>' +
+              '<td style="text-align:right;font-size:0.8125rem;">' + fmtNum(row.qty) + '</td>' +
+              '</tr>';
+          }).join('');
+        }
         if (tagPanelOpen) loadTagPanel();
       })
       .catch(function() { hideLoading('saldo'); });
@@ -594,7 +570,7 @@
       .catch(function() { hideLoading('utang'); });
   }
 
-  // ── Tag panel ─────────────────────────────────────────────────────────────
+  // ── Tag panel (checkbox + batch Simpan) ──────────────────────────────────
   var tagPanelOpen = false;
   var tagSearchTimeout = null;
 
@@ -606,58 +582,65 @@
         var list = document.getElementById('tag-list');
         if (!list) return;
 
-        if (d.items.length === 0) {
+        if (!d.items || d.items.length === 0) {
           list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--ni-text-muted);font-size:0.8125rem;">Tidak ada item ditemukan</div>';
           return;
         }
 
         list.innerHTML = d.items.map(function(item) {
+          var checked = item.tagged ? ' checked' : '';
           var taggedClass = item.tagged ? ' dash-tag-item--tagged' : '';
-          var checkIcon = item.tagged
-            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>'
-            : '';
-          return '<div class="dash-tag-item' + taggedClass + '" data-item-id="' + item.id + '">' +
-            '<span class="dash-tag-item__check">' + checkIcon + '</span>' +
+          return '<label class="dash-tag-item' + taggedClass + '">' +
+            '<input type="checkbox" data-item-id="' + item.id + '"' + checked + ' style="display:none;">' +
+            '<span class="dash-tag-item__check">' +
+            (item.tagged ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:10px;height:10px"><polyline points="20 6 9 17 4 12"/></svg>' : '') +
+            '</span>' +
             '<span class="dash-tag-item__name">' + item.nama + '</span>' +
             '<span class="dash-tag-item__id">' + item.item_id + '</span>' +
-            '</div>';
+            '</label>';
         }).join('');
 
-        // Bind toggle
+        // Toggle visual state on label click (no AJAX)
         list.querySelectorAll('.dash-tag-item').forEach(function(el) {
-          el.addEventListener('click', function() {
-            var itemId = el.dataset.itemId;
-            fetch('/dashboard/api/tag-item/', {
-              method: 'POST',
-              headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
-              body: JSON.stringify({item_id: parseInt(itemId)})
-            })
-              .then(function(r) { return r.json(); })
-              .then(function(res) {
-                var isTagged = res.status === 'tagged';
-                el.dataset.tagged = isTagged;
-                if (isTagged) {
-                  el.classList.add('dash-tag-item--tagged');
-                  el.querySelector('.dash-tag-item__check').innerHTML =
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:10px;height:10px"><polyline points="20 6 9 17 4 12"/></svg>';
-                } else {
-                  el.classList.remove('dash-tag-item--tagged');
-                  el.querySelector('.dash-tag-item__check').innerHTML = '';
-                }
-                // Reload saldo chart after tag change
-                var activeDays = getSaldoDays();
-                loadSaldoPersediaan(activeDays);
-              });
+          el.addEventListener('click', function(e) {
+            if (e.target.tagName === 'INPUT') return; // handled by checkbox
+            var cb = el.querySelector('input[type=checkbox]');
+            if (!cb) return;
+            cb.checked = !cb.checked;
+            if (cb.checked) {
+              el.classList.add('dash-tag-item--tagged');
+              el.querySelector('.dash-tag-item__check').innerHTML =
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:10px;height:10px"><polyline points="20 6 9 17 4 12"/></svg>';
+            } else {
+              el.classList.remove('dash-tag-item--tagged');
+              el.querySelector('.dash-tag-item__check').innerHTML = '';
+            }
           });
         });
       });
   }
 
-  function getSaldoDays() {
-    var container = document.querySelector('[data-widget="saldo"]');
-    if (!container) return 30;
-    var active = container.querySelector('.ni-chart-period--active');
-    return active ? parseInt(active.dataset.days) : 30;
+  function saveTags() {
+    var list = document.getElementById('tag-list');
+    if (!list) return;
+    var checked = list.querySelectorAll('input[type=checkbox]:checked');
+    var ids = [];
+    checked.forEach(function(cb) { ids.push(parseInt(cb.dataset.itemId)); });
+
+    var btn = document.getElementById('tag-save-btn');
+    if (btn) btn.disabled = true;
+
+    fetch('/dashboard/api/tag-item/', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
+      body: JSON.stringify({action: 'save_all', item_ids: ids})
+    })
+      .then(function(r) { return r.json(); })
+      .then(function() {
+        if (btn) btn.disabled = false;
+        loadSaldoPersediaan();
+      })
+      .catch(function() { if (btn) btn.disabled = false; });
   }
 
   function toggleTagPanel() {
@@ -724,24 +707,14 @@
           case 'pengeluaran':     loadPengeluaran(days);      break;
           case 'rata-pengeluaran':loadRataPengeluaran(days);  break;
           case 'top-persediaan':  loadTopPersediaan(days);    break;
-          case 'saldo':           saldoData=null; loadSaldoPersediaan(days); break;
+          case 'saldo':           loadSaldoPersediaan(); break;
           case 'recent-sales':    loadRecentSales(days, 1); break;
         }
       });
     });
   }
 
-  // ── Saldo tab switcher ────────────────────────────────────────────────────
-  function bindSaldoTabs() {
-    document.querySelectorAll('.dash-tab[data-view]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        document.querySelectorAll('.dash-tab[data-view]').forEach(function(b){b.classList.remove('dash-tab--active');});
-        btn.classList.add('dash-tab--active');
-        saldoView = btn.dataset.view;
-        renderSaldoChart();
-      });
-    });
-  }
+  // bindSaldoTabs removed — no chart tabs needed
 
   // ── Utang pagination ──────────────────────────────────────────────────────
   function bindUtangPagination() {
@@ -759,10 +732,13 @@
     if (next) next.addEventListener('click', function() { loadRecentSales(recentSalesDays, recentSalesPage + 1); });
   }
 
-  // ── Tag panel toggle ──────────────────────────────────────────────────────
+  // ── Tag panel toggle + save ───────────────────────────────────────────────
   function bindTagPanel() {
     var btn = document.getElementById('tag-panel-toggle');
     if (btn) btn.addEventListener('click', toggleTagPanel);
+
+    var saveBtn = document.getElementById('tag-save-btn');
+    if (saveBtn) saveBtn.addEventListener('click', saveTags);
 
     var searchInput = document.getElementById('tag-search');
     if (searchInput) {
@@ -788,14 +764,13 @@
     var days7e = getActiveDays('pengeluaran') || 7;
     var days30r = getActiveDays('rata-pengeluaran') || 30;
     var days30t = getActiveDays('top-persediaan')   || 30;
-    var days30s = getActiveDays('saldo')             || 30;
     loadRecentSales(daysRS, 1);
     loadPenjualan(days7);
     loadProfit(days7p);
     loadPengeluaran(days7e);
     loadRataPengeluaran(days30r);
     loadTopPersediaan(days30t);
-    saldoData = null; loadSaldoPersediaan(days30s);
+    loadSaldoPersediaan();
     loadUtang(1);
   }
 
@@ -921,7 +896,6 @@
     initEbState();
     setGreeting();
     bindChips();
-    bindSaldoTabs();
     bindUtangPagination();
     bindTagPanel();
     bindEbSelector();
@@ -934,7 +908,7 @@
     loadPengeluaran(7);
     loadRataPengeluaran(30);
     loadTopPersediaan(30);
-    loadSaldoPersediaan(30);
+    loadSaldoPersediaan();
     loadUtang(1);
   });
 

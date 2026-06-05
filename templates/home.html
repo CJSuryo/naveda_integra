@@ -310,48 +310,52 @@
     <div class="ni-card__header">
       <div>
         <h3 class="ni-card__title">Saldo Persediaan Dipantau</h3>
-        <p class="ni-card__subtitle">Hanya item yang kamu tandai di bawah</p>
+        <p class="ni-card__subtitle">Saldo terkini item yang ditandai</p>
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <div class="dash-tabs">
-          <button class="dash-tab dash-tab--active" data-view="idr">Nilai (Rp)</button>
-          <button class="dash-tab" data-view="qty">Qty</button>
-        </div>
-        <div class="ni-chart-periods" data-widget="saldo">
-          <button class="ni-chart-period" data-days="7">7 hari</button>
-          <button class="ni-chart-period ni-chart-period--active" data-days="30">30 hari</button>
-          <button class="ni-chart-period" data-days="90">90 hari</button>
-        </div>
-      </div>
+      <button class="ni-btn ni-btn--secondary ni-btn--sm" id="tag-panel-toggle" style="font-size:0.75rem;">
+        <i data-lucide="tag" style="width:14px;height:14px"></i> Tandai Item
+      </button>
     </div>
-    <div class="ni-card__body">
-      <div id="chart-saldo-wrap" style="position:relative;height:200px;">
-        <div class="ni-chart-loading" id="loading-saldo">
+    <div class="ni-card__body" style="padding-top:12px;">
+      <div style="position:relative;">
+        <div class="ni-chart-loading" id="loading-saldo" style="display:none;">
           <div class="ni-chart-loading__spinner"></div>
         </div>
-        <canvas id="chart-saldo"></canvas>
+        <div class="ni-scroll--x">
+          <table class="dash-utang-table">
+            <thead>
+              <tr>
+                <th>Persediaan</th>
+                <th style="text-align:right;">Nilai</th>
+                <th style="text-align:right;">Qty</th>
+              </tr>
+            </thead>
+            <tbody id="saldo-tbody">
+              <tr>
+                <td colspan="3" style="text-align:center;padding:20px;color:var(--ni-text-muted);">
+                  <div class="ni-chart-loading__spinner" style="margin:0 auto;"></div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <p class="dash-legend-guide">
-        <strong>Cara baca:</strong> Setiap garis = satu item. Turun = ada penjualan. Naik = ada pembelian baru masuk. Pilih "Rp" untuk nilai atau "Qty" untuk jumlah unit.
-      </p>
 
-      <!-- Inventory tag panel -->
-      <div class="dash-tag-panel">
+      <!-- Inventory tag panel — checkbox + Simpan -->
+      <div class="dash-tag-panel" id="tag-panel-body" style="display:none;">
         <div class="dash-tag-panel__header">
-          <span class="dash-tag-panel__title">Item yang dipantau</span>
-          <button class="ni-btn ni-btn--secondary ni-btn--sm" id="tag-panel-toggle" style="font-size:0.75rem;">
-            <i data-lucide="tag" style="width:14px;height:14px"></i> Tandai Item
+          <span class="dash-tag-panel__title">Pilih item yang dipantau</span>
+          <button class="ni-btn ni-btn--primary ni-btn--sm" id="tag-save-btn" style="font-size:0.75rem;">
+            <i data-lucide="check" style="width:14px;height:14px"></i> Simpan
           </button>
         </div>
-        <div id="tag-panel-body" style="display:none;">
-          <div class="dash-tag-panel__search">
-            <input type="text" id="tag-search" placeholder="Cari nama atau kode item…" autocomplete="off">
-          </div>
-          <div class="dash-tag-list" id="tag-list">
-            <div style="padding:16px;text-align:center;color:var(--ni-text-muted);font-size:0.8125rem;">Memuat…</div>
-          </div>
-          <p style="font-size:0.6875rem;color:var(--ni-text-muted);margin:8px 0 0;">Klik item untuk menambah atau menghapus dari pantauan. Perubahan langsung terlihat di grafik di atas.</p>
+        <div class="dash-tag-panel__search">
+          <input type="text" id="tag-search" placeholder="Cari nama atau kode item…" autocomplete="off">
         </div>
+        <div class="dash-tag-list" id="tag-list">
+          <div style="padding:16px;text-align:center;color:var(--ni-text-muted);font-size:0.8125rem;">Memuat…</div>
+        </div>
+        <p style="font-size:0.6875rem;color:var(--ni-text-muted);margin:8px 0 0;">Centang item yang ingin dipantau, lalu klik <strong>Simpan</strong>.</p>
       </div>
     </div>
   </div>

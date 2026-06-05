@@ -300,68 +300,45 @@ def api_top_persediaan(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def api_saldo_persediaan(request: HttpRequest) -> JsonResponse:
-    days = _parse_days(request, 30)
-    start, end = _date_range(days)
+    """Return current stock balance (running total up to today) for tagged items."""
     eb_id, eb_lv2_id, eb_lv3_id = _parse_eb(request)
+    today = timezone.now().date()
 
     tagged = list(DashboardInventoryTag.objects.select_related('item').all())
     if not tagged:
-        return JsonResponse({'items': [], 'labels': [], 'idr_series': {}, 'qty_series': {}})
+        return JsonResponse({'rows': []})
 
-    date_list = _date_list(start, end)
-    labels = [d.strftime('%d %b') for d in date_list]
-    idr_series: dict = {}
-    qty_series: dict = {}
-    items_meta = []
-
+    rows = []
     for tag in tagged:
         item = tag.item
 
-        inflows = list(
-            InventoryRecord.objects
-            .filter(item=item)
-            .filter(_inventory_q(eb_id, eb_lv2_id, eb_lv3_id))
-            .values_list('tanggal', 'quantity', 'total_value')
+        total_in = InventoryRecord.objects.filter(
+            item=item,
+            tanggal__lte=today,
+        ).filter(_inventory_q(eb_id, eb_lv2_id, eb_lv3_id)).aggregate(
+            qty=Sum('quantity'), nilai=Sum('total_value'),
         )
 
-        outflows_qs = (
+        total_out = (
             SalesItemFIFOAllocation.objects
             .filter(inventory_record__item=item)
             .filter(_sales_q_fifo(eb_id, eb_lv2_id, eb_lv3_id))
-            .annotate(sale_date=TruncDate('sales_item__sales_eb__sales_header__tanggal'))
-            .values('sale_date')
-            .annotate(out_qty=Sum('quantity_consumed'), out_value=Sum('cogs_amount'))
+            .filter(sales_item__sales_eb__sales_header__tanggal__lte=today)
+            .aggregate(qty=Sum('quantity_consumed'), nilai=Sum('cogs_amount'))
         )
 
-        daily_qty: defaultdict = defaultdict(float)
-        daily_idr: defaultdict = defaultdict(float)
+        qty_saldo = round(max(float(total_in['qty'] or 0) - float(total_out['qty'] or 0), 0), 2)
+        nilai_saldo = round(max(float(total_in['nilai'] or 0) - float(total_out['nilai'] or 0), 0), 2)
 
-        for tanggal, qty, val in inflows:
-            daily_qty[tanggal] += float(qty or 0)
-            daily_idr[tanggal] += float(val or 0)
+        rows.append({
+            'item_id': item.item_id,
+            'nama': item.nama,
+            'nilai': nilai_saldo,
+            'qty': qty_saldo,
+        })
 
-        for row in outflows_qs:
-            t = row['sale_date']
-            if t:
-                daily_qty[t] -= float(row['out_qty'] or 0)
-                daily_idr[t] -= float(row['out_value'] or 0)
-
-        pre_qty = sum(v for d, v in daily_qty.items() if d < start)
-        pre_idr = sum(v for d, v in daily_idr.items() if d < start)
-
-        item_qty_vals, item_idr_vals = [], []
-        running_qty, running_idr = pre_qty, pre_idr
-        for d in date_list:
-            running_qty += daily_qty.get(d, 0)
-            running_idr += daily_idr.get(d, 0)
-            item_qty_vals.append(round(max(running_qty, 0), 2))
-            item_idr_vals.append(round(max(running_idr, 0), 2))
-
-        idr_series[item.nama] = item_idr_vals
-        qty_series[item.nama] = item_qty_vals
-        items_meta.append({'item_id': item.item_id, 'nama': item.nama})
-
-    return JsonResponse({'labels': labels, 'idr_series': idr_series, 'qty_series': qty_series, 'items': items_meta})
+    rows.sort(key=lambda r: r['nilai'], reverse=True)
+    return JsonResponse({'rows': rows})
 
 
 # ── Utang Jatuh Tempo ────────────────────────────────────────────────────────
@@ -470,6 +447,22 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
     if request.method == 'POST':
         try:
             body = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Request tidak valid'}, status=400)
+
+        if body.get('action') == 'save_all':
+            item_ids = [int(i) for i in body.get('item_ids', []) if str(i).isdigit()]
+            DashboardInventoryTag.objects.all().delete()
+            for item_id in item_ids:
+                try:
+                    DashboardInventoryTag.objects.create(
+                        item=ItemMasterPurchase.objects.get(pk=item_id)
+                    )
+                except ItemMasterPurchase.DoesNotExist:
+                    pass
+            return JsonResponse({'status': 'saved', 'count': len(item_ids)})
+
+        try:
             item = ItemMasterPurchase.objects.get(pk=body.get('item_id'))
             tag, created = DashboardInventoryTag.objects.get_or_create(item=item)
             if not created:
@@ -478,8 +471,6 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
             return JsonResponse({'status': 'tagged', 'item_id': item.pk})
         except ItemMasterPurchase.DoesNotExist:
             return JsonResponse({'error': 'Item tidak ditemukan'}, status=404)
-        except (json.JSONDecodeError, KeyError):
-            return JsonResponse({'error': 'Request tidak valid'}, status=400)
 
     search = request.GET.get('q', '')
     qs = ItemMasterPurchase.objects.order_by('nama')

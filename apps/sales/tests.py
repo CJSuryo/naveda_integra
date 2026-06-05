@@ -194,6 +194,7 @@ class SalesViewTests(TestCase):
                 'selling_price': selling_price,
                 'offset_coa_account_id': self.akun_persediaan.pk,
                 'revenue_account_id': self.akun_pendapatan.pk,
+                'payment_account_id': self.akun_modal.pk,
             }],
         }]
         return json.dumps(groups)
