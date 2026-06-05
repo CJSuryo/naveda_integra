@@ -43,8 +43,7 @@
   <td>
     <span data-read="display_order">{{ ci.display_order|default:'—' }}</span>
     <span data-edit class="ni-d-none">
-      <input type="number" name="display_order" class="ni-input"
-             style="width:70px" min="1"
+      <input type="number" name="display_order" class="ni-input ni-catalog-order-input" min="1"
              value="{{ ci.display_order|default:'' }}"
              data-original="{{ ci.display_order|default:'' }}">
     </span>
@@ -54,7 +53,7 @@
   <td>
     <span data-read="product_image">
       {% if ci and ci.product_image %}
-      <img src="{{ ci.product_image.url }}" alt="" class="ni-catalog-thumb">
+      <img src="{{ ci.product_image.url }}" alt="{{ ci.display_name|default:item.nama }}" class="ni-catalog-thumb">
       {% else %}—{% endif %}
     </span>
     <span data-edit class="ni-d-none">
@@ -69,7 +68,7 @@
         <i data-lucide="pencil"></i> Edit
       </button>
       <button type="button" class="ni-btn ni-btn--primary ni-btn--sm ni-catalog-save-btn ni-d-none">
-        <i data-lucide="save"></i> Save
+        <i data-lucide="save"></i> Simpan
       </button>
       <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm ni-catalog-cancel-btn ni-d-none">
         Batal

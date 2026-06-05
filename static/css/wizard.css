@@ -127,3 +127,7 @@
   object-fit: cover;
   border-radius: var(--ni-radius-sm);
 }
+
+.ni-catalog-order-input {
+  width: 70px;
+}
