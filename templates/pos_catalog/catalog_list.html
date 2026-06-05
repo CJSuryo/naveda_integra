@@ -206,7 +206,7 @@
 
   function isDirty(row) {
     var dirty = false;
-    row.querySelectorAll('[data-edit] input[type!=file], [data-edit] input[type!=checkbox]').forEach(function (inp) {
+    row.querySelectorAll('[data-edit] input:not([type=file]):not([type=checkbox])').forEach(function (inp) {
       if (inp.type !== 'file' && inp.type !== 'checkbox') {
         if (inp.value !== (inp.getAttribute('data-original') || '')) dirty = true;
       }
