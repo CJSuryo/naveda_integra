@@ -1,6 +1,6 @@
 """Sales URLs."""
 from django.urls import path
-from . import views
+from . import views, kasir_views
 
 app_name = 'sales'
 
@@ -23,4 +23,10 @@ urlpatterns = [
     path('api/stt-offset/', views.api_stt_offset, name='api_stt_offset'),
     path('api/stt-defaults/', views.api_stt_defaults, name='api_stt_defaults'),
     path('api/pos-items/', views.api_pos_items, name='api_pos_items'),
+
+    # Kasir POS
+    path('kasir/', kasir_views.kasir_pos, name='kasir_pos'),
+    path('kasir/api/catalog/', kasir_views.api_kasir_catalog, name='api_kasir_catalog'),
+    path('kasir/api/config/<int:lv3_pk>/', kasir_views.api_kasir_config, name='api_kasir_config'),
+    path('kasir/api/submit/', kasir_views.api_kasir_submit, name='api_kasir_submit'),
 ]

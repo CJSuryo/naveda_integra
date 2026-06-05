@@ -10,7 +10,7 @@ from django.views.decorators.http import require_POST
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnisLv3
-from apps.pos_catalog.models import ProductModifierGroup
+from pos_catalog.models import ProductModifierGroup
 from apps.inventory.models import InventoryRecord
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 
