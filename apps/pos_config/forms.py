@@ -1,5 +1,5 @@
 from django import forms
-from .models import MerchantPOSConfig, StorePOSConfig, PaymentMethod, WorkShift
+from .models import MerchantPOSConfig, StorePOSConfig, PaymentMethod, WorkShift, OutletPOSConfig
 
 
 NI_INPUT_ATTRS = {'class': 'ni-input'}
@@ -65,5 +65,26 @@ class WorkShiftForm(forms.ModelForm):
             'name': forms.TextInput(attrs=NI_INPUT_ATTRS),
             'start_time': forms.TimeInput(attrs={**NI_INPUT_ATTRS, 'type': 'time'}),
             'end_time': forms.TimeInput(attrs={**NI_INPUT_ATTRS, 'type': 'time'}),
+            'is_active': forms.CheckboxInput(attrs=NI_CHECKBOX_ATTRS),
+        }
+
+
+class OutletPOSConfigForm(forms.ModelForm):
+    class Meta:
+        model = OutletPOSConfig
+        fields = [
+            'sub_transaction_type',
+            'revenue_account',
+            'offset_coa_account',
+            'default_payment_account',
+            'tax_pct',
+            'is_active',
+        ]
+        widgets = {
+            'sub_transaction_type': forms.Select(attrs=NI_INPUT_ATTRS),
+            'revenue_account': forms.Select(attrs=NI_INPUT_ATTRS),
+            'offset_coa_account': forms.Select(attrs=NI_INPUT_ATTRS),
+            'default_payment_account': forms.Select(attrs=NI_INPUT_ATTRS),
+            'tax_pct': forms.NumberInput(attrs={**NI_INPUT_ATTRS, 'step': '0.01', 'placeholder': 'Kosong = ikut parent'}),
             'is_active': forms.CheckboxInput(attrs=NI_CHECKBOX_ATTRS),
         }

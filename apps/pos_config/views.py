@@ -2,9 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from apps.accounts.views import _check_perm
-from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2
-from .models import MerchantPOSConfig, StorePOSConfig, PaymentMethod, WorkShift, ShiftLog
-from .forms import MerchantPOSConfigForm, StorePOSConfigForm, PaymentMethodForm, WorkShiftForm
+from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
+from .models import MerchantPOSConfig, StorePOSConfig, PaymentMethod, WorkShift, ShiftLog, OutletPOSConfig
+from .forms import MerchantPOSConfigForm, StorePOSConfigForm, PaymentMethodForm, WorkShiftForm, OutletPOSConfigForm
+from .utils import resolve_pos_config
 
 
 @login_required
@@ -88,3 +89,47 @@ def shift_list(request, store_pk):
     store = get_object_or_404(StorePOSConfig, pk=store_pk)
     shifts = store.shifts.order_by('start_time')
     return render(request, 'pos_config/shift_list.html', {'store': store, 'shifts': shifts})
+
+
+@login_required
+def outlet_config(request, lv3_pk):
+    denied = _check_perm(request.user, 'pos_config_manage')
+    if denied:
+        return denied
+    lv3 = get_object_or_404(
+        EntitasBisnisLv3.objects.select_related(
+            'parent_lv2__entitas_bisnis__pos_config',
+            'parent_lv2__pos_config',
+        ),
+        pk=lv3_pk,
+    )
+    merchant = getattr(lv3.parent_lv2.entitas_bisnis, 'pos_config', None)
+    if not merchant:
+        messages.warning(request, 'Merchant POS Config belum diset di level 1.')
+        return redirect('entitas_bisnis:list')
+
+    cfg, _ = OutletPOSConfig.objects.get_or_create(
+        entitas_bisnis_lv3=lv3,
+        defaults={'merchant_config': merchant},
+    )
+    effective = resolve_pos_config(
+        EntitasBisnisLv3.objects.select_related(
+            'parent_lv2__entitas_bisnis__pos_config',
+            'parent_lv2__pos_config',
+            'pos_config',
+        ).get(pk=lv3_pk)
+    )
+    if request.method == 'POST':
+        form = OutletPOSConfigForm(request.POST, instance=cfg)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'Outlet POS Config untuk {lv3.nama} disimpan.')
+            return redirect('pos_config:outlet_config', lv3_pk=lv3_pk)
+    else:
+        form = OutletPOSConfigForm(instance=cfg)
+    return render(request, 'pos_config/outlet_config_form.html', {
+        'form': form,
+        'lv3': lv3,
+        'cfg': cfg,
+        'effective': effective,
+    })

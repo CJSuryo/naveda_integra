@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Outlet POS Config — {{ lv3.nama }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Outlet POS Config</h1>
+    <p class="ni-page-header__subtitle">{{ lv3.nama }} · {{ lv3.parent_lv2.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="javascript:history.back()" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in ni-card--mb">
+  <div class="ni-card__header"><h3>Nilai Efektif (setelah cascade)</h3></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Sub-Transaction Type</dt><dd>{{ effective.sub_transaction_type_id|default:'—' }}</dd>
+      <dt>Tax %</dt><dd>{{ effective.tax_pct }}%</dd>
+      <dt>Revenue Account</dt><dd>{{ effective.revenue_account_id|default:'—' }}</dd>
+      <dt>HPP Account</dt><dd>{{ effective.offset_coa_account_id|default:'—' }}</dd>
+      <dt>Payment Account</dt><dd>{{ effective.payment_account_id|default:'—' }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h3>Override untuk {{ lv3.nama }}</h3></div>
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-grid">
+        {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small class="ni-help-text">{{ field.help_text }}</small>{% endif %}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

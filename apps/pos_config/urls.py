@@ -9,4 +9,5 @@ urlpatterns = [
     path('config/<int:merchant_pk>/stores/<int:lv2_pk>/', views.store_form, name='store_form'),
     path('config/store/<int:store_pk>/payments/', views.payment_method_list, name='payment_method_list'),
     path('config/store/<int:store_pk>/shifts/', views.shift_list, name='shift_list'),
+    path('outlet/<int:lv3_pk>/', views.outlet_config, name='outlet_config'),
 ]
