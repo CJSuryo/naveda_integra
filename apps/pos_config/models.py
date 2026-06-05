@@ -1,7 +1,7 @@
 from decimal import Decimal
 from django.conf import settings
 from django.db import models
-from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2
+from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 
 
 class MerchantPOSConfig(models.Model):
@@ -186,3 +186,68 @@ class WebPushSubscription(models.Model):
 
     class Meta:
         unique_together = ('user', 'endpoint')
+
+
+class OutletPOSConfig(models.Model):
+    """Lv3-specific POS config. Overrides MerchantPOSConfig (lv1) for STT + accounts."""
+
+    entitas_bisnis_lv3 = models.OneToOneField(
+        EntitasBisnisLv3,
+        on_delete=models.CASCADE,
+        related_name='pos_config',
+    )
+    merchant_config = models.ForeignKey(
+        MerchantPOSConfig,
+        on_delete=models.CASCADE,
+        related_name='outlets',
+    )
+    sub_transaction_type = models.ForeignKey(
+        'purchase.SubTransactionType',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pos_outlet_configs',
+        verbose_name='Sub-Transaction Type (Override)',
+        help_text='Kosongkan = pakai default dari Merchant (lv1).',
+    )
+    revenue_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pos_outlet_revenue',
+        verbose_name='Revenue Account (Override)',
+    )
+    offset_coa_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pos_outlet_offset',
+        verbose_name='HPP Account (Override)',
+    )
+    default_payment_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='pos_outlet_payment',
+        verbose_name='Payment Account (Override)',
+    )
+    tax_pct = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Tax % (Override)',
+        help_text='Kosongkan = pakai default dari Store (lv2) atau Merchant (lv1).',
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Outlet POS Config'
+
+    def __str__(self) -> str:
+        return f'Outlet POS Config — {self.entitas_bisnis_lv3.nama}'
