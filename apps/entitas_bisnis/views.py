@@ -120,7 +120,7 @@ def update_view(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect('entitas_bisnis:list')
     if _is_ajax(request):
         return _ajax_error(form)
-    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Edit Entitas Bisnis Level 1'})
+    return render(request, 'entitas_bisnis/form.html', {'form': form, 'title': 'Edit Entitas Bisnis Level 1', 'object': obj})
 
 
 @login_required

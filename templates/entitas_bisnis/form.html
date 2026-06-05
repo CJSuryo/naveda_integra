@@ -24,4 +24,35 @@
     </form>
   </div>
 </div>
+
+{% if object.pk %}
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">POS Configuration</h2>
+  <a href="{% url 'pos_config:merchant_config' object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+    <i data-lucide="settings" style="width:14px;height:14px"></i>
+    {% if object.pos_config %}Edit POS Config{% else %}Setup POS Config{% endif %}
+  </a>
+</div>
+{% if object.pos_config %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Status POS</dt>
+      <dd>{% if object.pos_config.is_pos_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
+      <dt>Tax Default</dt><dd>{{ object.pos_config.default_tax_pct }}%</dd>
+      <dt>Sub-Transaction Type</dt><dd>{{ object.pos_config.sub_transaction_type|default:'—' }}</dd>
+      <dt>Revenue Account</dt><dd>{{ object.pos_config.revenue_account|default:'—' }}</dd>
+      <dt>HPP Account</dt><dd>{{ object.pos_config.offset_coa_account|default:'—' }}</dd>
+      <dt>Payment Account</dt><dd>{{ object.pos_config.default_payment_account|default:'—' }}</dd>
+    </dl>
+  </div>
+</div>
+{% else %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <p>POS Config belum dikonfigurasi. <a href="{% url 'pos_config:merchant_config' object.pk %}">Setup sekarang →</a></p>
+  </div>
+</div>
+{% endif %}
+{% endif %}
 {% endblock %}
