@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from django.db.models import Sum
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
@@ -96,7 +97,15 @@ def catalog_items_ajax(request, eb_pk):
         for ci in CatalogItem.objects.filter(entitas_bisnis=eb, item__in=items)
         .select_related('item')
     }
-    rows = [{'item': item, 'catalog_item': catalog_map.get(item.pk)} for item in items]
+    stock_map = {
+        row['item_id']: row['total']
+        for row in InventoryRecord.objects.filter(entitas_bisnis=eb, item__in=items)
+        .values('item_id').annotate(total=Sum('quantity'))
+    }
+    rows = [
+        {'item': item, 'catalog_item': catalog_map.get(item.pk), 'stock': stock_map.get(item.pk, 0)}
+        for item in items
+    ]
     html = render_to_string(
         'pos_catalog/_catalog_rows.html',
         {'rows': rows, 'eb': eb},

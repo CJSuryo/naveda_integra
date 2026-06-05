@@ -29,6 +29,9 @@
     </span>
   </td>
 
+  {# Stock #}
+  <td class="ni-text-end">{{ row.stock|floatformat:0|intcomma }}</td>
+
   {# Is Active #}
   <td>
     <span data-read="is_active">{% if ci and ci.is_active %}✓{% else %}—{% endif %}</span>
@@ -79,6 +82,6 @@
 {% endwith %}
 {% empty %}
 <tr>
-  <td colspan="8" class="ni-text-center ni-text-muted">Tidak ada item untuk kategori ini.</td>
+  <td colspan="9" class="ni-text-center ni-text-muted">Tidak ada item untuk kategori ini.</td>
 </tr>
 {% endfor %}
