@@ -1,8 +1,85 @@
+{% load humanize %}
 {% for row in rows %}
-<tr data-item-id="{{ row.item.pk }}"
-    data-catalog-id="{{ row.catalog_item.pk|default:'' }}">
-  <td>{{ row.item.nama }}</td>
+{% with ci=row.catalog_item item=row.item %}
+<tr data-item-id="{{ item.pk }}"
+    data-catalog-id="{{ ci.pk|default:'' }}">
+  <td>{{ item.nama }}</td>
+  <td><span class="ni-badge ni-badge--secondary">{{ item.get_tipe_item_display }}</span></td>
+
+  {# Display Name #}
+  <td>
+    <span data-read="display_name">{{ ci.display_name|default:'—' }}</span>
+    <span data-edit class="ni-d-none">
+      <input type="text" name="display_name" class="ni-input"
+             value="{{ ci.display_name|default:'' }}"
+             data-original="{{ ci.display_name|default:'' }}">
+    </span>
+  </td>
+
+  {# Selling Price #}
+  <td>
+    <span data-read="selling_price">
+      {% if ci %}Rp {{ ci.selling_price|floatformat:0|intcomma }}{% else %}—{% endif %}
+    </span>
+    <span data-edit class="ni-d-none">
+      <input type="number" name="selling_price" class="ni-input"
+             step="1" min="0"
+             value="{{ ci.selling_price|default:'' }}"
+             data-original="{{ ci.selling_price|default:'' }}">
+    </span>
+  </td>
+
+  {# Is Active #}
+  <td>
+    <span data-read="is_active">{% if ci and ci.is_active %}✓{% else %}—{% endif %}</span>
+    <span data-edit class="ni-d-none">
+      <input type="checkbox" name="is_active" class="ni-checkbox"
+             {% if not ci or ci.is_active %}checked{% endif %}
+             data-original="{% if not ci or ci.is_active %}true{% else %}false{% endif %}">
+    </span>
+  </td>
+
+  {# Display Order #}
+  <td>
+    <span data-read="display_order">{{ ci.display_order|default:'—' }}</span>
+    <span data-edit class="ni-d-none">
+      <input type="number" name="display_order" class="ni-input"
+             style="width:70px" min="1"
+             value="{{ ci.display_order|default:'' }}"
+             data-original="{{ ci.display_order|default:'' }}">
+    </span>
+  </td>
+
+  {# Product Image #}
+  <td>
+    <span data-read="product_image">
+      {% if ci and ci.product_image %}
+      <img src="{{ ci.product_image.url }}" alt="" class="ni-catalog-thumb">
+      {% else %}—{% endif %}
+    </span>
+    <span data-edit class="ni-d-none">
+      <input type="file" name="product_image" accept="image/*">
+    </span>
+  </td>
+
+  {# Actions #}
+  <td>
+    <div class="ni-btn-row">
+      <button type="button" class="ni-btn ni-btn--warning ni-btn--sm ni-catalog-edit-btn">
+        <i data-lucide="pencil"></i> Edit
+      </button>
+      <button type="button" class="ni-btn ni-btn--primary ni-btn--sm ni-catalog-save-btn ni-d-none">
+        <i data-lucide="save"></i> Save
+      </button>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm ni-catalog-cancel-btn ni-d-none">
+        Batal
+      </button>
+    </div>
+  </td>
 </tr>
+{% endwith %}
 {% empty %}
-<tr><td colspan="8">Tidak ada item.</td></tr>
+<tr>
+  <td colspan="8" class="ni-text-center ni-text-muted">Tidak ada item untuk kategori ini.</td>
+</tr>
 {% endfor %}

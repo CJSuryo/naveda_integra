@@ -1,3 +1,243 @@
 {% extends 'base.html' %}
 {% block title %}Catalog — {{ eb.nama }}{% endblock %}
-{% block content %}CATALOG PLACEHOLDER{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Catalog</h1>
+    <p class="ni-page-header__subtitle">{{ eb.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_catalog:catalog_logs' eb.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="history"></i> Catalog Logs
+    </a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-d-flex ni-items-center ni-gap-3 ni-mb-3">
+      <button type="button" class="ni-btn ni-btn--primary" id="btnTambah">
+        <i data-lucide="plus"></i> Tambah Harga Jual
+      </button>
+    </div>
+    <div id="categoryButtons" class="ni-d-flex ni-gap-2 ni-flex-wrap ni-mb-4 ni-d-none">
+      {% for tipe in tipe_choices %}
+      <button type="button"
+              class="ni-btn ni-btn--secondary ni-btn--sm ni-category-btn"
+              data-tipe="{{ tipe.0 }}">
+        {{ tipe.1 }}
+      </button>
+      {% endfor %}
+    </div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" id="catalogTable">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Tipe</th>
+            <th>Display Name</th>
+            <th>Harga Jual</th>
+            <th>Active</th>
+            <th>Order</th>
+            <th>Gambar</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="catalogTbody">
+          <tr id="emptyRow">
+            <td colspan="8" class="ni-text-center ni-text-muted">
+              Pilih kategori untuk menampilkan item.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{# Hidden CSRF for JS #}
+{% csrf_token %}
+
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+  'use strict';
+
+  var UPSERT_URL = '{% url "pos_catalog:catalog_upsert" eb.pk %}';
+  var ITEMS_URL  = '{% url "pos_catalog:catalog_items_ajax" eb.pk %}';
+  var csrfToken  = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  var activeRow  = null;
+
+  // Show category buttons on "Tambah Harga Jual" click
+  document.getElementById('btnTambah').addEventListener('click', function () {
+    document.getElementById('categoryButtons').classList.remove('ni-d-none');
+  });
+
+  // Load items when a category button is clicked
+  document.querySelectorAll('.ni-category-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (activeRow && isDirty(activeRow)) {
+        if (!confirm('Ada perubahan belum disimpan. Discard?')) return;
+        cancelRow(activeRow);
+      }
+      document.querySelectorAll('.ni-category-btn').forEach(function (b) {
+        b.classList.remove('ni-btn--primary');
+        b.classList.add('ni-btn--secondary');
+      });
+      btn.classList.remove('ni-btn--secondary');
+      btn.classList.add('ni-btn--primary');
+      loadItems(btn.getAttribute('data-tipe'));
+    });
+  });
+
+  function loadItems(tipeItem) {
+    fetch(ITEMS_URL + '?tipe_item=' + encodeURIComponent(tipeItem), {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        var tbody = document.getElementById('catalogTbody');
+        tbody.innerHTML = data.html;
+        lucide.createIcons();
+        attachEditHandlers();
+        activeRow = null;
+      })
+      .catch(function () {
+        alert('Gagal memuat item. Coba lagi.');
+      });
+  }
+
+  function attachEditHandlers() {
+    document.querySelectorAll('.ni-catalog-edit-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('tr');
+        if (activeRow && activeRow !== row) {
+          if (isDirty(activeRow)) {
+            if (!confirm('Ada perubahan belum disimpan. Discard?')) return;
+          }
+          cancelRow(activeRow);
+        }
+        editRow(row);
+      });
+    });
+    document.querySelectorAll('.ni-catalog-save-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var row = btn.closest('tr');
+        saveRow(row);
+      });
+    });
+    document.querySelectorAll('.ni-catalog-cancel-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        cancelRow(btn.closest('tr'));
+      });
+    });
+  }
+
+  function editRow(row) {
+    activeRow = row;
+    row.querySelectorAll('[data-read]').forEach(function (el) { el.classList.add('ni-d-none'); });
+    row.querySelectorAll('[data-edit]').forEach(function (el) { el.classList.remove('ni-d-none'); });
+    row.querySelector('.ni-catalog-edit-btn').classList.add('ni-d-none');
+    row.querySelector('.ni-catalog-save-btn').classList.remove('ni-d-none');
+    row.querySelector('.ni-catalog-cancel-btn').classList.remove('ni-d-none');
+    setAllEditBtns(true);
+    row.querySelector('.ni-catalog-edit-btn').disabled = false;
+  }
+
+  function cancelRow(row) {
+    row.querySelectorAll('[data-edit]').forEach(function (el) { el.classList.add('ni-d-none'); });
+    row.querySelectorAll('[data-read]').forEach(function (el) { el.classList.remove('ni-d-none'); });
+    row.querySelector('.ni-catalog-edit-btn').classList.remove('ni-d-none');
+    row.querySelector('.ni-catalog-save-btn').classList.add('ni-d-none');
+    row.querySelector('.ni-catalog-cancel-btn').classList.add('ni-d-none');
+    // Restore original input values
+    row.querySelectorAll('[data-edit] input, [data-edit] textarea').forEach(function (inp) {
+      inp.value = inp.getAttribute('data-original') || '';
+    });
+    setAllEditBtns(false);
+    activeRow = null;
+  }
+
+  function saveRow(row) {
+    var fd = new FormData();
+    fd.append('csrfmiddlewaretoken', csrfToken);
+    fd.append('item_id', row.getAttribute('data-item-id'));
+    fd.append('selling_price', row.querySelector('[name=selling_price]').value);
+    fd.append('display_name', row.querySelector('[name=display_name]').value);
+    fd.append('display_order', row.querySelector('[name=display_order]').value);
+    fd.append('is_active', row.querySelector('[name=is_active]').checked ? 'true' : 'false');
+    var imgInput = row.querySelector('[name=product_image]');
+    if (imgInput && imgInput.files.length > 0) {
+      fd.append('product_image', imgInput.files[0]);
+    }
+
+    fetch(UPSERT_URL, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: fd,
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          var item = data.item;
+          row.querySelector('[data-read="display_name"]').textContent = item.display_name;
+          row.querySelector('[data-read="selling_price"]').textContent = 'Rp ' + Number(item.selling_price).toLocaleString('id-ID');
+          row.querySelector('[data-read="is_active"]').textContent = item.is_active ? '✓' : '—';
+          row.querySelector('[data-read="display_order"]').textContent = item.display_order;
+          if (item.image_url) {
+            var imgEl = row.querySelector('[data-read="product_image"]');
+            if (imgEl) imgEl.src = item.image_url;
+          }
+          row.setAttribute('data-catalog-id', item.id);
+          cancelRow(row);
+        } else {
+          alert('Gagal menyimpan: ' + (data.error || 'Unknown error'));
+        }
+      })
+      .catch(function () {
+        alert('Terjadi kesalahan. Coba lagi.');
+      });
+  }
+
+  function isDirty(row) {
+    var dirty = false;
+    row.querySelectorAll('[data-edit] input[type!=file], [data-edit] input[type!=checkbox]').forEach(function (inp) {
+      if (inp.type !== 'file' && inp.type !== 'checkbox') {
+        if (inp.value !== (inp.getAttribute('data-original') || '')) dirty = true;
+      }
+    });
+    var cb = row.querySelector('[name=is_active]');
+    if (cb) {
+      var orig = cb.getAttribute('data-original') === 'true';
+      if (cb.checked !== orig) dirty = true;
+    }
+    return dirty;
+  }
+
+  function setAllEditBtns(disabled) {
+    document.querySelectorAll('.ni-catalog-edit-btn').forEach(function (b) {
+      b.disabled = disabled;
+    });
+  }
+
+  // Click-outside handler
+  document.addEventListener('click', function (e) {
+    if (!activeRow) return;
+    if (activeRow.contains(e.target)) return;
+    if (isDirty(activeRow)) {
+      if (confirm('Ada perubahan belum disimpan. Discard?')) {
+        cancelRow(activeRow);
+      }
+    } else {
+      cancelRow(activeRow);
+    }
+  });
+
+})();
+</script>
+{% endblock %}

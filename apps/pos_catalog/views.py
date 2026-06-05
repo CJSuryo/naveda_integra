@@ -68,7 +68,11 @@ def catalog_list(request, eb_pk):
     if denied:
         return denied
     eb = get_object_or_404(EntitasBisnis, pk=eb_pk)
-    return render(request, 'pos_catalog/catalog_list.html', {'eb': eb})
+    tipe_choices = ItemMasterPurchase.ITEM_TYPE_CHOICES
+    return render(request, 'pos_catalog/catalog_list.html', {
+        'eb': eb,
+        'tipe_choices': tipe_choices,
+    })
 
 
 @login_required

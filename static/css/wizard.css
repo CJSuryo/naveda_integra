@@ -119,3 +119,11 @@
   font-size: 0.875rem;
   color: var(--ni-danger);
 }
+
+/* ---------- Catalog thumbnail ---------- */
+.ni-catalog-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--ni-radius-sm);
+}
