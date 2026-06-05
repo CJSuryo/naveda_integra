@@ -1,3 +1,68 @@
 {% extends 'base.html' %}
 {% block title %}Catalog Logs — {{ eb.nama }}{% endblock %}
-{% block content %}LOGS PLACEHOLDER{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Catalog Logs</h1>
+    <p class="ni-page-header__subtitle">{{ eb.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_catalog:catalog_list' eb.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left"></i> Kembali ke Catalog
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="get" class="ni-d-flex ni-gap-2 ni-mb-3">
+      <input type="text" name="q" value="{{ q }}" placeholder="Cari nama item..." class="ni-input">
+      <button type="submit" class="ni-btn ni-btn--primary">Cari</button>
+      {% if q %}<a href="?" class="ni-btn ni-btn--secondary">Reset</a>{% endif %}
+    </form>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Item</th>
+          <th>Field</th>
+          <th>Dari</th>
+          <th>Ke</th>
+          <th>Oleh</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in page %}
+        <tr>
+          <td class="ni-whitespace-nowrap">{{ log.changed_at|date:"d M Y H:i" }}</td>
+          <td>{{ log.catalog_item.item.nama }}</td>
+          <td><span class="ni-badge ni-badge--secondary">{{ log.field_name }}</span></td>
+          <td class="ni-text-muted">{{ log.old_value }}</td>
+          <td>{{ log.new_value }}</td>
+          <td class="ni-text-muted">{{ log.changed_by.email|default:'—' }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="6" class="ni-text-center ni-text-muted">Belum ada log.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+  <div class="ni-card__body">
+    <div class="ni-paginator">
+      {% if page.has_previous %}
+      <a href="?page={{ page.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm">← Prev</a>
+      {% endif %}
+      <span class="ni-text-muted">Halaman {{ page.number }} dari {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}
+      <a href="?page={{ page.next_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
