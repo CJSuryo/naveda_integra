@@ -31,6 +31,11 @@
   cursor: pointer;
 }
 
+.ni-card--success-border { border-left: 4px solid var(--ni-success); }
+.ni-card--warning-border { border-left: 4px solid var(--ni-warning); }
+.ni-card--danger-border  { border-left: 4px solid var(--ni-danger); }
+.ni-card--primary-border { border-left: 4px solid var(--ni-primary); }
+
 /* ---------- Card sections ---------- */
 .ni-card__header {
   display: flex;

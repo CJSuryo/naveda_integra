@@ -8,23 +8,23 @@
   </div>
   <div class="ni-page-header__actions">
     <a href="{% url 'entitas_bisnis:update' eb.pk %}" class="ni-btn ni-btn--secondary">
-      <i data-lucide="arrow-left" style="width:14px;height:14px"></i> Kembali ke Edit
+      <i data-lucide="arrow-left"></i> Kembali ke Edit
     </a>
   </div>
 </div>
 
 {% if checks.all_required_ok %}
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;border-left:4px solid #16a34a;">
+<div class="ni-card ni-card--success-border ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:center;gap:12px;">
-      <i data-lucide="check-circle-2" style="width:32px;height:32px;color:#16a34a;flex-shrink:0;"></i>
+    <div class="ni-wizard-banner">
+      <i data-lucide="check-circle-2" class="ni-icon-xl ni-text-success ni-flex-shrink-0"></i>
       <div>
-        <p style="font-weight:700;font-size:1.1rem;margin:0;">{{ eb.nama }} siap digunakan!</p>
-        <p style="margin:4px 0 0;color:var(--ni-text-muted);">Semua konfigurasi wajib telah selesai.</p>
+        <p class="ni-font-bold ni-text-lg ni-m-0">{{ eb.nama }} siap digunakan!</p>
+        <p class="ni-mt-1 ni-mb-0 ni-text-muted">Semua konfigurasi wajib telah selesai.</p>
       </div>
-      <div style="margin-left:auto;display:flex;gap:8px;">
+      <div class="ni-wizard-banner__actions">
         <a href="{% url 'sales:kasir_pos' %}" class="ni-btn ni-btn--primary">
-          <i data-lucide="monitor-check" style="width:14px;height:14px"></i> Buka Kasir
+          <i data-lucide="monitor-check"></i> Buka Kasir
         </a>
         <a href="{% url 'entitas_bisnis:list' %}" class="ni-btn ni-btn--secondary">Entitas Bisnis</a>
       </div>
@@ -32,13 +32,13 @@
   </div>
 </div>
 {% else %}
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;border-left:4px solid #d97706;">
+<div class="ni-card ni-card--warning-border ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:center;gap:12px;">
-      <i data-lucide="alert-triangle" style="width:28px;height:28px;color:#d97706;flex-shrink:0;"></i>
+    <div class="ni-d-flex ni-items-center ni-gap-3">
+      <i data-lucide="alert-triangle" class="ni-icon-lg ni-text-warning ni-flex-shrink-0"></i>
       <div>
-        <p style="font-weight:700;margin:0;">Konfigurasi belum lengkap</p>
-        <p style="margin:4px 0 0;color:var(--ni-text-muted);">Selesaikan semua item wajib di bawah sebelum menggunakan kasir.</p>
+        <p class="ni-font-bold ni-m-0">Konfigurasi belum lengkap</p>
+        <p class="ni-mt-1 ni-mb-0 ni-text-muted">Selesaikan semua item wajib di bawah sebelum menggunakan kasir.</p>
       </div>
     </div>
   </div>
@@ -46,51 +46,58 @@
 {% endif %}
 
 <!-- Progress bar -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px;">
+<div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-      <span style="font-weight:600;font-size:0.875rem;">Progress Wajib</span>
-      <span style="font-size:0.875rem;color:var(--ni-text-muted);">{{ checks.required_done }} dari {{ checks.required_total }} selesai</span>
+    <div class="ni-d-flex ni-items-center ni-justify-between ni-mb-2">
+      <span class="ni-font-semibold ni-text-sm">Progress Wajib</span>
+      <span class="ni-text-sm ni-text-muted">{{ checks.required_done }} dari {{ checks.required_total }} selesai</span>
     </div>
-    <div style="background:var(--ni-border,#e5e7eb);border-radius:8px;height:10px;overflow:hidden;">
-      <div style="background:{% if checks.all_required_ok %}#16a34a{% else %}#d97706{% endif %};height:100%;border-radius:8px;width:{% widthratio checks.required_done checks.required_total 100 %}%;transition:width .3s;"></div>
+    <div class="ni-progress-bar">
+      <div class="ni-progress-bar__fill {% if checks.all_required_ok %}ni-progress-bar__fill--success{% else %}ni-progress-bar__fill--warning{% endif %}"
+           style="--progress-width: {% widthratio checks.required_done checks.required_total 100 %}%"></div>
     </div>
   </div>
 </div>
 
 <!-- ── Wajib ── -->
-<div class="ni-section-header"><h2 class="ni-section-header__title">Wajib</h2></div>
+<div class="ni-section-header ni-mb-3"><h2 class="ni-section-header__title">Wajib</h2></div>
 
 <!-- 1. Toko (Lv2) -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.lv2_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.lv2_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">Toko (Level 2)</span>
-          {% if checks.lv2_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Belum</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">Toko (Level 2)</span>
+          {% if checks.lv2_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum</span>
+          {% endif %}
         </div>
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">
+        <p class="ni-checklist-item__desc">
           {% if checks.lv2_ok %}{{ checks.lv2_count }} toko aktif terdaftar.{% else %}Tambahkan minimal 1 toko (cabang) untuk entitas bisnis ini.{% endif %}
         </p>
         {% if checks.lv2_list %}
-        <div style="margin-bottom:10px;">
+        <div class="ni-checklist-sublist">
           {% for lv2 in checks.lv2_list %}
-          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--ni-border,#e5e7eb);font-size:0.875rem;">
-            <i data-lucide="store" style="width:14px;height:14px;flex-shrink:0;color:var(--ni-text-muted);"></i>
+          <div class="ni-checklist-sublist__item">
+            <i data-lucide="store" class="ni-icon-sm ni-text-muted ni-flex-shrink-0"></i>
             <span>{{ lv2.nama }}</span>
-            <span class="ni-badge ni-badge--success" style="font-size:0.7rem;">{{ lv2.children_lv3.count }} outlet</span>
+            <span class="ni-badge ni-badge--success">{{ lv2.children_lv3.count }} outlet</span>
           </div>
           {% endfor %}
         </div>
         {% endif %}
         <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="niEB.openAddLv2({{ eb.pk }})">
-          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Toko
+          <i data-lucide="plus"></i> Tambah Toko
         </button>
       </div>
     </div>
@@ -98,37 +105,43 @@
 </div>
 
 <!-- 2. Outlet (Lv3) -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.lv3_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.lv3_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">Outlet (Level 3)</span>
-          {% if checks.lv3_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Belum</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">Outlet (Level 3)</span>
+          {% if checks.lv3_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum</span>
+          {% endif %}
         </div>
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">
+        <p class="ni-checklist-item__desc">
           {% if checks.lv3_ok %}{{ checks.lv3_count }} outlet aktif. Outlet adalah unit yang muncul di layar pilih kasir.{% else %}Tambahkan minimal 1 outlet. Outlet muncul sebagai pilihan di layar kasir.{% endif %}
         </p>
         {% for lv2 in checks.lv2_list %}
-        <div style="margin-bottom:8px;">
-          <div style="font-size:0.8rem;font-weight:600;color:var(--ni-text-muted);margin-bottom:4px;">{{ lv2.nama }}</div>
+        <div class="ni-checklist-lv3-store">
+          <div class="ni-checklist-lv3-store__label">{{ lv2.nama }}</div>
           {% for lv3 in lv2.children_lv3.all %}{% if lv3.status_aktif %}
-          <div style="display:flex;align-items:center;gap:8px;padding:3px 0 3px 14px;font-size:0.875rem;">
-            <i data-lucide="dot" style="width:12px;height:12px;flex-shrink:0;"></i>
+          <div class="ni-checklist-lv3-entry">
+            <i data-lucide="dot" class="ni-icon-xs ni-flex-shrink-0"></i>
             <span>{{ lv3.nama }}</span>
           </div>
           {% endif %}{% endfor %}
-          <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="niEB.openAddLv3({{ eb.pk }}, {{ lv2.pk }})" style="margin-top:4px;">
-            <i data-lucide="plus" style="width:12px;height:12px"></i> Tambah Outlet di {{ lv2.nama }}
+          <button type="button" class="ni-btn ni-btn--success ni-btn--sm ni-mt-1" onclick="niEB.openAddLv3({{ eb.pk }}, {{ lv2.pk }})">
+            <i data-lucide="plus"></i> Tambah Outlet di {{ lv2.nama }}
           </button>
         </div>
         {% empty %}
-        <p style="font-size:0.875rem;color:var(--ni-text-muted);">Tambahkan Toko (Lv2) terlebih dahulu sebelum menambah outlet.</p>
+        <p class="ni-text-sm ni-text-muted">Tambahkan Toko (Lv2) terlebih dahulu sebelum menambah outlet.</p>
         {% endfor %}
       </div>
     </div>
@@ -136,33 +149,39 @@
 </div>
 
 <!-- 3. POS Config -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.pos_config_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.pos_config_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">POS Config</span>
-          {% if checks.pos_config_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Belum</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">POS Config</span>
+          {% if checks.pos_config_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum</span>
+          {% endif %}
         </div>
         {% if checks.pos_config_ok %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">
+        <p class="ni-checklist-item__desc">
           Tax: {{ checks.pos_cfg.default_tax_pct }}% · STT: {{ checks.pos_cfg.sub_transaction_type }} · Revenue: {{ checks.pos_cfg.revenue_account }}
         </p>
         {% elif checks.pos_missing %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 4px;">Field belum diisi:</p>
-        <ul style="margin:0 0 8px;padding-left:18px;font-size:0.875rem;color:#dc2626;">
+        <p class="ni-text-sm ni-text-muted ni-mb-1">Field belum diisi:</p>
+        <ul class="ni-checklist-missing-list">
           {% for field in checks.pos_missing %}<li>{{ field }}</li>{% endfor %}
         </ul>
         {% else %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">Set akun akuntansi dan pajak default untuk semua transaksi POS.</p>
+        <p class="ni-checklist-item__desc">Set akun akuntansi dan pajak default untuk semua transaksi POS.</p>
         {% endif %}
         <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
-          <i data-lucide="settings" style="width:14px;height:14px"></i>
+          <i data-lucide="settings"></i>
           {% if checks.pos_cfg %}Edit POS Config{% else %}Setup POS Config{% endif %}
         </a>
       </div>
@@ -171,31 +190,37 @@
 </div>
 
 <!-- 4. Sub-Transaction Type -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.stt_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.stt_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">Sub-Transaction Type (Kasir)</span>
-          {% if checks.stt_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Belum</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">Sub-Transaction Type (Kasir)</span>
+          {% if checks.stt_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum</span>
+          {% endif %}
         </div>
         {% if checks.stt_ok %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">STT sudah diassign di POS Config: <strong>{{ checks.pos_cfg.sub_transaction_type }}</strong></p>
+        <p class="ni-checklist-item__desc">STT sudah diassign di POS Config: <strong>{{ checks.pos_cfg.sub_transaction_type }}</strong></p>
         {% elif not checks.stt_exists %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 4px;">Belum ada Sub-Transaction Type dengan module <code>sales</code>.</p>
-        <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:0 0 8px;">Buat STT baru di Master Data, lalu assign di POS Config.</p>
+        <p class="ni-text-sm ni-text-muted ni-mb-1">Belum ada Sub-Transaction Type dengan module <code>sales</code>.</p>
+        <p class="ni-text-xs ni-text-muted ni-mb-2">Buat STT baru di Master Data, lalu assign di POS Config.</p>
         <a href="{% url 'master_data:tipe_transaksi_list' %}" class="ni-btn ni-btn--primary ni-btn--sm">
-          <i data-lucide="list" style="width:14px;height:14px"></i> Kelola Sub-Transaction Type
+          <i data-lucide="list"></i> Kelola Sub-Transaction Type
         </a>
         {% else %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">STT sudah ada tapi belum di-assign di POS Config.</p>
+        <p class="ni-checklist-item__desc">STT sudah ada tapi belum di-assign di POS Config.</p>
         <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
-          <i data-lucide="settings" style="width:14px;height:14px"></i> Assign STT di POS Config
+          <i data-lucide="settings"></i> Assign STT di POS Config
         </a>
         {% endif %}
       </div>
@@ -204,34 +229,40 @@
 </div>
 
 <!-- 5. Kasir User -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.users_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.users_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">Kasir User</span>
-          {% if checks.users_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Belum</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">Kasir User</span>
+          {% if checks.users_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum</span>
+          {% endif %}
         </div>
         {% if checks.users %}
-        <div style="margin-bottom:8px;">
+        <div class="ni-checklist-sublist">
           {% for ueb in checks.users %}
-          <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--ni-border,#e5e7eb);font-size:0.875rem;">
-            <i data-lucide="user" style="width:14px;height:14px;flex-shrink:0;color:var(--ni-text-muted);"></i>
+          <div class="ni-checklist-sublist__item">
+            <i data-lucide="user" class="ni-icon-sm ni-text-muted ni-flex-shrink-0"></i>
             <span>{{ ueb.user.name }}</span>
-            <span style="color:var(--ni-text-muted);">{{ ueb.user.email }}</span>
+            <span class="ni-text-muted">{{ ueb.user.email }}</span>
           </div>
           {% endfor %}
         </div>
         {% else %}
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">Tambahkan minimal 1 user yang bisa login sebagai kasir di outlet ini.</p>
+        <p class="ni-checklist-item__desc">Tambahkan minimal 1 user yang bisa login sebagai kasir di outlet ini.</p>
         {% endif %}
         <a href="{% url 'accounts:user_create' %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}&eb={{ eb.pk }}" class="ni-btn ni-btn--primary ni-btn--sm">
-          <i data-lucide="user-plus" style="width:14px;height:14px"></i> Tambah User Kasir
+          <i data-lucide="user-plus"></i> Tambah User Kasir
         </a>
       </div>
     </div>
@@ -239,27 +270,33 @@
 </div>
 
 <!-- ── Direkomendasikan ── -->
-<div class="ni-section-header"><h2 class="ni-section-header__title">Direkomendasikan</h2></div>
+<div class="ni-section-header ni-mb-3"><h2 class="ni-section-header__title">Direkomendasikan</h2></div>
 
 <!-- 6. QRIS -->
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
   <div class="ni-card__body">
-    <div style="display:flex;align-items:flex-start;gap:14px;">
-      <div style="flex-shrink:0;margin-top:2px;">
-        {% if checks.qris_ok %}<i data-lucide="check-circle-2" style="width:24px;height:24px;color:#16a34a;"></i>
-        {% else %}<i data-lucide="circle" style="width:24px;height:24px;color:var(--ni-text-muted);"></i>{% endif %}
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.qris_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
       </div>
-      <div style="flex:1;min-width:0;">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
-          <span style="font-weight:700;font-size:1rem;">QRIS Image</span>
-          {% if checks.qris_ok %}<span class="ni-badge ni-badge--success">Done</span>
-          {% else %}<span class="ni-badge ni-badge--secondary">Opsional</span>{% endif %}
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">QRIS Image</span>
+          {% if checks.qris_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Opsional</span>
+          {% endif %}
         </div>
-        <p style="color:var(--ni-text-muted);font-size:0.875rem;margin:0 0 8px;">
+        <p class="ni-checklist-item__desc">
           {% if checks.qris_ok %}Gambar QRIS sudah diupload.{% else %}Upload gambar QR code untuk pembayaran QRIS di kasir.{% endif %}
         </p>
         <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
-          <i data-lucide="upload" style="width:14px;height:14px"></i>
+          <i data-lucide="upload"></i>
           {% if checks.qris_ok %}Ganti QRIS{% else %}Upload QRIS{% endif %}
         </a>
       </div>
@@ -275,12 +312,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalAddLv2')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errAddLv2" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errAddLv2" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formAddLv2" method="post" action="">
         {% csrf_token %}
         {% for field in add_lv2_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
@@ -301,12 +338,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalAddLv3')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errAddLv3" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errAddLv3" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formAddLv3" method="post" action="">
         {% csrf_token %}
         {% for field in add_lv3_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
@@ -344,11 +381,11 @@ const niEB = {
       .then(json => {
         if (json.success) { location.reload(); }
         else {
-          err.style.display = 'block';
+          err.classList.remove('ni-d-none');
           err.textContent = Object.values(json.errors || {}).flat().join(' ');
         }
       })
-      .catch(() => { err.style.display = 'block'; err.textContent = 'Terjadi kesalahan. Coba lagi.'; });
+      .catch(() => { err.classList.remove('ni-d-none'); err.textContent = 'Terjadi kesalahan. Coba lagi.'; });
   },
 };
 document.querySelectorAll('.ni-modal-backdrop').forEach(b => {

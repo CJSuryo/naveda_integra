@@ -5,6 +5,13 @@
   <div>
     <h1 class="ni-page-header__title">{{ title }}</h1>
   </div>
+  {% if object.pk %}
+  <div class="ni-page-header__actions">
+    <a href="{% url 'entitas_bisnis:setup_wizard' object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+      <i data-lucide="rocket"></i> Setup Wizard
+    </a>
+  </div>
+  {% endif %}
 </div>
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
@@ -17,7 +24,7 @@
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
       {% endfor %}
-      <div class="ni-btn-row" style="margin-top:24px;">
+      <div class="ni-btn-row ni-mt-5">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'entitas_bisnis:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
@@ -29,7 +36,7 @@
 <div class="ni-section-header">
   <h2 class="ni-section-header__title">POS Configuration</h2>
   <a href="{% url 'pos_config:merchant_config' object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
-    <i data-lucide="settings" style="width:14px;height:14px"></i>
+    <i data-lucide="settings"></i>
     {% if object.pos_config %}Edit POS Config{% else %}Setup POS Config{% endif %}
   </a>
 </div>

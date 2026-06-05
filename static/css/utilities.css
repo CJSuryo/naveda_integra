@@ -343,6 +343,26 @@
 }
 
 /* ==========================================================================
+   FONT SIZE
+   ========================================================================== */
+
+.ni-text-xs   { font-size: 0.75rem; }
+.ni-text-sm   { font-size: 0.875rem; }
+.ni-text-base { font-size: 1rem; }
+.ni-text-lg   { font-size: 1.125rem; }
+.ni-text-xl   { font-size: 1.25rem; }
+
+/* ==========================================================================
+   ICON SIZES (applied on <i data-lucide="..."> — class carries to SVG)
+   ========================================================================== */
+
+.ni-icon-xs { width: 12px; height: 12px; }
+.ni-icon-sm { width: 14px; height: 14px; }
+.ni-icon-md { width: 24px; height: 24px; }
+.ni-icon-lg { width: 28px; height: 28px; }
+.ni-icon-xl { width: 32px; height: 32px; }
+
+/* ==========================================================================
    SR-ONLY (screen reader)
    ========================================================================== */
 
