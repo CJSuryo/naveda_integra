@@ -1,6 +1,7 @@
 """Sales models — Sales transactions with FIFO outflow, tax support, and automated journals."""
 from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -20,6 +21,14 @@ class SalesHeader(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sales_created',
+        verbose_name='Dibuat oleh',
+    )
 
     class Meta:
         verbose_name = 'Sales Header'
@@ -306,4 +315,43 @@ class SalesItemFIFOAllocation(models.Model):
 
     def __str__(self) -> str:
         return f'{self.sales_item} → {self.inventory_record} × {self.quantity_consumed}'
+
+
+class SalesEventLog(models.Model):
+    EVENT_CHOICES = [
+        ('CREATED', 'Dibuat'),
+        ('EDITED', 'Diedit'),
+        ('VOIDED', 'Dibatalkan'),
+        ('FIFO_PROCESSED', 'FIFO Diproses'),
+        ('JOURNAL_CREATED', 'Jurnal Dibuat'),
+        ('PAYMENT_PROCESSED', 'Pembayaran Diproses'),
+        ('LOCKED', 'Dikunci'),
+    ]
+
+    sales_header = models.ForeignKey(
+        SalesHeader,
+        on_delete=models.CASCADE,
+        related_name='event_logs',
+    )
+    event_type = models.CharField(max_length=40, choices=EVENT_CHOICES)
+    description = models.TextField(blank=True, default='')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sales_event_logs',
+    )
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Sales Event Log'
+        verbose_name_plural = 'Sales Event Logs'
+        ordering = ['timestamp']
+        indexes = [
+            models.Index(fields=['sales_header', 'timestamp'], name='idx_sel_header_ts'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.sales_header.transaction_id} — {self.event_type} @ {self.timestamp}'
 

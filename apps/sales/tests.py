@@ -8,7 +8,7 @@ from apps.accounts.models import Role, User
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.master_data.models import Akun, AsetLv1, AsetLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog
 from .services import get_available_stock, consume_fifo
 
 
@@ -266,3 +266,36 @@ class SalesViewTests(TestCase):
         # Should redirect but NOT delete
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(SalesHeader.objects.filter(pk=header.pk).exists())
+
+
+class SalesEventLogTests(TestCase):
+    def setUp(self):
+        self.header = SalesHeader.objects.create()
+
+    def test_log_creation(self):
+        log = SalesEventLog.objects.create(
+            sales_header=self.header,
+            event_type='CREATED',
+            description='Test',
+        )
+        self.assertEqual(log.sales_header, self.header)
+        self.assertEqual(log.event_type, 'CREATED')
+        self.assertIsNone(log.actor)
+
+    def test_logs_ordered_by_timestamp(self):
+        SalesEventLog.objects.create(sales_header=self.header, event_type='CREATED')
+        SalesEventLog.objects.create(sales_header=self.header, event_type='EDITED')
+        logs = list(SalesEventLog.objects.filter(sales_header=self.header))
+        self.assertEqual(logs[0].event_type, 'CREATED')
+        self.assertEqual(logs[1].event_type, 'EDITED')
+
+    def test_cascade_delete(self):
+        SalesEventLog.objects.create(sales_header=self.header, event_type='CREATED')
+        self.header.delete()
+        self.assertEqual(SalesEventLog.objects.count(), 0)
+
+
+class SalesHeaderCreatedByTests(TestCase):
+    def test_created_by_nullable(self):
+        h = SalesHeader.objects.create()
+        self.assertIsNone(h.created_by)
