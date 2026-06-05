@@ -575,7 +575,8 @@
   var tagSearchTimeout = null;
 
   function loadTagPanel(query) {
-    var url = '/dashboard/api/tag-item/' + (query ? '?q=' + encodeURIComponent(query) : '');
+    var eb = getEbParams().replace('&', '?');
+    var url = '/dashboard/api/tag-item/' + eb + (query ? (eb ? '&' : '?') + 'q=' + encodeURIComponent(query) : '');
     fetch(url)
       .then(function(r) { return r.json(); })
       .then(function(d) {

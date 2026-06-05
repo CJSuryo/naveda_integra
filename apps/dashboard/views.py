@@ -473,7 +473,19 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
             return JsonResponse({'error': 'Item tidak ditemukan'}, status=404)
 
     search = request.GET.get('q', '')
+    eb_id, eb_lv2_id, eb_lv3_id = _parse_eb(request)
+
     qs = ItemMasterPurchase.objects.order_by('nama')
+
+    if eb_lv3_id:
+        qs = qs.filter(inventory_records__entitas_bisnis_lv3_id=eb_lv3_id)
+    elif eb_lv2_id:
+        qs = qs.filter(inventory_records__entitas_bisnis_lv2_id=eb_lv2_id)
+    elif eb_id:
+        qs = qs.filter(inventory_records__entitas_bisnis_id=eb_id)
+
+    qs = qs.distinct()
+
     if search:
         qs = qs.filter(Q(nama__icontains=search) | Q(item_id__icontains=search))
     tagged_ids = set(DashboardInventoryTag.objects.values_list('item_id', flat=True))
