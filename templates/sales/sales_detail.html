@@ -267,4 +267,37 @@
 {% endif %}
 
 {% include 'components/delete_modal.html' %}
+
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Riwayat Aktivitas</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    {% if event_logs %}
+      {% for log in event_logs %}
+      <div class="ni-detail-grid">
+        <dt>
+          {% if log.event_type == 'CREATED' or log.event_type == 'PAYMENT_PROCESSED' %}
+            <span class="ni-badge ni-badge--success">{{ log.get_event_type_display }}</span>
+          {% elif log.event_type == 'EDITED' %}
+            <span class="ni-badge ni-badge--warning">{{ log.get_event_type_display }}</span>
+          {% elif log.event_type == 'VOIDED' %}
+            <span class="ni-badge ni-badge--danger">{{ log.get_event_type_display }}</span>
+          {% elif log.event_type == 'LOCKED' %}
+            <span class="ni-badge ni-badge--secondary">{{ log.get_event_type_display }}</span>
+          {% else %}
+            <span class="ni-badge ni-badge--info">{{ log.get_event_type_display }}</span>
+          {% endif %}
+          {% if log.description %}<span class="ni-text-muted ni-text-sm">{{ log.description }}</span>{% endif %}
+        </dt>
+        <dd class="ni-text-muted ni-text-sm">
+          {{ log.actor.get_full_name|default:log.actor.username|default:"System" }} &mdash; {{ log.timestamp|date:"d M Y H:i:s" }}
+        </dd>
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="ni-text-muted">Belum ada riwayat aktivitas.</p>
+    {% endif %}
+  </div>
+</div>
 {% endblock %}

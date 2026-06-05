@@ -16,7 +16,7 @@ from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
     get_available_stock,
     process_sales_fifo,
@@ -490,10 +490,13 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'is_bulk': is_bulk_alloc,
         })
 
+    event_logs = sales.event_logs.select_related('actor').order_by('timestamp')
+
     return render(request, 'sales/sales_detail.html', {
         'sales': sales,
         'eb_groups': eb_groups,
         'inventory_mutations': inventory_mutations,
+        'event_logs': event_logs,
     })
 
 
@@ -572,6 +575,12 @@ def sales_delete(request: HttpRequest, pk: int) -> HttpResponse:
                 log_jurnal_terhapus(journal, 'sales', request)
             reverse_sales_automated_journals(sales)
             reverse_sales_fifo(sales)
+            SalesEventLog.objects.create(
+                sales_header=sales,
+                event_type='VOIDED',
+                description=f'Transaksi {tid} dihapus.',
+                actor=request.user,
+            )
             sales.delete()
         dj_messages.success(request, f'Sales {tid} berhasil dihapus.')
         return redirect('sales:list')
@@ -835,6 +844,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             sales = SalesHeader.objects.create(
                 tanggal=tanggal,
                 deskripsi=deskripsi,
+                created_by=request.user,
             )
 
         for group in eb_groups_list:
@@ -874,6 +884,24 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
 
         # Generate automated journals
         create_sales_automated_journals(sales)
+
+        event_type = 'EDITED' if existing else 'CREATED'
+        SalesEventLog.objects.create(
+            sales_header=sales,
+            event_type=event_type,
+            description=f'Transaksi {sales.transaction_id} {"diperbarui" if existing else "dibuat"} via form.',
+            actor=request.user,
+        )
+        SalesEventLog.objects.create(
+            sales_header=sales,
+            event_type='FIFO_PROCESSED',
+            actor=None,
+        )
+        SalesEventLog.objects.create(
+            sales_header=sales,
+            event_type='JOURNAL_CREATED',
+            actor=None,
+        )
 
     action = 'diperbarui' if existing else 'dibuat'
     dj_messages.success(request, f'Sales {sales.transaction_id} berhasil {action}.')
