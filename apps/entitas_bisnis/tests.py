@@ -268,3 +268,77 @@ class EntitasBisnisLv3ViewTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertIn('/accounts/login/', response['Location'])
+
+
+# ── Setup Wizard Tests ────────────────────────────────────────────────────────
+
+from apps.entitas_bisnis.views import _compute_wizard_checks as _cwc
+
+
+class ComputeWizardChecksTests(TestCase):
+    def setUp(self):
+        tipe = TipeEntitas.objects.create(nama='WizardFnB')
+        self.eb = EntitasBisnis.objects.create(nama='Wizard Kopi', tipe_entitas=tipe)
+
+    def _get_eb(self):
+        return EntitasBisnis.objects.select_related('pos_config').prefetch_related(
+            'children_lv2__children_lv3'
+        ).get(pk=self.eb.pk)
+
+    def test_all_false_on_empty_eb(self):
+        checks = _cwc(self._get_eb())
+        self.assertFalse(checks['lv2_ok'])
+        self.assertFalse(checks['lv3_ok'])
+        self.assertFalse(checks['pos_config_ok'])
+        self.assertFalse(checks['stt_ok'])
+        self.assertFalse(checks['users_ok'])
+        self.assertFalse(checks['qris_ok'])
+        self.assertFalse(checks['all_required_ok'])
+
+    def test_lv2_ok_when_active_lv2_exists(self):
+        EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Area A')
+        checks = _cwc(self._get_eb())
+        self.assertTrue(checks['lv2_ok'])
+        self.assertEqual(checks['lv2_count'], 1)
+
+    def test_lv3_ok_when_active_lv3_exists(self):
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Area A')
+        EntitasBisnisLv3.objects.create(parent_lv2=lv2, nama='Outlet X')
+        checks = _cwc(self._get_eb())
+        self.assertTrue(checks['lv3_ok'])
+        self.assertEqual(checks['lv3_count'], 1)
+
+    def test_inactive_lv2_not_counted(self):
+        EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Inactive', status_aktif=False)
+        checks = _cwc(self._get_eb())
+        self.assertFalse(checks['lv2_ok'])
+
+
+class SetupWizardViewTests(TestCase):
+    def setUp(self):
+        from apps.accounts.models import User
+        self.tipe = TipeEntitas.objects.create(nama='WizardFnB2')
+        self.eb = EntitasBisnis.objects.create(nama='Wizard Kopi 2', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(
+            email='wizard@test.com', password='pass123', name='WizardAdmin'
+        )
+        self.client.login(username='wizard@test.com', password='pass123')
+
+    def test_wizard_returns_200(self):
+        resp = self.client.get(reverse('entitas_bisnis:setup_wizard', args=[self.eb.pk]))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_wizard_404_for_nonexistent_eb(self):
+        resp = self.client.get(reverse('entitas_bisnis:setup_wizard', args=[99999]))
+        self.assertEqual(resp.status_code, 404)
+
+    def test_wizard_requires_login(self):
+        self.client.logout()
+        resp = self.client.get(reverse('entitas_bisnis:setup_wizard', args=[self.eb.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/accounts/login/', resp['Location'])
+
+    def test_checks_in_context(self):
+        resp = self.client.get(reverse('entitas_bisnis:setup_wizard', args=[self.eb.pk]))
+        self.assertIn('checks', resp.context)
+        self.assertIn('eb', resp.context)

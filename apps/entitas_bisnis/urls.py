@@ -16,6 +16,7 @@ urlpatterns = [
     path('create/', views.create_view, name='create'),
     path('<int:pk>/edit/', views.update_view, name='update'),
     path('<int:pk>/delete/', views.delete_view, name='delete'),
+    path('<int:pk>/setup/', views.setup_wizard, name='setup_wizard'),
     # Entitas Bisnis Level 2
     path('<int:eb_pk>/lv2/create/', views.lv2_create, name='lv2_create'),
     path('<int:eb_pk>/lv2/<int:pk>/', views.lv2_detail, name='lv2_detail'),
