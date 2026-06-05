@@ -15,8 +15,8 @@
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <form method="get" class="ni-d-flex ni-gap-2 ni-mb-3">
-      <input type="text" name="q" value="{{ q }}" placeholder="Cari nama item..." class="ni-input">
+    <form method="get" role="search" class="ni-d-flex ni-gap-2 ni-mb-3" aria-label="Cari log item">
+      <input type="text" name="q" value="{{ q }}" placeholder="Cari nama item..." class="ni-input" aria-label="Nama item">
       <button type="submit" class="ni-btn ni-btn--primary">Cari</button>
       {% if q %}<a href="?" class="ni-btn ni-btn--secondary">Reset</a>{% endif %}
     </form>
@@ -55,11 +55,11 @@
   <div class="ni-card__body">
     <div class="ni-paginator">
       {% if page.has_previous %}
-      <a href="?page={{ page.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm">← Prev</a>
+      <a href="?page={{ page.previous_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm" aria-label="Halaman sebelumnya">← Sebelumnya</a>
       {% endif %}
       <span class="ni-text-muted">Halaman {{ page.number }} dari {{ page.paginator.num_pages }}</span>
       {% if page.has_next %}
-      <a href="?page={{ page.next_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm">Next →</a>
+      <a href="?page={{ page.next_page_number }}{% if q %}&q={{ q }}{% endif %}" class="ni-btn ni-btn--secondary ni-btn--sm" aria-label="Halaman berikutnya">Berikutnya →</a>
       {% endif %}
     </div>
   </div>
