@@ -78,6 +78,7 @@ def api_kasir_catalog(request: HttpRequest) -> JsonResponse:
     except EntitasBisnisLv3.DoesNotExist:
         return JsonResponse({'ok': False, 'items': []})
 
+    lv1_id = lv3.parent_lv2.entitas_bisnis_id
     inv_qs = (
         InventoryRecord.objects
         .filter(entitas_bisnis_lv3_id=lv3_pk, quantity__gt=0)
@@ -86,7 +87,6 @@ def api_kasir_catalog(request: HttpRequest) -> JsonResponse:
         .order_by('item__kategori__nama', 'item__nama')
     )
     if not inv_qs.exists():
-        lv1_id = lv3.parent_lv2.entitas_bisnis_id
         inv_qs = (
             InventoryRecord.objects
             .filter(entitas_bisnis_id=lv1_id, quantity__gt=0)
@@ -96,6 +96,14 @@ def api_kasir_catalog(request: HttpRequest) -> JsonResponse:
         )
 
     item_ids = list(inv_qs.values_list('item_id', flat=True).distinct())
+
+    from pos_catalog.models import CatalogItem
+    catalog_price_map = {
+        ci.item_id: ci.selling_price
+        for ci in CatalogItem.objects.filter(
+            entitas_bisnis_id=lv1_id, item_id__in=item_ids, is_active=True,
+        ).only('item_id', 'selling_price')
+    }
     modifier_map: dict[int, list] = {}
     for pmg in (
         ProductModifierGroup.objects
@@ -131,7 +139,7 @@ def api_kasir_catalog(request: HttpRequest) -> JsonResponse:
             'item_pk': inv.item_id,
             'name': inv.item.nama,
             'kode_item': inv.item.item_id,
-            'selling_price': str(inv.selling_price) if inv.selling_price is not None else '0',
+            'selling_price': str(catalog_price_map.get(inv.item_id, inv.selling_price) or 0),
             'category': inv.item.kategori.nama.lower().replace(' ', '') if inv.item.kategori else 'other',
             'category_label': inv.item.kategori.nama if inv.item.kategori else 'Lainnya',
             'modifier_groups': modifier_map.get(inv.item_id, []),
