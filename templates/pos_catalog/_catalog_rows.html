@@ -1,0 +1,8 @@
+{% for row in rows %}
+<tr data-item-id="{{ row.item.pk }}"
+    data-catalog-id="{{ row.catalog_item.pk|default:'' }}">
+  <td>{{ row.item.nama }}</td>
+</tr>
+{% empty %}
+<tr><td colspan="8">Tidak ada item.</td></tr>
+{% endfor %}

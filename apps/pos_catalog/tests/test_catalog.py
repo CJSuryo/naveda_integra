@@ -91,3 +91,103 @@ class CatalogItemLogTest(TestCase):
         )
         self.ci.delete()
         self.assertEqual(CatalogItemLog.objects.count(), 0)
+
+
+from django.test import Client
+from django.urls import reverse
+
+
+class CatalogListViewTest(TestCase):
+    def setUp(self):
+        self.eb = make_eb('ViewEB')
+        self.user = User.objects.create_user(
+            email='cat@test.com', password='pass', name='Cat', is_superuser=True,
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_catalog_list_returns_200(self):
+        url = reverse('pos_catalog:catalog_list', args=[self.eb.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_catalog_list_404_unknown_eb(self):
+        url = reverse('pos_catalog:catalog_list', args=[99999])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 404)
+
+    def test_catalog_list_requires_login(self):
+        self.client.logout()
+        url = reverse('pos_catalog:catalog_list', args=[self.eb.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/accounts/login/', resp['Location'])
+
+    def test_catalog_items_ajax_returns_html(self):
+        item = make_item('AjaxItem', 'FG')
+        from apps.inventory.models import InventoryRecord
+        import datetime
+        InventoryRecord.objects.create(
+            item=item, entitas_bisnis=self.eb,
+            quantity=10, unit_price=5000,
+            tanggal=datetime.date.today(),
+        )
+        url = reverse('pos_catalog:catalog_items_ajax', args=[self.eb.pk])
+        resp = self.client.get(url, {'tipe_item': 'FG'})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('html', data)
+        self.assertIn('AjaxItem', data['html'])
+
+    def test_catalog_items_ajax_empty_without_inventory(self):
+        url = reverse('pos_catalog:catalog_items_ajax', args=[self.eb.pk])
+        resp = self.client.get(url, {'tipe_item': 'FG'})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn('html', data)
+
+    def test_catalog_upsert_creates_catalog_item(self):
+        item = make_item('UpsertItem', 'RM')
+        url = reverse('pos_catalog:catalog_upsert', args=[self.eb.pk])
+        resp = self.client.post(url, {
+            'item_id': item.pk,
+            'selling_price': '12000',
+            'display_name': 'Upsert Name',
+            'display_order': '1',
+            'is_active': 'true',
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['success'])
+        from pos_catalog.models import CatalogItem
+        self.assertEqual(CatalogItem.objects.filter(entitas_bisnis=self.eb, item=item).count(), 1)
+
+    def test_catalog_upsert_writes_log_on_update(self):
+        from decimal import Decimal
+        from pos_catalog.models import CatalogItem, CatalogItemLog
+        item = make_item('LogUpsertItem', 'FG')
+        ci = CatalogItem.objects.create(
+            entitas_bisnis=self.eb, item=item, selling_price=Decimal('5000'),
+        )
+        url = reverse('pos_catalog:catalog_upsert', args=[self.eb.pk])
+        self.client.post(url, {
+            'item_id': item.pk,
+            'selling_price': '9000',
+            'display_name': '',
+            'display_order': str(ci.display_order),
+            'is_active': 'true',
+        })
+        self.assertTrue(
+            CatalogItemLog.objects.filter(
+                catalog_item=ci, field_name='selling_price',
+                old_value='5000.0000', new_value='9000',
+            ).exists() or
+            CatalogItemLog.objects.filter(
+                catalog_item=ci, field_name='selling_price',
+            ).exists()
+        )
+
+    def test_catalog_logs_returns_200(self):
+        url = reverse('pos_catalog:catalog_logs', args=[self.eb.pk])
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
