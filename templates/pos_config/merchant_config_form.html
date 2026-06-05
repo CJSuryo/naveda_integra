@@ -15,7 +15,7 @@
 
 <div class="ni-card ni-animate-fade-in" style="max-width:720px;">
   <div class="ni-card__body">
-    <form method="post" enctype="multipart/form-data">
+    <form method="post" enctype="multipart/form-data" action="?{% if next_url %}next={{ next_url }}{% endif %}">
       {% csrf_token %}
       {% for field in form %}
         <div class="ni-form-group">

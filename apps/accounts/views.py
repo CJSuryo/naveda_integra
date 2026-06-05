@@ -181,11 +181,28 @@ def user_create(request: HttpRequest) -> HttpResponse:
     if denied:
         return denied
     form = UserForm(request.POST or None)
+    next_url = request.GET.get('next', '')
+    eb_pk = request.GET.get('eb', '')
     if request.method == 'POST' and form.is_valid():
         user_obj = form.save()
+        if eb_pk:
+            from apps.accounts.models import UserEntitasBisnis
+            from apps.entitas_bisnis.models import EntitasBisnis
+            try:
+                eb = EntitasBisnis.objects.get(pk=int(eb_pk))
+                UserEntitasBisnis.objects.get_or_create(user=user_obj, entitas_bisnis=eb)
+            except (EntitasBisnis.DoesNotExist, ValueError, TypeError):
+                pass
         dj_messages.success(request, f'User {user_obj.email} berhasil dibuat.')
+        if next_url and next_url.startswith('/'):
+            return redirect(next_url)
         return redirect('accounts:user_detail', pk=user_obj.pk)
-    return render(request, 'accounts/user_form.html', {'form': form, 'title': 'Tambah User'})
+    return render(request, 'accounts/user_form.html', {
+        'form': form,
+        'title': 'Tambah User',
+        'next_url': next_url,
+        'eb_pk': eb_pk,
+    })
 
 
 @login_required

@@ -20,11 +20,15 @@ def merchant_config(request, pk):
         if form.is_valid():
             form.save()
             messages.success(request, 'Konfigurasi merchant POS disimpan.')
+            next_url = request.GET.get('next', '')
+            if next_url and next_url.startswith('/'):
+                return redirect(next_url)
             return redirect('pos_config:merchant_config', pk=pk)
     else:
         form = MerchantPOSConfigForm(instance=config)
     return render(request, 'pos_config/merchant_config_form.html', {
         'form': form, 'entitas': entitas, 'config': config,
+        'next_url': request.GET.get('next', ''),
     })
 
 
