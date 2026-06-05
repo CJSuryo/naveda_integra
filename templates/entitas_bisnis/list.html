@@ -28,11 +28,9 @@
           onclick="niEB.openAddLv2({{ lv1.pk }})" style="padding:4px 8px;">
           <i data-lucide="plus" style="width:14px;height:14px"></i>
         </button>
-        <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-          onclick="niEB.openEditLv1({{ lv1.pk }}, '{{ lv1.nama|escapejs }}', '{{ lv1.tipe_entitas_id }}', '{{ lv1.relasi }}', '{{ lv1.email|default:'' }}', '{{ lv1.telepon|default:'' }}', '{{ lv1.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv1.status_aktif|yesno:'true,false' }})"
-          style="padding:4px 8px;">
+        <a href="{% url 'entitas_bisnis:update' lv1.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
           <i data-lucide="pencil" style="width:14px;height:14px"></i>
-        </button>
+        </a>
         <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
           onclick="openDeleteModal('{% url 'entitas_bisnis:delete' lv1.pk %}', '{{ lv1.nama|escapejs }}')"
           style="padding:4px 8px;">
@@ -54,11 +52,9 @@
               onclick="niEB.openAddLv3({{ lv1.pk }}, {{ lv2.pk }})" style="padding:3px 6px;">
               <i data-lucide="plus" style="width:12px;height:12px"></i>
             </button>
-            <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-              onclick="niEB.openEditLv2({{ lv1.pk }}, {{ lv2.pk }}, '{{ lv2.nama|escapejs }}', '{{ lv2.email|default:'' }}', '{{ lv2.telepon|default:'' }}', '{{ lv2.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv2.status_aktif|yesno:'true,false' }})"
-              style="padding:3px 6px;">
+            <a href="{% url 'entitas_bisnis:lv2_update' lv1.pk lv2.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:3px 6px;">
               <i data-lucide="pencil" style="width:12px;height:12px"></i>
-            </button>
+            </a>
             <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
               onclick="openDeleteModal('{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}', '{{ lv2.nama|escapejs }}')"
               style="padding:3px 6px;">
@@ -74,11 +70,9 @@
             <span>{{ lv3.nama }}</span>
             {% if lv3.status_aktif %}<span class="ni-badge ni-badge--success" style="font-size:0.6rem;">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary" style="font-size:0.6rem;">Nonaktif</span>{% endif %}
             <div style="margin-left:auto;display:flex;gap:4px;">
-              <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-                onclick="niEB.openEditLv3({{ lv1.pk }}, {{ lv2.pk }}, {{ lv3.pk }}, '{{ lv3.nama|escapejs }}', '{{ lv3.email|default:'' }}', '{{ lv3.telepon|default:'' }}', '{{ lv3.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv3.status_aktif|yesno:'true,false' }})"
-                style="padding:2px 5px;">
+              <a href="{% url 'entitas_bisnis:lv3_update' lv1.pk lv2.pk lv3.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:2px 5px;">
                 <i data-lucide="pencil" style="width:11px;height:11px"></i>
-              </button>
+              </a>
               <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
                 onclick="openDeleteModal('{% url 'entitas_bisnis:lv3_delete' lv1.pk lv2.pk lv3.pk %}', '{{ lv3.nama|escapejs }}')"
                 style="padding:2px 5px;">
