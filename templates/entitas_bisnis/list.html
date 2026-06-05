@@ -36,6 +36,9 @@
         <a href="{% url 'entitas_bisnis:setup_wizard' lv1.pk %}" class="ni-btn ni-btn--primary">
           <i data-lucide="layout-dashboard"></i> Detail
         </a>
+        <a href="{% url 'pos_catalog:catalog_list' lv1.pk %}" class="ni-btn ni-btn--secondary">
+          <i data-lucide="tag"></i> Catalog
+        </a>
         <button type="button" class="ni-btn ni-btn--outline-danger"
           onclick="openDeleteModal('{% url 'entitas_bisnis:delete' lv1.pk %}', '{{ lv1.nama|escapejs }}')">
           <i data-lucide="trash-2"></i> Hapus

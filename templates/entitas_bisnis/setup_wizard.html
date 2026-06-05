@@ -304,6 +304,38 @@
   </div>
 </div>
 
+<!-- 7. Catalog & Harga Jual -->
+<div class="ni-card ni-mb-3 ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-checklist-item">
+      <div class="ni-checklist-item__icon">
+        {% if checks.catalog_ok %}
+        <i data-lucide="check-circle-2" class="ni-icon-md ni-text-success"></i>
+        {% else %}
+        <i data-lucide="circle" class="ni-icon-md ni-text-muted"></i>
+        {% endif %}
+      </div>
+      <div class="ni-checklist-item__body">
+        <div class="ni-checklist-item__header">
+          <span class="ni-checklist-item__title">Catalog &amp; Harga Jual</span>
+          {% if checks.catalog_ok %}
+          <span class="ni-badge ni-badge--success">Done</span>
+          {% else %}
+          <span class="ni-badge ni-badge--secondary">Opsional</span>
+          {% endif %}
+        </div>
+        <p class="ni-checklist-item__desc">
+          {% if checks.catalog_ok %}Item katalog sudah dikonfigurasi.{% else %}Tambahkan item dan harga jual untuk kasir.{% endif %}
+        </p>
+        <a href="{% url 'pos_catalog:catalog_list' eb.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
+          <i data-lucide="tag"></i>
+          {% if checks.catalog_ok %}Edit Catalog{% else %}Setup Catalog{% endif %}
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── AJAX Modals ── -->
 <div class="ni-modal-backdrop" id="modalAddLv2">
   <div class="ni-modal">

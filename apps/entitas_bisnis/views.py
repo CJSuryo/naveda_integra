@@ -271,6 +271,11 @@ def _compute_wizard_checks(eb) -> dict:
 
     qris_ok = bool(pos_cfg and pos_cfg.qris_image)
 
+    from pos_catalog.models import CatalogItem
+    catalog_ok = CatalogItem.objects.filter(
+        entitas_bisnis=eb, is_active=True
+    ).exists()
+
     pos_missing = []
     if pos_cfg:
         if not pos_cfg.sub_transaction_type_id:
@@ -300,6 +305,7 @@ def _compute_wizard_checks(eb) -> dict:
         'users': users,
         'users_ok': users_ok,
         'qris_ok': qris_ok,
+        'catalog_ok': catalog_ok,
         'all_required_ok': all_required_ok,
         'required_done': required_done,
         'required_total': 5,
