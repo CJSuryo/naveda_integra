@@ -65,4 +65,19 @@
     </table>
   </div>
 </div>
+
+{% if object.pos_config %}
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Store POS Config</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Tax Override</dt><dd>{% if object.pos_config.tax_pct %}{{ object.pos_config.tax_pct }}%{% else %}— (dari Merchant){% endif %}</dd>
+      <dt>Printer</dt><dd>{{ object.pos_config.get_printer_type_display|default:'—' }}</dd>
+      <dt>Active</dt><dd>{% if object.pos_config.is_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
+    </dl>
+  </div>
+</div>
+{% endif %}
 {% endblock %}

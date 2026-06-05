@@ -25,4 +25,29 @@
     </form>
   </div>
 </div>
+{% if object.pk %}
+<hr>
+<div class="ni-section-header">
+  <h2 class="ni-section-header__title">Outlet POS Config</h2>
+  <a href="{% url 'pos_config:outlet_config' lv3_pk=object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+    <i data-lucide="settings" style="width:14px;height:14px"></i>
+    Kelola Outlet POS Config
+  </a>
+</div>
+{% with oc=object.pos_config %}
+{% if oc %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Tax Override</dt><dd>{% if oc.tax_pct %}{{ oc.tax_pct }}%{% else %}— (ikut parent){% endif %}</dd>
+      <dt>STT Override</dt><dd>{{ oc.sub_transaction_type|default:'— (ikut merchant)' }}</dd>
+      <dt>Active</dt><dd>{% if oc.is_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
+    </dl>
+  </div>
+</div>
+{% else %}
+<p>Outlet POS Config belum diset. <a href="{% url 'pos_config:outlet_config' lv3_pk=object.pk %}">Setup sekarang →</a></p>
+{% endif %}
+{% endwith %}
+{% endif %}
 {% endblock %}
