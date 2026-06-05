@@ -97,7 +97,7 @@ class InventoryRecord(models.Model):
         verbose_name='Harga Jual',
     )
     quantity = models.DecimalField(max_digits=15, decimal_places=4, verbose_name='Quantity')
-    unit_price = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Unit Price')
+    unit_price = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Unit Cost')
     total_value = models.DecimalField(
         max_digits=19,
         decimal_places=4,

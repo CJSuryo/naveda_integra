@@ -32,6 +32,7 @@ class InventoryRecordForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['unit_price'].label = 'Unit Cost'
         self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
             tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
         ).order_by('item_id')
