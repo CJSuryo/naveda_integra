@@ -429,7 +429,706 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 <form style="display:none">{% csrf_token %}</form>
 
 <script>
-// Task 9 JS goes here
+/* ── Helpers ── */
+const rp = (n) => 'Rp ' + Math.round(n).toLocaleString('id-ID');
+const fmtTime = () => { const d = new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+const $ = (id) => document.getElementById(id);
+const csrfToken = () => document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+/* ── SVG icons ── */
+const IC = {
+  pause: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></svg>`,
+  user:  `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>`,
+  clock: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>`,
+  sliders:`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>`,
+  check: `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17 19 7"/></svg>`,
+  trash: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>`,
+  plus:  `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>`,
+  minus: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>`,
+};
+
+/* ── State ── */
+const S = {
+  store: null,
+  catalog: [],
+  categories: [],
+  activeCat: 'all',
+  query: '',
+  cart: [],
+  tender: 'cash',
+  discount: null,
+  held: [],
+  ui: {
+    modPanel: { open: false, item: null, isEdit: false, lineId: null, sels: {}, qty: 1 },
+    heldOpen: false,
+    discOpen: false,
+    numpad: { open: false, value: '' },
+    success: { open: false, data: null },
+  },
+};
+
+/* ── Pricing helpers ── */
+function unitPrice(item, sels) {
+  let p = Number(item.selling_price);
+  Object.values(sels || {}).flat().forEach(pk => {
+    for (const g of (item.modifier_groups || [])) {
+      const o = g.options.find(x => x.pk === pk);
+      if (o) { p += Number(o.additional_price); break; }
+    }
+  });
+  return p;
+}
+function modLabelsFor(item, sels) {
+  const out = [];
+  (item.modifier_groups || []).forEach(g => {
+    (sels[g.pk] || []).forEach(pk => {
+      const o = g.options.find(x => x.pk === pk);
+      if (!o) return;
+      const add = Number(o.additional_price);
+      out.push({ name: o.name, add: add > 0 ? add : 0 });
+    });
+  });
+  return out;
+}
+function selSig(itemPk, sels) {
+  const parts = Object.keys(sels).sort().map(k => k + ':' + [...sels[k]].sort().join(','));
+  return itemPk + '|' + parts.join('|');
+}
+function defaultSels(item) {
+  const sel = {};
+  (item.modifier_groups || []).forEach(g => {
+    const single = g.max_selections === 1;
+    const defs = g.options.filter(o => o.is_default).map(o => o.pk);
+    if (single) sel[g.pk] = defs.length ? [defs[0]] : (g.is_required && g.options.length ? [g.options[0].pk] : []);
+    else sel[g.pk] = defs;
+  });
+  return sel;
+}
+function buildLine(item, sels, qty) {
+  const up = unitPrice(item, sels);
+  return {
+    lineId: 'L' + Math.random().toString(36).slice(2, 9),
+    item, qty, selections: sels,
+    sig: selSig(item.item_pk, sels),
+    modLabels: modLabelsFor(item, sels),
+    unitPrice: up,
+    lineTotal: up * qty,
+  };
+}
+function computeTotals() {
+  const taxPct = S.store ? Number(S.store.taxPct) : 11;
+  const subtotal = S.cart.reduce((s, l) => s + l.lineTotal, 0);
+  let discAmt = 0;
+  if (S.discount) {
+    discAmt = S.discount.type === 'pct'
+      ? Math.round(subtotal * S.discount.val / 100)
+      : Math.min(S.discount.val, subtotal);
+  }
+  const taxedBase = Math.max(0, subtotal - discAmt);
+  const tax = Math.round(taxedBase * taxPct / 100);
+  const grand = taxedBase + tax;
+  return { subtotal, discAmt, tax, grand, taxPct };
+}
+function cartQtyMap() {
+  const m = {};
+  S.cart.forEach(l => { m[l.item.item_pk] = (m[l.item.item_pk] || 0) + l.qty; });
+  return m;
+}
+
+/* ── Cart ops ── */
+function mergeOrAdd(line) {
+  const idx = S.cart.findIndex(l => l.sig === line.sig);
+  if (idx >= 0) {
+    const ex = S.cart[idx];
+    S.cart[idx] = { ...ex, qty: ex.qty + line.qty, lineTotal: ex.unitPrice * (ex.qty + line.qty) };
+  } else {
+    S.cart.unshift(line);
+  }
+}
+function tapItem(item) {
+  if ((item.modifier_groups || []).length > 0) {
+    S.ui.modPanel = { open: true, item, isEdit: false, lineId: null, sels: defaultSels(item), qty: 1 };
+  } else {
+    mergeOrAdd(buildLine(item, {}, 1));
+    showToast(item.name + ' ditambahkan');
+  }
+  render();
+}
+function incLine(lineId) {
+  const l = S.cart.find(x => x.lineId === lineId);
+  if (l) { l.qty++; l.lineTotal = l.unitPrice * l.qty; }
+  render();
+}
+function decLine(lineId) {
+  const idx = S.cart.findIndex(x => x.lineId === lineId);
+  if (idx < 0) return;
+  const l = S.cart[idx];
+  if (l.qty <= 1) S.cart.splice(idx, 1);
+  else { l.qty--; l.lineTotal = l.unitPrice * l.qty; }
+  render();
+}
+function removeLine(lineId) {
+  S.cart = S.cart.filter(x => x.lineId !== lineId);
+  render();
+}
+function editLine(lineId) {
+  const l = S.cart.find(x => x.lineId === lineId);
+  if (!l) return;
+  const sels = {};
+  Object.keys(l.selections).forEach(k => { sels[k] = [...l.selections[k]]; });
+  S.ui.modPanel = { open: true, item: l.item, isEdit: true, lineId, sels, qty: l.qty };
+  render();
+}
+
+/* ── Modifier panel ops ── */
+function toggleOpt(group, optPk) {
+  const mp = S.ui.modPanel;
+  const single = group.max_selections === 1;
+  const cur = mp.sels[group.pk] || [];
+  let next;
+  if (single) {
+    next = [optPk];
+  } else {
+    const max = group.max_selections || 99;
+    if (cur.includes(optPk)) next = cur.filter(x => x !== optPk);
+    else next = cur.length >= max ? cur : [...cur, optPk];
+  }
+  mp.sels = { ...mp.sels, [group.pk]: next };
+  render();
+}
+function confirmMod() {
+  const mp = S.ui.modPanel;
+  const line = buildLine(mp.item, mp.sels, mp.qty);
+  if (mp.isEdit) {
+    const idx = S.cart.findIndex(l => l.lineId === mp.lineId);
+    if (idx >= 0) S.cart[idx] = { ...line, lineId: mp.lineId };
+  } else {
+    mergeOrAdd(line);
+    showToast(mp.item.name + ' ditambahkan');
+  }
+  S.ui.modPanel.open = false;
+  render();
+}
+
+/* ── Discount ── */
+function applyDiscount(d) {
+  S.discount = d;
+  S.ui.discOpen = false;
+  if (d) showToast('Diskon ' + (d.type === 'pct' ? d.val + '%' : rp(d.val)) + ' diterapkan');
+  render();
+}
+
+/* ── Hold / void ── */
+function holdBill() {
+  if (!S.cart.length) return;
+  const snap = S.cart.map(l => ({ ...l }));
+  const { grand } = computeTotals();
+  S.held.unshift({
+    id: 'HOLD-' + Date.now().toString().slice(-4),
+    label: 'Pesanan ' + fmtTime(),
+    time: fmtTime(),
+    count: S.cart.reduce((s, l) => s + l.qty, 0),
+    total: grand,
+    cart: snap,
+  });
+  resetSale(false);
+  showToast('Pesanan ditahan');
+  render();
+}
+function resumeHeld(heldId) {
+  const h = S.held.find(x => x.id === heldId);
+  if (!h) return;
+  S.cart = h.cart.map(l => ({ ...l, lineId: 'L' + Math.random().toString(36).slice(2, 9) }));
+  S.held = S.held.filter(x => x.id !== heldId);
+  S.discount = null;
+  S.ui.heldOpen = false;
+  showToast('Pesanan dilanjutkan');
+  render();
+}
+function deleteHeld(heldId) {
+  S.held = S.held.filter(x => x.id !== heldId);
+  render();
+}
+function voidBill() {
+  if (!S.cart.length) return;
+  resetSale(false);
+  showToast('Pesanan dibatalkan');
+  render();
+}
+function resetSale(bump) {
+  S.cart = [];
+  S.discount = null;
+  S.tender = 'cash';
+  render();
+}
+
+/* ── Pay ── */
+function onPay() {
+  if (!S.cart.length) return;
+  if (S.tender === 'cash') {
+    S.ui.numpad = { open: true, value: '' };
+    render();
+    const { grand } = computeTotals();
+    updateNumpadQuick(grand);
+  } else {
+    submitSale(0);
+  }
+}
+function updateNumpadQuick(grand) {
+  $('np-exact').textContent = 'Uang Pas';
+  $('np-q50').textContent = rp(Math.ceil(grand / 50000) * 50000);
+  $('np-q100').textContent = rp(Math.ceil(grand / 100000) * 100000);
+}
+function npPress(k) {
+  let v = S.ui.numpad.value;
+  if (k === 'del') v = v.slice(0, -1);
+  else if (k === '000') v = v === '' ? '' : v + '000';
+  else v = (v + k).replace(/^0+(?=\d)/, '').slice(0, 12);
+  S.ui.numpad.value = v;
+  renderNumpad();
+}
+function renderNumpad() {
+  const { grand } = computeTotals();
+  const num = Number(S.ui.numpad.value) || 0;
+  const change = num - grand;
+  $('np-received').textContent = rp(num);
+  $('np-change-val').textContent = rp(Math.abs(change));
+  $('np-change-lbl').textContent = change >= 0 ? 'Kembalian' : 'Kurang';
+  const disp = $('np-change-display');
+  disp.style.background = change >= 0 ? 'var(--pay-soft)' : 'var(--danger-soft)';
+  $('np-change-lbl').style.color = change >= 0 ? 'var(--pay-deep)' : 'var(--danger)';
+  $('np-change-val').style.color = change >= 0 ? 'var(--pay-deep)' : 'var(--danger)';
+  const btn = $('np-confirm');
+  btn.disabled = change < 0;
+  btn.className = 'np-confirm' + (change >= 0 ? ' pay' : '');
+}
+async function submitSale(tenderedAmount) {
+  const { grand } = computeTotals();
+  const payload = {
+    lv3_pk: S.store.lv3_pk,
+    cart: S.cart.map(l => ({
+      item_pk: l.item.item_pk,
+      qty: l.qty,
+      unit_price: l.unitPrice,
+      modifier_labels: l.modLabels.map(m => m.name).join(', '),
+    })),
+    tender: S.tender,
+    tendered_amount: tenderedAmount,
+    discount: S.discount,
+  };
+  try {
+    const resp = await fetch('/sales/kasir/api/submit/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+      body: JSON.stringify(payload),
+    });
+    const data = await resp.json();
+    if (!data.ok) { showToast('Error: ' + (data.error || 'Gagal')); return; }
+    S.ui.numpad.open = false;
+    S.ui.success = {
+      open: true,
+      data: {
+        trxId: data.trx_id,
+        total: grand,
+        paid: tenderedAmount || grand,
+        change: Number(data.change) || 0,
+        method: S.tender,
+      },
+    };
+    render();
+  } catch (e) {
+    showToast('Network error: ' + e.message);
+  }
+}
+
+/* ── Toast ── */
+let toastTimer = null;
+function showToast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+}
+
+/* ── Render ── */
+function render() {
+  renderBrandbar();
+  renderPills();
+  renderGrid();
+  renderTicket();
+  renderOverlays();
+}
+
+function renderBrandbar() {
+  if (!S.store) return;
+  const held = S.held.length;
+  $('brandbar').innerHTML = `
+    <div class="brand-mark">N</div>
+    <div class="brand-meta">
+      <div class="brand-name">Naveda Kasir</div>
+      <div class="brand-sub">${S.store.storeName} · ${S.store.outletName}</div>
+    </div>
+    <div class="brandbar-right">
+      <button class="chip held-chip" id="held-chip-btn">
+        ${IC.pause}<span>Tertahan</span>
+        ${held > 0 ? `<span class="badge tnum">${held}</span>` : ''}
+      </button>
+      <div class="chip">
+        <span class="dot"></span>${IC.user}<b>${S.store.cashierName}</b>
+      </div>
+      <div class="chip tnum" id="clock-chip">${IC.clock} ${fmtTime()}</div>
+    </div>`;
+  document.getElementById('held-chip-btn').addEventListener('click', () => { S.ui.heldOpen = true; render(); });
+}
+
+function renderPills() {
+  const cats = [{ id: 'all', label: 'Semua' }, ...S.categories];
+  const qmap = { all: 0 };
+  S.catalog.forEach(it => { qmap.all++; qmap[it.category] = (qmap[it.category] || 0) + 1; });
+  $('pillbar').innerHTML = cats.map(c =>
+    `<button class="pill${S.activeCat === c.id ? ' active' : ''}" data-cat="${c.id}">${c.label}<span class="cnt tnum">${qmap[c.id] || 0}</span></button>`
+  ).join('');
+}
+
+function renderGrid() {
+  const q = S.query.trim().toLowerCase();
+  const filtered = S.catalog.filter(it => {
+    if (S.activeCat !== 'all' && it.category !== S.activeCat) return false;
+    if (!q) return true;
+    return it.name.toLowerCase().includes(q) || it.kode_item.toLowerCase().includes(q);
+  });
+  const qmap = cartQtyMap();
+  if (!filtered.length) {
+    $('pgrid').innerHTML = '<div class="grid-empty">Tidak ada produk yang cocok.<br>Coba kata kunci lain.</div>';
+    return;
+  }
+  $('pgrid').innerHTML = filtered.map(it => {
+    const hasMods = (it.modifier_groups || []).length > 0;
+    const qty = qmap[it.item_pk] || 0;
+    return `<button class="pcard" data-item-pk="${it.item_pk}">
+      ${qty > 0 ? `<span class="qty-bubble tnum">${qty}</span>` : ''}
+      ${hasMods ? `<span class="mod-flag">${IC.sliders} Pilihan</span>` : ''}
+      <div class="thumb photo"><span class="ph-label">product shot</span></div>
+      <div class="body">
+        <div class="pname">${it.name}</div>
+        <div class="pcode">${it.kode_item}</div>
+        <div class="pprice tnum">${rp(it.selling_price)}</div>
+      </div>
+    </button>`;
+  }).join('');
+}
+
+function renderTicket() {
+  const totalQty = S.cart.reduce((s, l) => s + l.qty, 0);
+  const empty = S.cart.length === 0;
+  const { subtotal, discAmt, tax, grand, taxPct } = computeTotals();
+
+  $('tk-count').innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.5l2.2 12.4a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21.5 7H6"/></svg> ${totalQty} item`;
+
+  $('cart-empty').style.display = empty ? 'flex' : 'none';
+  $('tk-items').style.display = empty ? 'none' : 'flex';
+  if (!empty) {
+    $('tk-items').innerHTML = S.cart.map(line => {
+      const editable = (line.item.modifier_groups || []).length > 0;
+      return `<div class="line" data-line-id="${line.lineId}">
+        <div class="line-top">
+          <div style="min-width:0">
+            <div class="line-name">${line.item.name}</div>
+            ${line.modLabels.length ? `<div class="line-mods">${line.modLabels.map(m => `<span>${m.name}${m.add ? ` <b>+${rp(m.add)}</b>` : ''}</span>`).join('')}</div>` : ''}
+          </div>
+          <div class="line-price tnum">${rp(line.lineTotal)}</div>
+        </div>
+        <div class="line-bottom">
+          <div class="stepper">
+            <button class="minus" data-action="dec" data-lid="${line.lineId}">${IC.minus}</button>
+            <span class="qv tnum">${line.qty}</span>
+            <button data-action="inc" data-lid="${line.lineId}">${IC.plus}</button>
+          </div>
+          ${editable ? `<button class="line-edit" data-action="edit" data-lid="${line.lineId}">${IC.sliders} Ubah</button>` : ''}
+          <button class="line-trash" data-action="remove" data-lid="${line.lineId}">${IC.trash}</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  $('tot-subtotal').textContent = rp(subtotal);
+  $('tax-label').textContent = `PPN ${taxPct}%`;
+  $('tot-tax').textContent = rp(tax);
+  $('tot-grand').textContent = rp(grand);
+  $('pay-total').textContent = rp(grand);
+
+  const discRow = $('disc-row');
+  const discVal = $('disc-val');
+  if (S.discount && discAmt > 0) {
+    const lbl = S.discount.type === 'pct' ? S.discount.val + '%' : rp(S.discount.val);
+    discRow.className = 'totrow disc';
+    discRow.querySelector('.disc-add').innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v5.2a2 2 0 0 0 .6 1.4l7.8 7.8a2 2 0 0 0 2.8 0l5.2-5.2a2 2 0 0 0 0-2.8L11.6 5.6A2 2 0 0 0 10.2 5H5a2 2 0 0 0-2 2Z"/><circle cx="7.5" cy="9.5" r="1.3" fill="currentColor" stroke="none"/></svg> Diskon ${lbl}`;
+    discVal.textContent = '−' + rp(discAmt);
+    discVal.style.color = '';
+  } else {
+    discRow.className = 'totrow';
+    discRow.querySelector('.disc-add').innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v5.2a2 2 0 0 0 .6 1.4l7.8 7.8a2 2 0 0 0 2.8 0l5.2-5.2a2 2 0 0 0 0-2.8L11.6 5.6A2 2 0 0 0 10.2 5H5a2 2 0 0 0-2 2Z"/><circle cx="7.5" cy="9.5" r="1.3" fill="currentColor" stroke="none"/></svg> Tambah diskon`;
+    discVal.textContent = '—';
+    discVal.style.color = 'var(--ink-faint)';
+  }
+
+  ['cash', 'card', 'qris'].forEach(t => {
+    const btn = document.querySelector(`[data-tender="${t}"]`);
+    if (btn) btn.className = 'tender' + (S.tender === t ? ' sel' : '');
+  });
+
+  $('pay-btn').disabled = empty;
+  $('void-btn').disabled = empty;
+  $('hold-btn').disabled = empty;
+}
+
+function renderOverlays() {
+  const mp = S.ui.modPanel;
+  const ovScrim = $('ov-scrim');
+  const anyOverlay = mp.open || S.ui.heldOpen || S.ui.discOpen;
+  ovScrim.className = 'ov-scrim' + (anyOverlay ? ' on' : '');
+  $('mod-panel').className = 'overlay' + (mp.open ? ' on' : '');
+  $('held-panel').className = 'overlay' + (S.ui.heldOpen ? ' on' : '');
+  $('disc-panel').className = 'overlay' + (S.ui.discOpen ? ' on' : '');
+
+  if (mp.open && mp.item) {
+    $('mod-title').textContent = mp.item.name;
+    $('mod-sub').textContent = rp(mp.item.selling_price) + ' · pilih opsi di bawah';
+    $('mod-action-lbl').textContent = mp.isEdit ? 'Simpan' : 'Tambah';
+    const lineTotal = unitPrice(mp.item, mp.sels) * mp.qty;
+    $('mod-line-total').textContent = rp(lineTotal);
+
+    const groups = mp.item.modifier_groups || [];
+    $('mod-body').innerHTML = groups.map(g => {
+      const sel = mp.sels[g.pk] || [];
+      const single = g.max_selections === 1;
+      return `<div class="mgroup">
+        <div class="mgroup-head">
+          <span class="mg-name">${g.nama}</span>
+          ${g.is_required ? '<span class="mg-rule req">Wajib</span>' : `<span class="mg-rule opt">Opsional${g.max_selections > 1 ? ' · maks ' + g.max_selections : ''}</span>`}
+        </div>
+        <div class="mopts">
+          ${g.options.map(o => {
+            const on = sel.includes(o.pk);
+            return `<button class="mopt${on ? ' sel' : ''}" data-action="toggle-opt" data-gpk="${g.pk}" data-opk="${o.pk}">
+              <span class="mo-check">${on ? IC.check : ''}</span>
+              <span class="mo-name">${o.name}</span>
+              ${Number(o.additional_price) > 0 ? `<span class="mo-add">+${rp(o.additional_price)}</span>` : ''}
+            </button>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }).join('') + `<div class="mgroup">
+      <div class="mgroup-head"><span class="mg-name">Jumlah</span></div>
+      <div class="mqty"><div class="stepper" style="background:var(--surface);border:1px solid var(--line)">
+        <button class="minus" data-action="mod-dec">${IC.minus}</button>
+        <span class="qv tnum">${mp.qty}</span>
+        <button data-action="mod-inc">${IC.plus}</button>
+      </div></div>
+    </div>`;
+  }
+
+  if (S.ui.heldOpen) {
+    $('held-sub').textContent = S.held.length + ' pesanan disimpan · ketuk untuk melanjutkan';
+    $('held-body').innerHTML = S.held.length === 0
+      ? `<div style="color:var(--ink-faint);font-weight:600;text-align:center;padding:40px 0">Tidak ada pesanan tertahan.</div>`
+      : S.held.map(h => `<div class="held-card">
+          <div class="hc-ic">${IC.pause}</div>
+          <div class="hc-meta"><div class="hc-l">${h.label}</div><div class="hc-s">${h.count} item · ${h.time}</div></div>
+          <div class="hc-total tnum">${rp(h.total)}</div>
+          <button class="line-trash" data-action="del-held" data-held-id="${h.id}">${IC.trash}</button>
+          <button class="hc-resume" data-action="resume-held" data-held-id="${h.id}">Lanjutkan</button>
+        </div>`).join('');
+  }
+
+  if (S.ui.discOpen) {
+    const { subtotal } = computeTotals();
+    $('disc-sub').textContent = 'Diterapkan pada subtotal ' + rp(subtotal);
+    const pcts = [0, 5, 10, 15, 20, 25];
+    const amts = [10000, 25000, 50000];
+    const isPct = v => S.discount && S.discount.type === 'pct' && S.discount.val === v;
+    const isAmt = v => S.discount && S.discount.type === 'amt' && S.discount.val === v;
+    $('disc-body').innerHTML = `
+      <div class="mgroup"><div class="mgroup-head"><span class="mg-name">Persentase</span></div>
+        <div class="disc-grid">${pcts.map(p => `<button class="disc-opt${isPct(p) ? ' sel' : ''}" data-action="disc-pct" data-val="${p}">${p === 0 ? 'Tanpa' : p + '%'}</button>`).join('')}</div>
+      </div>
+      <div class="mgroup"><div class="mgroup-head"><span class="mg-name">Nominal</span></div>
+        <div class="disc-grid">${amts.map(a => `<button class="disc-opt${isAmt(a) ? ' sel' : ''}" data-action="disc-amt" data-val="${a}" style="font-size:15px">${rp(a)}</button>`).join('')}</div>
+      </div>`;
+  }
+
+  $('np-scrim').className = 'sheet-scrim' + (S.ui.numpad.open ? ' on' : '');
+  $('numpad').className = 'numpad' + (S.ui.numpad.open ? ' on' : '');
+  if (S.ui.numpad.open) renderNumpad();
+
+  const succ = $('success-overlay');
+  succ.className = 'success-scrim' + (S.ui.success.open ? ' on' : '');
+  if (S.ui.success.open && S.ui.success.data) {
+    const d = S.ui.success.data;
+    const methodLabel = { cash: 'Tunai', card: 'Kartu EDC', qris: 'QRIS' }[d.method] || 'Tunai';
+    $('success-trx').textContent = d.trxId;
+    $('success-amts').innerHTML = `
+      <div class="sa-row"><span class="k">Total</span><span class="v tnum">${rp(d.total)}</span></div>
+      <div class="sa-row"><span class="k">Metode · ${methodLabel}</span><span class="v tnum">${rp(d.paid)}</span></div>
+      ${d.method === 'cash' ? `<div class="sa-row change"><span class="k">Kembalian</span><span class="v tnum">${rp(d.change)}</span></div>` : ''}`;
+  }
+}
+
+/* ── Event delegation ── */
+document.addEventListener('click', e => {
+  const card = e.target.closest('.pcard[data-item-pk]');
+  if (card) {
+    const item = S.catalog.find(x => x.item_pk === parseInt(card.dataset.itemPk));
+    if (item) tapItem(item);
+    return;
+  }
+  const pill = e.target.closest('.pill[data-cat]');
+  if (pill) { S.activeCat = pill.dataset.cat; renderPills(); renderGrid(); return; }
+
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const action = t.dataset.action;
+  if (action === 'inc') { incLine(t.dataset.lid); return; }
+  if (action === 'dec') { decLine(t.dataset.lid); return; }
+  if (action === 'remove') { removeLine(t.dataset.lid); return; }
+  if (action === 'edit') { editLine(t.dataset.lid); return; }
+  if (action === 'mod-inc') { S.ui.modPanel.qty = Math.min(99, S.ui.modPanel.qty + 1); render(); return; }
+  if (action === 'mod-dec') { S.ui.modPanel.qty = Math.max(1, S.ui.modPanel.qty - 1); render(); return; }
+  if (action === 'toggle-opt') {
+    const gPk = parseInt(t.dataset.gpk);
+    const oPk = parseInt(t.dataset.opk);
+    const group = (S.ui.modPanel.item.modifier_groups || []).find(g => g.pk === gPk);
+    if (group) toggleOpt(group, oPk);
+    return;
+  }
+  if (action === 'resume-held') { resumeHeld(t.dataset.heldId); return; }
+  if (action === 'del-held') { deleteHeld(t.dataset.heldId); return; }
+  if (action === 'disc-pct') { const v = parseInt(t.dataset.val); applyDiscount(v === 0 ? null : { type: 'pct', val: v }); return; }
+  if (action === 'disc-amt') { applyDiscount({ type: 'amt', val: parseInt(t.dataset.val) }); return; }
+});
+
+/* ── Static button wires ── */
+$('ov-scrim').addEventListener('click', () => { S.ui.modPanel.open = false; S.ui.heldOpen = false; S.ui.discOpen = false; render(); });
+$('mod-close').addEventListener('click', () => { S.ui.modPanel.open = false; render(); });
+$('mod-cancel').addEventListener('click', () => { S.ui.modPanel.open = false; render(); });
+$('mod-confirm').addEventListener('click', confirmMod);
+$('held-close').addEventListener('click', () => { S.ui.heldOpen = false; render(); });
+$('disc-close').addEventListener('click', () => { S.ui.discOpen = false; render(); });
+$('disc-btn').addEventListener('click', () => { S.ui.discOpen = true; render(); });
+$('pay-btn').addEventListener('click', onPay);
+$('void-btn').addEventListener('click', voidBill);
+$('hold-btn').addEventListener('click', holdBill);
+document.querySelectorAll('[data-tender]').forEach(btn =>
+  btn.addEventListener('click', () => { S.tender = btn.dataset.tender; renderTicket(); })
+);
+$('np-scrim').addEventListener('click', () => { S.ui.numpad.open = false; render(); });
+$('np-close').addEventListener('click', () => { S.ui.numpad.open = false; render(); });
+$('np-exact').addEventListener('click', () => { const { grand } = computeTotals(); S.ui.numpad.value = String(grand); renderNumpad(); });
+$('np-q50').addEventListener('click', () => { const { grand } = computeTotals(); S.ui.numpad.value = String(Math.ceil(grand / 50000) * 50000); renderNumpad(); });
+$('np-q100').addEventListener('click', () => { const { grand } = computeTotals(); S.ui.numpad.value = String(Math.ceil(grand / 100000) * 100000); renderNumpad(); });
+document.querySelectorAll('.np-keys [data-k]').forEach(btn =>
+  btn.addEventListener('click', () => npPress(btn.dataset.k))
+);
+$('np-confirm').addEventListener('click', () => {
+  const num = Number(S.ui.numpad.value) || 0;
+  const { grand } = computeTotals();
+  if (num < grand) return;
+  S.ui.numpad.open = false;
+  submitSale(num);
+});
+$('success-new').addEventListener('click', () => { S.ui.success = { open: false, data: null }; resetSale(true); });
+$('success-print').addEventListener('click', () => showToast('Struk dicetak'));
+
+/* ── Search ── */
+$('search-input').addEventListener('input', e => {
+  S.query = e.target.value;
+  const clr = $('search-clear');
+  clr.style.display = S.query ? 'grid' : 'none';
+  renderGrid();
+  renderPills();
+});
+$('search-clear').addEventListener('click', () => {
+  S.query = '';
+  $('search-input').value = '';
+  $('search-clear').style.display = 'none';
+  renderGrid();
+  renderPills();
+});
+
+/* ── Scale to viewport ── */
+function fitScale() {
+  const s = Math.min(window.innerWidth / 1366, window.innerHeight / 1024);
+  $('scaler').style.transform = 'scale(' + s + ')';
+}
+window.addEventListener('resize', fitScale);
+fitScale();
+
+/* ── Clock tick ── */
+setInterval(() => {
+  const el = $('clock-chip');
+  if (el) el.innerHTML = IC.clock + ' ' + fmtTime();
+}, 30000);
+
+/* ── Store selector ── */
+async function selectStore(lv3Pk, storeName, outletName, brandName) {
+  const [cfgResp, catResp] = await Promise.all([
+    fetch(`/sales/kasir/api/config/${lv3Pk}/`).then(r => r.json()),
+    fetch(`/sales/kasir/api/catalog/?lv3_pk=${lv3Pk}`).then(r => r.json()),
+  ]);
+  if (!cfgResp.ok || !catResp.ok) { alert('Gagal memuat data store.'); return; }
+
+  S.store = {
+    lv3_pk: lv3Pk,
+    storeName: cfgResp.store_name || storeName,
+    outletName: cfgResp.outlet_name || outletName,
+    brandName: cfgResp.brand_name || brandName,
+    cashierName: cfgResp.cashier_name || 'Kasir',
+    taxPct: cfgResp.tax_pct || '11',
+    payAccountId: cfgResp.payment_account_id,
+    sttId: cfgResp.sub_transaction_type_id,
+    revenueId: cfgResp.revenue_account_id,
+    offsetId: cfgResp.offset_coa_account_id,
+  };
+  S.catalog = catResp.items || [];
+  S.categories = catResp.categories || [];
+
+  localStorage.setItem('kasir_lv3_pk', lv3Pk);
+  localStorage.setItem('kasir_store_name', storeName);
+  localStorage.setItem('kasir_outlet_name', outletName);
+  localStorage.setItem('kasir_brand_name', brandName);
+
+  $('store-selector').style.display = 'none';
+  $('scaler').style.display = '';
+  fitScale();
+  render();
+}
+
+document.querySelectorAll('.store-card[data-lv3-pk]').forEach(card => {
+  card.addEventListener('click', () => {
+    selectStore(
+      parseInt(card.dataset.lv3Pk),
+      card.dataset.storeName,
+      card.dataset.outletName,
+      card.dataset.brand,
+    );
+  });
+});
+
+/* ── Auto-select from localStorage ── */
+(function autoSelect() {
+  const pk = localStorage.getItem('kasir_lv3_pk');
+  if (!pk) return;
+  const card = document.querySelector(`.store-card[data-lv3-pk="${pk}"]`);
+  if (card) {
+    selectStore(
+      parseInt(pk),
+      localStorage.getItem('kasir_store_name') || '',
+      localStorage.getItem('kasir_outlet_name') || '',
+      localStorage.getItem('kasir_brand_name') || '',
+    );
+  }
+})();
 </script>
 </body>
 </html>
