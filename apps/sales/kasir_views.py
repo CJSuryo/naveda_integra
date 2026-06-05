@@ -131,10 +131,13 @@ def api_kasir_catalog(request: HttpRequest) -> JsonResponse:
 
     seen: set[int] = set()
     items_data = []
+    catalog_configured = bool(catalog_price_map)
     for inv in inv_qs:
         if inv.item_id in seen:
             continue
         seen.add(inv.item_id)
+        if catalog_configured and inv.item_id not in catalog_price_map:
+            continue
         items_data.append({
             'item_pk': inv.item_id,
             'name': inv.item.nama,
