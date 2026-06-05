@@ -1,0 +1,141 @@
+/* ==========================================================================
+   Naveda Integra — entitas-bisnis.css
+   Entitas Bisnis list page: collapsible tree hierarchy
+   ========================================================================== */
+
+/* ---------- Card tweaks ---------- */
+.ni-eb-card {
+  margin-bottom: 12px;
+}
+
+.ni-card__body--compact {
+  padding: 12px 16px;
+}
+
+/* ---------- Level 1 row ---------- */
+.ni-eb-row {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ni-eb-row__meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.ni-eb-row__name {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.ni-eb-row__sub {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted);
+  margin-top: 2px;
+}
+
+.ni-eb-row__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.ni-eb-row__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---------- Level 2 section ---------- */
+.ni-eb-lv2-tree {
+  display: none;
+  margin-left: 28px;
+  margin-top: 8px;
+}
+
+/* ---------- Level 2 row ---------- */
+.ni-eb-lv2-item {
+  margin-bottom: 6px;
+}
+
+.ni-eb-lv2-row {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.ni-eb-lv2-row__name {
+  font-weight: 500;
+}
+
+.ni-eb-lv2-row__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ---------- Level 3 section ---------- */
+.ni-eb-lv3-tree {
+  display: none;
+  margin-left: 24px;
+}
+
+/* ---------- Level 3 row ---------- */
+.ni-eb-lv3-row {
+  padding: 3px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ni-text-muted);
+}
+
+.ni-eb-lv3-row__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* ---------- Empty states ---------- */
+.ni-eb-empty {
+  padding: 6px 0;
+  color: var(--ni-text-muted);
+  font-style: italic;
+  font-size: 0.875rem;
+}
+
+/* ---------- Expand arrow ---------- */
+.ni-eb-arrow {
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+  color: var(--ni-text-muted);
+}
+
+.ni-eb-arrow--open {
+  transform: rotate(90deg);
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .ni-eb-row__actions {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .ni-eb-row__actions .ni-btn {
+    flex: 1;
+  }
+}

@@ -10,17 +10,25 @@ class MerchantPOSConfigForm(forms.ModelForm):
     class Meta:
         model = MerchantPOSConfig
         fields = [
-            'is_pos_active', 'logo', 'qris_image',
+            'is_pos_active',
+            'sub_transaction_type',
+            'revenue_account',
+            'offset_coa_account',
+            'default_payment_account',
             'default_tax_pct', 'default_service_charge_pct',
-            'tax_inclusive', 'currency', 'revenue_account',
+            'tax_inclusive', 'currency',
+            'logo', 'qris_image',
         ]
         widgets = {
             'is_pos_active': forms.CheckboxInput(attrs=NI_CHECKBOX_ATTRS),
+            'sub_transaction_type': forms.Select(attrs=NI_INPUT_ATTRS),
+            'revenue_account': forms.Select(attrs=NI_INPUT_ATTRS),
+            'offset_coa_account': forms.Select(attrs=NI_INPUT_ATTRS),
+            'default_payment_account': forms.Select(attrs=NI_INPUT_ATTRS),
             'default_tax_pct': forms.NumberInput(attrs=NI_INPUT_ATTRS),
             'default_service_charge_pct': forms.NumberInput(attrs=NI_INPUT_ATTRS),
             'tax_inclusive': forms.CheckboxInput(attrs=NI_CHECKBOX_ATTRS),
             'currency': forms.TextInput(attrs=NI_INPUT_ATTRS),
-            'revenue_account': forms.Select(attrs=NI_INPUT_ATTRS),
         }
 
 
@@ -78,6 +86,7 @@ class OutletPOSConfigForm(forms.ModelForm):
             'offset_coa_account',
             'default_payment_account',
             'tax_pct',
+            'qris_image',
             'is_active',
         ]
         widgets = {
@@ -85,6 +94,6 @@ class OutletPOSConfigForm(forms.ModelForm):
             'revenue_account': forms.Select(attrs=NI_INPUT_ATTRS),
             'offset_coa_account': forms.Select(attrs=NI_INPUT_ATTRS),
             'default_payment_account': forms.Select(attrs=NI_INPUT_ATTRS),
-            'tax_pct': forms.NumberInput(attrs={**NI_INPUT_ATTRS, 'step': '0.01', 'placeholder': 'Kosong = ikut parent'}),
+            'tax_pct': forms.NumberInput(attrs={**NI_INPUT_ATTRS, 'step': '0.01', 'placeholder': 'Kosong = 0%'}),
             'is_active': forms.CheckboxInput(attrs=NI_CHECKBOX_ATTRS),
         }

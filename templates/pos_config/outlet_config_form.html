@@ -1,14 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}Outlet POS Config — {{ lv3.nama }}{% endblock %}
+{% block title %}POS Config — {{ lv3.nama }}{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Outlet POS Config</h1>
-    <p class="ni-page-header__subtitle">{{ lv3.nama }} · {{ lv3.parent_lv2.nama }}</p>
+    <h1 class="ni-page-header__title">POS Config: {{ lv3.nama }}</h1>
+    <p class="ni-page-header__subtitle">{{ lv3.parent_lv2.nama }} · {{ lv3.parent_lv2.entitas_bisnis.nama }}</p>
   </div>
   <div class="ni-page-header__actions">
+    {% if next_url %}
+    <a href="{{ next_url }}" class="ni-btn ni-btn--secondary">Kembali</a>
+    {% else %}
     <a href="javascript:history.back()" class="ni-btn ni-btn--secondary">Kembali</a>
+    {% endif %}
   </div>
 </div>
 
@@ -16,23 +20,9 @@
 <div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
 {% endfor %}
 
-<div class="ni-card ni-animate-fade-in ni-card--mb">
-  <div class="ni-card__header"><h3>Nilai Efektif (setelah cascade)</h3></div>
-  <div class="ni-card__body">
-    <dl class="ni-detail-grid">
-      <dt>Sub-Transaction Type</dt><dd>{{ effective.sub_transaction_type_id|default:'—' }}</dd>
-      <dt>Tax %</dt><dd>{{ effective.tax_pct }}%</dd>
-      <dt>Revenue Account</dt><dd>{{ effective.revenue_account_id|default:'—' }}</dd>
-      <dt>HPP Account</dt><dd>{{ effective.offset_coa_account_id|default:'—' }}</dd>
-      <dt>Payment Account</dt><dd>{{ effective.payment_account_id|default:'—' }}</dd>
-    </dl>
-  </div>
-</div>
-
 <div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__header"><h3>Override untuk {{ lv3.nama }}</h3></div>
   <div class="ni-card__body">
-    <form method="post">
+    <form method="post" enctype="multipart/form-data" action="?{% if next_url %}next={{ next_url }}{% endif %}">
       {% csrf_token %}
       <div class="ni-form-grid">
         {% for field in form %}

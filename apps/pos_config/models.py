@@ -239,8 +239,14 @@ class OutletPOSConfig(models.Model):
         decimal_places=2,
         null=True,
         blank=True,
-        verbose_name='Tax % (Override)',
-        help_text='Kosongkan = pakai default dari Store (lv2) atau Merchant (lv1).',
+        verbose_name='Tax %',
+        help_text='Kosongkan = 0%.',
+    )
+    qris_image = models.ImageField(
+        upload_to='pos/qris/',
+        null=True,
+        blank=True,
+        verbose_name='QRIS Image',
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

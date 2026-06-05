@@ -102,32 +102,27 @@ def outlet_config(request, lv3_pk):
         return denied
     lv3 = get_object_or_404(
         EntitasBisnisLv3.objects.select_related(
-            'parent_lv2__entitas_bisnis__pos_config',
+            'parent_lv2__entitas_bisnis',
             'parent_lv2__pos_config',
         ),
         pk=lv3_pk,
     )
-    merchant = getattr(lv3.parent_lv2.entitas_bisnis, 'pos_config', None)
-    if not merchant:
-        messages.warning(request, 'Merchant POS Config belum diset di level 1.')
-        return redirect('entitas_bisnis:list')
+    merchant, _ = MerchantPOSConfig.objects.get_or_create(
+        entitas_bisnis=lv3.parent_lv2.entitas_bisnis
+    )
 
     cfg, _ = OutletPOSConfig.objects.get_or_create(
         entitas_bisnis_lv3=lv3,
         defaults={'merchant_config': merchant},
     )
-    effective = resolve_pos_config(
-        EntitasBisnisLv3.objects.select_related(
-            'parent_lv2__entitas_bisnis__pos_config',
-            'parent_lv2__pos_config',
-            'pos_config',
-        ).get(pk=lv3_pk)
-    )
     if request.method == 'POST':
-        form = OutletPOSConfigForm(request.POST, instance=cfg)
+        form = OutletPOSConfigForm(request.POST, request.FILES, instance=cfg)
         if form.is_valid():
             form.save()
             messages.success(request, f'Outlet POS Config untuk {lv3.nama} disimpan.')
+            next_url = request.GET.get('next', '')
+            if next_url and next_url.startswith('/'):
+                return redirect(next_url)
             return redirect('pos_config:outlet_config', lv3_pk=lv3_pk)
     else:
         form = OutletPOSConfigForm(instance=cfg)
@@ -135,5 +130,5 @@ def outlet_config(request, lv3_pk):
         'form': form,
         'lv3': lv3,
         'cfg': cfg,
-        'effective': effective,
+        'next_url': request.GET.get('next', ''),
     })

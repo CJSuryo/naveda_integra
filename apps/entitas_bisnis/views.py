@@ -64,7 +64,7 @@ def tipe_entitas_delete(request: HttpRequest, pk: int) -> HttpResponse:
 def list_view(request: HttpRequest) -> HttpResponse:
     lv1_list = (
         EntitasBisnis.objects
-        .select_related('tipe_entitas')
+        .select_related('tipe_entitas', 'pos_config')
         .prefetch_related('children_lv2__children_lv3')
         .all()
         .order_by('nama')
@@ -237,17 +237,17 @@ def _compute_wizard_checks(eb) -> dict:
     eb must be fetched with select_related('pos_config') and
     prefetch_related('children_lv2__children_lv3').
     """
-    from apps.entitas_bisnis.models import EntitasBisnisLv3
     from apps.purchase.models import SubTransactionType
     from apps.accounts.models import UserEntitasBisnis
 
     lv2_list = [lv2 for lv2 in eb.children_lv2.all() if lv2.status_aktif]
     lv2_count = len(lv2_list)
 
-    lv3_qs = EntitasBisnisLv3.objects.filter(
-        parent_lv2__entitas_bisnis=eb, status_aktif=True
+    lv3_count = sum(
+        lv3.status_aktif
+        for lv2 in lv2_list
+        for lv3 in lv2.children_lv3.all()
     )
-    lv3_count = lv3_qs.count()
 
     pos_cfg = getattr(eb, 'pos_config', None)
     pos_config_ok = bool(

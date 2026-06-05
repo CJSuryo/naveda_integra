@@ -8,92 +8,95 @@
   </div>
   <div class="ni-page-header__actions">
     <button type="button" class="ni-btn ni-btn--success" onclick="niEB.openAddLv1()">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Entitas
+      <i data-lucide="plus"></i> Tambah Entitas
     </button>
   </div>
 </div>
 
 {% for lv1 in lv1_list %}
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:12px;">
-  <div class="ni-card__body" style="padding:12px 16px;">
+<div class="ni-card ni-eb-card ni-animate-fade-in">
+  <div class="ni-card__body ni-card__body--compact">
     <!-- Lv1 row -->
-    <div class="ni-eb-lv1" data-toggle="eb-lv1" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
-      <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:18px;height:18px;transition:transform 200ms;flex-shrink:0;"></i>
-      <span style="font-weight:600;font-size:1rem;">{{ lv1.nama }}</span>
-      {% if lv1.tipe_entitas %}<span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1.tipe_entitas }}</span>{% endif %}
-      {% if lv1.status_aktif %}<span class="ni-badge ni-badge--success" style="font-size:0.7rem;">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">Nonaktif</span>{% endif %}
-      <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1.children_lv2.count }} cabang</span>
-      <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation()">
-        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Cabang (Lv2)"
-          onclick="niEB.openAddLv2({{ lv1.pk }})" style="padding:4px 8px;">
-          <i data-lucide="plus" style="width:14px;height:14px"></i>
+    <div class="ni-eb-row" data-toggle="eb-lv1">
+      <i data-lucide="chevron-right" class="ni-eb-arrow ni-icon-sm"></i>
+      <div class="ni-eb-row__meta">
+        <div class="ni-d-flex ni-items-center ni-gap-2 ni-flex-wrap">
+          <span class="ni-eb-row__name">{{ lv1.nama }}</span>
+          {% if lv1.tipe_entitas %}<span class="ni-badge ni-badge--secondary">{{ lv1.tipe_entitas }}</span>{% endif %}
+          {% if lv1.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}
+          <span class="ni-badge ni-badge--secondary">{{ lv1.children_lv2.count }} cabang</span>
+          {% if lv1.pos_config and lv1.pos_config.is_pos_active %}<span class="ni-badge ni-badge--primary">POS Aktif</span>{% endif %}
+        </div>
+        {% if lv1.email %}<div class="ni-eb-row__sub">{{ lv1.email }}</div>{% endif %}
+      </div>
+      <div class="ni-eb-row__actions" onclick="event.stopPropagation()">
+        <button type="button" class="ni-btn ni-btn--success" onclick="niEB.openAddLv2({{ lv1.pk }})">
+          <i data-lucide="plus"></i> Tambah Cabang
         </button>
-        <a href="{% url 'entitas_bisnis:update' lv1.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:4px 8px;">
-          <i data-lucide="pencil" style="width:14px;height:14px"></i>
+        <a href="{% url 'entitas_bisnis:setup_wizard' lv1.pk %}" class="ni-btn ni-btn--primary">
+          <i data-lucide="layout-dashboard"></i> Detail
         </a>
-        <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-          onclick="openDeleteModal('{% url 'entitas_bisnis:delete' lv1.pk %}', '{{ lv1.nama|escapejs }}')"
-          style="padding:4px 8px;">
-          <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+        <button type="button" class="ni-btn ni-btn--outline-danger"
+          onclick="openDeleteModal('{% url 'entitas_bisnis:delete' lv1.pk %}', '{{ lv1.nama|escapejs }}')">
+          <i data-lucide="trash-2"></i> Hapus
         </button>
       </div>
     </div>
     <!-- Lv2 children -->
-    <div class="ni-eb-lv2-list" style="display:none;margin-left:28px;margin-top:8px;">
+    <div class="ni-eb-lv2-tree">
       {% for lv2 in lv1.children_lv2.all %}
-      <div style="margin-bottom:6px;">
-        <div class="ni-eb-lv2" data-toggle="eb-lv2" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:4px 0;">
-          <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:14px;height:14px;transition:transform 200ms;flex-shrink:0;"></i>
-          <span style="font-weight:500;">{{ lv2.nama }}</span>
-          {% if lv2.status_aktif %}<span class="ni-badge ni-badge--success" style="font-size:0.65rem;">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary" style="font-size:0.65rem;">Nonaktif</span>{% endif %}
-          <span class="ni-badge ni-badge--secondary" style="font-size:0.65rem;">{{ lv2.children_lv3.count }} unit</span>
-          <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation()">
-            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Unit (Lv3)"
-              onclick="niEB.openAddLv3({{ lv1.pk }}, {{ lv2.pk }})" style="padding:3px 6px;">
-              <i data-lucide="plus" style="width:12px;height:12px"></i>
+      <div class="ni-eb-lv2-item">
+        <div class="ni-eb-lv2-row" data-toggle="eb-lv2">
+          <i data-lucide="chevron-right" class="ni-eb-arrow ni-icon-xs"></i>
+          <span class="ni-eb-lv2-row__name">{{ lv2.nama }}</span>
+          {% if lv2.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}
+          <span class="ni-badge ni-badge--secondary">{{ lv2.children_lv3.count }} outlet</span>
+          <div class="ni-eb-lv2-row__actions" onclick="event.stopPropagation()">
+            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" onclick="niEB.openAddLv3({{ lv1.pk }}, {{ lv2.pk }})">
+              <i data-lucide="plus"></i> Tambah Outlet
             </button>
-            <a href="{% url 'entitas_bisnis:lv2_update' lv1.pk lv2.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:3px 6px;">
-              <i data-lucide="pencil" style="width:12px;height:12px"></i>
-            </a>
-            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-              onclick="openDeleteModal('{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}', '{{ lv2.nama|escapejs }}')"
-              style="padding:3px 6px;">
-              <i data-lucide="trash-2" style="width:12px;height:12px"></i>
+            <button type="button" class="ni-btn ni-btn--warning ni-btn--sm"
+              onclick="niEB.openEditLv2({{ lv1.pk }}, {{ lv2.pk }}, '{{ lv2.nama|escapejs }}', '{{ lv2.email|default:''|escapejs }}', '{{ lv2.telepon|default:''|escapejs }}', '{{ lv2.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv2.status_aktif|lower }})">
+              <i data-lucide="pencil"></i> Edit
+            </button>
+            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm"
+              onclick="openDeleteModal('{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}', '{{ lv2.nama|escapejs }}')">
+              <i data-lucide="trash-2"></i> Hapus
             </button>
           </div>
         </div>
         <!-- Lv3 children -->
-        <div class="ni-eb-lv3-list" style="display:none;margin-left:24px;">
+        <div class="ni-eb-lv3-tree">
           {% for lv3 in lv2.children_lv3.all %}
-          <div style="padding:3px 0;display:flex;align-items:center;gap:8px;color:var(--ni-text-muted);">
-            <i data-lucide="dot" style="width:12px;height:12px;flex-shrink:0;"></i>
+          <div class="ni-eb-lv3-row">
+            <i data-lucide="dot" class="ni-icon-xs ni-flex-shrink-0"></i>
             <span>{{ lv3.nama }}</span>
-            {% if lv3.status_aktif %}<span class="ni-badge ni-badge--success" style="font-size:0.6rem;">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary" style="font-size:0.6rem;">Nonaktif</span>{% endif %}
-            <div style="margin-left:auto;display:flex;gap:4px;">
-              <a href="{% url 'entitas_bisnis:lv3_update' lv1.pk lv2.pk lv3.pk %}" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit" style="padding:2px 5px;">
-                <i data-lucide="pencil" style="width:11px;height:11px"></i>
-              </a>
-              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-                onclick="openDeleteModal('{% url 'entitas_bisnis:lv3_delete' lv1.pk lv2.pk lv3.pk %}', '{{ lv3.nama|escapejs }}')"
-                style="padding:2px 5px;">
-                <i data-lucide="trash-2" style="width:11px;height:11px"></i>
+            {% if lv3.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}
+            <div class="ni-eb-lv3-row__actions">
+              <button type="button" class="ni-btn ni-btn--warning ni-btn--sm"
+                onclick="niEB.openEditLv3({{ lv1.pk }}, {{ lv2.pk }}, {{ lv3.pk }}, '{{ lv3.nama|escapejs }}', '{{ lv3.email|default:''|escapejs }}', '{{ lv3.telepon|default:''|escapejs }}', '{{ lv3.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv3.status_aktif|lower }})">
+                <i data-lucide="pencil"></i> Edit
+              </button>
+              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm"
+                onclick="openDeleteModal('{% url 'entitas_bisnis:lv3_delete' lv1.pk lv2.pk lv3.pk %}', '{{ lv3.nama|escapejs }}')">
+                <i data-lucide="trash-2"></i> Hapus
               </button>
             </div>
           </div>
           {% empty %}
-          <div style="padding:4px 0;color:var(--ni-text-muted);font-style:italic;font-size:0.85rem;">Belum ada unit.</div>
+          <div class="ni-eb-empty">Belum ada outlet.</div>
           {% endfor %}
         </div>
       </div>
       {% empty %}
-      <div style="padding:6px 0;color:var(--ni-text-muted);font-style:italic;font-size:0.875rem;">Belum ada cabang.</div>
+      <div class="ni-eb-empty">Belum ada cabang.</div>
       {% endfor %}
     </div>
   </div>
 </div>
 {% empty %}
 <div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__body" style="text-align:center;padding:32px;">
+  <div class="ni-card__body ni-text-center ni-p-5">
     <p class="ni-text-muted">Belum ada entitas bisnis. Klik <strong>Tambah Entitas</strong> untuk memulai.</p>
   </div>
 </div>
@@ -107,12 +110,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalAddLv1')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errAddLv1" style="display:none;" class="ni-alert ni-alert--danger" style="margin-bottom:12px;"></div>
+      <div id="errAddLv1" class="ni-alert ni-alert--danger ni-d-none" style="margin-bottom:12px;"></div>
       <form id="formAddLv1" method="post" action="{% url 'entitas_bisnis:create' %}">
         {% csrf_token %}
         {% for field in add_lv1_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
@@ -134,12 +137,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalEditLv1')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errEditLv1" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errEditLv1" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formEditLv1" method="post" action="">
         {% csrf_token %}
         {% for field in edit_lv1_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
@@ -161,12 +164,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalAddLv2')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errAddLv2" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errAddLv2" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formAddLv2" method="post" action="">
         {% csrf_token %}
         {% for field in add_lv2_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
         </div>
         {% endfor %}
@@ -187,12 +190,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalEditLv2')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errEditLv2" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errEditLv2" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formEditLv2" method="post" action="">
         {% csrf_token %}
         {% for field in edit_lv2_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
         </div>
         {% endfor %}
@@ -213,12 +216,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalAddLv3')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errAddLv3" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errAddLv3" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formAddLv3" method="post" action="">
         {% csrf_token %}
         {% for field in add_lv3_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
         </div>
         {% endfor %}
@@ -239,12 +242,12 @@
       <button class="ni-modal__close" type="button" onclick="niEB.close('modalEditLv3')"><i data-lucide="x"></i></button>
     </div>
     <div class="ni-modal__body">
-      <div id="errEditLv3" style="display:none;" class="ni-alert ni-alert--danger"></div>
+      <div id="errEditLv3" class="ni-alert ni-alert--danger ni-d-none"></div>
       <form id="formEditLv3" method="post" action="">
         {% csrf_token %}
         {% for field in edit_lv3_form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span style="color:var(--ni-danger)">*</span>{% endif %}</label>
+          <label class="ni-form-label">{{ field.label }}{% if field.field.required %} <span class="ni-text-danger">*</span>{% endif %}</label>
           {{ field }}
         </div>
         {% endfor %}
@@ -445,28 +448,28 @@
   // Collapsible toggle
   document.querySelectorAll('[data-toggle="eb-lv1"]').forEach(function (el) {
     el.addEventListener('click', function () {
-      var children = el.closest('.ni-card__body').querySelector('.ni-eb-lv2-list');
-      var arrow = el.querySelector('.ni-coa-arrow');
-      if (children.style.display === 'none') {
+      var children = el.closest('.ni-card__body').querySelector('.ni-eb-lv2-tree');
+      var arrow = el.querySelector('.ni-eb-arrow');
+      if (children.style.display === 'none' || children.style.display === '') {
         children.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
+        arrow.classList.add('ni-eb-arrow--open');
       } else {
         children.style.display = 'none';
-        arrow.style.transform = '';
+        arrow.classList.remove('ni-eb-arrow--open');
       }
     });
   });
 
   document.querySelectorAll('[data-toggle="eb-lv2"]').forEach(function (el) {
     el.addEventListener('click', function () {
-      var children = el.parentElement.querySelector('.ni-eb-lv3-list');
-      var arrow = el.querySelector('.ni-coa-arrow');
-      if (children.style.display === 'none') {
+      var children = el.parentElement.querySelector('.ni-eb-lv3-tree');
+      var arrow = el.querySelector('.ni-eb-arrow');
+      if (children.style.display === 'none' || children.style.display === '') {
         children.style.display = 'block';
-        arrow.style.transform = 'rotate(90deg)';
+        arrow.classList.add('ni-eb-arrow--open');
       } else {
         children.style.display = 'none';
-        arrow.style.transform = '';
+        arrow.classList.remove('ni-eb-arrow--open');
       }
     });
   });
@@ -482,7 +485,6 @@
     // Find the card for this lv1 pk and expand it
     document.querySelectorAll('[data-toggle="eb-lv1"]').forEach(function (el) {
       var card = el.closest('.ni-card');
-      // Check if any button in this card references this lv1Pk
       var btns = card ? card.querySelectorAll('button[onclick]') : [];
       var isMatch = false;
       btns.forEach(function (btn) {
@@ -492,13 +494,12 @@
         }
       });
       if (isMatch) {
-        var children = el.closest('.ni-card__body').querySelector('.ni-eb-lv2-list');
-        var arrow = el.querySelector('.ni-coa-arrow');
-        if (children && children.style.display === 'none') {
+        var children = el.closest('.ni-card__body').querySelector('.ni-eb-lv2-tree');
+        var arrow = el.querySelector('.ni-eb-arrow');
+        if (children && (children.style.display === 'none' || children.style.display === '')) {
           children.style.display = 'block';
-          arrow.style.transform = 'rotate(90deg)';
+          if (arrow) arrow.classList.add('ni-eb-arrow--open');
         }
-        // Also expand lv2 if specified
         if (lv2Pk && children) {
           children.querySelectorAll('[data-toggle="eb-lv2"]').forEach(function (lv2El) {
             var lv2Btns = lv2El.parentElement.querySelectorAll('button[onclick]');
@@ -510,11 +511,11 @@
               }
             });
             if (lv2Match) {
-              var lv3Children = lv2El.parentElement.querySelector('.ni-eb-lv3-list');
-              var lv2Arrow = lv2El.querySelector('.ni-coa-arrow');
-              if (lv3Children && lv3Children.style.display === 'none') {
+              var lv3Children = lv2El.parentElement.querySelector('.ni-eb-lv3-tree');
+              var lv2Arrow = lv2El.querySelector('.ni-eb-arrow');
+              if (lv3Children && (lv3Children.style.display === 'none' || lv3Children.style.display === '')) {
                 lv3Children.style.display = 'block';
-                lv2Arrow.style.transform = 'rotate(90deg)';
+                if (lv2Arrow) lv2Arrow.classList.add('ni-eb-arrow--open');
               }
             }
           });
