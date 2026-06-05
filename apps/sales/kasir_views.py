@@ -59,7 +59,7 @@ def api_kasir_config(request: HttpRequest, lv3_pk: int) -> JsonResponse:
         'offset_coa_account_id': cfg['offset_coa_account_id'],
         'payment_account_id': cfg['payment_account_id'],
         'qris_image_url': cfg['qris_image_url'],
-        'cashier_name': request.user.get_full_name() or request.user.username,
+        'cashier_name': request.user.name,
     })
 
 
