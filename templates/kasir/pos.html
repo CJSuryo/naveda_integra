@@ -778,8 +778,16 @@ function renderBrandbar() {
         <span class="dot"></span>${IC.user}<b>${S.store.cashierName}</b>
       </div>
       <div class="chip tnum" id="clock-chip">${IC.clock} ${fmtTime()}</div>
+      <button id="back-to-selector-btn" class="chip" style="gap:7px;cursor:pointer;" title="Ganti Outlet / Kembali">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        Ganti Outlet
+      </button>
     </div>`;
   document.getElementById('held-chip-btn').addEventListener('click', () => { S.ui.heldOpen = true; render(); });
+  document.getElementById('back-to-selector-btn').addEventListener('click', () => {
+    const sel = document.getElementById('store-selector');
+    if (sel) sel.style.display = 'flex';
+  });
 }
 
 function renderPills() {

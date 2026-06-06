@@ -97,15 +97,29 @@ def catalog_items_ajax(request, eb_pk):
         for ci in CatalogItem.objects.filter(entitas_bisnis=eb, item__in=items)
         .select_related('item')
     }
-    stock_map = {
-        row['item_id']: row['total']
+    inv_agg = {
+        row['item_id']: row
         for row in InventoryRecord.objects.filter(entitas_bisnis=eb, item__in=items)
-        .values('item_id').annotate(total=Sum('quantity'))
+        .values('item_id').annotate(qty=Sum('quantity'), nilai=Sum('total_value'))
     }
-    rows = [
-        {'item': item, 'catalog_item': catalog_map.get(item.pk), 'stock': stock_map.get(item.pk, 0)}
-        for item in items
-    ]
+    rows = []
+    for item in items:
+        agg = inv_agg.get(item.pk, {})
+        qty = agg.get('qty') or Decimal('0')
+        nilai = agg.get('nilai') or Decimal('0')
+        hpp = (nilai / qty).quantize(Decimal('0.0001')) if qty else Decimal('0')
+        ci = catalog_map.get(item.pk)
+        sp = ci.selling_price if ci else Decimal('0')
+        profit = sp - hpp
+        margin = (profit / sp * 100).quantize(Decimal('0.01')) if sp else Decimal('0')
+        rows.append({
+            'item': item,
+            'catalog_item': ci,
+            'stock': qty,
+            'hpp': hpp,
+            'profit_per_unit': profit,
+            'margin_pct': margin,
+        })
     html = render_to_string(
         'pos_catalog/_catalog_rows.html',
         {'rows': rows, 'eb': eb},
@@ -174,6 +188,10 @@ def catalog_upsert(request, eb_pk):
     catalog_item.save()
     if logs:
         CatalogItemLog.objects.bulk_create(logs)
+
+    InventoryRecord.objects.filter(entitas_bisnis=eb, item=item).update(
+        selling_price=catalog_item.selling_price
+    )
 
     return JsonResponse({
         'success': True,

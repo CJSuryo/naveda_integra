@@ -475,7 +475,9 @@
     var fieldTdStyle = hasItem ? '' : ' style="display:none;"';
     // Satuan/Bulk inputs: always show TDs but disable irrelevant inputs
     var satuanInputDisabled = (!hasItem || prefillIsBulk) ? ' disabled style="display:none;"' : '';
-    var bulkInputDisabled = (!hasItem || !prefillIsBulk) ? ' disabled style="display:none;"' : '';
+    // Non-bulk in edit mode: show HPP read-only; non-bulk new entry: hide
+    var bulkInputDisabled = prefillIsBulk ? '' :
+      (prefillHpp ? ' readonly style="background:var(--ni-bg);color:var(--ni-text-muted);"' : ' disabled style="display:none;"');
 
     var tr = document.createElement('tr');
     tr.id = rid;
@@ -591,6 +593,13 @@
         showItemFields(rid, tipeItem);
         checkStock(rid, val);
         toggleBulkSalesFields(rid, tipeItem);
+        if (opt && opt.selling_price) {
+          var priceField = document.getElementById(rid + '_price');
+          if (priceField && !priceField.value) {
+            priceField.value = opt.selling_price;
+            updateTotal(rid);
+          }
+        }
         updateGroupTotals(gid);
       },
       shouldLoad: function (query) {

@@ -304,7 +304,10 @@ def api_saldo_persediaan(request: HttpRequest) -> JsonResponse:
     eb_id, eb_lv2_id, eb_lv3_id = _parse_eb(request)
     today = timezone.now().date()
 
-    tagged = list(DashboardInventoryTag.objects.select_related('item').all())
+    tag_qs = DashboardInventoryTag.objects.select_related('item')
+    if eb_id:
+        tag_qs = tag_qs.filter(entitas_bisnis_id=eb_id)
+    tagged = list(tag_qs)
     if not tagged:
         return JsonResponse({'rows': []})
 
@@ -450,13 +453,19 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
         except json.JSONDecodeError:
             return JsonResponse({'error': 'Request tidak valid'}, status=400)
 
+        eb_id_post = body.get('eb_id')
+        eb_id_post = int(eb_id_post) if eb_id_post and str(eb_id_post).isdigit() else None
+        from apps.entitas_bisnis.models import EntitasBisnis as _EB
+
         if body.get('action') == 'save_all':
             item_ids = [int(i) for i in body.get('item_ids', []) if str(i).isdigit()]
-            DashboardInventoryTag.objects.all().delete()
+            eb_obj = _EB.objects.filter(pk=eb_id_post).first() if eb_id_post else None
+            DashboardInventoryTag.objects.filter(entitas_bisnis=eb_obj).delete()
             for item_id in item_ids:
                 try:
                     DashboardInventoryTag.objects.create(
-                        item=ItemMasterPurchase.objects.get(pk=item_id)
+                        item=ItemMasterPurchase.objects.get(pk=item_id),
+                        entitas_bisnis=eb_obj,
                     )
                 except ItemMasterPurchase.DoesNotExist:
                     pass
@@ -464,7 +473,10 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
 
         try:
             item = ItemMasterPurchase.objects.get(pk=body.get('item_id'))
-            tag, created = DashboardInventoryTag.objects.get_or_create(item=item)
+            eb_obj = _EB.objects.filter(pk=eb_id_post).first() if eb_id_post else None
+            tag, created = DashboardInventoryTag.objects.get_or_create(
+                item=item, entitas_bisnis=eb_obj
+            )
             if not created:
                 tag.delete()
                 return JsonResponse({'status': 'untagged', 'item_id': item.pk})
@@ -488,7 +500,14 @@ def api_tag_item(request: HttpRequest) -> JsonResponse:
 
     if search:
         qs = qs.filter(Q(nama__icontains=search) | Q(item_id__icontains=search))
-    tagged_ids = set(DashboardInventoryTag.objects.values_list('item_id', flat=True))
+    tagged_ids = set(
+        DashboardInventoryTag.objects
+        .filter(entitas_bisnis_id=eb_id)
+        .values_list('item_id', flat=True)
+    ) if eb_id else set(
+        DashboardInventoryTag.objects.filter(entitas_bisnis__isnull=True)
+        .values_list('item_id', flat=True)
+    )
     return JsonResponse({'items': [
         {'id': i.pk, 'item_id': i.item_id, 'nama': i.nama, 'tipe': i.tipe_item, 'tagged': i.pk in tagged_ids}
         for i in qs[:50]

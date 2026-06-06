@@ -48,7 +48,10 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
     from apps.entitas_bisnis.models import EntitasBisnis
     from apps.dashboard.models import DashboardInventoryTag
 
-    tagged_ids = set(DashboardInventoryTag.objects.values_list('item_id', flat=True))
+    tagged_qs = DashboardInventoryTag.objects
+    if eb_filter:
+        tagged_qs = tagged_qs.filter(entitas_bisnis_id=eb_filter)
+    tagged_ids = set(tagged_qs.values_list('item_id', flat=True))
 
     return render(request, 'inventory/inventory_list.html', {
         'records_satuan': records_satuan,

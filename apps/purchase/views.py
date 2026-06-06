@@ -968,6 +968,22 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
         qs = qs.exclude(pk__in=used_ids)
 
     items = qs[:50]
+    selling_price_map: dict = {}
+    if eb_lv1_id:
+        from apps.inventory.models import InventoryRecord as _IR
+        from django.db.models import Max as _Max
+        selling_price_map = {
+            item_id: str(sp)
+            for item_id, sp in (
+                _IR.objects
+                .filter(entitas_bisnis_id=eb_lv1_id, item_id__in=[i.pk for i in items])
+                .exclude(selling_price__isnull=True)
+                .values('item_id')
+                .annotate(sp=_Max('selling_price'))
+                .values_list('item_id', 'sp')
+            )
+        }
+
     results = [
         {
             'id': item.pk,
@@ -980,6 +996,7 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
             'coa_account_text': str(item.coa_account) if item.coa_account else '',
             'metode_biaya_persediaan': item.metode_biaya_persediaan or '',
             'lama_kadaluarsa': item.lama_kadaluarsa or '',
+            'selling_price': selling_price_map.get(item.pk, ''),
         }
         for item in items
     ]

@@ -416,7 +416,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'sub_transaction_type_id': si.sub_transaction_type_id,
                 'quantity': str(si.quantity),
                 'selling_price': str(si.selling_price),
-                'hpp_terpakai': str(si.hpp_terpakai) if si.hpp_terpakai else '',
+                'hpp_terpakai': str(si.hpp_terpakai) if si.hpp_terpakai else str(si.cogs_amount or ''),
                 'offset_coa_account_id': si.offset_coa_account_id,
                 'revenue_account_id': si.revenue_account_id,
                 'payment_account_id': si.payment_account_id or eg.payment_account_id or '',

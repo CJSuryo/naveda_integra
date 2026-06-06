@@ -631,10 +631,14 @@
     var btn = document.getElementById('tag-save-btn');
     if (btn) btn.disabled = true;
 
+    var ebParams = getEbParams();
+    var ebId = null;
+    var m = ebParams.match(/eb_id=(\d+)/);
+    if (m) ebId = parseInt(m[1]);
     fetch('/dashboard/api/tag-item/', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrf()},
-      body: JSON.stringify({action: 'save_all', item_ids: ids})
+      body: JSON.stringify({action: 'save_all', item_ids: ids, eb_id: ebId})
     })
       .then(function(r) { return r.json(); })
       .then(function() {

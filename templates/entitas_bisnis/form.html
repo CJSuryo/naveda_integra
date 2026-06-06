@@ -35,9 +35,9 @@
 {% if object.pk %}
 <div class="ni-section-header">
   <h2 class="ni-section-header__title">POS Configuration</h2>
-  <a href="{% url 'pos_config:merchant_config' object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+  <a href="{% url 'entitas_bisnis:setup_wizard' object.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
     <i data-lucide="settings"></i>
-    {% if object.pos_config %}Edit POS Config{% else %}Setup POS Config{% endif %}
+    Setup Wizard
   </a>
 </div>
 {% if object.pos_config %}
@@ -57,7 +57,7 @@
 {% else %}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <p>POS Config belum dikonfigurasi. <a href="{% url 'pos_config:merchant_config' object.pk %}">Setup sekarang →</a></p>
+    <p>POS Config belum dikonfigurasi. <a href="{% url 'entitas_bisnis:setup_wizard' object.pk %}">Setup sekarang →</a></p>
   </div>
 </div>
 {% endif %}

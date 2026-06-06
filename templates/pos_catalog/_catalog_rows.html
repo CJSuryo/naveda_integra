@@ -29,6 +29,21 @@
     </span>
   </td>
 
+  {# HPP #}
+  <td class="ni-text-end">
+    {% if row.hpp %}Rp {{ row.hpp|floatformat:0|intcomma }}{% else %}—{% endif %}
+  </td>
+
+  {# Profit Per Unit #}
+  <td class="ni-text-end {% if row.profit_per_unit < 0 %}ni-text-danger{% endif %}">
+    {% if ci %}Rp {{ row.profit_per_unit|floatformat:0|intcomma }}{% else %}—{% endif %}
+  </td>
+
+  {# Margin % #}
+  <td class="ni-text-end {% if row.margin_pct < 0 %}ni-text-danger{% endif %}">
+    {% if ci %}{{ row.margin_pct|floatformat:1 }}%{% else %}—{% endif %}
+  </td>
+
   {# Stock #}
   <td class="ni-text-end">{{ row.stock|floatformat:0|intcomma }}</td>
 
@@ -82,6 +97,6 @@
 {% endwith %}
 {% empty %}
 <tr>
-  <td colspan="9" class="ni-text-center ni-text-muted">Tidak ada item untuk kategori ini.</td>
+  <td colspan="12" class="ni-text-center ni-text-muted">Tidak ada item untuk kategori ini.</td>
 </tr>
 {% endfor %}
