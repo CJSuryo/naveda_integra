@@ -131,3 +131,13 @@
 .ni-catalog-order-input {
   width: 70px;
 }
+
+/* ---------- Catalog price history row ---------- */
+.ni-catalog-history-row .ni-catalog-history-cell {
+  background: var(--ni-bg-alt, #f0f0f0);
+  padding: 0.75rem 1rem;
+}
+
+.ni-catalog-history-content {
+  overflow-x: auto;
+}

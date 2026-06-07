@@ -130,6 +130,45 @@
         cancelRow(btn.closest('tr'));
       });
     });
+    document.querySelectorAll('.ni-catalog-history-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        togglePriceHistory(btn);
+      });
+    });
+  }
+
+  function togglePriceHistory(btn) {
+    var itemId = btn.getAttribute('data-item-id');
+    var historyRow = document.querySelector('.ni-catalog-history-row[data-for-item="' + itemId + '"]');
+    if (!historyRow) return;
+    if (!historyRow.classList.contains('ni-d-none')) {
+      historyRow.classList.add('ni-d-none');
+      return;
+    }
+    var content = historyRow.querySelector('.ni-catalog-history-content');
+    content.innerHTML = '<span class="ni-text-muted">Memuat riwayat harga...</span>';
+    historyRow.classList.remove('ni-d-none');
+    fetch(btn.getAttribute('data-history-url'))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.history || !data.history.length) {
+          content.innerHTML = '<span class="ni-text-muted">Belum ada riwayat perubahan harga.</span>';
+          return;
+        }
+        var rows = data.history.map(function (h) {
+          var dari = h.dari ? h.dari : '—';
+          var sampai = h.sampai ? h.sampai : 'sekarang';
+          var harga = parseInt(h.harga || 0).toLocaleString('id-ID');
+          var qty = parseFloat(h.jumlah_terjual || 0).toLocaleString('id-ID');
+          return '<tr><td>' + dari + '</td><td>' + sampai + '</td><td class="ni-text-end">Rp ' + harga + '</td><td class="ni-text-end">' + qty + '</td></tr>';
+        }).join('');
+        content.innerHTML = '<table class="ni-table ni-table--sm">' +
+          '<thead><tr><th>Dari</th><th>Sampai</th><th class="ni-text-end">Harga Jual</th><th class="ni-text-end">Terjual</th></tr></thead>' +
+          '<tbody>' + rows + '</tbody></table>';
+      })
+      .catch(function () {
+        content.innerHTML = '<span class="ni-text-danger">Gagal memuat riwayat.</span>';
+      });
   }
 
   function editRow(row) {
@@ -139,6 +178,8 @@
     row.querySelector('.ni-catalog-edit-btn').classList.add('ni-d-none');
     row.querySelector('.ni-catalog-save-btn').classList.remove('ni-d-none');
     row.querySelector('.ni-catalog-cancel-btn').classList.remove('ni-d-none');
+    var histBtn = row.querySelector('.ni-catalog-history-btn');
+    if (histBtn) histBtn.classList.remove('ni-d-none');
     setAllEditBtns(true);
     row.querySelector('.ni-catalog-edit-btn').disabled = false;
   }
@@ -149,6 +190,12 @@
     row.querySelector('.ni-catalog-edit-btn').classList.remove('ni-d-none');
     row.querySelector('.ni-catalog-save-btn').classList.add('ni-d-none');
     row.querySelector('.ni-catalog-cancel-btn').classList.add('ni-d-none');
+    var histBtn = row.querySelector('.ni-catalog-history-btn');
+    if (histBtn) histBtn.classList.add('ni-d-none');
+    // Hide history row if open
+    var itemId = row.getAttribute('data-item-id');
+    var historyRow = document.querySelector('.ni-catalog-history-row[data-for-item="' + itemId + '"]');
+    if (historyRow) historyRow.classList.add('ni-d-none');
     // Restore original input values
     row.querySelectorAll('[data-edit] input, [data-edit] textarea').forEach(function (inp) {
       inp.value = inp.getAttribute('data-original') || '';

@@ -970,18 +970,15 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
     items = qs[:50]
     selling_price_map: dict = {}
     if eb_lv1_id:
-        from apps.inventory.models import InventoryRecord as _IR
-        from django.db.models import Max as _Max
+        from apps.pos_catalog.models import CatalogItem as _CI
         selling_price_map = {
-            item_id: str(sp)
-            for item_id, sp in (
-                _IR.objects
-                .filter(entitas_bisnis_id=eb_lv1_id, item_id__in=[i.pk for i in items])
-                .exclude(selling_price__isnull=True)
-                .values('item_id')
-                .annotate(sp=_Max('selling_price'))
-                .values_list('item_id', 'sp')
-            )
+            ci.item_id: str(ci.selling_price)
+            for ci in _CI.objects.filter(
+                entitas_bisnis_id=eb_lv1_id,
+                item_id__in=[i.pk for i in items],
+                is_active=True,
+            ).only('item_id', 'selling_price')
+            if ci.selling_price is not None
         }
 
     results = [

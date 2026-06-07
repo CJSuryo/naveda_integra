@@ -14,4 +14,5 @@ urlpatterns = [
     path('<int:eb_pk>/catalog/items/', views.catalog_items_ajax, name='catalog_items_ajax'),
     path('<int:eb_pk>/catalog/items/upsert/', views.catalog_upsert, name='catalog_upsert'),
     path('<int:eb_pk>/catalog/logs/', views.catalog_logs, name='catalog_logs'),
+    path('<int:eb_pk>/catalog/items/<int:item_pk>/price-history/', views.catalog_price_history, name='catalog_price_history'),
 ]

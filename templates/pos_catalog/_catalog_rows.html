@@ -91,9 +91,25 @@
       <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm ni-catalog-cancel-btn ni-d-none">
         Batal
       </button>
+      {% if ci %}
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm ni-catalog-history-btn ni-d-none"
+              data-item-id="{{ item.pk }}"
+              data-history-url="{% url 'pos_catalog:catalog_price_history' eb_pk=eb.pk item_pk=item.pk %}">
+        <i data-lucide="clock"></i> Riwayat Harga
+      </button>
+      {% endif %}
     </div>
   </td>
 </tr>
+{% if ci %}
+<tr class="ni-catalog-history-row ni-d-none" data-for-item="{{ item.pk }}">
+  <td colspan="12" class="ni-catalog-history-cell">
+    <div class="ni-catalog-history-content">
+      <span class="ni-text-muted">Memuat riwayat harga...</span>
+    </div>
+  </td>
+</tr>
+{% endif %}
 {% endwith %}
 {% empty %}
 <tr>

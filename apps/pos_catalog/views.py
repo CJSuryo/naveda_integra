@@ -226,3 +226,75 @@ def catalog_logs(request, eb_pk):
     return render(request, 'pos_catalog/catalog_logs.html', {
         'eb': eb, 'page': page, 'q': q,
     })
+
+
+@login_required
+def catalog_price_history(request, eb_pk, item_pk):
+    denied = _check_perm(request.user, 'pos_config_manage')
+    if denied:
+        return JsonResponse({'error': 'forbidden'}, status=403)
+    eb = get_object_or_404(EntitasBisnis, pk=eb_pk)
+    ci = get_object_or_404(CatalogItem, entitas_bisnis=eb, item_id=item_pk)
+
+    # Price-change log entries oldest-first to build periods
+    price_logs = list(
+        CatalogItemLog.objects
+        .filter(catalog_item=ci, field_name='selling_price')
+        .order_by('changed_at')
+        .values('new_value', 'old_value', 'changed_at')
+    )
+
+    from apps.sales.models import SalesItem
+
+    # Build periods: [{price, date_from, date_to}, ...]
+    # First period = old_value of first log (price at creation), up to first change
+    periods = []
+    if price_logs:
+        # Period before first change: price = first log's old_value
+        first_change_dt = price_logs[0]['changed_at'].date()
+        old_price = price_logs[0]['old_value']
+        if old_price:
+            periods.append({
+                'harga': old_price,
+                'dari': None,
+                'sampai': first_change_dt,
+            })
+        for i, log in enumerate(price_logs):
+            date_from = log['changed_at'].date()
+            date_to = price_logs[i + 1]['changed_at'].date() if i + 1 < len(price_logs) else None
+            periods.append({
+                'harga': log['new_value'],
+                'dari': date_from,
+                'sampai': date_to,
+            })
+    else:
+        # No changes ever — current price is the only period
+        periods.append({
+            'harga': str(ci.selling_price),
+            'dari': None,
+            'sampai': None,
+        })
+
+    # For each period, sum qty sold in that date range for this item + eb
+    from django.db.models import Sum as _Sum
+    result = []
+    for p in periods:
+        si_qs = SalesItem.objects.filter(
+            sales_eb__entitas_bisnis=eb,
+            item_id=item_pk,
+        )
+        if p['dari']:
+            si_qs = si_qs.filter(sales_eb__sales_header__tanggal__gte=p['dari'])
+        if p['sampai']:
+            si_qs = si_qs.filter(sales_eb__sales_header__tanggal__lt=p['sampai'])
+        qty = si_qs.aggregate(total=_Sum('quantity'))['total'] or 0
+        result.append({
+            'harga': p['harga'],
+            'dari': str(p['dari']) if p['dari'] else '',
+            'sampai': str(p['sampai']) if p['sampai'] else '',
+            'jumlah_terjual': str(qty),
+        })
+
+    # Most recent first
+    result.reverse()
+    return JsonResponse({'history': result})
