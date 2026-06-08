@@ -27,6 +27,14 @@ Phases 4 and 5 can be built in parallel.
 - [Deferred Revenue Design](../specs/2026-06-07-deferred-revenue-design.md)
 - [Recurring Revenue Design](../specs/2026-06-07-recurring-revenue-design.md)
 
+## Implementation Plans
+
+- [Phase 1 — Piutang](2026-06-07-piutang-phase1.md)
+- [Phase 2 — Sales payment_type](2026-06-08-sales-payment-type-phase2.md)
+- [Phase 3 — Pendapatan Core](2026-06-08-pendapatan-phase3.md)
+- [Phase 4 — Deferred Revenue](2026-06-08-deferred-revenue-phase4.md)
+- [Phase 5 — Recurring Revenue](2026-06-08-recurring-revenue-phase5.md)
+
 ---
 
 ## Phase 1 — Piutang
