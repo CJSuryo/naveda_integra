@@ -24,6 +24,7 @@ urlpatterns = [
     path('pos/', include('apps.pos_crm.urls')),
     path('pos/', include('apps.pos_promotions.urls')),
     path('pos/', include('apps.pos_reports.urls')),
+    path('piutang/', include('apps.piutang.urls', namespace='piutang')),
     path('dashboard/', include('apps.dashboard.urls', namespace='dashboard')),
     path('', include('apps.accounts.urls_home')),
 ]
