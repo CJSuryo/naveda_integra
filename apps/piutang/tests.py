@@ -146,3 +146,65 @@ class CreatePiutangPaymentTests(TestCase):
         self.assertEqual(len(credits), 1)
         self.assertEqual(debits[0].akun, self.f['coa_kas'])
         self.assertEqual(credits[0].akun, self.f['coa_piutang'])
+
+
+from .services import compute_angsuran_schedule, compute_bagian_lancar
+
+
+class ComputeAngsuranScheduleTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+
+    def _make_piutang(self, jenis_bunga, bunga_persen, jumlah_angsuran, periode_angsuran):
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=date(2026, 12, 31),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1200000')}],
+            jenis_bunga=jenis_bunga, bunga_persen=bunga_persen,
+            jumlah_angsuran=jumlah_angsuran, periode_angsuran=periode_angsuran,
+        )
+        return p
+
+    def test_tanpa_bunga_equal_principal(self):
+        p = self._make_piutang('tanpa_bunga', Decimal('0'), 3, 'bulanan')
+        schedule = compute_angsuran_schedule(p)
+        self.assertEqual(len(schedule), 3)
+        self.assertEqual(schedule[0]['pokok'], Decimal('400000'))
+        self.assertEqual(schedule[0]['bunga'], Decimal('0'))
+
+    def test_flat_constant_installment(self):
+        p = self._make_piutang('flat', Decimal('12'), 12, 'bulanan')
+        schedule = compute_angsuran_schedule(p)
+        self.assertEqual(len(schedule), 12)
+        monthly_bunga = Decimal('1200000') * Decimal('12') / 100 / 12
+        self.assertEqual(schedule[0]['bunga'], monthly_bunga)
+
+    def test_total_pokok_equals_jumlah_pokok(self):
+        p = self._make_piutang('tanpa_bunga', Decimal('0'), 4, 'bulanan')
+        schedule = compute_angsuran_schedule(p)
+        self.assertEqual(sum(r['pokok'] for r in schedule), p.jumlah_pokok)
+
+
+class ComputeBagianLancarTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+
+    def test_full_amount_when_due_within_12_months(self):
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2026, 6, 1),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('500000')}],
+        )
+        bagian = compute_bagian_lancar(p)
+        self.assertEqual(bagian, Decimal('500000'))
+
+    def test_zero_when_due_beyond_12_months(self):
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('500000')}],
+        )
+        bagian = compute_bagian_lancar(p)
+        self.assertEqual(bagian, Decimal('0'))
