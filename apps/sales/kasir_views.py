@@ -282,7 +282,7 @@ def api_kasir_submit(request: HttpRequest) -> JsonResponse:
                 actor=None,
             )
 
-            create_sales_automated_journals(sales)
+            create_sales_automated_journals(sales, user=request.user)
 
             SalesEventLog.objects.create(
                 sales_header=sales,

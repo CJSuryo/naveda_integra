@@ -883,7 +883,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
         process_sales_fifo(sales)
 
         # Generate automated journals
-        create_sales_automated_journals(sales)
+        create_sales_automated_journals(sales, user=request.user)
 
         event_type = 'EDITED' if existing else 'CREATED'
         SalesEventLog.objects.create(
