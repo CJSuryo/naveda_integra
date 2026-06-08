@@ -66,11 +66,6 @@ def create_manual_piutang(
     jatuh_tempo,
     details: list,
     jenis_jangka_waktu: str = 'short_term',
-    requires_approval: bool = False,
-    jenis_bunga: str = 'tanpa_bunga',
-    bunga_persen: Decimal = Decimal('0'),
-    jumlah_angsuran=None,
-    periode_angsuran: str = 'bulanan',
     user=None,
 ) -> PiutangHeader:
     if not details:
@@ -90,12 +85,6 @@ def create_manual_piutang(
             jumlah_pokok=total,
             status='draft',
             jenis_jangka_waktu=jenis_jangka_waktu,
-            requires_approval=requires_approval,
-            approval_status='pending' if requires_approval else '',
-            jenis_bunga=jenis_bunga,
-            bunga_persen=bunga_persen,
-            jumlah_angsuran=jumlah_angsuran,
-            periode_angsuran=periode_angsuran,
             created_by=user,
         )
         PiutangDetail.objects.bulk_create([
@@ -282,55 +271,6 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
         ),
     ])
     return header
-
-
-def compute_angsuran_schedule(piutang: PiutangHeader) -> list[dict]:
-    if not piutang.jumlah_angsuran or piutang.jumlah_angsuran <= 0:
-        return []
-    n = piutang.jumlah_angsuran
-    pokok = piutang.jumlah_pokok
-    rate_annual = piutang.bunga_persen / Decimal('100')
-
-    period_months = {'bulanan': 1, 'triwulanan': 3, 'semesteran': 6, 'tahunan': 12}
-    m = period_months.get(piutang.periode_angsuran, 1)
-    rate_period = rate_annual * m / Decimal('12')
-
-    result = []
-    if piutang.jenis_bunga == 'tanpa_bunga':
-        base_pokok = (pokok / n).quantize(Decimal('0.01'))
-        remainder = pokok - base_pokok * (n - 1)
-        for i in range(1, n + 1):
-            p = remainder if i == n else base_pokok
-            result.append({'no': i, 'pokok': p, 'bunga': Decimal('0'), 'angsuran': p})
-
-    elif piutang.jenis_bunga == 'flat':
-        base_pokok = (pokok / n).quantize(Decimal('0.01'))
-        bunga_period = (pokok * rate_period).quantize(Decimal('0.01'))
-        remainder = pokok - base_pokok * (n - 1)
-        for i in range(1, n + 1):
-            p = remainder if i == n else base_pokok
-            result.append({'no': i, 'pokok': p, 'bunga': bunga_period, 'angsuran': p + bunga_period})
-
-    elif piutang.jenis_bunga == 'anuitas':
-        if rate_period == 0:
-            return compute_angsuran_schedule(
-                type('obj', (), {
-                    'jumlah_angsuran': n, 'jumlah_pokok': pokok, 'jenis_bunga': 'tanpa_bunga',
-                    'bunga_persen': Decimal('0'), 'periode_angsuran': piutang.periode_angsuran,
-                })()
-            )
-        factor = rate_period * (1 + rate_period) ** n / ((1 + rate_period) ** n - 1)
-        angsuran_tetap = (pokok * factor).quantize(Decimal('0.01'))
-        saldo = pokok
-        for i in range(1, n + 1):
-            bunga = (saldo * rate_period).quantize(Decimal('0.01'))
-            p = (angsuran_tetap - bunga).quantize(Decimal('0.01'))
-            if i == n:
-                p = saldo.quantize(Decimal('0.01'))
-            result.append({'no': i, 'pokok': p, 'bunga': bunga, 'angsuran': p + bunga})
-            saldo -= p
-
-    return result
 
 
 def compute_bagian_lancar(piutang: PiutangHeader) -> Decimal:

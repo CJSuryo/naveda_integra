@@ -12,9 +12,10 @@ from .forms import (
     PiutangAttachmentForm, PiutangDetailFormSet, PiutangHeaderForm,
     PiutangPenerimaanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
 )
+import json
 from .models import PiutangAttachment, PiutangHeader, PiutangPenerimaan, PiutangReklasifikasi
 from .services import (
-    compute_angsuran_schedule, compute_bagian_lancar,
+    compute_bagian_lancar,
     create_manual_piutang, create_piutang_payment,
     get_piutang_aging, get_piutang_dashboard_kpi,
     reverse_piutang_payment, write_off_piutang,
@@ -37,10 +38,13 @@ def piutang_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def piutang_list(request: HttpRequest) -> HttpResponse:
+    from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     status_filter = request.GET.get('status', '')
     search = request.GET.get('q', '').strip()
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     qs = PiutangHeader.objects.select_related('entitas_bisnis').order_by('-tanggal', '-created_at')
     if tanggal_dari:
@@ -53,11 +57,22 @@ def piutang_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(
             Q(nomor_piutang__icontains=search) | Q(debitur__icontains=search) | Q(deskripsi__icontains=search)
         )
+    if eb_filter_list:
+        lv1_ids = set()
+        for sel in eb_filter_list:
+            resolved = _resolve_eb_selection(sel)
+            if resolved:
+                lv1_ids.add(resolved['lv1_id'])
+        if lv1_ids:
+            qs = qs.filter(entitas_bisnis_id__in=lv1_ids)
+
     return render(request, 'piutang/list.html', {
         'piutangs': list(qs),
         'tanggal_dari': tanggal_dari, 'tanggal_sampai': tanggal_sampai,
         'status_filter': status_filter, 'search': search,
         'status_choices': PiutangHeader.STATUS_CHOICES,
+        'eb_options': _get_eb_dropdown_options(),
+        'eb_filter_list': eb_filter_list,
     })
 
 
@@ -92,11 +107,6 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                         jatuh_tempo=cd.get('jatuh_tempo'),
                         details=details,
                         jenis_jangka_waktu=cd['jenis_jangka_waktu'],
-                        requires_approval=cd.get('requires_approval', False),
-                        jenis_bunga=cd.get('jenis_bunga', 'tanpa_bunga'),
-                        bunga_persen=cd.get('bunga_persen') or Decimal('0'),
-                        jumlah_angsuran=cd.get('jumlah_angsuran'),
-                        periode_angsuran=cd.get('periode_angsuran', 'bulanan'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
@@ -130,14 +140,12 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
     penerimaan_form = PiutangPenerimaanForm(piutang_header=piutang, initial={'tanggal_terima': piutang.tanggal})
     attachment_form = PiutangAttachmentForm()
-    angsuran_schedule = compute_angsuran_schedule(piutang) if piutang.jumlah_angsuran else []
     bagian_lancar = compute_bagian_lancar(piutang) if piutang.can_reklasifikasi else None
     akun_piutang_list = list(Akun.objects.filter(kategori_id='aset').order_by('kode_akun'))
     return render(request, 'piutang/detail.html', {
         'piutang': piutang,
         'penerimaan_form': penerimaan_form,
         'attachment_form': attachment_form,
-        'angsuran_schedule': angsuran_schedule,
         'bagian_lancar': bagian_lancar,
         'akun_piutang_list': akun_piutang_list,
         'write_off_form': PiutangWriteOffForm(initial={'tanggal': timezone.now().date()}),
@@ -230,48 +238,6 @@ def piutang_write_off(request: HttpRequest, pk: int) -> HttpResponse:
                 return redirect('piutang:detail', pk=pk)
             except ValueError as exc:
                 dj_messages.error(request, str(exc))
-    return redirect('piutang:detail', pk=pk)
-
-
-@login_required
-def piutang_submit_approval(request: HttpRequest, pk: int) -> HttpResponse:
-    piutang = get_object_or_404(PiutangHeader, pk=pk)
-    if request.method == 'POST':
-        if piutang.status != 'draft' or not piutang.requires_approval:
-            dj_messages.error(request, 'Tidak dapat diajukan.')
-        else:
-            piutang.approval_status = 'pending'
-            piutang.save(update_fields=['approval_status'])
-            dj_messages.success(request, 'Diajukan untuk persetujuan.')
-    return redirect('piutang:detail', pk=pk)
-
-
-@login_required
-def piutang_approve(request: HttpRequest, pk: int) -> HttpResponse:
-    piutang = get_object_or_404(PiutangHeader, pk=pk)
-    if request.method == 'POST':
-        if piutang.approval_status != 'pending':
-            dj_messages.error(request, 'Hanya piutang berstatus Pending yang dapat disetujui.')
-            return redirect('piutang:detail', pk=pk)
-        piutang.approval_status = 'approved'
-        piutang.approved_by = request.user
-        piutang.approved_at = timezone.now()
-        piutang.status = 'open'
-        piutang.save(update_fields=['approval_status', 'approved_by', 'approved_at', 'status'])
-        dj_messages.success(request, 'Piutang disetujui.')
-    return redirect('piutang:detail', pk=pk)
-
-
-@login_required
-def piutang_reject(request: HttpRequest, pk: int) -> HttpResponse:
-    piutang = get_object_or_404(PiutangHeader, pk=pk)
-    if request.method == 'POST':
-        if piutang.approval_status != 'pending':
-            dj_messages.error(request, 'Hanya piutang berstatus Pending yang dapat ditolak.')
-            return redirect('piutang:detail', pk=pk)
-        piutang.approval_status = 'rejected'
-        piutang.save(update_fields=['approval_status'])
-        dj_messages.warning(request, 'Piutang ditolak.')
     return redirect('piutang:detail', pk=pk)
 
 

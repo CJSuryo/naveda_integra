@@ -11,19 +11,6 @@
     {% if piutang.can_edit %}
       <a href="{% url 'piutang:update' piutang.pk %}" class="ni-btn ni-btn--warning">Edit</a>
     {% endif %}
-    {% if piutang.requires_approval and piutang.status == 'draft' %}
-      <form method="post" action="{% url 'piutang:submit_approval' piutang.pk %}" class="ni-form-inline">
-        {% csrf_token %}
-        <button type="submit" class="ni-btn ni-btn--secondary">Ajukan Persetujuan</button>
-      </form>
-    {% endif %}
-    {% if piutang.status == 'draft' %}
-      <form method="post" action="{% url 'piutang:approve' piutang.pk %}" class="ni-form-inline">
-        {% csrf_token %}
-        <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui dan posting piutang ini?')">Setujui &amp; Post</button>
-      </form>
-      <button type="button" class="ni-btn ni-btn--danger" onclick="openModal('rejectModal')">Tolak</button>
-    {% endif %}
     {% if piutang.can_pay %}
       <button type="button" class="ni-btn ni-btn--primary" onclick="openModal('terimaModal')">Terima Penerimaan</button>
     {% endif %}
@@ -52,10 +39,6 @@
           {% endif %}
         </dd>
         <dt>Deskripsi</dt><dd>{{ piutang.deskripsi|default:'-' }}</dd>
-        {% if piutang.requires_approval %}
-        <dt>Status Persetujuan</dt><dd>{{ piutang.get_approval_status_display|default:'-' }}</dd>
-        <dt>Disetujui Oleh</dt><dd>{{ piutang.approved_by|default:'-' }}</dd>
-        {% endif %}
       </dl>
     </div>
   </div>
@@ -72,37 +55,6 @@
     </div>
   </div>
 </div>
-
-{% if angsuran_schedule %}
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__header">
-    <h2 class="ni-card__title">Tabel Angsuran</h2>
-    <span class="ni-text-muted">{{ angsuran_schedule|length }} angsuran</span>
-  </div>
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead>
-        <tr>
-          <th>No</th>
-          <th class="ni-text-right">Pokok</th>
-          <th class="ni-text-right">Bunga</th>
-          <th class="ni-text-right">Angsuran</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in angsuran_schedule %}
-        <tr>
-          <td>{{ row.no }}</td>
-          <td class="ni-text-right">{{ row.pokok|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ row.bunga|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right"><strong>{{ row.angsuran|floatformat:0|intcomma }}</strong></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
-{% endif %}
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Detail Piutang</h2></div>
@@ -255,31 +207,6 @@
   <a href="{% url 'piutang:delete' piutang.pk %}" class="ni-btn ni-btn--danger">Hapus</a>
   {% endif %}
 </div>
-
-<!-- ── Reject Modal ────────────────────────────────────────────── -->
-{% if piutang.status == 'draft' %}
-<div class="ni-modal-backdrop" id="rejectModal">
-  <div class="ni-modal">
-    <div class="ni-modal__header">
-      <h3 class="ni-modal__title">Tolak Piutang</h3>
-      <button class="ni-modal__close" type="button" onclick="closeModal('rejectModal')">&times;</button>
-    </div>
-    <div class="ni-modal__body">
-      <form method="post" action="{% url 'piutang:reject' piutang.pk %}">
-        {% csrf_token %}
-        <div class="ni-form-group">
-          <label class="ni-form-label">Alasan penolakan</label>
-          <textarea name="notes" class="ni-input" rows="3"></textarea>
-        </div>
-        <div class="ni-btn-row">
-          <button type="submit" class="ni-btn ni-btn--danger">Tolak</button>
-          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('rejectModal')">Batal</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 
 <!-- ── Terima Penerimaan Modal ────────────────────────────────── -->
 {% if piutang.can_pay %}

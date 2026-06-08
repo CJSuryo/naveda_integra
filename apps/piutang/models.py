@@ -12,19 +12,6 @@ JENIS_JANGKA_WAKTU_CHOICES = [
     ('long_term', 'Jangka Panjang'),
 ]
 
-JENIS_BUNGA_CHOICES = [
-    ('tanpa_bunga', 'Tanpa Bunga'),
-    ('flat', 'Flat'),
-    ('anuitas', 'Anuitas (Efektif)'),
-]
-
-PERIODE_ANGSURAN_CHOICES = [
-    ('bulanan', 'Bulanan'),
-    ('triwulanan', 'Triwulanan (3 Bulan)'),
-    ('semesteran', 'Semesteran (6 Bulan)'),
-    ('tahunan', 'Tahunan'),
-]
-
 JENIS_DOKUMEN_CHOICES = [
     ('invoice', 'Invoice'),
     ('kontrak', 'Kontrak'),
@@ -52,12 +39,6 @@ class PiutangHeader(models.Model):
         ('overdue', 'Jatuh Tempo'),
         ('written_off', 'Dihapusbukukan'),
         ('cancelled', 'Dibatalkan'),
-    ]
-    APPROVAL_STATUS_CHOICES = [
-        ('', '-'),
-        ('pending', 'Menunggu'),
-        ('approved', 'Disetujui'),
-        ('rejected', 'Ditolak'),
     ]
     SOURCE_TYPE_CHOICES = [
         ('manual', 'Manual'),
@@ -96,33 +77,9 @@ class PiutangHeader(models.Model):
         max_length=20, choices=JENIS_JANGKA_WAKTU_CHOICES, default='short_term',
         verbose_name='Jenis Jangka Waktu',
     )
-    requires_approval = models.BooleanField(default=False, verbose_name='Perlu Persetujuan')
-    approval_status = models.CharField(
-        max_length=20, choices=APPROVAL_STATUS_CHOICES, blank=True, default='',
-        verbose_name='Status Persetujuan',
-    )
-    approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='piutang_approved', verbose_name='Disetujui Oleh',
-    )
-    approved_at = models.DateTimeField(null=True, blank=True, verbose_name='Disetujui Pada')
     coa_piutang_account = models.ForeignKey(
         'master_data.Akun', on_delete=models.PROTECT,
         related_name='piutang_headers', verbose_name='Akun Piutang',
-    )
-    jenis_bunga = models.CharField(
-        max_length=20, choices=JENIS_BUNGA_CHOICES, default='tanpa_bunga',
-        verbose_name='Jenis Bunga',
-    )
-    bunga_persen = models.DecimalField(
-        max_digits=8, decimal_places=4, default=0, verbose_name='Suku Bunga (% per tahun)',
-    )
-    jumlah_angsuran = models.PositiveSmallIntegerField(
-        null=True, blank=True, verbose_name='Jumlah Angsuran',
-    )
-    periode_angsuran = models.CharField(
-        max_length=20, choices=PERIODE_ANGSURAN_CHOICES, default='bulanan',
-        verbose_name='Periode Angsuran',
     )
     is_locked = models.BooleanField(default=False, verbose_name='Terkunci')
     created_by = models.ForeignKey(
@@ -378,9 +335,6 @@ class PiutangAuditLog(models.Model):
     ACTION_CHOICES = [
         ('CREATED', 'Dibuat'),
         ('EDITED', 'Diedit'),
-        ('SUBMIT_APPROVAL', 'Diajukan Persetujuan'),
-        ('APPROVED', 'Disetujui'),
-        ('REJECTED', 'Ditolak'),
         ('PAYMENT', 'Penerimaan'),
         ('REVERSE_PAYMENT', 'Batalkan Penerimaan'),
         ('WRITE_OFF', 'Dihapusbukukan'),

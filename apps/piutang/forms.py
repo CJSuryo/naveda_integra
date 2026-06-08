@@ -11,8 +11,7 @@ class PiutangHeaderForm(forms.ModelForm):
         model = PiutangHeader
         fields = [
             'tanggal', 'debitur', 'deskripsi', 'jatuh_tempo',
-            'jenis_jangka_waktu', 'coa_piutang_account', 'requires_approval',
-            'jenis_bunga', 'bunga_persen', 'jumlah_angsuran', 'periode_angsuran',
+            'jenis_jangka_waktu', 'coa_piutang_account',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -21,19 +20,12 @@ class PiutangHeaderForm(forms.ModelForm):
             'jatuh_tempo': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'jenis_jangka_waktu': forms.Select(attrs={'class': 'ni-input'}),
             'coa_piutang_account': forms.Select(attrs={'class': 'ni-input'}),
-            'requires_approval': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
-            'jenis_bunga': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_bunga'}),
-            'bunga_persen': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0'}),
-            'jumlah_angsuran': forms.NumberInput(attrs={'class': 'ni-input', 'min': '1'}),
-            'periode_angsuran': forms.Select(attrs={'class': 'ni-input'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['deskripsi'].required = False
         self.fields['jatuh_tempo'].required = False
-        self.fields['requires_approval'].required = False
-        self.fields['jumlah_angsuran'].required = False
         self.fields['coa_piutang_account'].queryset = Akun.objects.filter(
             kategori_id='aset'
         ).order_by('kode_akun')
@@ -69,7 +61,7 @@ class PiutangPenerimaanForm(forms.ModelForm):
     class Meta:
         model = PiutangPenerimaan
         fields = ['tanggal_terima', 'jumlah_diterima', 'payment_account',
-                  'metode_penerimaan', 'nomor_referensi', 'catatan', 'angsuran_no']
+                  'metode_penerimaan', 'nomor_referensi', 'catatan']
         widgets = {
             'tanggal_terima': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'jumlah_diterima': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0.01'}),
@@ -77,14 +69,12 @@ class PiutangPenerimaanForm(forms.ModelForm):
             'metode_penerimaan': forms.Select(attrs={'class': 'ni-input'}),
             'nomor_referensi': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'No. transfer / cek'}),
             'catatan': forms.TextInput(attrs={'class': 'ni-input'}),
-            'angsuran_no': forms.NumberInput(attrs={'class': 'ni-input', 'min': '1'}),
         }
 
     def __init__(self, *args, piutang_header=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['nomor_referensi'].required = False
         self.fields['catatan'].required = False
-        self.fields['angsuran_no'].required = False
         self.fields['payment_account'].queryset = Akun.objects.filter(
             kategori_id='aset'
         ).order_by('kode_akun')

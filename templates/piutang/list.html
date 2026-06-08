@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load humanize %}
 {% block title %}Daftar Piutang{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -14,11 +15,19 @@
 
 <div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
   <div class="ni-card__body">
-    <form method="get" class="ni-filter-bar">
+    <form id="piutangFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
         <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
+            {% for opt in eb_options %}
+            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group ni-form-group--grow">
           <label class="ni-form-label">Cari</label>
-          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, debitur, referensi...">
+          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, debitur, deskripsi...">
         </div>
         <div class="ni-form-group ni-form-group--narrow">
           <label class="ni-form-label">Dari Tanggal</label>
@@ -53,7 +62,9 @@
         <tr>
           <th>Nomor Piutang</th>
           <th>Tanggal</th>
-          <th>Debitur</th>
+          <th>Debitur / EB</th>
+          <th>Deskripsi</th>
+          <th>Sumber</th>
           <th class="ni-text-right">Jumlah Pokok</th>
           <th class="ni-text-right">Sisa</th>
           <th>Jatuh Tempo</th>
@@ -67,16 +78,24 @@
           <td><a href="{% url 'piutang:detail' piutang.pk %}">{{ piutang.nomor_piutang }}</a></td>
           <td>{{ piutang.tanggal }}</td>
           <td>
-            {{ piutang.debitur|default:'' }}
+            {% if piutang.debitur %}{{ piutang.debitur }}{% endif %}
             {% if piutang.entitas_bisnis %}
               {% if piutang.debitur %}<br>{% endif %}
-              <span class="{% if piutang.debitur %}ni-text-muted{% endif %}">{{ piutang.entitas_bisnis }}</span>
-            {% elif not piutang.debitur %}
-              —
+              <span class="ni-text-muted">{{ piutang.entitas_bisnis }}</span>
+            {% elif not piutang.debitur %}—{% endif %}
+          </td>
+          <td>{{ piutang.deskripsi|default:'-'|truncatechars:40 }}</td>
+          <td>
+            {% if piutang.source_type == 'from_sales' %}
+              <span class="ni-badge ni-badge--info">Sales</span>
+            {% elif piutang.source_type == 'from_pendapatan' %}
+              <span class="ni-badge ni-badge--info">Pendapatan</span>
+            {% else %}
+              <span class="ni-badge">Manual</span>
             {% endif %}
           </td>
-          <td class="ni-text-right">{{ piutang.jumlah_pokok|floatformat:0 }}</td>
-          <td class="ni-text-right">{{ piutang.sisa_piutang|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ piutang.jumlah_pokok|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ piutang.sisa_piutang|floatformat:0|intcomma }}</td>
           <td>{{ piutang.jatuh_tempo|default:'-' }}</td>
           <td>
             <span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span>
@@ -84,10 +103,32 @@
           <td><a href="{% url 'piutang:detail' piutang.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data piutang.</td></tr>
+        <tr><td colspan="10" class="ni-text-center ni-text-muted">Belum ada data piutang.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+  var ebSel = document.getElementById('ebFilterSelect');
+  var form = document.getElementById('piutangFilterForm');
+  if (ebSel && window.TomSelect) {
+    var ts = new TomSelect(ebSel, {
+      plugins: ['remove_button'],
+      persist: false,
+      maxOptions: 500,
+      placeholder: 'Pilih entitas bisnis...',
+    });
+    var initialized = false;
+    ts.on('change', function() {
+      if (!initialized) { return; }
+      form.submit();
+    });
+    setTimeout(function() { initialized = true; }, 0);
+  }
+})();
+</script>
 {% endblock %}
