@@ -166,7 +166,58 @@ def create_piutang_from_sales(sales_header, user=None) -> PiutangHeader:
 
 
 def create_piutang_from_pendapatan(pendapatan_header, user=None) -> PiutangHeader:
-    raise NotImplementedError('Implemented in Phase 3 after apps/pendapatan/ is ready.')
+    total = Decimal('0')
+    details = []
+    for eb_group in pendapatan_header.entitas_groups.prefetch_related('items__revenue_account').all():
+        for item in eb_group.items.all():
+            total += item.jumlah_bruto
+            details.append({
+                'deskripsi': item.deskripsi_item[:255],
+                'jumlah': item.jumlah_bruto,
+                'revenue_account': item.revenue_account,
+            })
+
+    if total <= 0:
+        raise ValueError('Total pendapatan kredit harus lebih besar dari 0.')
+
+    coa_piutang = (
+        pendapatan_header.entitas_groups.first().payment_account
+        if pendapatan_header.entitas_groups.exists()
+        else None
+    )
+    if not coa_piutang:
+        raise ValueError('Payment account (akun piutang) diperlukan pada PendapatanEntitasBisnis.')
+
+    eb = (
+        pendapatan_header.entitas_groups.first().entitas_bisnis
+        if pendapatan_header.entitas_groups.exists()
+        else None
+    )
+
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.create(
+            tanggal=pendapatan_header.tanggal,
+            entitas_bisnis=eb,
+            debitur=str(eb) if eb else '',
+            deskripsi=f'Piutang dari Pendapatan {pendapatan_header.transaction_id}',
+            source_type='from_pendapatan',
+            source_pendapatan=pendapatan_header,
+            jumlah_pokok=total,
+            status='open',
+            coa_piutang_account=coa_piutang,
+            created_by=user,
+        )
+        PiutangDetail.objects.bulk_create([
+            PiutangDetail(
+                piutang_header=piutang,
+                deskripsi=d['deskripsi'],
+                jumlah=d['jumlah'],
+                revenue_account=d.get('revenue_account'),
+            )
+            for d in details
+        ])
+        _log(piutang, 'CREATED', user=user, after=_snapshot(piutang))
+    return piutang
 
 
 # ── Payment ───────────────────────────────────────────────────────────────────
