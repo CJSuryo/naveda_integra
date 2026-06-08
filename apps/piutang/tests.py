@@ -148,7 +148,7 @@ class CreatePiutangPaymentTests(TestCase):
         self.assertEqual(credits[0].akun, self.f['coa_piutang'])
 
 
-from .services import compute_angsuran_schedule, compute_bagian_lancar
+from .services import compute_angsuran_schedule, compute_bagian_lancar, write_off_piutang, reverse_piutang_payment
 
 
 class ComputeAngsuranScheduleTests(TestCase):
@@ -208,3 +208,81 @@ class ComputeBagianLancarTests(TestCase):
         )
         bagian = compute_bagian_lancar(p)
         self.assertEqual(bagian, Decimal('0'))
+
+
+from .services import get_piutang_aging
+
+
+class WriteOffPiutangTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_beban = Akun.objects.create(
+            kategori_id='beban', nama='Beban Piutang Tak Tertagih', kode_akun='6.1.1',
+        )
+        self.piutang = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=self.f['eb'], debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=date(2026, 3, 1),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('500000')}],
+        )
+        self.piutang.status = 'overdue'
+        self.piutang.save()
+
+    def test_creates_write_off_record(self):
+        write_off_piutang(
+            self.piutang,
+            {'tanggal': date(2026, 6, 7), 'metode': 'langsung',
+             'bad_debt_account': self.coa_beban, 'alasan': 'Tidak tertagih'},
+        )
+        self.assertTrue(hasattr(self.piutang, 'write_off'))
+
+    def test_status_becomes_written_off(self):
+        write_off_piutang(
+            self.piutang,
+            {'tanggal': date(2026, 6, 7), 'metode': 'langsung',
+             'bad_debt_account': self.coa_beban, 'alasan': ''},
+        )
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'written_off')
+
+    def test_langsung_journal_dr_bad_debt_cr_piutang(self):
+        write_off_piutang(
+            self.piutang,
+            {'tanggal': date(2026, 6, 7), 'metode': 'langsung',
+             'bad_debt_account': self.coa_beban, 'alasan': ''},
+        )
+        wo = self.piutang.write_off
+        details = wo.jurnal.details.all()
+        dr = next(d for d in details if d.debit > 0)
+        cr = next(d for d in details if d.kredit > 0)
+        self.assertEqual(dr.akun, self.coa_beban)
+        self.assertEqual(cr.akun, self.f['coa_piutang'])
+
+
+class ReversePiutangPaymentTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.piutang = create_manual_piutang(
+            tanggal=date(2026, 6, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000')}],
+        )
+        self.piutang.status = 'open'
+        self.piutang.save()
+        self.penerimaan = create_piutang_payment(
+            self.piutang,
+            {'tanggal_terima': date(2026, 6, 7), 'jumlah_diterima': Decimal('600000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+
+    def test_reversal_creates_counter_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        initial_count = JurnalHeader.objects.count()
+        reverse_piutang_payment(self.penerimaan)
+        self.assertEqual(JurnalHeader.objects.count(), initial_count + 1)
+
+    def test_jumlah_terbayar_reverts(self):
+        reverse_piutang_payment(self.penerimaan)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.jumlah_terbayar, Decimal('0'))
+        self.assertEqual(self.piutang.status, 'open')
