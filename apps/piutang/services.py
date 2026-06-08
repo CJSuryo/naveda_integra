@@ -115,7 +115,54 @@ def create_manual_piutang(
 # ── Stubs for callers that will be implemented in later phases ─────────────────
 
 def create_piutang_from_sales(sales_header, user=None) -> PiutangHeader:
-    raise NotImplementedError('Implemented in Phase 2 after SalesHeader.payment_type is added.')
+    total = Decimal('0')
+    details = []
+    for eb_group in sales_header.entitas_groups.select_related('entitas_bisnis').all():
+        for item in eb_group.items.select_related('revenue_account').all():
+            total += item.total_sales
+            details.append({
+                'deskripsi': str(item.item),
+                'jumlah': item.total_sales,
+                'revenue_account': item.revenue_account,
+            })
+
+    if total <= 0:
+        raise ValueError('Total credit sales harus lebih besar dari 0.')
+
+    coa_piutang = (
+        sales_header.entitas_groups.first().payment_account
+        if sales_header.entitas_groups.exists()
+        else None
+    )
+    if not coa_piutang:
+        raise ValueError('Payment account (akun piutang) diperlukan pada SalesEntitasBisnis.')
+
+    eb = sales_header.entitas_groups.first().entitas_bisnis if sales_header.entitas_groups.exists() else None
+
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.create(
+            tanggal=sales_header.tanggal,
+            entitas_bisnis=eb,
+            debitur=str(eb) if eb else '',
+            deskripsi=f'Piutang dari Sales {sales_header.transaction_id}',
+            source_type='from_sales',
+            source_sales=sales_header,
+            jumlah_pokok=total,
+            status='open',
+            coa_piutang_account=coa_piutang,
+            created_by=user,
+        )
+        PiutangDetail.objects.bulk_create([
+            PiutangDetail(
+                piutang_header=piutang,
+                deskripsi=d['deskripsi'],
+                jumlah=d['jumlah'],
+                revenue_account=d.get('revenue_account'),
+            )
+            for d in details
+        ])
+        _log(piutang, 'CREATED', user=user, after=_snapshot(piutang))
+    return piutang
 
 
 def create_piutang_from_pendapatan(pendapatan_header, user=None) -> PiutangHeader:

@@ -300,3 +300,54 @@ class SalesHeaderCreatedByTests(TestCase):
     def test_created_by_nullable(self):
         h = SalesHeader.objects.create()
         self.assertIsNone(h.created_by)
+
+
+from apps.piutang.models import PiutangHeader
+
+
+class CreditSalesCreatesPiutangTests(TestCase):
+    def setUp(self):
+        from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
+        from apps.master_data.models import Akun
+        from apps.purchase.models import ItemMasterPurchase, SubTransactionType
+
+        tipe = TipeEntitas.objects.create(nama='Pelanggan')
+        self.eb = EntitasBisnis.objects.create(nama='PT Klien', tipe_entitas=tipe, relasi='pelanggan')
+        self.coa_piutang = Akun.objects.create(kategori_id='aset', nama='Piutang Dagang', kode_akun='1.2.1')
+        self.coa_kas = Akun.objects.create(kategori_id='aset', nama='Kas', kode_akun='1.1.1')
+        self.coa_revenue = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan', kode_akun='4.1.1')
+        self.item = ItemMasterPurchase.objects.create(item_id='FG-001', nama='Produk A', tipe_item='FG')
+        self.stt = SubTransactionType.objects.create(
+            nama='Kredit', module='sales', direction='outflow',
+            default_offset_account=self.coa_revenue,
+        )
+
+    def _make_credit_sales_header(self):
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        header = SalesHeader.objects.create(payment_type='credit')
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+            payment_account=self.coa_piutang,
+        )
+        SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('500000'),
+            offset_coa_account=self.coa_kas, revenue_account=self.coa_revenue,
+            payment_account=self.coa_piutang,
+        )
+        return header
+
+    def test_creates_piutang_header(self):
+        from apps.piutang.services import create_piutang_from_sales
+        header = self._make_credit_sales_header()
+        piutang = create_piutang_from_sales(header)
+        self.assertIsNotNone(piutang.pk)
+        self.assertEqual(piutang.source_type, 'from_sales')
+        self.assertEqual(piutang.source_sales, header)
+        self.assertEqual(piutang.status, 'open')
+
+    def test_jumlah_pokok_equals_total_credit_items(self):
+        from apps.piutang.services import create_piutang_from_sales
+        header = self._make_credit_sales_header()
+        piutang = create_piutang_from_sales(header)
+        self.assertEqual(piutang.jumlah_pokok, Decimal('500000'))
