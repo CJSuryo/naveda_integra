@@ -81,10 +81,6 @@ class PiutangHeader(models.Model):
         'sales.SalesHeader', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_headers', verbose_name='Sales Header',
     )
-    source_pendapatan = models.ForeignKey(
-        'pendapatan.PendapatanHeader', on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='piutang_headers', verbose_name='Pendapatan Header',
-    )
     jumlah_pokok = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah Pokok')
     jumlah_terbayar = models.DecimalField(
         max_digits=19, decimal_places=4, default=0, verbose_name='Jumlah Terbayar',
@@ -167,7 +163,7 @@ class PiutangHeader(models.Model):
                     seq = int(last.rsplit('-', 1)[1]) + 1
                 except (ValueError, IndexError):
                     seq = 1
-            return f'TRX-PIU-{seq:03d}'
+            return f'TRX-PIU-{seq:04d}'
 
     @property
     def sisa_piutang(self) -> Decimal:
@@ -196,6 +192,10 @@ class PiutangHeader(models.Model):
             and self.jenis_jangka_waktu == 'long_term'
             and self.jatuh_tempo is not None
         )
+
+    @property
+    def can_edit(self) -> bool:
+        return self.status == 'draft' and not self.is_locked
 
     @property
     def entitas_display(self) -> str:
