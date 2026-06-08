@@ -75,9 +75,9 @@
               —
             {% endif %}
           </td>
-          <td class="ni-text-right">{{ piutang.total_amount|floatformat:0 }}</td>
-          <td class="ni-text-right">{{ piutang.outstanding_amount|floatformat:0 }}</td>
-          <td>{{ piutang.tanggal_jatuh_tempo|default:'-' }}</td>
+          <td class="ni-text-right">{{ piutang.jumlah_pokok|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ piutang.sisa_piutang|floatformat:0 }}</td>
+          <td>{{ piutang.jatuh_tempo|default:'-' }}</td>
           <td>
             <span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span>
           </td>

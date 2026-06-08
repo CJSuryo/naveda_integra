@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{% if mode == 'create' %}Buat Piutang{% else %}Edit Piutang{% endif %}{% endblock %}
 {% block content %}
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <h1 class="ni-page-header__title">{% if mode == 'create' %}Buat Piutang{% else %}Edit Piutang{% endif %}</h1>
     <p class="ni-page-header__subtitle">Isi data piutang dan detail baris piutang.</p>
   </div>
 </div>
@@ -55,12 +55,12 @@
           {% for detail_form in formset %}
             <tr class="detail-row" {% if detail_form.instance.pk %}data-existing="1"{% endif %}>
               <td>
-                {{ detail_form.description }}
+                {{ detail_form.deskripsi }}
                 {{ detail_form.id }}
                 {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
               </td>
-              <td class="ni-text-right">{{ detail_form.amount }}</td>
-              <td>{{ detail_form.coa_pendapatan_account }}</td>
+              <td class="ni-text-right">{{ detail_form.jumlah }}</td>
+              <td>{{ detail_form.revenue_account }}</td>
               <td>
                 <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-row">&#10005;</button>
               </td>

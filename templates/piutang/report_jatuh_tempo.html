@@ -28,8 +28,8 @@
         <tr>
           <td><a href="{% url 'piutang:detail' piutang.pk %}" class="ni-link">{{ piutang.nomor_piutang }}</a></td>
           <td>{{ piutang.entitas_bisnis }}</td>
-          <td>{{ piutang.tanggal_jatuh_tempo }}</td>
-          <td class="ni-text-right">{{ piutang.total_amount|floatformat:0|intcomma }}</td>
+          <td>{{ piutang.jatuh_tempo }}</td>
+          <td class="ni-text-right">{{ piutang.jumlah_pokok|floatformat:0|intcomma }}</td>
           <td>
             {% if piutang.status == 'partial' %}
               <span class="ni-badge ni-badge--warning">Sebagian</span>
