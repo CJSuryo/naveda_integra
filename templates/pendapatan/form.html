@@ -1,0 +1,242 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if mode == 'create' %}Tambah Pendapatan{% else %}Edit Pendapatan{% endif %}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{% if mode == 'create' %}Tambah Pendapatan{% else %}Edit Pendapatan{% endif %}</h1>
+    <p class="ni-page-header__subtitle">Catat pendapatan dengan detail item</p>
+  </div>
+</div>
+
+{% if form.non_field_errors %}
+<div class="ni-alert ni-alert--danger ni-mb-4">
+  {{ form.non_field_errors }}
+</div>
+{% endif %}
+
+<form method="post" id="pendapatan-form">
+  {% csrf_token %}
+  <input type="hidden" name="item_count" id="item_count" value="{{ item_forms|length }}">
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Pendapatan</h2></div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="id_eb_selection" name="eb_selection" class="ni-input">
+            <option value="">— Pilih Entitas Bisnis (opsional) —</option>
+          </select>
+        </div>
+        {% for field in form %}
+        <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Item Pendapatan</h2>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" id="add-item-btn">+ Tambah Item</button>
+    </div>
+    <div id="item-rows-container">
+      {% for item_form in item_forms %}
+      <div class="ni-item-row ni-card ni-mb-3" data-index="{{ forloop.counter0 }}">
+        <div class="ni-card__body">
+          <div class="ni-form-grid ni-form-grid--2">
+            <div class="ni-form-group ni-form-group--full">
+              <label class="ni-form-label">Deskripsi Item</label>
+              {{ item_form.deskripsi_item }}
+              {% if item_form.deskripsi_item.errors %}<div class="ni-form-error">{{ item_form.deskripsi_item.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Kategori</label>
+              {{ item_form.kategori }}
+              {% if item_form.kategori.errors %}<div class="ni-form-error">{{ item_form.kategori.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Sub-Tipe Transaksi</label>
+              {{ item_form.sub_transaction_type }}
+              {% if item_form.sub_transaction_type.errors %}<div class="ni-form-error">{{ item_form.sub_transaction_type.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Jumlah Bruto</label>
+              {{ item_form.jumlah_bruto }}
+              {% if item_form.jumlah_bruto.errors %}<div class="ni-form-error">{{ item_form.jumlah_bruto.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Akun Pendapatan</label>
+              {{ item_form.revenue_account }}
+              {% if item_form.revenue_account.errors %}<div class="ni-form-error">{{ item_form.revenue_account.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Akun Kas/Bank (opsional)</label>
+              {{ item_form.payment_account }}
+            </div>
+            <div class="ni-form-group ni-form-group--full">
+              <label class="ni-form-label">
+                {{ item_form.is_deferred }}
+                Pendapatan Diterima di Muka
+              </label>
+            </div>
+            <div class="ni-deferred-fields" style="display:none;">
+              <div class="ni-form-grid ni-form-grid--2">
+                <div class="ni-form-group">
+                  <label class="ni-form-label">Akun Deferred (Liability)</label>
+                  {{ item_form.deferred_account }}
+                  {% if item_form.deferred_account.errors %}<div class="ni-form-error">{{ item_form.deferred_account.errors }}</div>{% endif %}
+                </div>
+                <div class="ni-form-group">
+                  <label class="ni-form-label">Akun Pengakuan</label>
+                  {{ item_form.recognition_account }}
+                  {% if item_form.recognition_account.errors %}<div class="ni-form-error">{{ item_form.recognition_account.errors }}</div>{% endif %}
+                </div>
+                <div class="ni-form-group">
+                  <label class="ni-form-label">Tanggal Mulai</label>
+                  {{ item_form.deferred_tanggal_mulai }}
+                  {% if item_form.deferred_tanggal_mulai.errors %}<div class="ni-form-error">{{ item_form.deferred_tanggal_mulai.errors }}</div>{% endif %}
+                </div>
+                <div class="ni-form-group">
+                  <label class="ni-form-label">Tanggal Selesai</label>
+                  {{ item_form.deferred_tanggal_selesai }}
+                  {% if item_form.deferred_tanggal_selesai.errors %}<div class="ni-form-error">{{ item_form.deferred_tanggal_selesai.errors }}</div>{% endif %}
+                </div>
+                <div class="ni-form-group">
+                  <label class="ni-form-label">Metode</label>
+                  {{ item_form.deferred_metode }}
+                </div>
+              </div>
+            </div>
+          </div>
+          {% if not forloop.first %}
+          <div class="ni-btn-row">
+            <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="ni-btn-row">
+    <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+    <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
+</form>
+
+<script>
+(function () {
+  var container = document.getElementById('item-rows-container');
+  var addBtn = document.getElementById('add-item-btn');
+  var itemCountInput = document.getElementById('item_count');
+
+  function getItemCount() {
+    return container.querySelectorAll('.ni-item-row').length;
+  }
+
+  function attachRowEvents(row) {
+    var deferredCb = row.querySelector('input[type=checkbox][name$="-is_deferred"]');
+    var deferredFields = row.querySelector('.ni-deferred-fields');
+    if (deferredCb && deferredFields) {
+      function toggleDeferred() {
+        deferredFields.style.display = deferredCb.checked ? 'block' : 'none';
+      }
+      deferredCb.addEventListener('change', toggleDeferred);
+      toggleDeferred();
+    }
+
+    var sttSelect = row.querySelector('select[name$="-sub_transaction_type"]');
+    var revenueSelect = row.querySelector('select[name$="-revenue_account"]');
+    if (sttSelect && revenueSelect) {
+      sttSelect.addEventListener('change', function () {
+        var sttId = sttSelect.value;
+        if (!sttId) return;
+        fetch('/pendapatan/api/stt-defaults/?stt_id=' + sttId)
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.revenue_account_id) {
+              revenueSelect.value = data.revenue_account_id;
+            }
+          })
+          .catch(function () {});
+      });
+    }
+
+    var removeBtn = row.querySelector('.remove-item-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () {
+        row.remove();
+        reindexRows();
+      });
+    }
+  }
+
+  function reindexRows() {
+    var rows = container.querySelectorAll('.ni-item-row');
+    rows.forEach(function (row, i) {
+      row.setAttribute('data-index', i);
+      row.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.name) el.name = el.name.replace(/item_\d+/, 'item_' + i);
+        if (el.id) el.id = el.id.replace(/item_\d+/, 'item_' + i);
+      });
+      row.querySelectorAll('label[for]').forEach(function (lbl) {
+        lbl.setAttribute('for', lbl.getAttribute('for').replace(/item_\d+/, 'item_' + i));
+      });
+    });
+    itemCountInput.value = rows.length;
+  }
+
+  container.querySelectorAll('.ni-item-row').forEach(attachRowEvents);
+
+  addBtn.addEventListener('click', function () {
+    var firstRow = container.querySelector('.ni-item-row');
+    if (!firstRow) return;
+    var newRow = firstRow.cloneNode(true);
+    var newIdx = getItemCount();
+    newRow.setAttribute('data-index', newIdx);
+    newRow.querySelectorAll('input, select, textarea').forEach(function (el) {
+      if (el.name) el.name = el.name.replace(/item_\d+/, 'item_' + newIdx);
+      if (el.id) el.id = el.id.replace(/item_\d+/, 'item_' + newIdx);
+      if (el.type !== 'checkbox' && el.tagName !== 'SELECT') el.value = '';
+      if (el.type === 'checkbox') el.checked = false;
+      if (el.tagName === 'SELECT') el.selectedIndex = 0;
+    });
+    newRow.querySelectorAll('label[for]').forEach(function (lbl) {
+      lbl.setAttribute('for', lbl.getAttribute('for').replace(/item_\d+/, 'item_' + newIdx));
+    });
+    var removeBtn = newRow.querySelector('.remove-item-btn');
+    if (!removeBtn) {
+      var btnDiv = document.createElement('div');
+      btnDiv.className = 'ni-btn-row';
+      btnDiv.innerHTML = '<button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>';
+      newRow.querySelector('.ni-card__body').appendChild(btnDiv);
+    }
+    container.appendChild(newRow);
+    itemCountInput.value = getItemCount();
+    attachRowEvents(newRow);
+  });
+
+  // EB TomSelect
+  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
+  var ebSelect = document.getElementById('id_eb_selection');
+  if (ebSelect && ebOptions.length) {
+    ebOptions.forEach(function (opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      ebSelect.appendChild(o);
+    });
+    if (typeof TomSelect !== 'undefined') {
+      new TomSelect(ebSelect, { maxOptions: 500, allowEmptyOption: true });
+    }
+  }
+})();
+</script>
+{% endblock %}

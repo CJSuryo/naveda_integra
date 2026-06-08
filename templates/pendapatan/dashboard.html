@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Dashboard Pendapatan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Dashboard Pendapatan</h1>
+    <p class="ni-page-header__subtitle">Ringkasan pendapatan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Daftar</a>
+    <a href="{% url 'pendapatan:create' %}" class="ni-btn ni-btn--primary">+ Tambah</a>
+  </div>
+</div>
+
+<div class="ni-kpi-grid">
+  <div class="ni-kpi-card ni-kpi-card--success">
+    <div class="ni-kpi-card__label">Total Bulan Ini</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_bulan_ini|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Total Bulan Lalu</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_bulan_lalu|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--info">
+    <div class="ni-kpi-card__label">Cash Bulan Ini</div>
+    <div class="ni-kpi-card__value">{{ kpi.cash_bulan_ini|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Kredit Bulan Ini</div>
+    <div class="ni-kpi-card__value">{{ kpi.credit_bulan_ini|floatformat:0|intcomma }}</div>
+  </div>
+</div>
+{% endblock %}

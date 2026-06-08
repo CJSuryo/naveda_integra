@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ header.transaction_id }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ header.transaction_id }}</h1>
+    <p class="ni-page-header__subtitle">{{ header.get_payment_type_display }} — {{ header.get_status_display }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if header.status == 'draft' %}
+    <form method="post" action="{% url 'pendapatan:confirm' header.pk %}" class="ni-form-inline">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Konfirmasi transaksi ini?')">Konfirmasi</button>
+    </form>
+    {% endif %}
+    {% if header.status == 'confirmed' and not header.is_locked %}
+    <form method="post" action="{% url 'pendapatan:void' header.pk %}" class="ni-form-inline">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Batalkan transaksi ini?')">Batalkan</button>
+    </form>
+    {% endif %}
+    <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Informasi Transaksi</h2></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>ID Transaksi</dt><dd>{{ header.transaction_id }}</dd>
+      <dt>Tanggal</dt><dd>{{ header.tanggal }}</dd>
+      <dt>Tipe Pembayaran</dt><dd>{{ header.get_payment_type_display }}</dd>
+      <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span></dd>
+      <dt>Sumber</dt><dd>{{ header.get_source_type_display }}</dd>
+      <dt>Deskripsi</dt><dd>{{ header.deskripsi|default:'-' }}</dd>
+      <dt>Dibuat</dt><dd>{{ header.created_at }}</dd>
+    </dl>
+  </div>
+</div>
+
+{% for eb_group in header.entitas_groups.all %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">{{ eb_group.entitas_bisnis.nama }}</h2>
+    {% if eb_group.payment_account %}<span class="ni-text-muted">Akun: {{ eb_group.payment_account }}</span>{% endif %}
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Deskripsi</th>
+          <th>Kategori</th>
+          <th>STT</th>
+          <th class="ni-text-right">Jumlah Bruto</th>
+          <th>Akun Pendapatan</th>
+          <th>Deferred</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in eb_group.items.all %}
+        <tr>
+          <td>{{ item.deskripsi_item }}</td>
+          <td>{{ item.get_kategori_display }}</td>
+          <td>{{ item.sub_transaction_type.nama }}</td>
+          <td class="ni-text-right">{{ item.jumlah_bruto|floatformat:0|intcomma }}</td>
+          <td>{{ item.revenue_account }}</td>
+          <td>{% if item.is_deferred %}<span class="ni-badge ni-badge--warning">Ya</span>{% else %}—{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-muted ni-text-center">Tidak ada item.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Event Log</h2></div>
+  <div class="ni-card__body">
+    <ul class="ni-timeline">
+      {% for log in header.event_logs.all %}
+      <li class="ni-timeline__item">
+        <span class="ni-timeline__event">{{ log.event_type }}</span>
+        {% if log.description %}<span class="ni-timeline__desc">— {{ log.description }}</span>{% endif %}
+        <span class="ni-timeline__meta">{{ log.timestamp }} {% if log.actor %}({{ log.actor }}){% endif %}</span>
+      </li>
+      {% empty %}
+      <li class="ni-text-muted">Belum ada event.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

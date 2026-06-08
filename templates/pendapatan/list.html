@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daftar Pendapatan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Daftar Pendapatan</h1>
+    <p class="ni-page-header__subtitle">Seluruh transaksi pendapatan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:dashboard' %}" class="ni-btn ni-btn--secondary">Dashboard</a>
+    <a href="{% url 'pendapatan:create' %}" class="ni-btn ni-btn--primary">+ Tambah</a>
+  </div>
+</div>
+
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Cari</label>
+          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="ID transaksi, deskripsi...">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Status</label>
+          <select name="status" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+        <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>ID Transaksi</th>
+          <th>Tanggal</th>
+          <th>Deskripsi</th>
+          <th>Tipe</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pendapatans %}
+        <tr>
+          <td><a href="{% url 'pendapatan:detail' p.pk %}" class="ni-link">{{ p.transaction_id }}</a></td>
+          <td>{{ p.tanggal }}</td>
+          <td>{{ p.deskripsi|default:'-'|truncatechars:60 }}</td>
+          <td>{{ p.get_payment_type_display }}</td>
+          <td><span class="ni-badge ni-badge--{{ p.status }}">{{ p.get_status_display }}</span></td>
+          <td><a href="{% url 'pendapatan:detail' p.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada data pendapatan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
