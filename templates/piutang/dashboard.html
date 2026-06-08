@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Dashboard Piutang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Dashboard Piutang</h1>
+    <p class="ni-page-header__subtitle">Ringkasan posisi piutang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:list' %}" class="ni-btn ni-btn--secondary">Daftar Piutang</a>
+    <a href="{% url 'piutang:create' %}" class="ni-btn ni-btn--primary">+ Tambah Piutang</a>
+  </div>
+</div>
+
+<div class="ni-kpi-grid">
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Total Outstanding</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_outstanding|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--danger">
+    <div class="ni-kpi-card__label">Total Overdue</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_overdue|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--success">
+    <div class="ni-kpi-card__label">Collected This Month</div>
+    <div class="ni-kpi-card__value">{{ kpi.collected_this_month|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--info">
+    <div class="ni-kpi-card__label">Collection Rate</div>
+    <div class="ni-kpi-card__value">{{ kpi.collection_rate|floatformat:1 }}%</div>
+  </div>
+</div>
+
+<div class="ni-grid ni-grid--2">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Aging Piutang</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Bucket</th>
+            <th class="ni-text-right">Jumlah</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Belum Jatuh Tempo</td>
+            <td class="ni-text-right">{{ buckets.current|floatformat:0|intcomma }}</td>
+          </tr>
+          <tr>
+            <td>1–30 Hari</td>
+            <td class="ni-text-right">{{ buckets.1_30|floatformat:0|intcomma }}</td>
+          </tr>
+          <tr>
+            <td>31–60 Hari</td>
+            <td class="ni-text-right">{{ buckets.31_60|floatformat:0|intcomma }}</td>
+          </tr>
+          <tr>
+            <td>61–90 Hari</td>
+            <td class="ni-text-right">{{ buckets.61_90|floatformat:0|intcomma }}</td>
+          </tr>
+          <tr>
+            <td>&gt; 90 Hari</td>
+            <td class="ni-text-right">{{ buckets.over_90|floatformat:0|intcomma }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Jatuh Tempo (30 Hari)</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead><tr><th>Nomor</th><th>Debitur</th><th>Jatuh Tempo</th><th class="ni-text-right">Sisa</th></tr></thead>
+        <tbody>
+          {% for p in due_soon %}
+          <tr>
+            <td><a href="{% url 'piutang:detail' p.pk %}">{{ p.nomor_piutang }}</a></td>
+            <td>{{ p.entitas_display }}</td>
+            <td>{{ p.tanggal_jatuh_tempo }}</td>
+            <td class="ni-text-right">{{ p.outstanding_amount|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" class="ni-text-muted ni-text-center">Tidak ada dalam 30 hari.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">Isi data piutang dan detail baris piutang.</p>
+  </div>
+</div>
+
+<form method="post" id="piutang-form">
+  {% csrf_token %}
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Piutang</h2></div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="id_eb_selection" name="eb_selection" class="ni-input">
+            <option value="">— Pilih Entitas Bisnis (opsional) —</option>
+          </select>
+        </div>
+        {% for field in form %}
+          <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
+            <label class="ni-form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+          </div>
+        {% endfor %}
+        {% if form.non_field_errors %}
+          <div class="ni-form-error ni-form-group--full">{{ form.non_field_errors }}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Detail Piutang</h2>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" id="add-detail-row">+ Tambah Baris</button>
+    </div>
+    {{ formset.management_form }}
+    <div class="ni-table-wrapper">
+      <table class="ni-table" id="detail-table">
+        <thead>
+          <tr>
+            <th>Deskripsi</th>
+            <th class="ni-text-right">Jumlah</th>
+            <th>Akun Pendapatan (opsional)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="detail-tbody">
+          {% for detail_form in formset %}
+            <tr class="detail-row" {% if detail_form.instance.pk %}data-existing="1"{% endif %}>
+              <td>
+                {{ detail_form.description }}
+                {{ detail_form.id }}
+                {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
+              </td>
+              <td class="ni-text-right">{{ detail_form.amount }}</td>
+              <td>{{ detail_form.coa_pendapatan_account }}</td>
+              <td>
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-row">&#10005;</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="ni-text-right"><strong>Total</strong></td>
+            <td class="ni-text-right"><strong id="detail-total">0</strong></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="ni-btn-row">
+    <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+    <a href="{% url 'piutang:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
+</form>
+
+<script>
+(function() {
+  const tbody = document.getElementById('detail-tbody');
+  const addBtn = document.getElementById('add-detail-row');
+  const totalForms = document.getElementById('id_details-TOTAL_FORMS');
+
+  function updateTotal() {
+    let total = 0;
+    document.querySelectorAll('.amount-field').forEach(function(inp) {
+      const row = inp.closest('tr');
+      const delCb = row ? row.querySelector('input[type=checkbox][name$="-DELETE"]') : null;
+      if (!delCb || !delCb.checked) {
+        total += parseFloat(inp.value) || 0;
+      }
+    });
+    document.getElementById('detail-total').textContent = total.toLocaleString('id-ID');
+  }
+
+  function attachRowEvents(row) {
+    row.querySelector('.remove-row').addEventListener('click', function() {
+      const delCb = row.querySelector('input[type=checkbox][name$="-DELETE"]');
+      if (delCb) {
+        delCb.checked = true;
+        row.classList.add('ni-row--deleted');
+      } else {
+        row.remove();
+        totalForms.value = parseInt(totalForms.value) - 1;
+      }
+      updateTotal();
+    });
+    const amtField = row.querySelector('.amount-field');
+    if (amtField) amtField.addEventListener('input', updateTotal);
+  }
+
+  document.querySelectorAll('.detail-row').forEach(attachRowEvents);
+  updateTotal();
+
+  if (addBtn) {
+    addBtn.addEventListener('click', function() {
+      const idx = parseInt(totalForms.value);
+      const firstRow = tbody.querySelector('.detail-row');
+      const newRow = firstRow ? firstRow.cloneNode(true) : null;
+      if (!newRow) return;
+      newRow.querySelectorAll('input, select').forEach(function(el) {
+        const name = el.name.replace(/-\d+-/, '-' + idx + '-');
+        const id = el.id.replace(/_\d+_/, '_' + idx + '_');
+        el.name = name; el.id = id;
+        if (el.type !== 'checkbox') el.value = '';
+        if (el.type === 'checkbox') el.checked = false;
+      });
+      newRow.classList.remove('ni-row--deleted');
+      tbody.appendChild(newRow);
+      totalForms.value = idx + 1;
+      attachRowEvents(newRow);
+    });
+  }
+
+  // ── Entitas Bisnis TomSelect ──────────────────────────────────────────
+  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
+  var ebSelected = '{{ eb_selected|default:""|escapejs }}';
+
+  var ebSelect = document.getElementById('id_eb_selection');
+  if (ebSelect && ebOptions.length) {
+    ebOptions.forEach(function(opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === ebSelected) o.selected = true;
+      ebSelect.appendChild(o);
+    });
+    if (typeof TomSelect !== 'undefined') {
+      new TomSelect(ebSelect, {
+        maxOptions: 500,
+        placeholder: '— Pilih Entitas Bisnis (opsional) —',
+        allowEmptyOption: true,
+      });
+    }
+  }
+})();
+</script>
+{% endblock %}

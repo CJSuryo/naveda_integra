@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Laporan Write-Off Piutang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Write-Off Piutang</h1>
+    <p class="ni-page-header__subtitle">Daftar piutang yang telah dihapusbukukan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?format=json" class="ni-btn ni-btn--secondary ni-btn--sm">JSON</a>
+  </div>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Nomor Piutang</th>
+          <th>Debitur</th>
+          <th class="ni-text-right">Jumlah Dihapus</th>
+          <th>Metode</th>
+          <th>Alasan</th>
+          <th>Dibuat Oleh</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for wo in write_offs %}
+        <tr>
+          <td>{{ wo.tanggal }}</td>
+          <td><a href="{% url 'piutang:detail' wo.piutang_header.pk %}" class="ni-link">{{ wo.piutang_header.nomor_piutang }}</a></td>
+          <td>{{ wo.piutang_header.debitur|default:'-' }}</td>
+          <td class="ni-text-right">{{ wo.jumlah_dihapus|floatformat:0|intcomma }}</td>
+          <td>{{ wo.metode }}</td>
+          <td>{{ wo.alasan|default:'-' }}</td>
+          <td>{{ wo.created_by|default:'-' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Tidak ada data write-off.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

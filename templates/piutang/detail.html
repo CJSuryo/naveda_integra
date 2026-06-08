@@ -1,0 +1,377 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ piutang.nomor_piutang }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ piutang.nomor_piutang }}</h1>
+    <p class="ni-page-header__subtitle">{{ piutang.entitas_display }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if piutang.can_edit %}
+      <a href="{% url 'piutang:update' piutang.pk %}" class="ni-btn ni-btn--warning">Edit</a>
+    {% endif %}
+    {% if piutang.requires_approval and piutang.status == 'draft' %}
+      <form method="post" action="{% url 'piutang:submit_approval' piutang.pk %}" class="ni-form-inline">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--secondary">Ajukan Persetujuan</button>
+      </form>
+    {% endif %}
+    {% if piutang.status == 'draft' or piutang.status == 'waiting_approval' %}
+      <form method="post" action="{% url 'piutang:approve' piutang.pk %}" class="ni-form-inline">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui dan posting piutang ini?')">Setujui &amp; Post</button>
+      </form>
+      <button type="button" class="ni-btn ni-btn--danger" onclick="openModal('rejectModal')">Tolak</button>
+    {% endif %}
+    {% if piutang.can_receive %}
+      <button type="button" class="ni-btn ni-btn--primary" onclick="openModal('terimaModal')">Terima Penerimaan</button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Piutang</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Nomor Piutang</dt><dd>{{ piutang.nomor_piutang }}</dd>
+        <dt>Debitur</dt><dd>{{ piutang.debitur|default:'-' }}</dd>
+        <dt>Entitas Bisnis</dt><dd>{{ piutang.entitas_bisnis|default:'-' }}</dd>
+        <dt>Nomor Referensi</dt><dd>{{ piutang.nomor_referensi|default:'-' }}</dd>
+        <dt>Tanggal</dt><dd>{{ piutang.tanggal }}</dd>
+        <dt>Jatuh Tempo</dt><dd>{{ piutang.tanggal_jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
+        <dt>Sumber</dt><dd>
+          {% if piutang.source_type == 'manual' %}
+            <span class="ni-badge">Manual</span>
+          {% elif piutang.source_type == 'from_sales' %}
+            <span class="ni-badge ni-badge--info">Dari Penjualan</span>
+          {% elif piutang.source_type == 'from_pendapatan' %}
+            <span class="ni-badge ni-badge--info">Dari Pendapatan</span>
+          {% else %}
+            {{ piutang.source_type|default:'-' }}
+          {% endif %}
+        </dd>
+        <dt>Deskripsi</dt><dd>{{ piutang.deskripsi|default:'-' }}</dd>
+        {% if piutang.requires_approval %}
+        <dt>Status Persetujuan</dt><dd>{{ piutang.get_approval_status_display|default:'-' }}</dd>
+        <dt>Disetujui Oleh</dt><dd>{{ piutang.approved_by|default:'-' }}</dd>
+        {% endif %}
+        {% if piutang.jurnal_pembentukan %}
+        <dt>Jurnal Pembentukan</dt>
+        <dd><a href="{% url 'jurnal:header_detail' piutang.jurnal_pembentukan.pk %}">{{ piutang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Posisi Keuangan</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Total Piutang</dt><dd><strong>{{ piutang.total_amount|floatformat:0|intcomma }}</strong></dd>
+        <dt>Diterima</dt><dd>{{ piutang.received_amount|floatformat:0|intcomma }}</dd>
+        <dt>Sisa</dt><dd><strong>{{ piutang.outstanding_amount|floatformat:0|intcomma }}</strong></dd>
+        <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span></dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+{% if angsuran_schedule %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Tabel Angsuran</h2>
+    <span class="ni-text-muted">{{ angsuran_schedule|length }} angsuran</span>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>No</th>
+          <th class="ni-text-right">Pokok</th>
+          <th class="ni-text-right">Bunga</th>
+          <th class="ni-text-right">Angsuran</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in angsuran_schedule %}
+        <tr>
+          <td>{{ row.no }}</td>
+          <td class="ni-text-right">{{ row.pokok|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ row.bunga|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right"><strong>{{ row.angsuran|floatformat:0|intcomma }}</strong></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Detail Piutang</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Deskripsi</th><th>Akun Pendapatan</th><th class="ni-text-right">Jumlah</th></tr></thead>
+      <tbody>
+        {% for detail in piutang.details.all %}
+        <tr>
+          <td>{{ detail.description|default:'-' }}</td>
+          <td>{{ detail.coa_pendapatan_account|default:'-' }}</td>
+          <td class="ni-text-right">{{ detail.amount|floatformat:0|intcomma }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Penerimaan</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Akun</th><th class="ni-text-right">Jumlah</th><th>Keterangan</th><th>Jurnal</th><th></th></tr></thead>
+      <tbody>
+        {% for penerimaan in piutang.penerimaan.all %}
+        <tr>
+          <td>{{ penerimaan.tanggal }}</td>
+          <td>{{ penerimaan.coa_account }}</td>
+          <td class="ni-text-right">{{ penerimaan.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ penerimaan.keterangan|default:'-' }}</td>
+          <td>{% if penerimaan.jurnal_header %}<a href="{% url 'jurnal:header_detail' penerimaan.jurnal_header.pk %}">{{ penerimaan.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
+          <td>
+            {% if not piutang.is_locked %}
+            <form method="post" action="{% url 'piutang:penerimaan_cancel' piutang.pk penerimaan.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan penerimaan ini?')">Batal</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada penerimaan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if write_off_form %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Write-Off Piutang</h2>
+  </div>
+  <div class="ni-card__body">
+    <form method="post" action="{% url 'piutang:write_off' piutang.pk %}">
+      {% csrf_token %}
+      <div class="ni-form-grid ni-form-grid--2">
+        {% for field in write_off_form %}
+        <div class="ni-form-group {% if field.name == 'alasan' %}ni-form-group--full{% endif %}">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ni-btn-row">
+        <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Write-off piutang ini? Tindakan ini tidak dapat dibatalkan.')">Write-Off</button>
+      </div>
+    </form>
+  </div>
+  {% if piutang.write_offs.all %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah Dihapus</th><th>Metode</th><th>Alasan</th><th>Dibuat Oleh</th></tr></thead>
+      <tbody>
+        {% for wo in piutang.write_offs.all %}
+        <tr>
+          <td>{{ wo.tanggal }}</td>
+          <td class="ni-text-right">{{ wo.jumlah_dihapus|floatformat:0|intcomma }}</td>
+          <td>{{ wo.metode }}</td>
+          <td>{{ wo.alasan|default:'-' }}</td>
+          <td>{{ wo.created_by|default:'-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if reklasifikasi_form %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Reklasifikasi Piutang</h2>
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('reklasifikasiModal')">+ Buat Jurnal Reklasifikasi</button>
+  </div>
+  {% if piutang.reklasifikasi_entries.all %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Nomor Jurnal</th><th class="ni-text-right">Jumlah</th><th>Catatan</th><th>Dibuat Oleh</th><th></th></tr></thead>
+      <tbody>
+        {% for rkl in piutang.reklasifikasi_entries.all %}
+        <tr>
+          <td>{{ rkl.tanggal }}</td>
+          <td><a href="{% url 'jurnal:header_detail' rkl.jurnal.pk %}">{{ rkl.jurnal.nomor_transaksi }}</a></td>
+          <td class="ni-text-right">{{ rkl.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ rkl.catatan|default:'-' }}</td>
+          <td>{{ rkl.created_by|default:'-' }}</td>
+          <td>
+            <form method="post" action="{% url 'piutang:reklasifikasi_reverse' piutang.pk rkl.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan jurnal {{ rkl.jurnal.nomor_transaksi }}?')">Batalkan</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Audit Log</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Waktu</th><th>Aksi</th><th>User</th><th>Catatan</th></tr></thead>
+      <tbody>
+        {% for log in piutang.audit_logs.all %}
+        <tr>
+          <td>{{ log.timestamp|date:"d M Y H:i" }}</td>
+          <td>{{ log.get_action_display }}</td>
+          <td>{{ log.user|default:'-' }}</td>
+          <td>{{ log.notes|default:'-' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada log.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-page-actions">
+  <a href="{% url 'piutang:list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  {% if not piutang.is_locked %}
+  <a href="{% url 'piutang:delete' piutang.pk %}" class="ni-btn ni-btn--danger">Hapus</a>
+  {% endif %}
+</div>
+
+<!-- ── Reject Modal ────────────────────────────────────────────── -->
+{% if piutang.status == 'draft' or piutang.status == 'waiting_approval' %}
+<div class="ni-modal-backdrop" id="rejectModal">
+  <div class="ni-modal">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tolak Piutang</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('rejectModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <form method="post" action="{% url 'piutang:reject' piutang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Alasan penolakan</label>
+          <textarea name="notes" class="ni-input" rows="3"></textarea>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--danger">Tolak</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('rejectModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Terima Penerimaan Modal ────────────────────────────────── -->
+{% if piutang.can_receive %}
+<div class="ni-modal-backdrop" id="terimaModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Terima Penerimaan — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('terimaModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p class="ni-text-muted">Sisa: <strong>Rp {{ piutang.outstanding_amount|floatformat:0|intcomma }}</strong></p>
+      <form method="post" action="{% url 'piutang:terima' piutang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-grid ni-form-grid--2">
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ penerimaan_form.tanggal.label }}</label>
+            {{ penerimaan_form.tanggal }}
+            {% if penerimaan_form.tanggal.errors %}<div class="ni-form-error">{{ penerimaan_form.tanggal.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ penerimaan_form.jumlah.label }}</label>
+            {{ penerimaan_form.jumlah }}
+            {% if penerimaan_form.jumlah.errors %}<div class="ni-form-error">{{ penerimaan_form.jumlah.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ penerimaan_form.coa_account.label }}</label>
+            {{ penerimaan_form.coa_account }}
+          </div>
+          <div class="ni-form-group ni-form-group--full">
+            <label class="ni-form-label">{{ penerimaan_form.keterangan.label }}</label>
+            {{ penerimaan_form.keterangan }}
+          </div>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Catat Penerimaan</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('terimaModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Reklasifikasi Modal ────────────────────────────────────── -->
+{% if reklasifikasi_form %}
+<div class="ni-modal-backdrop" id="reklasifikasiModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Buat Jurnal Reklasifikasi</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('reklasifikasiModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p class="ni-text-muted">Reklasifikasi piutang.</p>
+      <form method="post" action="{% url 'piutang:reklasifikasi_post' piutang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-grid ni-form-grid--2">
+          {% for field in reklasifikasi_form %}
+          <div class="ni-form-group {% if field.name == 'catatan' %}ni-form-group--full{% endif %}">
+            <label class="ni-form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Konfirmasi &amp; Post</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('reklasifikasiModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<script>
+function openModal(id) {
+  document.getElementById(id).classList.add('ni-modal-backdrop--visible');
+}
+function closeModal(id) {
+  document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
+}
+document.querySelectorAll('.ni-modal-backdrop').forEach(function(backdrop) {
+  backdrop.addEventListener('click', function(e) {
+    if (e.target === backdrop) closeModal(backdrop.id);
+  });
+});
+</script>
+{% endblock %}

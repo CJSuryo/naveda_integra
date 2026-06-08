@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Hapus Piutang{% endblock %}
+{% block content %}
+<div class="ni-card ni-animate-fade-in ni-card--centered">
+  <div class="ni-card__body ni-card__body--centered">
+    <div class="ni-icon-circle ni-icon-circle--danger">
+      <i data-lucide="trash-2"></i>
+    </div>
+    <p class="ni-confirm-text">Hapus <strong>{{ piutang.nomor_piutang }}</strong>?</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row ni-btn-row--center">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'piutang:detail' piutang.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

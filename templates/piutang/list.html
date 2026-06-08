@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Piutang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Daftar Piutang</h1>
+    <p class="ni-page-header__subtitle">Seluruh piutang yang tercatat</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:dashboard' %}" class="ni-btn ni-btn--secondary">Dashboard</a>
+    <a href="{% url 'piutang:create' %}" class="ni-btn ni-btn--primary">+ Tambah Piutang</a>
+  </div>
+</div>
+
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Cari</label>
+          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, debitur, referensi...">
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Dari Tanggal</label>
+          <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+        </div>
+        <div class="ni-form-group ni-form-group--narrow">
+          <label class="ni-form-label">Sampai Tanggal</label>
+          <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Status</label>
+          <select name="status" class="ni-input">
+            <option value="">— Semua —</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--lg">Filter</button>
+        <a href="{% url 'piutang:list' %}" class="ni-btn ni-btn--secondary ni-btn--lg">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor Piutang</th>
+          <th>Tanggal</th>
+          <th>Debitur</th>
+          <th class="ni-text-right">Jumlah Pokok</th>
+          <th class="ni-text-right">Sisa</th>
+          <th>Jatuh Tempo</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for piutang in piutangs %}
+        <tr class="{% if piutang.is_overdue %}ni-row--danger{% endif %}">
+          <td><a href="{% url 'piutang:detail' piutang.pk %}">{{ piutang.nomor_piutang }}</a></td>
+          <td>{{ piutang.tanggal }}</td>
+          <td>
+            {{ piutang.debitur|default:'' }}
+            {% if piutang.entitas_bisnis %}
+              {% if piutang.debitur %}<br>{% endif %}
+              <span class="{% if piutang.debitur %}ni-text-muted{% endif %}">{{ piutang.entitas_bisnis }}</span>
+            {% elif not piutang.debitur %}
+              —
+            {% endif %}
+          </td>
+          <td class="ni-text-right">{{ piutang.total_amount|floatformat:0 }}</td>
+          <td class="ni-text-right">{{ piutang.outstanding_amount|floatformat:0 }}</td>
+          <td>{{ piutang.tanggal_jatuh_tempo|default:'-' }}</td>
+          <td>
+            <span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span>
+          </td>
+          <td><a href="{% url 'piutang:detail' piutang.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data piutang.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
