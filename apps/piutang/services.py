@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Sum
 from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
@@ -125,11 +126,13 @@ def create_piutang_from_pendapatan(pendapatan_header, user=None) -> PiutangHeade
 
 def create_piutang_payment(piutang: PiutangHeader, data: dict, user=None) -> PiutangPenerimaan:
     jumlah = Decimal(str(data['jumlah_diterima']))
-    if jumlah > piutang.sisa_piutang:
-        raise ValueError(
-            f'Jumlah diterima ({jumlah}) melebihi sisa piutang ({piutang.sisa_piutang}).'
-        )
     with transaction.atomic():
+        # Lock the piutang row for the duration of this transaction to prevent concurrent payment races
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if jumlah > piutang.sisa_piutang:
+            raise ValueError(
+                f'Jumlah diterima ({jumlah}) melebihi sisa piutang ({piutang.sisa_piutang}).'
+            )
         penerimaan = PiutangPenerimaan.objects.create(
             piutang_header=piutang,
             tanggal_terima=data['tanggal_terima'],
@@ -145,8 +148,6 @@ def create_piutang_payment(piutang: PiutangHeader, data: dict, user=None) -> Piu
         penerimaan.jurnal_header = jurnal
         penerimaan.save(update_fields=['jurnal_header'])
 
-        # Re-aggregate to avoid race condition
-        from django.db.models import Sum
         total_paid = piutang.penerimaan.aggregate(s=Sum('jumlah_diterima'))['s'] or Decimal('0')
         piutang.jumlah_terbayar = total_paid
         if total_paid >= piutang.jumlah_pokok:
