@@ -81,6 +81,10 @@ class PiutangHeader(models.Model):
         'sales.SalesHeader', on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_headers', verbose_name='Sales Header',
     )
+    source_pendapatan = models.ForeignKey(
+        'pendapatan.PendapatanHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_headers', verbose_name='Pendapatan Header',
+    )
     jumlah_pokok = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah Pokok')
     jumlah_terbayar = models.DecimalField(
         max_digits=19, decimal_places=4, default=0, verbose_name='Jumlah Terbayar',
