@@ -7,7 +7,7 @@ from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
 from apps.master_data.models import Akun
 
 from .models import PiutangHeader, PiutangDetail, PiutangAuditLog
-from .services import create_manual_piutang
+from .services import create_manual_piutang, create_piutang_payment
 
 
 def make_fixtures():
@@ -76,3 +76,73 @@ class CreateManualPiutangTests(TestCase):
         n1 = int(p1.nomor_piutang.rsplit('-', 1)[1])
         n2 = int(p2.nomor_piutang.rsplit('-', 1)[1])
         self.assertEqual(n2, n1 + 1)
+
+
+class CreatePiutangPaymentTests(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.piutang = create_manual_piutang(
+            tanggal=date(2026, 6, 7), entitas_bisnis=self.f['eb'],
+            debitur='PT Klien', deskripsi='', coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2026, 7, 7),
+            details=[{'deskripsi': 'Jasa', 'jumlah': Decimal('1000000')}],
+        )
+        self.piutang.status = 'open'
+        self.piutang.save()
+
+    def test_creates_penerimaan_record(self):
+        create_piutang_payment(
+            self.piutang,
+            {'tanggal_terima': date(2026, 6, 10), 'jumlah_diterima': Decimal('400000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': 'TRF-001', 'catatan': ''},
+        )
+        self.assertEqual(self.piutang.penerimaan.count(), 1)
+
+    def test_updates_jumlah_terbayar(self):
+        create_piutang_payment(
+            self.piutang,
+            {'tanggal_terima': date(2026, 6, 10), 'jumlah_diterima': Decimal('400000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.jumlah_terbayar, Decimal('400000'))
+        self.assertEqual(self.piutang.status, 'partial')
+
+    def test_status_becomes_paid_when_fully_settled(self):
+        create_piutang_payment(
+            self.piutang,
+            {'tanggal_terima': date(2026, 6, 10), 'jumlah_diterima': Decimal('1000000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'tunai',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'paid')
+
+    def test_raises_if_exceeds_sisa(self):
+        with self.assertRaises(ValueError):
+            create_piutang_payment(
+                self.piutang,
+                {'tanggal_terima': date(2026, 6, 10), 'jumlah_diterima': Decimal('2000000'),
+                 'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+                 'nomor_referensi': '', 'catatan': ''},
+            )
+
+    def test_generates_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        create_piutang_payment(
+            self.piutang,
+            {'tanggal_terima': date(2026, 6, 10), 'jumlah_diterima': Decimal('500000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        penerimaan = self.piutang.penerimaan.first()
+        self.assertIsNotNone(penerimaan.jurnal_header)
+        details = penerimaan.jurnal_header.details.all()
+        debits = [d for d in details if d.debit > 0]
+        credits = [d for d in details if d.kredit > 0]
+        self.assertEqual(len(debits), 1)
+        self.assertEqual(len(credits), 1)
+        self.assertEqual(debits[0].akun, self.f['coa_kas'])
+        self.assertEqual(credits[0].akun, self.f['coa_piutang'])

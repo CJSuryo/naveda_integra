@@ -119,3 +119,67 @@ def create_piutang_from_sales(sales_header, user=None) -> PiutangHeader:
 
 def create_piutang_from_pendapatan(pendapatan_header, user=None) -> PiutangHeader:
     raise NotImplementedError('Implemented in Phase 3 after apps/pendapatan/ is ready.')
+
+
+# ── Payment ───────────────────────────────────────────────────────────────────
+
+def create_piutang_payment(piutang: PiutangHeader, data: dict, user=None) -> PiutangPenerimaan:
+    jumlah = Decimal(str(data['jumlah_diterima']))
+    if jumlah > piutang.sisa_piutang:
+        raise ValueError(
+            f'Jumlah diterima ({jumlah}) melebihi sisa piutang ({piutang.sisa_piutang}).'
+        )
+    with transaction.atomic():
+        penerimaan = PiutangPenerimaan.objects.create(
+            piutang_header=piutang,
+            tanggal_terima=data['tanggal_terima'],
+            jumlah_diterima=jumlah,
+            angsuran_no=data.get('angsuran_no'),
+            payment_account=data['payment_account'],
+            metode_penerimaan=data.get('metode_penerimaan', 'transfer'),
+            nomor_referensi=data.get('nomor_referensi', ''),
+            catatan=data.get('catatan', ''),
+            created_by=user,
+        )
+        jurnal = _create_payment_journal(piutang, penerimaan)
+        penerimaan.jurnal_header = jurnal
+        penerimaan.save(update_fields=['jurnal_header'])
+
+        # Re-aggregate to avoid race condition
+        from django.db.models import Sum
+        total_paid = piutang.penerimaan.aggregate(s=Sum('jumlah_diterima'))['s'] or Decimal('0')
+        piutang.jumlah_terbayar = total_paid
+        if total_paid >= piutang.jumlah_pokok:
+            piutang.status = 'paid'
+        elif total_paid > 0:
+            piutang.status = 'partial'
+        piutang.save(update_fields=['jumlah_terbayar', 'status'])
+
+        _log(piutang, 'PAYMENT', user=user, after=_snapshot(piutang))
+    return penerimaan
+
+
+def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaan) -> JurnalHeader:
+    nomor = _next_piutang_journal_number('TRX-PIU-P')
+    header = JurnalHeader.objects.create(
+        tanggal=penerimaan.tanggal_terima,
+        nomor_transaksi=nomor,
+        uraian_transaksi=f'Penerimaan Piutang {piutang.nomor_piutang} — {piutang.entitas_display}',
+        entitas_bisnis=piutang.entitas_bisnis,
+        is_penyesuaian=False,
+    )
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(
+            jurnal_header=header,
+            akun=penerimaan.payment_account,
+            debit=penerimaan.jumlah_diterima,
+            kredit=Decimal('0'),
+        ),
+        JurnalDetail(
+            jurnal_header=header,
+            akun=piutang.coa_piutang_account,
+            debit=Decimal('0'),
+            kredit=penerimaan.jumlah_diterima,
+        ),
+    ])
+    return header
