@@ -228,7 +228,7 @@ def compute_angsuran_schedule(piutang: PiutangHeader) -> list[dict]:
             bunga = (saldo * rate_period).quantize(Decimal('0.01'))
             p = (angsuran_tetap - bunga).quantize(Decimal('0.01'))
             if i == n:
-                p = saldo
+                p = saldo.quantize(Decimal('0.01'))
             result.append({'no': i, 'pokok': p, 'bunga': bunga, 'angsuran': p + bunga})
             saldo -= p
 
