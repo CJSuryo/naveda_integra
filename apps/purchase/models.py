@@ -220,6 +220,7 @@ class SubTransactionType(models.Model):
     MODULE_CHOICES = [
         ('purchase', 'Purchase'),
         ('sales', 'Sales'),
+        ('pendapatan', 'Pendapatan'),
     ]
     DIRECTION_CHOICES = [
         ('inflow', 'Inflow'),

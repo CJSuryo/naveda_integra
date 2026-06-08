@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'apps.jurnal',
     'apps.sales',
     'apps.piutang',
+    'apps.pendapatan',
     'apps.inventory',
     'apps.purchase',
     'apps.utang',
