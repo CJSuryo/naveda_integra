@@ -220,6 +220,9 @@ def piutang_submit_approval(request: HttpRequest, pk: int) -> HttpResponse:
 def piutang_approve(request: HttpRequest, pk: int) -> HttpResponse:
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if request.method == 'POST':
+        if piutang.approval_status != 'pending':
+            dj_messages.error(request, 'Hanya piutang berstatus Pending yang dapat disetujui.')
+            return redirect('piutang:detail', pk=pk)
         piutang.approval_status = 'approved'
         piutang.approved_by = request.user
         piutang.approved_at = timezone.now()
@@ -233,6 +236,9 @@ def piutang_approve(request: HttpRequest, pk: int) -> HttpResponse:
 def piutang_reject(request: HttpRequest, pk: int) -> HttpResponse:
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if request.method == 'POST':
+        if piutang.approval_status != 'pending':
+            dj_messages.error(request, 'Hanya piutang berstatus Pending yang dapat ditolak.')
+            return redirect('piutang:detail', pk=pk)
         piutang.approval_status = 'rejected'
         piutang.save(update_fields=['approval_status'])
         dj_messages.warning(request, 'Piutang ditolak.')
@@ -247,7 +253,8 @@ def piutang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             cd = form.cleaned_data
             from apps.jurnal.models import JurnalDetail, JurnalHeader
-            nomor = f'TRX-PIU-RKL-{piutang.pk}'
+            count = PiutangReklasifikasi.objects.filter(piutang_header=piutang).count() + 1
+            nomor = f'TRX-PIU-RKL-{piutang.pk}-{count:04d}'
             jurnal = JurnalHeader.objects.create(
                 tanggal=cd['tanggal'],
                 nomor_transaksi=nomor,
@@ -273,6 +280,9 @@ def piutang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
 def piutang_reklasifikasi_reverse(request: HttpRequest, pk: int, rkl_pk: int) -> HttpResponse:
     rkl = get_object_or_404(PiutangReklasifikasi, pk=rkl_pk, piutang_header_id=pk)
     if request.method == 'POST':
+        if not rkl.jurnal:
+            dj_messages.error(request, 'Tidak ada jurnal untuk dibalik.')
+            return redirect('piutang:detail', pk=pk)
         from apps.jurnal.models import JurnalDetail, JurnalHeader
         orig = rkl.jurnal
         rev = JurnalHeader.objects.create(
