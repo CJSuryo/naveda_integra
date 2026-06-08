@@ -24,7 +24,7 @@
       </form>
       <button type="button" class="ni-btn ni-btn--danger" onclick="openModal('rejectModal')">Tolak</button>
     {% endif %}
-    {% if piutang.can_receive %}
+    {% if piutang.can_pay %}
       <button type="button" class="ni-btn ni-btn--primary" onclick="openModal('terimaModal')">Terima Penerimaan</button>
     {% endif %}
   </div>
@@ -40,7 +40,7 @@
         <dt>Entitas Bisnis</dt><dd>{{ piutang.entitas_bisnis|default:'-' }}</dd>
         <dt>Nomor Referensi</dt><dd>{{ piutang.nomor_referensi|default:'-' }}</dd>
         <dt>Tanggal</dt><dd>{{ piutang.tanggal }}</dd>
-        <dt>Jatuh Tempo</dt><dd>{{ piutang.tanggal_jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
+        <dt>Jatuh Tempo</dt><dd>{{ piutang.jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
         <dt>Sumber</dt><dd>
           {% if piutang.source_type == 'manual' %}
             <span class="ni-badge">Manual</span>
@@ -57,10 +57,6 @@
         <dt>Status Persetujuan</dt><dd>{{ piutang.get_approval_status_display|default:'-' }}</dd>
         <dt>Disetujui Oleh</dt><dd>{{ piutang.approved_by|default:'-' }}</dd>
         {% endif %}
-        {% if piutang.jurnal_pembentukan %}
-        <dt>Jurnal Pembentukan</dt>
-        <dd><a href="{% url 'jurnal:header_detail' piutang.jurnal_pembentukan.pk %}">{{ piutang.jurnal_pembentukan.nomor_transaksi }}</a></dd>
-        {% endif %}
       </dl>
     </div>
   </div>
@@ -69,9 +65,9 @@
     <div class="ni-card__header"><h2 class="ni-card__title">Posisi Keuangan</h2></div>
     <div class="ni-card__body">
       <dl class="ni-detail-grid">
-        <dt>Total Piutang</dt><dd><strong>{{ piutang.total_amount|floatformat:0|intcomma }}</strong></dd>
-        <dt>Diterima</dt><dd>{{ piutang.received_amount|floatformat:0|intcomma }}</dd>
-        <dt>Sisa</dt><dd><strong>{{ piutang.outstanding_amount|floatformat:0|intcomma }}</strong></dd>
+        <dt>Total Piutang</dt><dd><strong>{{ piutang.jumlah_pokok|floatformat:0|intcomma }}</strong></dd>
+        <dt>Diterima</dt><dd>{{ piutang.jumlah_terbayar|floatformat:0|intcomma }}</dd>
+        <dt>Sisa</dt><dd><strong>{{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong></dd>
         <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span></dd>
       </dl>
     </div>
@@ -117,9 +113,9 @@
       <tbody>
         {% for detail in piutang.details.all %}
         <tr>
-          <td>{{ detail.description|default:'-' }}</td>
-          <td>{{ detail.coa_pendapatan_account|default:'-' }}</td>
-          <td class="ni-text-right">{{ detail.amount|floatformat:0|intcomma }}</td>
+          <td>{{ detail.deskripsi|default:'-' }}</td>
+          <td>{{ detail.revenue_account|default:'-' }}</td>
+          <td class="ni-text-right">{{ detail.jumlah|floatformat:0|intcomma }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="3" class="ni-text-center ni-text-muted">Belum ada detail.</td></tr>
@@ -137,10 +133,10 @@
       <tbody>
         {% for penerimaan in piutang.penerimaan.all %}
         <tr>
-          <td>{{ penerimaan.tanggal }}</td>
-          <td>{{ penerimaan.coa_account }}</td>
-          <td class="ni-text-right">{{ penerimaan.jumlah|floatformat:0|intcomma }}</td>
-          <td>{{ penerimaan.keterangan|default:'-' }}</td>
+          <td>{{ penerimaan.tanggal_terima }}</td>
+          <td>{{ penerimaan.payment_account }}</td>
+          <td class="ni-text-right">{{ penerimaan.jumlah_diterima|floatformat:0|intcomma }}</td>
+          <td>{{ penerimaan.catatan|default:'-' }}</td>
           <td>{% if penerimaan.jurnal_header %}<a href="{% url 'jurnal:header_detail' penerimaan.jurnal_header.pk %}">{{ penerimaan.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
           <td>
             {% if not piutang.is_locked %}
@@ -181,20 +177,18 @@
       </div>
     </form>
   </div>
-  {% if piutang.write_offs.all %}
+  {% if piutang.write_off %}
   <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah Dihapus</th><th>Metode</th><th>Alasan</th><th>Dibuat Oleh</th></tr></thead>
       <tbody>
-        {% for wo in piutang.write_offs.all %}
         <tr>
-          <td>{{ wo.tanggal }}</td>
-          <td class="ni-text-right">{{ wo.jumlah_dihapus|floatformat:0|intcomma }}</td>
-          <td>{{ wo.metode }}</td>
-          <td>{{ wo.alasan|default:'-' }}</td>
-          <td>{{ wo.created_by|default:'-' }}</td>
+          <td>{{ piutang.write_off.tanggal }}</td>
+          <td class="ni-text-right">{{ piutang.write_off.jumlah_dihapus|floatformat:0|intcomma }}</td>
+          <td>{{ piutang.write_off.metode }}</td>
+          <td>{{ piutang.write_off.alasan|default:'-' }}</td>
+          <td>{{ piutang.write_off.created_by|default:'-' }}</td>
         </tr>
-        {% endfor %}
       </tbody>
     </table>
   </div>
@@ -218,7 +212,7 @@
           <td>{{ rkl.tanggal }}</td>
           <td><a href="{% url 'jurnal:header_detail' rkl.jurnal.pk %}">{{ rkl.jurnal.nomor_transaksi }}</a></td>
           <td class="ni-text-right">{{ rkl.jumlah|floatformat:0|intcomma }}</td>
-          <td>{{ rkl.catatan|default:'-' }}</td>
+          <td>{{ rkl.keterangan|default:'-' }}</td>
           <td>{{ rkl.created_by|default:'-' }}</td>
           <td>
             <form method="post" action="{% url 'piutang:reklasifikasi_reverse' piutang.pk rkl.pk %}" class="ni-form-inline">
@@ -289,7 +283,7 @@
 {% endif %}
 
 <!-- ── Terima Penerimaan Modal ────────────────────────────────── -->
-{% if piutang.can_receive %}
+{% if piutang.can_pay %}
 <div class="ni-modal-backdrop" id="terimaModal">
   <div class="ni-modal ni-modal--lg">
     <div class="ni-modal__header">
@@ -297,27 +291,27 @@
       <button class="ni-modal__close" type="button" onclick="closeModal('terimaModal')">&times;</button>
     </div>
     <div class="ni-modal__body">
-      <p class="ni-text-muted">Sisa: <strong>Rp {{ piutang.outstanding_amount|floatformat:0|intcomma }}</strong></p>
+      <p class="ni-text-muted">Sisa: <strong>Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong></p>
       <form method="post" action="{% url 'piutang:terima' piutang.pk %}">
         {% csrf_token %}
         <div class="ni-form-grid ni-form-grid--2">
           <div class="ni-form-group">
-            <label class="ni-form-label">{{ penerimaan_form.tanggal.label }}</label>
-            {{ penerimaan_form.tanggal }}
-            {% if penerimaan_form.tanggal.errors %}<div class="ni-form-error">{{ penerimaan_form.tanggal.errors }}</div>{% endif %}
+            <label class="ni-form-label">{{ penerimaan_form.tanggal_terima.label }}</label>
+            {{ penerimaan_form.tanggal_terima }}
+            {% if penerimaan_form.tanggal_terima.errors %}<div class="ni-form-error">{{ penerimaan_form.tanggal_terima.errors }}</div>{% endif %}
           </div>
           <div class="ni-form-group">
-            <label class="ni-form-label">{{ penerimaan_form.jumlah.label }}</label>
-            {{ penerimaan_form.jumlah }}
-            {% if penerimaan_form.jumlah.errors %}<div class="ni-form-error">{{ penerimaan_form.jumlah.errors }}</div>{% endif %}
+            <label class="ni-form-label">{{ penerimaan_form.jumlah_diterima.label }}</label>
+            {{ penerimaan_form.jumlah_diterima }}
+            {% if penerimaan_form.jumlah_diterima.errors %}<div class="ni-form-error">{{ penerimaan_form.jumlah_diterima.errors }}</div>{% endif %}
           </div>
           <div class="ni-form-group">
-            <label class="ni-form-label">{{ penerimaan_form.coa_account.label }}</label>
-            {{ penerimaan_form.coa_account }}
+            <label class="ni-form-label">{{ penerimaan_form.payment_account.label }}</label>
+            {{ penerimaan_form.payment_account }}
           </div>
           <div class="ni-form-group ni-form-group--full">
-            <label class="ni-form-label">{{ penerimaan_form.keterangan.label }}</label>
-            {{ penerimaan_form.keterangan }}
+            <label class="ni-form-label">{{ penerimaan_form.catatan.label }}</label>
+            {{ penerimaan_form.catatan }}
           </div>
         </div>
         <div class="ni-btn-row">

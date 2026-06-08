@@ -79,8 +79,8 @@
           <tr>
             <td><a href="{% url 'piutang:detail' p.pk %}">{{ p.nomor_piutang }}</a></td>
             <td>{{ p.entitas_display }}</td>
-            <td>{{ p.tanggal_jatuh_tempo }}</td>
-            <td class="ni-text-right">{{ p.outstanding_amount|floatformat:0|intcomma }}</td>
+            <td>{{ p.jatuh_tempo }}</td>
+            <td class="ni-text-right">{{ p.sisa_piutang|floatformat:0|intcomma }}</td>
           </tr>
           {% empty %}
           <tr><td colspan="4" class="ni-text-muted ni-text-center">Tidak ada dalam 30 hari.</td></tr>
