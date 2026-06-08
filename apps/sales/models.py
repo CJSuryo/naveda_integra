@@ -19,6 +19,12 @@ class SalesHeader(models.Model):
         verbose_name='Locked',
         help_text='True jika periode sudah tutup buku.',
     )
+    payment_type = models.CharField(
+        max_length=10,
+        choices=[('cash', 'Cash'), ('credit', 'Kredit')],
+        default='cash',
+        verbose_name='Tipe Pembayaran',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
