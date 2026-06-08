@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal
 
 from django.contrib import messages as dj_messages
@@ -62,9 +63,14 @@ def piutang_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def piutang_create(request: HttpRequest) -> HttpResponse:
+    from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+    from apps.entitas_bisnis.models import EntitasBisnis
+
     if request.method == 'POST':
         form = PiutangHeaderForm(request.POST)
         formset = PiutangDetailFormSet(request.POST, prefix='details')
+        eb_selection = request.POST.get('eb_selection', '')
+        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
         if form.is_valid() and formset.is_valid():
             details = [
                 {'deskripsi': f.cleaned_data.get('deskripsi', ''),
@@ -78,8 +84,9 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
             else:
                 try:
                     cd = form.cleaned_data
+                    eb = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
                     piutang = create_manual_piutang(
-                        tanggal=cd['tanggal'], entitas_bisnis=None,
+                        tanggal=cd['tanggal'], entitas_bisnis=eb,
                         debitur=cd.get('debitur', ''), deskripsi=cd.get('deskripsi', ''),
                         coa_piutang_account=cd['coa_piutang_account'],
                         jatuh_tempo=cd.get('jatuh_tempo'),
@@ -96,10 +103,17 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                     return redirect('piutang:detail', pk=piutang.pk)
                 except ValueError as exc:
                     form.add_error(None, str(exc))
-        return render(request, 'piutang/form.html', {'form': form, 'formset': formset, 'mode': 'create'})
+        return render(request, 'piutang/form.html', {
+            'form': form, 'formset': formset, 'mode': 'create',
+            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_selected': eb_selection,
+        })
     form = PiutangHeaderForm()
     formset = PiutangDetailFormSet(prefix='details', queryset=PiutangHeader.objects.none())
-    return render(request, 'piutang/form.html', {'form': form, 'formset': formset, 'mode': 'create'})
+    return render(request, 'piutang/form.html', {
+        'form': form, 'formset': formset, 'mode': 'create',
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+    })
 
 
 @login_required
@@ -133,6 +147,9 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
+    from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+    from apps.entitas_bisnis.models import EntitasBisnis
+
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if piutang.status != 'draft':
         dj_messages.error(request, 'Hanya piutang berstatus Draft yang dapat diedit.')
@@ -140,15 +157,28 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         form = PiutangHeaderForm(request.POST, instance=piutang)
         formset = PiutangDetailFormSet(request.POST, prefix='details', instance=piutang)
+        eb_selection = request.POST.get('eb_selection', '')
+        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
         if form.is_valid() and formset.is_valid():
-            form.save()
+            instance = form.save()
             formset.save()
+            instance.entitas_bisnis = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
+            instance.save(update_fields=['entitas_bisnis'])
             dj_messages.success(request, 'Piutang berhasil diperbarui.')
             return redirect('piutang:detail', pk=pk)
-        return render(request, 'piutang/form.html', {'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang})
+        return render(request, 'piutang/form.html', {
+            'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
+            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_selected': eb_selection,
+        })
     form = PiutangHeaderForm(instance=piutang)
     formset = PiutangDetailFormSet(prefix='details', instance=piutang)
-    return render(request, 'piutang/form.html', {'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang})
+    eb_selected = f'lv1:{piutang.entitas_bisnis_id}' if piutang.entitas_bisnis_id else ''
+    return render(request, 'piutang/form.html', {
+        'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_selected': eb_selected,
+    })
 
 
 @login_required
