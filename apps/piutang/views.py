@@ -331,12 +331,12 @@ def piutang_report_aging(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def piutang_report_subjek(request: HttpRequest) -> HttpResponse:
-    from django.db.models import Sum
+    from django.db.models import Count, Sum
     rows = (
         PiutangHeader.objects
         .filter(status__in=('open', 'partial', 'overdue'))
         .values('debitur', 'entitas_bisnis__nama')
-        .annotate(total=Sum('jumlah_pokok'), terbayar=Sum('jumlah_terbayar'))
+        .annotate(total=Sum('jumlah_pokok'), terbayar=Sum('jumlah_terbayar'), jumlah_invoice=Count('id'))
         .order_by('-total')
     )
     return render(request, 'piutang/report_subjek.html', {'rows': rows})

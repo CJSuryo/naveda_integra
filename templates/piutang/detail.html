@@ -17,7 +17,7 @@
         <button type="submit" class="ni-btn ni-btn--secondary">Ajukan Persetujuan</button>
       </form>
     {% endif %}
-    {% if piutang.status == 'draft' or piutang.status == 'waiting_approval' %}
+    {% if piutang.status == 'draft' %}
       <form method="post" action="{% url 'piutang:approve' piutang.pk %}" class="ni-form-inline">
         {% csrf_token %}
         <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui dan posting piutang ini?')">Setujui &amp; Post</button>
@@ -257,7 +257,7 @@
 </div>
 
 <!-- ── Reject Modal ────────────────────────────────────────────── -->
-{% if piutang.status == 'draft' or piutang.status == 'waiting_approval' %}
+{% if piutang.status == 'draft' %}
 <div class="ni-modal-backdrop" id="rejectModal">
   <div class="ni-modal">
     <div class="ni-modal__header">
@@ -337,7 +337,7 @@
         {% csrf_token %}
         <div class="ni-form-grid ni-form-grid--2">
           {% for field in reklasifikasi_form %}
-          <div class="ni-form-group {% if field.name == 'catatan' %}ni-form-group--full{% endif %}">
+          <div class="ni-form-group {% if field.name == 'keterangan' %}ni-form-group--full{% endif %}">
             <label class="ni-form-label">{{ field.label }}</label>
             {{ field }}
             {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
