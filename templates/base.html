@@ -204,6 +204,53 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'pendapatan' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="trending-up" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Pendapatan</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'pendapatan:dashboard' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Dashboard</span>
+          </a>
+          <a href="{% url 'pendapatan:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Pendapatan</span>
+          </a>
+          <a href="{% url 'pendapatan:create' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tambah Pendapatan</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="ni-nav-item {% if 'piutang' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="hand-coins" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Piutang</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'piutang:dashboard' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Dashboard</span>
+          </a>
+          <a href="{% url 'piutang:list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Daftar Piutang</span>
+          </a>
+          <a href="{% url 'piutang:create' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tambah Piutang</span>
+          </a>
+          <a href="{% url 'piutang:report_aging' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Aging</span>
+          </a>
+          <a href="{% url 'piutang:report_jatuh_tempo' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Jatuh Tempo</span>
+          </a>
+          <a href="{% url 'piutang:report_subjek' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">per Debitur</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'inventory' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="warehouse" class="ni-nav-link__icon"></i>
