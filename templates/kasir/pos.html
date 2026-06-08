@@ -248,6 +248,9 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   <div id="store-selector">
     <h1>Pilih Outlet</h1>
     <div class="store-grid">
+      <button class="store-card" onclick="window.location.href='/'">
+        <div class="sc-name">Kembali ke Menu Utama</div>
+      </button>
       {% for store in stores %}
       <button class="store-card" data-lv3-pk="{{ store.pk }}" data-store-name="{{ store.parent_lv2.nama }}" data-outlet-name="{{ store.nama }}" data-brand="{{ store.parent_lv2.entitas_bisnis.nama }}">
         <div class="sc-name">{{ store.nama }}</div>
