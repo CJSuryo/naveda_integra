@@ -936,7 +936,7 @@ def api_pos_items(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'items': []})
 
     from apps.entitas_bisnis.models import EntitasBisnisLv3
-    from apps.pos_catalog.models import ProductModifierGroup
+    from pos_catalog.models import ProductModifierGroup
 
     # Get inventory records for this store (lv3 specific, then fall back to lv1)
     inv_qs = (

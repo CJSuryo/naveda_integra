@@ -970,7 +970,7 @@ def api_item_autocomplete(request: HttpRequest) -> JsonResponse:
     items = qs[:50]
     selling_price_map: dict = {}
     if eb_lv1_id:
-        from apps.pos_catalog.models import CatalogItem as _CI
+        from pos_catalog.models import CatalogItem as _CI
         selling_price_map = {
             ci.item_id: str(ci.selling_price)
             for ci in _CI.objects.filter(
