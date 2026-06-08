@@ -54,7 +54,7 @@ def consume_fifo(item_id: int, quantity: Decimal) -> tuple[Decimal, list[tuple[F
     return total_cogs, consumed
 
 
-def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHeader]:
+def create_sales_automated_journals(sales_header: SalesHeader, user=None) -> list[JurnalHeader]:
     """Generate automated journal entries for a sales transaction.
 
     Per EB group, one journal header with detail lines for all items.
@@ -137,6 +137,10 @@ def create_sales_automated_journals(sales_header: SalesHeader) -> list[JurnalHea
 
             JurnalDetail.objects.bulk_create(detail_lines)
             created_headers.append(header)
+
+        if sales_header.payment_type == 'credit':
+            from apps.piutang.services import create_piutang_from_sales
+            create_piutang_from_sales(sales_header, user=user)
 
     return created_headers
 
