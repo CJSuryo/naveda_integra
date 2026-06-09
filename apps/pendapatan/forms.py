@@ -47,9 +47,9 @@ class PendapatanItemForm(forms.Form):
     )
     payment_account = forms.ModelChoiceField(
         queryset=Akun.objects.filter(kategori_id='aset').order_by('kode_akun'),
-        required=False,
+        required=True,
         widget=forms.Select(attrs={'class': 'ni-input'}),
-        empty_label='— Akun Kas/Bank (opsional) —',
+        empty_label='— Pilih Akun Kas/Bank —',
     )
     is_deferred = forms.BooleanField(
         required=False,

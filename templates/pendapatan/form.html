@@ -76,8 +76,9 @@
               {% if item_form.revenue_account.errors %}<div class="ni-form-error">{{ item_form.revenue_account.errors }}</div>{% endif %}
             </div>
             <div class="ni-form-group">
-              <label class="ni-form-label">Akun Kas/Bank (opsional)</label>
+              <label class="ni-form-label">Akun Kas/Bank</label>
               {{ item_form.payment_account }}
+              {% if item_form.payment_account.errors %}<div class="ni-form-error">{{ item_form.payment_account.errors }}</div>{% endif %}
             </div>
             <div class="ni-form-group ni-form-group--full">
               <label class="ni-form-label">
