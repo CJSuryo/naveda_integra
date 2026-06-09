@@ -368,6 +368,7 @@ class PiutangAuditLog(models.Model):
         ('WRITE_OFF', 'Dihapusbukukan'),
         ('REKLASIFIKASI', 'Reklasifikasi'),
         ('CANCELLED', 'Dibatalkan'),
+        ('PENYISIHAN', 'Penyisihan Piutang'),
     ]
 
     piutang_header = models.ForeignKey(
@@ -395,3 +396,77 @@ class PiutangAuditLog(models.Model):
 
     def __str__(self) -> str:
         return f'{self.action} — {self.nomor_piutang} — {self.timestamp}'
+
+
+class PenyisihanRateConfig(models.Model):
+    BUCKET_KEY_CHOICES = [
+        ('current', 'Belum Jatuh Tempo'),
+        ('1_30', 'Lewat 1–30 Hari'),
+        ('31_60', 'Lewat 31–60 Hari'),
+        ('61_90', 'Lewat 61–90 Hari'),
+        ('91_180', 'Lewat 91–180 Hari'),
+        ('181_365', 'Lewat 181–365 Hari'),
+        ('over_365', 'Lewat > 365 Hari'),
+    ]
+
+    bucket_key = models.CharField(
+        max_length=20, unique=True, choices=BUCKET_KEY_CHOICES, verbose_name='Bucket',
+    )
+    label = models.CharField(max_length=100, verbose_name='Label')
+    rate_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, verbose_name='Rate Penyisihan (%)',
+    )
+    urutan = models.PositiveSmallIntegerField(default=0, verbose_name='Urutan')
+
+    class Meta:
+        verbose_name = 'Rate Penyisihan Piutang'
+        verbose_name_plural = 'Rate Penyisihan Piutang'
+        ordering = ['urutan']
+
+    def __str__(self) -> str:
+        return f'{self.label} — {self.rate_percent}%'
+
+
+class PiutangPenyisihan(models.Model):
+    JENIS_CHOICES = [
+        ('manual', 'Manual (Per-Piutang)'),
+        ('batch', 'Batch Akhir Periode'),
+    ]
+
+    piutang_header = models.ForeignKey(
+        PiutangHeader, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='penyisihan_entries',
+        verbose_name='Piutang Header',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal')
+    jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, verbose_name='Jenis')
+    jumlah = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Jumlah',
+        help_text='Positif = beban penyisihan, negatif = pemulihan',
+    )
+    allowance_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='piutang_penyisihan_allowance', verbose_name='Akun Cadangan',
+    )
+    expense_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='piutang_penyisihan_expense', verbose_name='Akun Beban',
+    )
+    jurnal_header = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_penyisihan', verbose_name='Jurnal',
+    )
+    catatan = models.CharField(max_length=512, blank=True, default='', verbose_name='Catatan')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_penyisihan_created', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Penyisihan Piutang'
+        verbose_name_plural = 'Penyisihan Piutang'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return f'Penyisihan {self.jenis} — {self.tanggal} — {self.jumlah}'
