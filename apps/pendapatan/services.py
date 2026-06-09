@@ -275,6 +275,11 @@ def _create_pendapatan_journals(header: PendapatanHeader, user=None) -> None:
         entries = []
         for item in eb_group.items.all():
             pay_acct = item.payment_account or eb_group.payment_account
+            if pay_acct is None:
+                raise ValueError(
+                    f'Item "{item.deskripsi_item}" tidak memiliki akun pembayaran. '
+                    f'Isi akun pembayaran pada item atau grup entitas bisnis sebelum mengkonfirmasi.'
+                )
             cr_acct = (
                 item.deferred_account
                 if item.is_deferred and item.deferred_account
