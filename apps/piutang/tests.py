@@ -8,6 +8,8 @@ from apps.master_data.models import Akun
 
 from .models import PiutangHeader, PiutangDetail, PiutangAuditLog
 from .services import create_manual_piutang, create_piutang_payment
+from apps.piutang.services import compute_penyisihan_for_piutang
+from apps.piutang.models import PenyisihanRateConfig
 
 
 def make_fixtures():
@@ -361,3 +363,89 @@ class ReversePiutangPaymentTests(TestCase):
         self.piutang.refresh_from_db()
         self.assertEqual(self.piutang.jumlah_terbayar, Decimal('0'))
         self.assertEqual(self.piutang.status, 'open')
+
+
+# ── Task 5: compute_penyisihan_for_piutang ────────────────────────────────────
+
+class ComputePenyisihanForPiutangTest(TestCase):
+    def setUp(self):
+        defaults = [
+            ('current', 'Belum Jatuh Tempo', '0.00', 1),
+            ('1_30', 'Lewat 1–30 Hari', '5.00', 2),
+            ('31_60', 'Lewat 31–60 Hari', '15.00', 3),
+            ('61_90', 'Lewat 61–90 Hari', '25.00', 4),
+            ('91_180', 'Lewat 91–180 Hari', '50.00', 5),
+            ('181_365', 'Lewat 181–365 Hari', '75.00', 6),
+            ('over_365', 'Lewat > 365 Hari', '100.00', 7),
+        ]
+        for key, label, rate, urutan in defaults:
+            PenyisihanRateConfig.objects.get_or_create(
+                bucket_key=key, defaults={'label': label, 'rate_percent': rate, 'urutan': urutan}
+            )
+
+    def _make_piutang_db(self, jumlah_pokok, jatuh_tempo_delta_days):
+        akun, _ = Akun.objects.get_or_create(
+            kode_akun='1100', defaults={'nama': 'Piutang Usaha', 'kategori_id': 'aset'}
+        )
+        p = PiutangHeader.objects.create(
+            tanggal=date.today(),
+            jatuh_tempo=date.today() - timedelta(days=jatuh_tempo_delta_days),
+            jumlah_pokok=Decimal(str(jumlah_pokok)),
+            jumlah_terbayar=Decimal('0'),
+            jenis_jangka_waktu='short_term',
+            coa_piutang_account=akun,
+            status='open',
+        )
+        return p
+
+    def test_short_term_overdue_31_days(self):
+        p = self._make_piutang_db(1_000_000, jatuh_tempo_delta_days=31)
+        result = compute_penyisihan_for_piutang(p)
+        assert result['total_penyisihan'] == Decimal('150000.00')  # 15% of 1_000_000
+
+    def test_current_has_zero_penyisihan(self):
+        p = self._make_piutang_db(1_000_000, jatuh_tempo_delta_days=-30)  # future
+        result = compute_penyisihan_for_piutang(p)
+        assert result['total_penyisihan'] == Decimal('0.00')
+
+    def test_breakdown_has_7_entries(self):
+        p = self._make_piutang_db(1_000_000, jatuh_tempo_delta_days=10)
+        result = compute_penyisihan_for_piutang(p)
+        assert len(result['breakdown']) == 7
+
+
+# ── Task 7: compute_batch_penyisihan ─────────────────────────────────────────
+
+from apps.piutang.services import compute_batch_penyisihan
+
+
+class ComputeBatchPenyisihanTest(TestCase):
+    def setUp(self):
+        defaults = [
+            ('current', 'Belum JT', '0.00', 1), ('1_30', '1-30', '5.00', 2),
+            ('31_60', '31-60', '15.00', 3), ('61_90', '61-90', '25.00', 4),
+            ('91_180', '91-180', '50.00', 5), ('181_365', '181-365', '75.00', 6),
+            ('over_365', '>365', '100.00', 7),
+        ]
+        for key, label, rate, urutan in defaults:
+            PenyisihanRateConfig.objects.get_or_create(
+                bucket_key=key, defaults={'label': label, 'rate_percent': rate, 'urutan': urutan}
+            )
+
+    def test_returns_required_keys(self):
+        akun, _ = Akun.objects.get_or_create(
+            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
+        )
+        result = compute_batch_penyisihan(date.today(), akun)
+        assert 'target_saldo' in result
+        assert 'saldo_existing' in result
+        assert 'delta' in result
+        assert 'breakdown' in result
+        assert 'piutang_count' in result
+
+    def test_delta_equals_target_minus_existing(self):
+        akun, _ = Akun.objects.get_or_create(
+            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
+        )
+        result = compute_batch_penyisihan(date.today(), akun)
+        assert result['delta'] == result['target_saldo'] - result['saldo_existing']

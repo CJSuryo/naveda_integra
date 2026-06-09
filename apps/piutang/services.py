@@ -528,6 +528,235 @@ def get_piutang_aging() -> dict:
     return buckets
 
 
+def _get_rate_config() -> dict:
+    from .models import PenyisihanRateConfig
+    return {r.bucket_key: r.rate_percent for r in PenyisihanRateConfig.objects.all()}
+
+
+def compute_penyisihan_for_piutang(piutang) -> dict:
+    rates = _get_rate_config()
+    today = date.today()
+    bucket_amounts = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
+
+    if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
+        schedule = compute_angsuran_schedule(piutang)
+        if schedule:
+            for row in schedule:
+                if row['status'] != 'lunas' and row['sisa_bayar'] > 0:
+                    key = _classify_bucket(row['tanggal'], today)
+                    bucket_amounts[key] += row['sisa_bayar']
+        else:
+            key = _classify_bucket(piutang.jatuh_tempo, today)
+            bucket_amounts[key] += piutang.sisa_piutang
+    else:
+        key = _classify_bucket(piutang.jatuh_tempo, today)
+        bucket_amounts[key] += piutang.sisa_piutang
+
+    breakdown = []
+    total = Decimal('0')
+    for key in _AGING_BUCKET_KEYS:
+        amt = bucket_amounts[key]
+        rate = rates.get(key, Decimal('0'))
+        penyisihan = (amt * rate / 100).quantize(Decimal('0.01'))
+        total += penyisihan
+        breakdown.append({
+            'bucket_key': key,
+            'label': _AGING_BUCKET_LABELS[key],
+            'jumlah_piutang': amt,
+            'rate': rate,
+            'penyisihan': penyisihan,
+        })
+    return {'total_penyisihan': total, 'breakdown': breakdown}
+
+
+def _next_penyisihan_journal_number(prefix='TRX-PIU-PSH') -> str:
+    with transaction.atomic():
+        last = (
+            JurnalHeader.objects
+            .select_for_update()
+            .filter(nomor_transaksi__startswith=f'{prefix}-')
+            .order_by('-nomor_transaksi')
+            .values_list('nomor_transaksi', flat=True)
+            .first()
+        )
+        seq = 1
+        if last:
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        return f'{prefix}-{seq:04d}'
+
+
+def create_penyisihan_journal(
+    piutang, allowance_account, expense_account, tanggal, catatan='', user=None
+):
+    from .models import PiutangPenyisihan
+    result = compute_penyisihan_for_piutang(piutang)
+    total = result['total_penyisihan']
+    if total <= 0:
+        raise ValueError('Tidak ada penyisihan yang dapat dihitung untuk piutang ini.')
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        nomor = _next_penyisihan_journal_number('TRX-PIU-PSH')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Penyisihan Piutang {piutang.nomor_piutang}',
+            entitas_bisnis=piutang.entitas_bisnis,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=header, akun=expense_account, debit=total, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=header, akun=allowance_account, debit=Decimal('0'), kredit=total),
+        ])
+        entry = PiutangPenyisihan.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            jenis='manual',
+            jumlah=total,
+            allowance_account=allowance_account,
+            expense_account=expense_account,
+            jurnal_header=header,
+            catatan=catatan,
+            created_by=user,
+        )
+        piutang.is_specifically_impaired = True
+        piutang.save(update_fields=['is_specifically_impaired'])
+        _log(piutang, 'PENYISIHAN', user=user, after={'jumlah': str(total), 'nomor': nomor})
+    return entry
+
+
+def reverse_penyisihan_journal(entry, user=None) -> None:
+    from .models import PiutangPenyisihan
+    piutang = entry.piutang_header
+    with transaction.atomic():
+        if entry.jurnal_header_id:
+            orig = entry.jurnal_header
+            nomor = _next_penyisihan_journal_number('TRX-PIU-PSHR')
+            rev = JurnalHeader.objects.create(
+                tanggal=timezone.now().date(),
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Reversal Penyisihan {piutang.nomor_piutang if piutang else ""}',
+                entitas_bisnis=piutang.entitas_bisnis if piutang else None,
+                is_penyesuaian=True,
+            )
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(jurnal_header=rev, akun=d.akun, debit=d.kredit, kredit=d.debit)
+                for d in orig.details.all()
+            ])
+        entry.delete()
+        if piutang:
+            remaining = PiutangPenyisihan.objects.filter(
+                piutang_header=piutang, jenis='manual'
+            ).exists()
+            if not remaining:
+                piutang.is_specifically_impaired = False
+                piutang.save(update_fields=['is_specifically_impaired'])
+            _log(piutang, 'PENYISIHAN', user=user, notes='Jurnal penyisihan dibatalkan')
+
+
+def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
+    from .models import PenyisihanRateConfig
+    from django.db.models import Sum as DSum
+
+    rates = {r.bucket_key: r.rate_percent for r in PenyisihanRateConfig.objects.all()}
+    today = tanggal  # caller-supplied date used as "today" for aging classification
+    bucket_amounts = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
+    piutang_count = 0
+
+    qs = (
+        PiutangHeader.objects
+        .filter(status__in=('open', 'partial', 'overdue'), is_specifically_impaired=False)
+        .prefetch_related('penerimaan')
+    )
+    for piutang in qs:
+        piutang_count += 1
+        if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
+            schedule = compute_angsuran_schedule(piutang)
+            if schedule:
+                for row in schedule:
+                    if row['status'] != 'lunas' and row['sisa_bayar'] > 0:
+                        key = _classify_bucket(row['tanggal'], today)
+                        bucket_amounts[key] += row['sisa_bayar']
+                continue
+        key = _classify_bucket(piutang.jatuh_tempo, today)
+        bucket_amounts[key] += piutang.sisa_piutang
+
+    breakdown = []
+    target_saldo = Decimal('0')
+    for key in _AGING_BUCKET_KEYS:
+        amt = bucket_amounts[key]
+        rate = rates.get(key, Decimal('0'))
+        penyisihan = (amt * rate / 100).quantize(Decimal('0.01'))
+        target_saldo += penyisihan
+        breakdown.append({
+            'bucket_key': key,
+            'label': _AGING_BUCKET_LABELS[key],
+            'jumlah_piutang': amt,
+            'rate': rate,
+            'penyisihan': penyisihan,
+        })
+
+    agg = (
+        JurnalDetail.objects
+        .filter(akun=allowance_account, jurnal_header__tanggal__lte=tanggal)
+        .aggregate(total_kredit=DSum('kredit'), total_debit=DSum('debit'))
+    )
+    saldo_existing = (
+        (agg['total_kredit'] or Decimal('0')) - (agg['total_debit'] or Decimal('0'))
+    ).quantize(Decimal('0.01'))
+
+    delta = (target_saldo - saldo_existing).quantize(Decimal('0.01'))
+    return {
+        'target_saldo': target_saldo,
+        'saldo_existing': saldo_existing,
+        'delta': delta,
+        'breakdown': breakdown,
+        'piutang_count': piutang_count,
+    }
+
+
+def create_batch_penyisihan_journal(
+    batch_data: dict, allowance_account, expense_account, tanggal, catatan='', user=None
+):
+    from .models import PiutangPenyisihan
+    delta = batch_data['delta']
+    if delta == 0:
+        raise ValueError('Delta penyisihan adalah 0, tidak perlu jurnal.')
+    with transaction.atomic():
+        nomor = _next_penyisihan_journal_number('TRX-PIU-PSH-B')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Penyisihan Piutang Batch — {tanggal}',
+            is_penyesuaian=True,
+        )
+        abs_delta = abs(delta)
+        if delta > 0:
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(jurnal_header=header, akun=expense_account, debit=abs_delta, kredit=Decimal('0')),
+                JurnalDetail(jurnal_header=header, akun=allowance_account, debit=Decimal('0'), kredit=abs_delta),
+            ])
+        else:
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(jurnal_header=header, akun=allowance_account, debit=abs_delta, kredit=Decimal('0')),
+                JurnalDetail(jurnal_header=header, akun=expense_account, debit=Decimal('0'), kredit=abs_delta),
+            ])
+        entry = PiutangPenyisihan.objects.create(
+            piutang_header=None,
+            tanggal=tanggal,
+            jenis='batch',
+            jumlah=delta,
+            allowance_account=allowance_account,
+            expense_account=expense_account,
+            jurnal_header=header,
+            catatan=catatan,
+            created_by=user,
+        )
+    return entry
+
+
 def get_piutang_dashboard_kpi() -> dict:
     today = timezone.now().date()
     month_start = today.replace(day=1)
