@@ -9,30 +9,41 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import (
+    BatchPenyisihanForm,
+    PenyisihanRateConfigFormSet,
     PiutangAttachmentForm, PiutangDetailFormSet, PiutangHeaderForm,
-    PiutangPenerimaanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
+    PiutangPenerimaanForm, PiutangPenyisihanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
 )
-import json
-from .models import PiutangAttachment, PiutangHeader, PiutangPenerimaan, PiutangReklasifikasi
+from .models import (
+    PenyisihanRateConfig,
+    PiutangAttachment, PiutangHeader, PiutangPenerimaan, PiutangPenyisihan, PiutangReklasifikasi,
+)
 from .services import (
+    _AGING_BUCKET_KEYS,
+    _AGING_BUCKET_LABELS,
+    compute_angsuran_schedule,
     compute_bagian_lancar,
+    compute_batch_penyisihan,
+    compute_penyisihan_for_piutang,
+    create_batch_penyisihan_journal,
     create_manual_piutang, create_piutang_payment,
+    create_penyisihan_journal,
     get_piutang_aging, get_piutang_dashboard_kpi,
-    reverse_piutang_payment, write_off_piutang,
+    reverse_piutang_payment, reverse_penyisihan_journal,
+    write_off_piutang,
 )
 
 
 @login_required
 def piutang_dashboard(request: HttpRequest) -> HttpResponse:
     kpi = get_piutang_dashboard_kpi()
-    buckets = get_piutang_aging()
     due_soon = list(
         PiutangHeader.objects
         .filter(status__in=('open', 'partial'), jatuh_tempo__lte=timezone.now().date())
         .order_by('jatuh_tempo')[:20]
     )
     return render(request, 'piutang/dashboard.html', {
-        'kpi': kpi, 'buckets': buckets, 'due_soon': due_soon,
+        'kpi': kpi, 'due_soon': due_soon,
     })
 
 
@@ -101,12 +112,17 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                     cd = form.cleaned_data
                     eb = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
                     piutang = create_manual_piutang(
-                        tanggal=cd['tanggal'], entitas_bisnis=eb,
-                        debitur=cd.get('debitur', ''), deskripsi=cd.get('deskripsi', ''),
+                        tanggal=cd['tanggal'],
+                        entitas_bisnis=eb,
+                        debitur=cd.get('debitur', ''),
+                        deskripsi=cd.get('deskripsi', ''),
                         coa_piutang_account=cd['coa_piutang_account'],
                         jatuh_tempo=cd.get('jatuh_tempo'),
                         details=details,
                         jenis_jangka_waktu=cd['jenis_jangka_waktu'],
+                        jenis_bunga=cd.get('jenis_bunga', 'tanpa_bunga'),
+                        suku_bunga=cd.get('suku_bunga') or Decimal('0'),
+                        periode_angsuran=cd.get('periode_angsuran', 'bulanan'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
@@ -142,6 +158,20 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     attachment_form = PiutangAttachmentForm()
     bagian_lancar = compute_bagian_lancar(piutang) if piutang.can_reklasifikasi else None
     akun_piutang_list = list(Akun.objects.filter(kategori_id='aset').order_by('kode_akun'))
+
+    angsuran_schedule = []
+    if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
+        angsuran_schedule = compute_angsuran_schedule(piutang)
+
+    penyisihan_preview = compute_penyisihan_for_piutang(piutang)
+    penyisihan_form = PiutangPenyisihanForm(initial={'tanggal': timezone.now().date()})
+    penyisihan_history = (
+        PiutangPenyisihan.objects
+        .filter(piutang_header=piutang)
+        .select_related('jurnal_header', 'allowance_account', 'expense_account', 'created_by')
+        .order_by('-tanggal')
+    )
+
     return render(request, 'piutang/detail.html', {
         'piutang': piutang,
         'penerimaan_form': penerimaan_form,
@@ -150,6 +180,10 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'akun_piutang_list': akun_piutang_list,
         'write_off_form': PiutangWriteOffForm(initial={'tanggal': timezone.now().date()}),
         'reklasifikasi_form': PiutangReklasifikasiForm(initial={'tanggal': timezone.now().date()}),
+        'angsuran_schedule': angsuran_schedule,
+        'penyisihan_preview': penyisihan_preview,
+        'penyisihan_form': penyisihan_form,
+        'penyisihan_history': penyisihan_history,
     })
 
 
@@ -322,7 +356,30 @@ def piutang_attachment_delete(request: HttpRequest, pk: int, apk: int) -> HttpRe
 @login_required
 def piutang_report_aging(request: HttpRequest) -> HttpResponse:
     buckets = get_piutang_aging()
-    return render(request, 'piutang/report_aging.html', {'buckets': buckets})
+    rates = {r.bucket_key: r.rate_percent for r in PenyisihanRateConfig.objects.all()}
+    bucket_summary = []
+    grand_total_outstanding = Decimal('0')
+    grand_total_penyisihan = Decimal('0')
+    for key in _AGING_BUCKET_KEYS:
+        entries = buckets[key]
+        total = sum(e['jumlah'] for e in entries)
+        rate = rates.get(key, Decimal('0'))
+        penyisihan = (Decimal(str(total)) * rate / 100).quantize(Decimal('0.01'))
+        grand_total_outstanding += Decimal(str(total))
+        grand_total_penyisihan += penyisihan
+        bucket_summary.append({
+            'key': key,
+            'label': _AGING_BUCKET_LABELS[key],
+            'entries': entries,
+            'total': total,
+            'rate': rate,
+            'penyisihan': penyisihan,
+        })
+    return render(request, 'piutang/report_aging.html', {
+        'bucket_summary': bucket_summary,
+        'grand_total_outstanding': grand_total_outstanding,
+        'grand_total_penyisihan': grand_total_penyisihan,
+    })
 
 
 @login_required
@@ -353,3 +410,101 @@ def piutang_report_write_off(request: HttpRequest) -> HttpResponse:
     from .models import PiutangWriteOff
     write_offs = PiutangWriteOff.objects.select_related('piutang_header', 'created_by').order_by('-tanggal')
     return render(request, 'piutang/report_write_off.html', {'write_offs': write_offs})
+
+
+@login_required
+def piutang_penyisihan_create(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        if piutang.is_specifically_impaired:
+            dj_messages.error(request, 'Piutang ini sudah disisihkan secara khusus.')
+            return redirect('piutang:detail', pk=pk)
+        if piutang.status not in ('open', 'partial', 'overdue'):
+            dj_messages.error(request, 'Penyisihan hanya bisa dibuat untuk piutang aktif.')
+            return redirect('piutang:detail', pk=pk)
+        form = PiutangPenyisihanForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                create_penyisihan_journal(
+                    piutang=piutang,
+                    allowance_account=cd['allowance_account'],
+                    expense_account=cd['expense_account'],
+                    tanggal=cd['tanggal'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Jurnal penyisihan berhasil dibuat.')
+            except ValueError as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_penyisihan_cancel(request: HttpRequest, pk: int, ppk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    entry = get_object_or_404(PiutangPenyisihan, pk=ppk, piutang_header=piutang)
+    if request.method == 'POST':
+        try:
+            reverse_penyisihan_journal(entry, user=request.user)
+            dj_messages.success(request, 'Jurnal penyisihan berhasil dibatalkan.')
+        except Exception as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_report_penyisihan(request: HttpRequest) -> HttpResponse:
+    batch_preview = None
+    form = BatchPenyisihanForm(initial={'tanggal': timezone.now().date()})
+    history = (
+        PiutangPenyisihan.objects
+        .filter(jenis='batch')
+        .select_related('jurnal_header', 'allowance_account', 'expense_account', 'created_by')
+        .order_by('-tanggal')[:20]
+    )
+
+    if request.method == 'POST':
+        action = request.POST.get('action', '')
+        form = BatchPenyisihanForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            if action == 'preview':
+                batch_preview = compute_batch_penyisihan(cd['tanggal'], cd['allowance_account'])
+            elif action == 'post':
+                batch_data = compute_batch_penyisihan(cd['tanggal'], cd['allowance_account'])
+                try:
+                    create_batch_penyisihan_journal(
+                        batch_data=batch_data,
+                        allowance_account=cd['allowance_account'],
+                        expense_account=cd['expense_account'],
+                        tanggal=cd['tanggal'],
+                        catatan=cd.get('catatan', ''),
+                        user=request.user,
+                    )
+                    dj_messages.success(request, f'Jurnal penyisihan batch berhasil dibuat. Delta: {batch_data["delta"]}')
+                    return redirect('piutang:report_penyisihan')
+                except ValueError as exc:
+                    dj_messages.error(request, str(exc))
+                    batch_preview = batch_data
+
+    return render(request, 'piutang/report_penyisihan.html', {
+        'form': form, 'batch_preview': batch_preview, 'history': history,
+    })
+
+
+@login_required
+def piutang_settings_rates(request: HttpRequest) -> HttpResponse:
+    qs = PenyisihanRateConfig.objects.all().order_by('urutan')
+    if request.method == 'POST':
+        formset = PenyisihanRateConfigFormSet(request.POST, queryset=qs)
+        if formset.is_valid():
+            formset.save()
+            dj_messages.success(request, 'Rate penyisihan berhasil disimpan.')
+            return redirect('piutang:settings_rates')
+        dj_messages.error(request, 'Terdapat kesalahan pada form.')
+    else:
+        formset = PenyisihanRateConfigFormSet(queryset=qs)
+    return render(request, 'piutang/settings_rates.html', {'formset': formset, 'rates': qs})

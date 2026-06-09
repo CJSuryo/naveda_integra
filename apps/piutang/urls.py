@@ -21,4 +21,8 @@ urlpatterns = [
     path('reports/subjek/', views.piutang_report_subjek, name='report_subjek'),
     path('reports/jatuh-tempo/', views.piutang_report_jatuh_tempo, name='report_jatuh_tempo'),
     path('reports/write-off/', views.piutang_report_write_off, name='report_write_off'),
+    path('<int:pk>/penyisihan/', views.piutang_penyisihan_create, name='penyisihan_create'),
+    path('<int:pk>/penyisihan/<int:ppk>/cancel/', views.piutang_penyisihan_cancel, name='penyisihan_cancel'),
+    path('reports/penyisihan/', views.piutang_report_penyisihan, name='report_penyisihan'),
+    path('settings/penyisihan-rates/', views.piutang_settings_rates, name='settings_rates'),
 ]
