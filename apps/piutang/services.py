@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import calendar
+from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
@@ -12,6 +14,105 @@ from .models import (
     PiutangAuditLog, PiutangAttachment, PiutangDetail, PiutangHeader,
     PiutangPenerimaan, PiutangReklasifikasi, PiutangWriteOff,
 )
+
+
+# ── Schedule Helpers ──────────────────────────────────────────────────────────
+
+_PERIODE_MONTHS_MAP = {'bulanan': 1, 'triwulanan': 3, 'semesteran': 6, 'tahunan': 12}
+
+
+def _add_months(d: date, months: int) -> date:
+    month = d.month - 1 + months
+    year = d.year + month // 12
+    month = month % 12 + 1
+    day = min(d.day, calendar.monthrange(year, month)[1])
+    return d.replace(year=year, month=month, day=day)
+
+
+def compute_angsuran_schedule(piutang) -> list:
+    """Returns installment schedule for a PiutangHeader. Empty list if no jatuh_tempo."""
+    if not piutang.jatuh_tempo:
+        return []
+    periode_months = _PERIODE_MONTHS_MAP.get(piutang.periode_angsuran, 1)
+    total_months = (
+        (piutang.jatuh_tempo.year - piutang.tanggal.year) * 12
+        + (piutang.jatuh_tempo.month - piutang.tanggal.month)
+    )
+    if total_months <= 0:
+        return []
+    n = max(1, round(total_months / periode_months))
+    total = float(piutang.jumlah_pokok)
+    jenis = piutang.jenis_bunga
+    r = float(piutang.suku_bunga) / 100 / 12 * periode_months if jenis != 'tanpa_bunga' else 0.0
+
+    rows = []
+    sisa = total
+    if jenis == 'anuitas' and r > 0:
+        pmt = total * r / (1 - (1 + r) ** (-n))
+        for i in range(n):
+            bunga_i = sisa * r
+            pokok_i = pmt - bunga_i
+            if i == n - 1:
+                pokok_i = sisa
+            angsuran_i = pokok_i + bunga_i
+            sisa -= pokok_i
+            rows.append({
+                'no': i + 1,
+                'tanggal': _add_months(piutang.tanggal, (i + 1) * periode_months),
+                'pokok': Decimal(str(round(pokok_i, 0))),
+                'bunga': Decimal(str(round(bunga_i, 0))),
+                'angsuran': Decimal(str(round(angsuran_i, 0))),
+                'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
+            })
+    else:
+        pk_unit = round(total / n, 0)
+        bng_unit = round(total * r, 0) if jenis == 'flat' else 0.0
+        cumulative_pk = 0.0
+        for i in range(n):
+            pk_i = round(total - cumulative_pk, 0) if i == n - 1 else pk_unit
+            cumulative_pk += pk_i
+            sisa -= pk_i
+            ang_i = pk_i + bng_unit
+            rows.append({
+                'no': i + 1,
+                'tanggal': _add_months(piutang.tanggal, (i + 1) * periode_months),
+                'pokok': Decimal(str(int(pk_i))),
+                'bunga': Decimal(str(int(bng_unit))),
+                'angsuran': Decimal(str(int(ang_i))),
+                'sisa_pokok': Decimal(str(int(round(max(0.0, sisa), 0)))),
+            })
+
+    # Payment matching: direct via angsuran_no; unallocated pool fills in order
+    direct_paid: dict[int, float] = {}
+    unallocated = 0.0
+    penerimaan_qs = piutang.penerimaan.all() if piutang.pk else []
+    for p in penerimaan_qs:
+        if p.angsuran_no:
+            direct_paid[p.angsuran_no] = direct_paid.get(p.angsuran_no, 0.0) + float(p.jumlah_diterima)
+        else:
+            unallocated += float(p.jumlah_diterima)
+
+    today = date.today()
+    for row in rows:
+        ang = float(row['angsuran'])
+        no = row['no']
+        paid = direct_paid.get(no, 0.0)
+        if paid < ang - 1.0 and unallocated > 0:
+            apply = min(unallocated, max(0.0, ang - paid))
+            paid += apply
+            unallocated = max(0.0, unallocated - apply)
+        row['paid'] = Decimal(str(round(paid, 0)))
+        row['sisa_bayar'] = Decimal(str(round(max(0.0, ang - paid), 0)))
+        if paid >= ang - 1.0:
+            row['status'] = 'lunas'
+            row['sisa_bayar'] = Decimal('0')
+        elif paid > 1.0:
+            row['status'] = 'sebagian'
+        elif row['tanggal'] < today:
+            row['status'] = 'jatuh_tempo'
+        else:
+            row['status'] = 'akan_datang'
+    return rows
 
 
 # ── Audit Helper ──────────────────────────────────────────────────────────────

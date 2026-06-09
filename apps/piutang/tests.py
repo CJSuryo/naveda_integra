@@ -179,6 +179,72 @@ class ComputeBagianLancarTests(TestCase):
 from .services import get_piutang_aging
 
 
+# ── Task 3: Schedule helpers ───────────────────────────────────────────────────
+
+import calendar as _calendar
+
+from apps.piutang.services import _add_months, compute_angsuran_schedule
+
+
+class AddMonthsTest(TestCase):
+    def test_simple(self):
+        assert _add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
+
+    def test_year_rollover(self):
+        assert _add_months(date(2025, 11, 30), 3) == date(2026, 2, 28)
+
+
+class ComputeAngsuranScheduleTest(TestCase):
+    def _make_piutang(self, jumlah_pokok, jenis_bunga='tanpa_bunga', suku_bunga=0,
+                      periode='bulanan', tanggal=None, jatuh_tempo=None):
+        from apps.master_data.models import Akun
+        akun, _ = Akun.objects.get_or_create(
+            kode_akun='1100', defaults={'nama': 'Piutang Usaha', 'kategori_id': 'aset'}
+        )
+        return PiutangHeader(
+            nomor_piutang='TEST-001',
+            tanggal=tanggal or date(2026, 1, 1),
+            jatuh_tempo=jatuh_tempo or date(2026, 12, 31),
+            jumlah_pokok=Decimal(str(jumlah_pokok)),
+            jumlah_terbayar=Decimal('0'),
+            jenis_jangka_waktu='long_term',
+            jenis_bunga=jenis_bunga,
+            suku_bunga=Decimal(str(suku_bunga)),
+            periode_angsuran=periode,
+            coa_piutang_account=akun,
+            status='open',
+        )
+
+    def test_tanpa_bunga_12_bulan(self):
+        p = self._make_piutang(12_000_000, tanggal=date(2026, 1, 1), jatuh_tempo=date(2026, 12, 31))
+        rows = compute_angsuran_schedule(p)
+        assert len(rows) == 11  # 11 monthly periods from Jan to Dec
+        assert all(r['bunga'] == 0 for r in rows)
+        total_pokok = sum(r['pokok'] for r in rows)
+        assert total_pokok == Decimal('12000000')
+
+    def test_no_schedule_without_jatuh_tempo(self):
+        p = self._make_piutang(1_000_000, jatuh_tempo=None)
+        p.jatuh_tempo = None
+        assert compute_angsuran_schedule(p) == []
+
+    def test_flat_interest(self):
+        p = self._make_piutang(
+            12_000_000, jenis_bunga='flat', suku_bunga=12,
+            tanggal=date(2026, 1, 1), jatuh_tempo=date(2026, 12, 31),
+        )
+        rows = compute_angsuran_schedule(p)
+        assert all(r['bunga'] > 0 for r in rows)
+
+    def test_status_akan_datang(self):
+        future = date.today().replace(year=date.today().year + 1)
+        p = self._make_piutang(
+            6_000_000, tanggal=date.today(), jatuh_tempo=future,
+        )
+        rows = compute_angsuran_schedule(p)
+        assert all(r['status'] == 'akan_datang' for r in rows)
+
+
 class WriteOffPiutangTests(TestCase):
     def setUp(self):
         self.f = make_fixtures()
