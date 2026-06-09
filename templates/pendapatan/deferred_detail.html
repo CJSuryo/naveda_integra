@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Deferred — {{ schedule.pendapatan_item.pendapatan_eb.pendapatan_header.transaction_id }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Deferred Revenue</h1>
+    <p class="ni-page-header__subtitle">{{ schedule.pendapatan_item.deskripsi_item }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:deferred_list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Jadwal</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Transaksi</dt>
+        <dd><a href="{% url 'pendapatan:detail' schedule.pendapatan_item.pendapatan_eb.pendapatan_header.pk %}">{{ schedule.pendapatan_item.pendapatan_eb.pendapatan_header.transaction_id }}</a></dd>
+        <dt>Item</dt><dd>{{ schedule.pendapatan_item.deskripsi_item }}</dd>
+        <dt>Tanggal Mulai</dt><dd>{{ schedule.tanggal_mulai }}</dd>
+        <dt>Tanggal Selesai</dt><dd>{{ schedule.tanggal_selesai }}</dd>
+        <dt>Metode</dt><dd>{{ schedule.metode }}</dd>
+        <dt>Akun Deferred</dt><dd>{{ schedule.deferred_account }}</dd>
+        <dt>Akun Pengakuan</dt><dd>{{ schedule.recognition_account }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Posisi</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Jumlah Total</dt><dd><strong>{{ schedule.jumlah_total|floatformat:0|intcomma }}</strong></dd>
+        <dt>Sudah Diakui</dt><dd>{{ schedule.total_recognized|floatformat:0|intcomma }}</dd>
+        <dt>Sisa</dt><dd><strong>{{ schedule.total_remaining|floatformat:0|intcomma }}</strong></dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Jadwal Pengakuan</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Periode</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Status</th>
+          <th>Jurnal</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in schedule.entries.all %}
+        <tr>
+          <td>{{ entry.periode|date:"Y-m" }}</td>
+          <td class="ni-text-right">{{ entry.jumlah|floatformat:0|intcomma }}</td>
+          <td>
+            {% if entry.status == 'recognized' %}
+              <span class="ni-badge ni-badge--success">Diakui</span>
+            {% elif entry.status == 'reversed' %}
+              <span class="ni-badge ni-badge--danger">Dibalik</span>
+            {% else %}
+              <span class="ni-badge">Pending</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if entry.jurnal_header %}
+              <a href="{% url 'jurnal:header_detail' entry.jurnal_header.pk %}">{{ entry.jurnal_header.nomor_transaksi }}</a>
+            {% else %}&#8212;{% endif %}
+          </td>
+          <td>
+            {% if entry.status == 'pending' %}
+            <form method="post" action="{% url 'pendapatan:deferred_recognize' entry.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--sm ni-btn--primary" onclick="return confirm('Akui periode {{ entry.periode|date:"Y-m" }}?')">Akui</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada entry.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

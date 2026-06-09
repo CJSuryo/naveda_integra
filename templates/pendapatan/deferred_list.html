@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Deferred Revenue{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Deferred Revenue</h1>
+    <p class="ni-page-header__subtitle">Jadwal pengakuan pendapatan diterima di muka</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Daftar Pendapatan</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>ID Transaksi</th>
+          <th>Item</th>
+          <th>Tanggal Mulai</th>
+          <th>Tanggal Selesai</th>
+          <th class="ni-text-right">Jumlah Total</th>
+          <th class="ni-text-right">Diakui</th>
+          <th class="ni-text-right">Sisa</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for schedule in schedules %}
+        <tr>
+          <td>
+            <a href="{% url 'pendapatan:detail' schedule.pendapatan_item.pendapatan_eb.pendapatan_header.pk %}">
+              {{ schedule.pendapatan_item.pendapatan_eb.pendapatan_header.transaction_id }}
+            </a>
+          </td>
+          <td>{{ schedule.pendapatan_item.deskripsi_item|truncatechars:40 }}</td>
+          <td>{{ schedule.tanggal_mulai }}</td>
+          <td>{{ schedule.tanggal_selesai }}</td>
+          <td class="ni-text-right">{{ schedule.jumlah_total|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ schedule.total_recognized|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ schedule.total_remaining|floatformat:0|intcomma }}</td>
+          <td>
+            <a href="{% url 'pendapatan:deferred_detail' schedule.pk %}" class="ni-btn ni-btn--sm ni-btn--secondary">Detail</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada jadwal deferred revenue.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

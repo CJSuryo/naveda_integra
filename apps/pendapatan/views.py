@@ -126,3 +126,40 @@ def pendapatan_void(request: HttpRequest, pk: int) -> HttpResponse:
         except ValueError as exc:
             dj_messages.error(request, str(exc))
     return redirect('pendapatan:detail', pk=pk)
+
+
+@login_required
+def deferred_list(request: HttpRequest) -> HttpResponse:
+    from .models import DeferredRevenueSchedule
+    schedules = DeferredRevenueSchedule.objects.select_related(
+        'pendapatan_item__pendapatan_eb__pendapatan_header',
+        'recognition_account', 'deferred_account',
+    ).order_by('-pendapatan_item__pendapatan_eb__pendapatan_header__tanggal')
+    return render(request, 'pendapatan/deferred_list.html', {'schedules': schedules})
+
+
+@login_required
+def deferred_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    from .models import DeferredRevenueSchedule
+    schedule = get_object_or_404(
+        DeferredRevenueSchedule.objects.select_related(
+            'recognition_account', 'deferred_account',
+            'pendapatan_item__pendapatan_eb__pendapatan_header',
+        ).prefetch_related('entries__jurnal_header'),
+        pk=pk,
+    )
+    return render(request, 'pendapatan/deferred_detail.html', {'schedule': schedule})
+
+
+@login_required
+def deferred_recognize(request: HttpRequest, entry_pk: int) -> HttpResponse:
+    from .models import DeferredRevenueEntry
+    from .deferred_services import recognize_deferred_entry
+    entry = get_object_or_404(DeferredRevenueEntry, pk=entry_pk)
+    if request.method == 'POST':
+        try:
+            recognize_deferred_entry(entry, user=request.user)
+            dj_messages.success(request, f'Periode {entry.periode.strftime("%Y-%m")} berhasil diakui.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('pendapatan:deferred_detail', pk=entry.schedule_id)
