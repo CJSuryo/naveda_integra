@@ -123,6 +123,16 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
             piutang = create_piutang_from_pendapatan(header, user)
             _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
 
+        # Create deferred schedules for deferred items
+        from .deferred_services import create_deferred_schedule
+        deferred_count = 0
+        for eb_group in header.entitas_groups.prefetch_related('items').all():
+            for item in eb_group.items.filter(is_deferred=True):
+                create_deferred_schedule(item)
+                deferred_count += 1
+        if deferred_count:
+            _log_event(header, 'DEFERRED_SCHEDULED', description=f'{deferred_count} jadwal dibuat', actor=user)
+
         header.status = 'confirmed'
         header.save(update_fields=['status'])
         _log_event(header, 'CONFIRMED', actor=user)
