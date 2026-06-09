@@ -167,6 +167,9 @@ def create_manual_piutang(
     jatuh_tempo,
     details: list,
     jenis_jangka_waktu: str = 'short_term',
+    jenis_bunga: str = 'tanpa_bunga',
+    suku_bunga: Decimal = Decimal('0'),
+    periode_angsuran: str = 'bulanan',
     user=None,
 ) -> PiutangHeader:
     if not details:
@@ -186,6 +189,9 @@ def create_manual_piutang(
             jumlah_pokok=total,
             status='draft',
             jenis_jangka_waktu=jenis_jangka_waktu,
+            jenis_bunga=jenis_bunga,
+            suku_bunga=suku_bunga,
+            periode_angsuran=periode_angsuran,
             created_by=user,
         )
         PiutangDetail.objects.bulk_create([
@@ -776,9 +782,30 @@ def get_piutang_dashboard_kpi() -> dict:
         collected_this_month / (collected_this_month + total_outstanding) * 100
         if (collected_this_month + total_outstanding) > 0 else Decimal('0')
     )
+
+    aging_buckets = get_piutang_aging()
+    rates = _get_rate_config()
+    aging_summary = {}
+    total_penyisihan_target = Decimal('0')
+    for key in _AGING_BUCKET_KEYS:
+        total_amt = sum(entry['jumlah'] for entry in aging_buckets[key])
+        rate = rates.get(key, Decimal('0'))
+        penyisihan = (Decimal(str(total_amt)) * rate / 100).quantize(Decimal('0.01'))
+        total_penyisihan_target += penyisihan
+        aging_summary[key] = {
+            'label': _AGING_BUCKET_LABELS[key],
+            'total_outstanding': Decimal(str(total_amt)),
+            'rate': rate,
+            'penyisihan': penyisihan,
+        }
+    piutang_neto = (total_outstanding - total_penyisihan_target).quantize(Decimal('0.01'))
+
     return {
         'total_outstanding': total_outstanding,
         'total_overdue': total_overdue,
         'collected_this_month': collected_this_month,
         'collection_rate': collection_rate.quantize(Decimal('0.01')),
+        'total_penyisihan_target': total_penyisihan_target,
+        'piutang_neto': piutang_neto,
+        'aging_summary': aging_summary,
     }
