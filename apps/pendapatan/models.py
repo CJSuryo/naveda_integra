@@ -274,7 +274,7 @@ class RecurringTemplate(models.Model):
     )
     deskripsi_item = models.TextField(verbose_name='Deskripsi Item')
     kategori = models.CharField(
-        max_length=50,
+        max_length=30,
         choices=KATEGORI_CHOICES,
         verbose_name='Kategori',
     )
@@ -333,6 +333,7 @@ class RecurringTemplate(models.Model):
         verbose_name='Dibuat Oleh',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['tanggal_berikutnya']
@@ -343,7 +344,7 @@ class RecurringTemplate(models.Model):
         return self.nama
 
     def save(self, *args, **kwargs):
-        if not self.pk and not self.tanggal_berikutnya:
+        if not self.pk and self.tanggal_mulai and not self.tanggal_berikutnya:
             self.tanggal_berikutnya = self.tanggal_mulai
         super().save(*args, **kwargs)
 

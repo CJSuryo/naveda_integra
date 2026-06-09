@@ -126,7 +126,7 @@ class Migration(migrations.Migration):
                     ('lainnya', 'Lainnya'),
                 ],
                 default='lainnya',
-                max_length=50,
+                max_length=30,
                 verbose_name='Kategori',
             ),
             preserve_default=False,
