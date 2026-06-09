@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 from django.db import transaction
@@ -40,6 +41,69 @@ def _next_journal_number(prefix: str) -> str:
             except (ValueError, IndexError):
                 seq = 1
         return f'{prefix}-{seq:04d}'
+
+
+# ── Recurring Utilities ───────────────────────────────────────────────────────
+
+def compute_next_date(current_date, frekuensi: str):
+    from dateutil.relativedelta import relativedelta
+
+    DELTA_MAP = {
+        'harian': timedelta(days=1),
+        'mingguan': timedelta(weeks=1),
+        'bulanan': relativedelta(months=1),
+        'triwulanan': relativedelta(months=3),
+        'semesteran': relativedelta(months=6),
+        'tahunan': relativedelta(years=1),
+    }
+    delta = DELTA_MAP.get(frekuensi)
+    if delta is None:
+        raise ValueError(f'Frekuensi tidak dikenal: {frekuensi}')
+    return current_date + delta
+
+
+def generate_from_recurring(template, user=None) -> PendapatanHeader:
+    with transaction.atomic():
+        header = PendapatanHeader.objects.create(
+            tanggal=template.tanggal_berikutnya,
+            deskripsi=f'{template.nama} — {template.tanggal_berikutnya}',
+            payment_type=template.payment_type,
+            source_type='recurring',
+            source_recurring=template,
+            status='draft',
+            created_by=user,
+        )
+
+        eb_group = PendapatanEntitasBisnis.objects.create(
+            pendapatan_header=header,
+            entitas_bisnis=template.entitas_bisnis,
+            entitas_bisnis_lv2=template.entitas_bisnis_lv2,
+            entitas_bisnis_lv3=template.entitas_bisnis_lv3,
+        )
+
+        PendapatanItem.objects.create(
+            pendapatan_eb=eb_group,
+            deskripsi_item=template.deskripsi_item,
+            kategori=template.kategori,
+            sub_transaction_type=template.sub_transaction_type,
+            jumlah_bruto=template.jumlah,
+            revenue_account=template.revenue_account,
+            payment_account=template.payment_account,
+            is_deferred=False,
+        )
+
+        new_next = compute_next_date(template.tanggal_berikutnya, template.frekuensi)
+        template.tanggal_berikutnya = new_next
+        if template.tanggal_selesai and new_next > template.tanggal_selesai:
+            template.is_active = False
+        template.save(update_fields=['tanggal_berikutnya', 'is_active', 'updated_at'])
+
+        _log_event(header, 'RECURRING_GENERATED', description=f'Generated from template {template.pk}', actor=user)
+
+        if template.auto_confirm:
+            confirm_pendapatan(header, user=user)
+
+    return header
 
 
 # ── Create ────────────────────────────────────────────────────────────────────

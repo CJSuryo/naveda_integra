@@ -8,7 +8,7 @@ from apps.master_data.models import Akun
 from apps.purchase.models import SubTransactionType
 
 from .models import PendapatanHeader, PendapatanEntitasBisnis, PendapatanItem, PendapatanEventLog
-from .services import confirm_pendapatan, create_pendapatan_header
+from .services import confirm_pendapatan, create_pendapatan_header, compute_next_date, generate_from_recurring
 
 
 def make_fixtures():
@@ -111,3 +111,88 @@ class ConfirmPendapatanCreditTests(TestCase):
         cr = JurnalDetail.objects.filter(kredit__gt=0).first()
         self.assertEqual(dr.akun, self.f['coa_piutang'])
         self.assertEqual(cr.akun, self.f['coa_revenue'])
+
+
+class ComputeNextDateTests(TestCase):
+    def test_harian(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 15), 'harian'), date(2026, 1, 16))
+
+    def test_mingguan(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 15), 'mingguan'), date(2026, 1, 22))
+
+    def test_bulanan(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 31), 'bulanan'), date(2026, 2, 28))
+
+    def test_triwulanan(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 15), 'triwulanan'), date(2026, 4, 15))
+
+    def test_semesteran(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 15), 'semesteran'), date(2026, 7, 15))
+
+    def test_tahunan(self):
+        self.assertEqual(compute_next_date(date(2026, 1, 15), 'tahunan'), date(2027, 1, 15))
+
+
+class GenerateFromRecurringTests(TestCase):
+    def setUp(self):
+        from apps.pendapatan.models import RecurringTemplate
+
+        tipe = TipeEntitas.objects.create(nama='Pelanggan')
+        self.eb = EntitasBisnis.objects.create(
+            nama='PT Klien', tipe_entitas=tipe, relasi='pelanggan'
+        )
+        self.revenue_akun = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pendapatan Sewa', kode_akun='4.1.1'
+        )
+        self.kas_akun = Akun.objects.create(
+            kategori_id='aset', nama='Kas', kode_akun='1.1.1'
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Pendapatan Sewa', module='pendapatan', direction='inflow',
+            default_offset_account=self.revenue_akun,
+        )
+        self.template = RecurringTemplate.objects.create(
+            nama='Sewa Kantor',
+            entitas_bisnis=self.eb,
+            deskripsi_item='Sewa bulan berikutnya',
+            kategori='jasa',
+            sub_transaction_type=self.stt,
+            jumlah=Decimal('5000000'),
+            revenue_account=self.revenue_akun,
+            payment_account=self.kas_akun,
+            payment_type='cash',
+            frekuensi='bulanan',
+            tanggal_mulai=date(2026, 1, 1),
+            tanggal_berikutnya=date(2026, 1, 1),
+        )
+
+    def test_creates_pendapatan_header(self):
+        header = generate_from_recurring(self.template, user=None)
+        self.assertIsNotNone(header.pk)
+        self.assertEqual(header.source_type, 'recurring')
+        self.assertEqual(header.source_recurring, self.template)
+        self.assertEqual(header.status, 'draft')
+
+    def test_creates_pendapatan_item(self):
+        header = generate_from_recurring(self.template, user=None)
+        items = header.entitas_groups.first().items.all()
+        self.assertEqual(items.count(), 1)
+        self.assertEqual(items.first().jumlah_bruto, Decimal('5000000'))
+
+    def test_advances_tanggal_berikutnya(self):
+        generate_from_recurring(self.template, user=None)
+        self.template.refresh_from_db()
+        self.assertEqual(self.template.tanggal_berikutnya, date(2026, 2, 1))
+
+    def test_deactivates_after_tanggal_selesai(self):
+        self.template.tanggal_selesai = date(2026, 1, 31)
+        self.template.save()
+        generate_from_recurring(self.template, user=None)
+        self.template.refresh_from_db()
+        self.assertFalse(self.template.is_active)
+
+    def test_auto_confirm_confirms_header(self):
+        self.template.auto_confirm = True
+        self.template.save()
+        header = generate_from_recurring(self.template, user=None)
+        self.assertEqual(header.status, 'confirmed')
