@@ -29,6 +29,19 @@ METODE_PENERIMAAN_CHOICES = [
     ('cek', 'Cek'),
 ]
 
+JENIS_BUNGA_CHOICES = [
+    ('tanpa_bunga', 'Tanpa Bunga'),
+    ('flat', 'Flat'),
+    ('anuitas', 'Anuitas (Efektif)'),
+]
+
+PERIODE_ANGSURAN_CHOICES = [
+    ('bulanan', 'Bulanan'),
+    ('triwulanan', 'Triwulanan (3 Bulan)'),
+    ('semesteran', 'Semesteran (6 Bulan)'),
+    ('tahunan', 'Tahunan'),
+]
+
 
 class PiutangHeader(models.Model):
     STATUS_CHOICES = [
@@ -82,6 +95,21 @@ class PiutangHeader(models.Model):
         related_name='piutang_headers', verbose_name='Akun Piutang',
     )
     is_locked = models.BooleanField(default=False, verbose_name='Terkunci')
+    jenis_bunga = models.CharField(
+        max_length=20, choices=JENIS_BUNGA_CHOICES, default='tanpa_bunga',
+        verbose_name='Jenis Bunga',
+    )
+    suku_bunga = models.DecimalField(
+        max_digits=8, decimal_places=4, default=0,
+        verbose_name='Suku Bunga (% per tahun)',
+    )
+    periode_angsuran = models.CharField(
+        max_length=20, choices=PERIODE_ANGSURAN_CHOICES, default='bulanan',
+        verbose_name='Periode Angsuran',
+    )
+    is_specifically_impaired = models.BooleanField(
+        default=False, verbose_name='Sudah Disisihkan Khusus',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_created', verbose_name='Dibuat Oleh',
