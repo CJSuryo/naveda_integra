@@ -60,8 +60,8 @@ class CreateDeferredScheduleTests(TestCase):
 
     def test_straight_line_equal_amounts(self):
         schedule = create_deferred_schedule(self.item)
-        amounts = list(schedule.entries.values_list('jumlah', flat=True))
-        self.assertEqual(amounts[0], amounts[1])
+        amounts = list(schedule.entries.order_by('periode').values_list('jumlah', flat=True))
+        self.assertEqual(len(set(amounts)), 1)
 
     def test_total_entries_equal_jumlah_total(self):
         schedule = create_deferred_schedule(self.item)

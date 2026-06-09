@@ -33,6 +33,13 @@ def create_deferred_schedule(item: PendapatanItem) -> DeferredRevenueSchedule:
     if not periods:
         raise ValueError('Tidak ada periode yang valid antara tanggal mulai dan selesai.')
 
+    # Idempotent: return existing schedule if already created
+    try:
+        from .models import DeferredRevenueSchedule as _S
+        return _S.objects.get(pendapatan_item=item)
+    except _S.DoesNotExist:
+        pass
+
     n = len(periods)
     jumlah_total = item.jumlah_bruto
     metode = item.deferred_metode or 'straight_line'
@@ -71,10 +78,11 @@ def create_deferred_schedule(item: PendapatanItem) -> DeferredRevenueSchedule:
 
 
 def recognize_deferred_entry(entry: DeferredRevenueEntry, user=None) -> JurnalHeader:
-    if entry.status != 'pending':
-        raise ValueError(f'Entry status harus pending, bukan {entry.status}.')
-
     with transaction.atomic():
+        entry = DeferredRevenueEntry.objects.select_for_update().get(pk=entry.pk)
+        if entry.status != 'pending':
+            raise ValueError(f'Entry status harus pending, bukan {entry.status}.')
+
         from apps.pendapatan.services import _next_journal_number
         nomor = _next_journal_number('TRX-PND-DR')
         header = JurnalHeader.objects.create(
@@ -108,6 +116,7 @@ def recognize_deferred_entry(entry: DeferredRevenueEntry, user=None) -> JurnalHe
 
 
 def reverse_deferred_entry(entry: DeferredRevenueEntry, user=None):
-    if entry.status == 'pending':
-        entry.status = 'reversed'
-        entry.save(update_fields=['status'])
+    with transaction.atomic():
+        if entry.status == 'pending':
+            entry.status = 'reversed'
+            entry.save(update_fields=['status'])
