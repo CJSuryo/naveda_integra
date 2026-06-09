@@ -798,6 +798,7 @@ def get_piutang_dashboard_kpi() -> dict:
             'rate': rate,
             'penyisihan': penyisihan,
         }
+    total_penyisihan_target = total_penyisihan_target.quantize(Decimal('0.01'))
     piutang_neto = (total_outstanding - total_penyisihan_target).quantize(Decimal('0.01'))
 
     return {
