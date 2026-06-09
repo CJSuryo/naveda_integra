@@ -14,8 +14,16 @@
 
 <div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
   <div class="ni-card__body">
-    <form method="get" class="ni-filter-bar">
+    <form id="utangFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
+            {% for opt in eb_options %}
+            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="ni-form-group ni-form-group--grow">
           <label class="ni-form-label">Cari</label>
           <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, kreditor, referensi...">
@@ -63,7 +71,8 @@
           <th>Nomor</th>
           <th>Tanggal</th>
           <th>Jenis</th>
-          <th>Kreditor / Entitas</th>
+          <th>Entitas Bisnis</th>
+          <th>Kreditor</th>
           <th class="ni-text-right">Total</th>
           <th class="ni-text-right">Sisa</th>
           <th>Jatuh Tempo</th>
@@ -77,15 +86,8 @@
           <td><a href="{% url 'utang:detail' utang.pk %}">{{ utang.nomor_utang }}</a></td>
           <td>{{ utang.tanggal }}</td>
           <td><span class="ni-badge">{{ utang.get_jenis_utang_display }}</span></td>
-          <td>
-            {{ utang.kreditor|default:'' }}
-            {% if utang.entitas_bisnis %}
-              {% if utang.kreditor %}<br>{% endif %}
-              <span class="{% if utang.kreditor %}ni-text-muted{% endif %}">{{ utang.entitas_bisnis }}</span>
-            {% elif not utang.kreditor %}
-              —
-            {% endif %}
-          </td>
+          <td>{{ utang.entitas_bisnis|default:'—' }}</td>
+          <td>{{ utang.kreditor|default:'—' }}</td>
           <td class="ni-text-right">{{ utang.total_amount|floatformat:0 }}</td>
           <td class="ni-text-right">{{ utang.outstanding_amount|floatformat:0 }}</td>
           <td>{{ utang.tanggal_jatuh_tempo|default:'-' }}</td>
@@ -95,10 +97,32 @@
           <td><a href="{% url 'utang:detail' utang.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="ni-text-center ni-text-muted">Belum ada data utang.</td></tr>
+        <tr><td colspan="10" class="ni-text-center ni-text-muted">Belum ada data utang.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function() {
+  var ebSel = document.getElementById('ebFilterSelect');
+  var form = document.getElementById('utangFilterForm');
+  if (ebSel && window.TomSelect) {
+    var ts = new TomSelect(ebSel, {
+      plugins: ['remove_button'],
+      persist: false,
+      maxOptions: 500,
+      placeholder: 'Pilih entitas bisnis...',
+    });
+    var initialized = false;
+    ts.on('change', function() {
+      if (!initialized) { return; }
+      form.submit();
+    });
+    setTimeout(function() { initialized = true; }, 0);
+  }
+})();
+</script>
 {% endblock %}

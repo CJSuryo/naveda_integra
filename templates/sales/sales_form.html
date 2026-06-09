@@ -736,6 +736,16 @@
         var stock = parseFloat(data.available_stock || 0);
         if (data.is_bulk) {
           info.textContent = 'Nilai Persediaan: Rp ' + stock.toLocaleString('id-ID', {maximumFractionDigits: 0});
+          var hppField = document.getElementById(rid + '_hpp');
+          if (hppField && !hppField.value) {
+            hppField.value = stock;
+            hppField.disabled = false;
+            hppField.style.display = '';
+            var tr = document.getElementById(rid);
+            if (tr && tr.parentElement && tr.parentElement.id) {
+              updateGroupTotals(tr.parentElement.id.replace('_items', ''));
+            }
+          }
         } else {
           info.textContent = 'Stok: ' + stock.toLocaleString('id-ID') + ' unit';
         }
