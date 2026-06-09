@@ -181,8 +181,6 @@ from .services import get_piutang_aging
 
 # ── Task 3: Schedule helpers ───────────────────────────────────────────────────
 
-import calendar as _calendar
-
 from apps.piutang.services import _add_months, compute_angsuran_schedule
 
 
@@ -243,6 +241,16 @@ class ComputeAngsuranScheduleTest(TestCase):
         )
         rows = compute_angsuran_schedule(p)
         assert all(r['status'] == 'akan_datang' for r in rows)
+
+    def test_anuitas_last_row_zero_sisa_pokok(self):
+        p = self._make_piutang(
+            12_000_000, jenis_bunga='anuitas', suku_bunga=12,
+            tanggal=date(2026, 1, 1), jatuh_tempo=date(2026, 12, 31),
+        )
+        rows = compute_angsuran_schedule(p)
+        assert len(rows) == 11
+        assert rows[-1]['sisa_pokok'] == Decimal('0')
+        assert all(r['bunga'] > 0 for r in rows)
 
 
 class WriteOffPiutangTests(TestCase):

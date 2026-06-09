@@ -59,10 +59,10 @@ def compute_angsuran_schedule(piutang) -> list:
             rows.append({
                 'no': i + 1,
                 'tanggal': _add_months(piutang.tanggal, (i + 1) * periode_months),
-                'pokok': Decimal(str(round(pokok_i, 0))),
-                'bunga': Decimal(str(round(bunga_i, 0))),
-                'angsuran': Decimal(str(round(angsuran_i, 0))),
-                'sisa_pokok': Decimal(str(round(max(0.0, sisa), 0))),
+                'pokok': Decimal(str(int(round(pokok_i, 0)))),
+                'bunga': Decimal(str(int(round(bunga_i, 0)))),
+                'angsuran': Decimal(str(int(round(angsuran_i, 0)))),
+                'sisa_pokok': Decimal(str(int(round(max(0.0, sisa), 0)))),
             })
     else:
         pk_unit = round(total / n, 0)
