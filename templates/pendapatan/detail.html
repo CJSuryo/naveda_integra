@@ -9,6 +9,7 @@
   </div>
   <div class="ni-page-header__actions">
     {% if header.status == 'draft' %}
+    <a href="{% url 'pendapatan:edit' header.pk %}" class="ni-btn ni-btn--secondary">Edit</a>
     <form method="post" action="{% url 'pendapatan:confirm' header.pk %}" class="ni-form-inline">
       {% csrf_token %}
       <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Konfirmasi transaksi ini?')">Konfirmasi</button>

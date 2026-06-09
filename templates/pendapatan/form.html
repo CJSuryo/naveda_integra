@@ -225,16 +225,19 @@
 
   // EB TomSelect
   var ebOptions = {{ eb_options_json|default:"[]"|safe }};
+  var ebSelected = "{{ eb_selected|default:'' }}";
   var ebSelect = document.getElementById('id_eb_selection');
   if (ebSelect && ebOptions.length) {
     ebOptions.forEach(function (opt) {
       var o = document.createElement('option');
       o.value = opt.value;
       o.textContent = opt.label;
+      if (ebSelected && opt.value === ebSelected) o.selected = true;
       ebSelect.appendChild(o);
     });
     if (typeof TomSelect !== 'undefined') {
-      new TomSelect(ebSelect, { maxOptions: 500, allowEmptyOption: true });
+      var ts = new TomSelect(ebSelect, { maxOptions: 500, allowEmptyOption: true });
+      if (ebSelected) ts.setValue(ebSelected, true);
     }
   }
 })();

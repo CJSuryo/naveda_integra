@@ -95,6 +95,108 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
+    from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+    from apps.entitas_bisnis.models import EntitasBisnis
+    from django.db import transaction
+
+    header = get_object_or_404(PendapatanHeader, pk=pk)
+    if header.status != 'draft':
+        dj_messages.error(request, 'Hanya pendapatan berstatus draft yang dapat diedit.')
+        return redirect('pendapatan:detail', pk=pk)
+
+    eb_group = header.entitas_groups.select_related('entitas_bisnis').prefetch_related('items').first()
+    existing_items = list(eb_group.items.all()) if eb_group else []
+
+    if request.method == 'POST':
+        form = PendapatanHeaderForm(request.POST, instance=header)
+        item_count = max(int(request.POST.get('item_count', '1')), 1)
+        item_forms = [PendapatanItemForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
+        eb_selection = request.POST.get('eb_selection', '')
+        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+
+        if form.is_valid() and all(f.is_valid() for f in item_forms):
+            try:
+                with transaction.atomic():
+                    form.save()
+                    eb = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
+                    items_data = [f.cleaned_data for f in item_forms]
+                    pay_acct = items_data[0].get('payment_account')
+
+                    if eb_group:
+                        eb_group.entitas_bisnis = eb
+                        eb_group.payment_account = pay_acct
+                        eb_group.save(update_fields=['entitas_bisnis_id', 'payment_account_id'])
+                        eb_group.items.all().delete()
+                    else:
+                        from .models import PendapatanEntitasBisnis
+                        eb_group_new = PendapatanEntitasBisnis.objects.create(
+                            pendapatan_header=header,
+                            entitas_bisnis=eb,
+                            payment_account=pay_acct,
+                        )
+                        eb_group = eb_group_new
+
+                    from .models import PendapatanItem
+                    PendapatanItem.objects.bulk_create([
+                        PendapatanItem(
+                            pendapatan_eb=eb_group,
+                            deskripsi_item=item['deskripsi_item'],
+                            kategori=item['kategori'],
+                            sub_transaction_type=item['sub_transaction_type'],
+                            jumlah_bruto=item['jumlah_bruto'],
+                            revenue_account=item['revenue_account'],
+                            payment_account=item.get('payment_account'),
+                            tax=item.get('tax'),
+                            tax_type=item.get('tax_type', ''),
+                            tax_account=item.get('tax_account'),
+                            is_deferred=item.get('is_deferred', False),
+                            deferred_account=item.get('deferred_account'),
+                            recognition_account=item.get('recognition_account'),
+                            deferred_tanggal_mulai=item.get('deferred_tanggal_mulai'),
+                            deferred_tanggal_selesai=item.get('deferred_tanggal_selesai'),
+                            deferred_metode=item.get('deferred_metode', 'straight_line'),
+                        )
+                        for item in items_data
+                    ])
+
+                dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil diperbarui.')
+                return redirect('pendapatan:detail', pk=header.pk)
+            except (ValueError, Exception) as exc:
+                form.add_error(None, str(exc))
+    else:
+        form = PendapatanHeaderForm(instance=header)
+        item_forms = [
+            PendapatanItemForm(prefix=f'item_{i}', initial={
+                'deskripsi_item': item.deskripsi_item,
+                'kategori': item.kategori,
+                'sub_transaction_type': item.sub_transaction_type_id,
+                'jumlah_bruto': item.jumlah_bruto,
+                'revenue_account': item.revenue_account_id,
+                'payment_account': item.payment_account_id,
+                'is_deferred': item.is_deferred,
+                'deferred_account': item.deferred_account_id,
+                'recognition_account': item.recognition_account_id,
+                'deferred_tanggal_mulai': item.deferred_tanggal_mulai,
+                'deferred_tanggal_selesai': item.deferred_tanggal_selesai,
+                'deferred_metode': item.deferred_metode,
+            })
+            for i, item in enumerate(existing_items)
+        ] or [PendapatanItemForm(prefix='item_0')]
+
+    eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
+
+    return render(request, 'pendapatan/form.html', {
+        'form': form,
+        'item_forms': item_forms,
+        'mode': 'edit',
+        'header': header,
+        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_selected': eb_selected,
+    })
+
+
+@login_required
 def pendapatan_detail(request: HttpRequest, pk: int) -> HttpResponse:
     header = get_object_or_404(
         PendapatanHeader.objects
