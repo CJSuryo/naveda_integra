@@ -14,4 +14,12 @@ urlpatterns = [
     path('deferred/', views.deferred_list, name='deferred_list'),
     path('deferred/entry/<int:entry_pk>/recognize/', views.deferred_recognize, name='deferred_recognize'),
     path('deferred/<int:pk>/', views.deferred_detail, name='deferred_detail'),
+    # Recurring Templates
+    path('recurring/', views.recurring_list, name='recurring_list'),
+    path('recurring/create/', views.recurring_create, name='recurring_create'),
+    path('recurring/<int:pk>/', views.recurring_detail, name='recurring_detail'),
+    path('recurring/<int:pk>/edit/', views.recurring_edit, name='recurring_edit'),
+    path('recurring/<int:pk>/delete/', views.recurring_delete, name='recurring_delete'),
+    path('recurring/<int:pk>/generate/', views.recurring_generate, name='recurring_generate'),
+    path('reports/recurring/', views.recurring_calendar, name='recurring_calendar'),
 ]

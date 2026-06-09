@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}{{ template.nama }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ template.nama }}</h1>
+    <p class="ni-page-header__subtitle">{% if template.is_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge">Tidak Aktif</span>{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:recurring_edit' template.pk %}" class="ni-btn ni-btn--secondary">Edit</a>
+    {% if template.is_active %}
+    <form method="post" action="{% url 'pendapatan:recurring_generate' template.pk %}" class="ni-form-inline">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary">Generate Sekarang</button>
+    </form>
+    <form method="post" action="{% url 'pendapatan:recurring_delete' template.pk %}" class="ni-form-inline">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Nonaktifkan template ini?')">Nonaktifkan</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Template</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Entitas Bisnis</dt><dd>{{ template.entitas_bisnis }}</dd>
+        <dt>Deskripsi Item</dt><dd>{{ template.deskripsi_item }}</dd>
+        <dt>Kategori</dt><dd>{{ template.get_kategori_display }}</dd>
+        <dt>Jumlah</dt><dd><strong>{{ template.jumlah|floatformat:0|intcomma }}</strong></dd>
+        <dt>Frekuensi</dt><dd>{{ template.get_frekuensi_display }}</dd>
+        <dt>Tipe Pembayaran</dt><dd>{{ template.get_payment_type_display }}</dd>
+        <dt>Auto Konfirmasi</dt><dd>{% if template.auto_confirm %}Ya{% else %}Tidak{% endif %}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Jadwal</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Tanggal Mulai</dt><dd>{{ template.tanggal_mulai }}</dd>
+        <dt>Tanggal Selesai</dt><dd>{{ template.tanggal_selesai|default:"—" }}</dd>
+        <dt>Berikutnya</dt><dd><strong>{{ template.tanggal_berikutnya }}</strong></dd>
+        <dt>Akun Pendapatan</dt><dd>{{ template.revenue_account }}</dd>
+        <dt>Akun Pembayaran</dt><dd>{{ template.payment_account|default:"—" }}</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Pendapatan Dihasilkan (20 Terakhir)</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr><th>ID Transaksi</th><th>Tanggal</th><th>Status</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for h in generated %}
+        <tr>
+          <td><a href="{% url 'pendapatan:detail' h.pk %}">{{ h.transaction_id }}</a></td>
+          <td>{{ h.tanggal }}</td>
+          <td><span class="ni-badge ni-badge--{{ h.status }}">{{ h.get_status_display }}</span></td>
+          <td><a href="{% url 'pendapatan:detail' h.pk %}" class="ni-btn ni-btn--sm ni-btn--secondary">Detail</a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada pendapatan dihasilkan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

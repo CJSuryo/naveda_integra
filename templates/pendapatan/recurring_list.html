@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Template Recurring{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Template Recurring Pendapatan</h1>
+    <p class="ni-page-header__subtitle">Template untuk generate pendapatan berulang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:recurring_create' %}" class="ni-btn ni-btn--primary">+ Buat Template</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Entitas Bisnis</th>
+          <th>Frekuensi</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Berikutnya</th>
+          <th>Auto Konfirmasi</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td><a href="{% url 'pendapatan:recurring_detail' t.pk %}">{{ t.nama }}</a></td>
+          <td>{{ t.entitas_bisnis }}</td>
+          <td>{{ t.get_frekuensi_display }}</td>
+          <td class="ni-text-right">{{ t.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ t.tanggal_berikutnya }}</td>
+          <td>{% if t.auto_confirm %}<span class="ni-badge ni-badge--success">Ya</span>{% else %}<span class="ni-badge">Tidak</span>{% endif %}</td>
+          <td>
+            <a href="{% url 'pendapatan:recurring_detail' t.pk %}" class="ni-btn ni-btn--sm ni-btn--secondary">Detail</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada template recurring aktif.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if inactive %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Template Tidak Aktif</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama</th><th>Entitas Bisnis</th><th>Frekuensi</th><th class="ni-text-right">Jumlah</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in inactive %}
+        <tr>
+          <td><a href="{% url 'pendapatan:recurring_detail' t.pk %}">{{ t.nama }}</a></td>
+          <td>{{ t.entitas_bisnis }}</td>
+          <td>{{ t.get_frekuensi_display }}</td>
+          <td class="ni-text-right">{{ t.jumlah|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,7 +1,7 @@
 from django import forms
 from apps.master_data.models import Akun
 from apps.purchase.models import SubTransactionType
-from .models import PendapatanHeader
+from .models import PendapatanHeader, RecurringTemplate
 
 
 class PendapatanHeaderForm(forms.ModelForm):
@@ -91,3 +91,31 @@ class PendapatanItemForm(forms.Form):
                 if not cleaned.get(f):
                     self.add_error(f, 'Field ini wajib diisi untuk item deferred.')
         return cleaned
+
+
+class RecurringTemplateForm(forms.ModelForm):
+    class Meta:
+        model = RecurringTemplate
+        fields = [
+            'nama', 'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
+            'deskripsi_item', 'kategori', 'sub_transaction_type', 'jumlah',
+            'revenue_account', 'payment_account', 'payment_type',
+            'frekuensi', 'tanggal_mulai', 'tanggal_selesai', 'auto_confirm',
+        ]
+        widgets = {
+            'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+            'deskripsi_item': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+            'jumlah': forms.NumberInput(attrs={'class': 'ni-input'}),
+            'kategori': forms.Select(attrs={'class': 'ni-input'}),
+            'payment_type': forms.Select(attrs={'class': 'ni-input'}),
+            'frekuensi': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'sub_transaction_type': forms.Select(attrs={'class': 'ni-input'}),
+            'revenue_account': forms.Select(attrs={'class': 'ni-input'}),
+            'payment_account': forms.Select(attrs={'class': 'ni-input'}),
+            'tanggal_mulai': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'tanggal_selesai': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'auto_confirm': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+        }

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Kalender Recurring{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Jadwal Recurring — 3 Bulan Ke Depan</h1>
+    <p class="ni-page-header__subtitle">{{ today }} s/d {{ end_date }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:recurring_list' %}" class="ni-btn ni-btn--secondary">&#8592; Template</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal Berikutnya</th>
+          <th>Template</th>
+          <th>Entitas Bisnis</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Auto Konfirmasi</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in templates %}
+        <tr>
+          <td>{{ t.tanggal_berikutnya }}</td>
+          <td><a href="{% url 'pendapatan:recurring_detail' t.pk %}">{{ t.nama }}</a></td>
+          <td>{{ t.entitas_bisnis }}</td>
+          <td class="ni-text-right">{{ t.jumlah|floatformat:0|intcomma }}</td>
+          <td>{% if t.auto_confirm %}<span class="ni-badge ni-badge--success">Ya</span>{% else %}<span class="ni-badge">Tidak</span>{% endif %}</td>
+          <td>
+            <form method="post" action="{% url 'pendapatan:recurring_generate' t.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--sm ni-btn--primary">Generate</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Tidak ada jadwal recurring dalam 3 bulan ke depan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

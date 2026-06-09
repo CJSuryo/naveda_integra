@@ -4,9 +4,9 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages as dj_messages
-from .models import PendapatanHeader, PendapatanEventLog
-from .services import confirm_pendapatan, create_pendapatan_header, void_pendapatan, get_pendapatan_dashboard_kpi
-from .forms import PendapatanHeaderForm, PendapatanItemForm
+from .models import PendapatanHeader, PendapatanEventLog, RecurringTemplate
+from .services import confirm_pendapatan, create_pendapatan_header, void_pendapatan, get_pendapatan_dashboard_kpi, generate_from_recurring
+from .forms import PendapatanHeaderForm, PendapatanItemForm, RecurringTemplateForm
 
 
 @login_required
@@ -163,3 +163,90 @@ def deferred_recognize(request: HttpRequest, entry_pk: int) -> HttpResponse:
         except ValueError as exc:
             dj_messages.error(request, str(exc))
     return redirect('pendapatan:deferred_detail', pk=entry.schedule_id)
+
+
+# ── Recurring Template Views ──────────────────────────────────────────────────
+
+@login_required
+def recurring_list(request):
+    templates = RecurringTemplate.objects.select_related('entitas_bisnis').filter(is_active=True)
+    inactive = RecurringTemplate.objects.filter(is_active=False)
+    return render(request, 'pendapatan/recurring_list.html', {
+        'templates': templates,
+        'inactive': inactive,
+    })
+
+
+@login_required
+def recurring_create(request):
+    form = RecurringTemplateForm(request.POST or None)
+    if form.is_valid():
+        template = form.save(commit=False)
+        template.created_by = request.user
+        template.save()
+        dj_messages.success(request, f'Template "{template.nama}" berhasil dibuat.')
+        return redirect('pendapatan:recurring_detail', pk=template.pk)
+    return render(request, 'pendapatan/recurring_form.html', {'form': form, 'title': 'Buat Template Recurring'})
+
+
+@login_required
+def recurring_detail(request, pk):
+    template = get_object_or_404(RecurringTemplate, pk=pk)
+    generated = template.generated_headers.order_by('-tanggal')[:20]
+    return render(request, 'pendapatan/recurring_detail.html', {
+        'template': template,
+        'generated': generated,
+    })
+
+
+@login_required
+def recurring_edit(request, pk):
+    template = get_object_or_404(RecurringTemplate, pk=pk)
+    form = RecurringTemplateForm(request.POST or None, instance=template)
+    if form.is_valid():
+        form.save()
+        dj_messages.success(request, 'Template berhasil diperbarui.')
+        return redirect('pendapatan:recurring_detail', pk=template.pk)
+    return render(request, 'pendapatan/recurring_form.html', {'form': form, 'title': 'Edit Template Recurring'})
+
+
+@login_required
+def recurring_delete(request, pk):
+    template = get_object_or_404(RecurringTemplate, pk=pk)
+    if request.method == 'POST':
+        template.is_active = False
+        template.save(update_fields=['is_active'])
+        dj_messages.success(request, f'Template "{template.nama}" dinonaktifkan.')
+        return redirect('pendapatan:recurring_list')
+    return redirect('pendapatan:recurring_detail', pk=pk)
+
+
+@login_required
+def recurring_generate(request, pk):
+    if request.method != 'POST':
+        return redirect('pendapatan:recurring_detail', pk=pk)
+    template = get_object_or_404(RecurringTemplate, pk=pk, is_active=True)
+    try:
+        header = generate_from_recurring(template, user=request.user)
+        dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil dibuat.')
+    except Exception as e:
+        dj_messages.error(request, f'Gagal generate: {e}')
+    return redirect('pendapatan:recurring_detail', pk=pk)
+
+
+@login_required
+def recurring_calendar(request):
+    from datetime import date
+    from dateutil.relativedelta import relativedelta
+
+    today = date.today()
+    end_date = today + relativedelta(months=3)
+    templates = RecurringTemplate.objects.filter(
+        is_active=True,
+        tanggal_berikutnya__lte=end_date,
+    ).order_by('tanggal_berikutnya')
+    return render(request, 'pendapatan/recurring_calendar.html', {
+        'templates': templates,
+        'today': today,
+        'end_date': end_date,
+    })

@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:recurring_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-grid ni-form-grid--2">
+        {% for field in form %}
+        <div class="ni-form-group {% if field.name == 'deskripsi_item' %}ni-form-group--full{% endif %} {% if field.errors %}ni-form-group--error{% endif %}">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ni-btn-row">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'pendapatan:recurring_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
