@@ -9,7 +9,7 @@ class PendapatanHeaderForm(forms.ModelForm):
         model = PendapatanHeader
         fields = ['tanggal', 'deskripsi', 'payment_type']
         widgets = {
-            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}, format='%Y-%m-%d'),
             'deskripsi': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
             'payment_type': forms.Select(attrs={'class': 'ni-input', 'id': 'id_payment_type'}),
         }
