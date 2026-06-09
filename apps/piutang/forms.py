@@ -1,9 +1,12 @@
 from django import forms
-from django.forms import inlineformset_factory
+from django.forms import inlineformset_factory, modelformset_factory
 
 from apps.master_data.models import Akun
 
-from .models import PiutangAttachment, PiutangDetail, PiutangHeader, PiutangPenerimaan
+from .models import (
+    PiutangAttachment, PiutangDetail, PiutangHeader, PiutangPenerimaan,
+    PenyisihanRateConfig,
+)
 
 
 class PiutangHeaderForm(forms.ModelForm):
@@ -12,20 +15,25 @@ class PiutangHeaderForm(forms.ModelForm):
         fields = [
             'tanggal', 'debitur', 'deskripsi', 'jatuh_tempo',
             'jenis_jangka_waktu', 'coa_piutang_account',
+            'jenis_bunga', 'suku_bunga', 'periode_angsuran',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'debitur': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Nama debitur'}),
             'deskripsi': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
             'jatuh_tempo': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
-            'jenis_jangka_waktu': forms.Select(attrs={'class': 'ni-input'}),
+            'jenis_jangka_waktu': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_jangka_waktu'}),
             'coa_piutang_account': forms.Select(attrs={'class': 'ni-input'}),
+            'jenis_bunga': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_bunga'}),
+            'suku_bunga': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+            'periode_angsuran': forms.Select(attrs={'class': 'ni-input'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['deskripsi'].required = False
         self.fields['jatuh_tempo'].required = False
+        self.fields['suku_bunga'].required = False
         self.fields['coa_piutang_account'].queryset = Akun.objects.filter(
             kategori_id='aset'
         ).order_by('kode_akun')
@@ -133,3 +141,61 @@ class PiutangReklasifikasiForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'class': 'ni-input'}),
     )
+
+
+class PiutangPenyisihanForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal',
+    )
+    allowance_account = forms.ModelChoiceField(
+        queryset=Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Cadangan Kerugian Piutang',
+        empty_label='— Pilih Akun Cadangan —',
+    )
+    expense_account = forms.ModelChoiceField(
+        queryset=Akun.objects.filter(kategori_id='beban').order_by('kode_akun'),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Beban Penyisihan',
+        empty_label='— Pilih Akun Beban —',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Catatan (opsional)'}),
+    )
+
+
+class BatchPenyisihanForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Perhitungan',
+    )
+    allowance_account = forms.ModelChoiceField(
+        queryset=Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Cadangan Kerugian Piutang',
+        empty_label='— Pilih Akun Cadangan —',
+    )
+    expense_account = forms.ModelChoiceField(
+        queryset=Akun.objects.filter(kategori_id='beban').order_by('kode_akun'),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Beban Penyisihan',
+        empty_label='— Pilih Akun Beban —',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Catatan (opsional)'}),
+    )
+
+
+PenyisihanRateConfigFormSet = modelformset_factory(
+    PenyisihanRateConfig,
+    fields=['rate_percent'],
+    extra=0,
+    widgets={
+        'rate_percent': forms.NumberInput(attrs={
+            'class': 'ni-input ni-input--sm', 'step': '0.01', 'min': '0', 'max': '100',
+        }),
+    },
+)
