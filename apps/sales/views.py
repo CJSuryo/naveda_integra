@@ -19,6 +19,7 @@ from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
     get_available_stock,
+    get_fifo_unit_cost,
     process_sales_fifo,
     create_sales_automated_journals,
     reverse_sales_automated_journals,
@@ -598,7 +599,7 @@ def api_stock_check(request: HttpRequest) -> JsonResponse:
     """Check available stock for an item."""
     item_id = request.GET.get('item_id', '')
     if not item_id:
-        return JsonResponse({'available_stock': '0', 'is_bulk': False})
+        return JsonResponse({'available_stock': '0', 'is_bulk': False, 'unit_cost': '0'})
     try:
         item = ItemMasterPurchase.objects.only('tipe_item').get(pk=int(item_id))
         is_bulk = item.tipe_item in ('RMB', 'FGB', 'ITMB')
@@ -613,12 +614,18 @@ def api_stock_check(request: HttpRequest) -> JsonResponse:
             return JsonResponse({
                 'available_stock': str(total_value),
                 'is_bulk': True,
+                'unit_cost': '0',
             })
         else:
             stock = get_available_stock(int(item_id))
-            return JsonResponse({'available_stock': str(stock), 'is_bulk': False})
+            unit_cost = get_fifo_unit_cost(int(item_id))
+            return JsonResponse({
+                'available_stock': str(stock),
+                'is_bulk': False,
+                'unit_cost': str(unit_cost),
+            })
     except (ValueError, TypeError, ItemMasterPurchase.DoesNotExist):
-        return JsonResponse({'available_stock': '0', 'is_bulk': False})
+        return JsonResponse({'available_stock': '0', 'is_bulk': False, 'unit_cost': '0'})
 
 
 @login_required

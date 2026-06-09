@@ -21,6 +21,22 @@ def get_available_stock(item_id: int) -> Decimal:
     return result['total'] or Decimal('0')
 
 
+def get_fifo_unit_cost(item_id: int) -> Decimal:
+    """Weighted-average unit cost across remaining FIFO batches (display/estimation only)."""
+    from django.db.models import F, Sum
+    result = FIFOBatch.objects.filter(
+        item_id=item_id, remaining_qty__gt=0,
+    ).aggregate(
+        total_qty=Sum('remaining_qty'),
+        total_value=Sum(F('remaining_qty') * F('unit_price')),
+    )
+    total_qty = result['total_qty'] or Decimal('0')
+    total_value = result['total_value'] or Decimal('0')
+    if total_qty <= 0:
+        return Decimal('0')
+    return total_value / total_qty
+
+
 def consume_fifo(item_id: int, quantity: Decimal) -> tuple[Decimal, list[tuple[FIFOBatch, Decimal]]]:
     """Consume inventory using FIFO method.
 

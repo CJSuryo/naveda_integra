@@ -475,9 +475,9 @@
     var fieldTdStyle = hasItem ? '' : ' style="display:none;"';
     // Satuan/Bulk inputs: always show TDs but disable irrelevant inputs
     var satuanInputDisabled = (!hasItem || prefillIsBulk) ? ' disabled style="display:none;"' : '';
-    // Non-bulk in edit mode: show HPP read-only; non-bulk new entry: hide
+    // HPP field handling: for bulk show normally, for satuan show but disabled (readonly)
     var bulkInputDisabled = prefillIsBulk ? '' :
-      (prefillHpp ? ' readonly style="background:var(--ni-bg);color:var(--ni-text-muted);"' : ' disabled style="display:none;"');
+      ' disabled style="background:var(--ni-bg);color:var(--ni-text-muted);"';
 
     var tr = document.createElement('tr');
     tr.id = rid;
@@ -644,8 +644,22 @@
     var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
     var total = qty * price;
     document.getElementById(rid + '_total').value = formatNum(total);
-    // Find gid from the row's parent
+    
+    // For satuan items, recalculate HPP estimate as quantity * unit_cost
     var tr = document.getElementById(rid);
+    if (tr && tr.dataset.unitCost) {
+      var isBulk = tr.dataset.tipeItem && BULK_TYPES.indexOf(tr.dataset.tipeItem) !== -1;
+      if (!isBulk) {
+        var unitCost = parseFloat(tr.dataset.unitCost) || 0;
+        var hppEstimate = qty * unitCost;
+        var hppField = document.getElementById(rid + '_hpp');
+        if (hppField) {
+          hppField.value = formatNum(hppEstimate);
+        }
+      }
+    }
+    
+    // Find gid from the row's parent
     if (tr) {
       var tbody = tr.parentElement;
       if (tbody && tbody.id) {
@@ -685,9 +699,18 @@
       if (isBulk) inp.value = '';
     });
     tr.querySelectorAll('td.col-bulk input').forEach(function (inp) {
-      inp.style.display = isBulk ? '' : 'none';
-      inp.disabled = !isBulk;
-      if (!isBulk) inp.value = '';
+      inp.style.display = '';  // Always show HPP field
+      if (isBulk) {
+        inp.disabled = false;
+        inp.style.background = '';
+        inp.style.color = '';
+      } else {
+        // For satuan items, show as readonly with estimation note
+        inp.disabled = true;
+        inp.style.background = 'var(--ni-bg)';
+        inp.style.color = 'var(--ni-text-muted)';
+        inp.placeholder = 'Estimasi (qty × hpp unit)';
+      }
     });
   };
 
@@ -734,6 +757,11 @@
         var info = document.getElementById(rid + '_stock');
         if (!info) return;
         var stock = parseFloat(data.available_stock || 0);
+        var unitCost = parseFloat(data.unit_cost || 0);
+        var tr = document.getElementById(rid);
+        if (tr) {
+          tr.dataset.unitCost = unitCost;
+        }
         if (data.is_bulk) {
           info.textContent = 'Nilai Persediaan: Rp ' + stock.toLocaleString('id-ID', {maximumFractionDigits: 0});
           var hppField = document.getElementById(rid + '_hpp');
@@ -741,13 +769,24 @@
             hppField.value = stock;
             hppField.disabled = false;
             hppField.style.display = '';
-            var tr = document.getElementById(rid);
-            if (tr && tr.parentElement && tr.parentElement.id) {
-              updateGroupTotals(tr.parentElement.id.replace('_items', ''));
+            var tbody = tr ? tr.parentElement : null;
+            if (tbody && tbody.id) {
+              updateGroupTotals(tbody.id.replace('_items', ''));
             }
           }
         } else {
-          info.textContent = 'Stok: ' + stock.toLocaleString('id-ID') + ' unit';
+          info.textContent = 'Stok: ' + stock.toLocaleString('id-ID') + ' unit | Unit Cost: Rp ' + unitCost.toLocaleString('id-ID', {maximumFractionDigits: 4});
+          // For satuan items, initialize HPP field with estimate
+          var hppField = document.getElementById(rid + '_hpp');
+          if (hppField && !hppField.value) {
+            var qty = parseFloat(document.getElementById(rid + '_qty').value) || 0;
+            var hppEstimate = qty * unitCost;
+            hppField.value = formatNum(hppEstimate);
+            hppField.disabled = true;
+            hppField.style.background = 'var(--ni-bg)';
+            hppField.style.color = 'var(--ni-text-muted)';
+            hppField.placeholder = 'Estimasi (qty × hpp unit)';
+          }
         }
         info.className = stock > 0 ? 'ni-stock-info' : 'ni-stock-info ni-stock-warning';
       })
