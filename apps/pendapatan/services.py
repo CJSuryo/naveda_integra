@@ -64,11 +64,11 @@ def compute_next_date(current_date: date, frekuensi: str) -> date:
 
 def generate_from_recurring(template, user=None) -> PendapatanHeader:
     if not template.is_active:
-        raise ValueError(f'Template {template.pk} is not active.')
+        raise ValueError(f'Template "{template.nama}" tidak aktif.')
     with transaction.atomic():
         template = type(template).objects.select_for_update().get(pk=template.pk)
         if not template.is_active:
-            raise ValueError(f'Template {template.pk} is not active.')
+            raise ValueError(f'Template "{template.nama}" tidak aktif.')
         header = PendapatanHeader.objects.create(
             tanggal=template.tanggal_berikutnya,
             deskripsi=f'{template.nama} — {template.tanggal_berikutnya}',

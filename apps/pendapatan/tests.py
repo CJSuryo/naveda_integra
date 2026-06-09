@@ -136,6 +136,11 @@ class ComputeNextDateTests(TestCase):
         with self.assertRaises(ValueError):
             compute_next_date(date(2026, 1, 1), 'dekade')
 
+    def test_invalid_frekuensi_raises(self):
+        from datetime import date
+        with self.assertRaises(ValueError):
+            compute_next_date(date(2026, 1, 15), 'tidak_dikenal')
+
 
 class GenerateFromRecurringTests(TestCase):
     def setUp(self):
@@ -200,3 +205,13 @@ class GenerateFromRecurringTests(TestCase):
         self.template.save()
         header = generate_from_recurring(self.template, user=None)
         self.assertEqual(header.status, 'confirmed')
+
+    def test_logs_recurring_generated_event(self):
+        from apps.pendapatan.models import PendapatanEventLog
+        header = generate_from_recurring(self.template, user=None)
+        self.assertTrue(
+            PendapatanEventLog.objects.filter(
+                pendapatan_header=header,
+                event_type='RECURRING_GENERATED',
+            ).exists()
+        )
