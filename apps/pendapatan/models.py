@@ -252,3 +252,74 @@ class RecurringTemplate(models.Model):
 
     def __str__(self) -> str:
         return self.nama
+
+
+class DeferredRevenueSchedule(models.Model):
+    pendapatan_item = models.OneToOneField(
+        PendapatanItem, on_delete=models.CASCADE, related_name='deferred_schedule',
+        verbose_name='Pendapatan Item',
+    )
+    jumlah_total = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah Total')
+    tanggal_mulai = models.DateField(verbose_name='Tanggal Mulai')
+    tanggal_selesai = models.DateField(verbose_name='Tanggal Selesai')
+    metode = models.CharField(
+        max_length=20, choices=DEFERRED_METODE_CHOICES, default='straight_line',
+        verbose_name='Metode',
+    )
+    recognition_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='deferred_recognition', verbose_name='Akun Pengakuan',
+    )
+    deferred_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='deferred_liability', verbose_name='Akun Deferred (Liability)',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Jadwal Deferred Revenue'
+        verbose_name_plural = 'Jadwal Deferred Revenue'
+
+    def __str__(self) -> str:
+        return f'Deferred {self.pendapatan_item.pk} — {self.tanggal_mulai} s/d {self.tanggal_selesai}'
+
+    @property
+    def total_recognized(self):
+        from decimal import Decimal
+        from django.db.models import Sum
+        return self.entries.filter(status='recognized').aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+
+    @property
+    def total_remaining(self):
+        return self.jumlah_total - self.total_recognized
+
+
+class DeferredRevenueEntry(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Belum Diakui'),
+        ('recognized', 'Sudah Diakui'),
+        ('reversed', 'Dibalik'),
+    ]
+
+    schedule = models.ForeignKey(
+        DeferredRevenueSchedule, on_delete=models.CASCADE, related_name='entries',
+        verbose_name='Jadwal',
+    )
+    periode = models.DateField(verbose_name='Periode (1 = bulan)')
+    jumlah = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah')
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='pending', verbose_name='Status',
+    )
+    jurnal_header = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='deferred_entries', verbose_name='Jurnal',
+    )
+
+    class Meta:
+        verbose_name = 'Entry Deferred Revenue'
+        verbose_name_plural = 'Entry Deferred Revenue'
+        unique_together = ('schedule', 'periode')
+        ordering = ['periode']
+
+    def __str__(self) -> str:
+        return f'{self.schedule.pk} — {self.periode.strftime("%Y-%m")} — {self.status}'
