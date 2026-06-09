@@ -170,7 +170,7 @@ def deferred_recognize(request: HttpRequest, entry_pk: int) -> HttpResponse:
 @login_required
 def recurring_list(request):
     templates = RecurringTemplate.objects.select_related('entitas_bisnis').filter(is_active=True)
-    inactive = RecurringTemplate.objects.filter(is_active=False)
+    inactive = RecurringTemplate.objects.select_related('entitas_bisnis').filter(is_active=False)
     return render(request, 'pendapatan/recurring_list.html', {
         'templates': templates,
         'inactive': inactive,
@@ -204,7 +204,10 @@ def recurring_edit(request, pk):
     template = get_object_or_404(RecurringTemplate, pk=pk)
     form = RecurringTemplateForm(request.POST or None, instance=template)
     if form.is_valid():
-        form.save()
+        updated = form.save()
+        if updated.tanggal_mulai > updated.tanggal_berikutnya:
+            updated.tanggal_berikutnya = updated.tanggal_mulai
+            updated.save(update_fields=['tanggal_berikutnya', 'updated_at'])
         dj_messages.success(request, 'Template berhasil diperbarui.')
         return redirect('pendapatan:recurring_detail', pk=template.pk)
     return render(request, 'pendapatan/recurring_form.html', {'form': form, 'title': 'Edit Template Recurring'})
@@ -215,7 +218,7 @@ def recurring_delete(request, pk):
     template = get_object_or_404(RecurringTemplate, pk=pk)
     if request.method == 'POST':
         template.is_active = False
-        template.save(update_fields=['is_active'])
+        template.save(update_fields=['is_active', 'updated_at'])
         dj_messages.success(request, f'Template "{template.nama}" dinonaktifkan.')
         return redirect('pendapatan:recurring_list')
     return redirect('pendapatan:recurring_detail', pk=pk)
@@ -229,7 +232,7 @@ def recurring_generate(request, pk):
     try:
         header = generate_from_recurring(template, user=request.user)
         dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil dibuat.')
-    except Exception as e:
+    except ValueError as e:
         dj_messages.error(request, f'Gagal generate: {e}')
     return redirect('pendapatan:recurring_detail', pk=pk)
 
@@ -241,8 +244,9 @@ def recurring_calendar(request):
 
     today = date.today()
     end_date = today + relativedelta(months=3)
-    templates = RecurringTemplate.objects.filter(
+    templates = RecurringTemplate.objects.select_related('entitas_bisnis').filter(
         is_active=True,
+        tanggal_berikutnya__gte=today,
         tanggal_berikutnya__lte=end_date,
     ).order_by('tanggal_berikutnya')
     return render(request, 'pendapatan/recurring_calendar.html', {
