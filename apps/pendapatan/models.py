@@ -243,15 +243,109 @@ class PendapatanEventLog(models.Model):
 
 
 class RecurringTemplate(models.Model):
-    """Placeholder — fully implemented in Phase 5."""
-    nama = models.CharField(max_length=255)
+    FREKUENSI_CHOICES = [
+        ('harian', 'Harian'),
+        ('mingguan', 'Mingguan'),
+        ('bulanan', 'Bulanan'),
+        ('triwulanan', 'Triwulanan'),
+        ('semesteran', 'Semesteran'),
+        ('tahunan', 'Tahunan'),
+    ]
+
+    nama = models.CharField(max_length=255, verbose_name='Nama Template')
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis',
+        on_delete=models.PROTECT,
+        verbose_name='Entitas Bisnis',
+    )
+    entitas_bisnis_lv2 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv2',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name='Entitas Bisnis Lv2',
+    )
+    entitas_bisnis_lv3 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name='Entitas Bisnis Lv3',
+    )
+    deskripsi_item = models.TextField(verbose_name='Deskripsi Item')
+    kategori = models.CharField(
+        max_length=50,
+        choices=KATEGORI_CHOICES,
+        verbose_name='Kategori',
+    )
+    sub_transaction_type = models.ForeignKey(
+        'purchase.SubTransactionType',
+        on_delete=models.PROTECT,
+        verbose_name='Sub Transaction Type',
+    )
+    jumlah = models.DecimalField(
+        max_digits=19,
+        decimal_places=4,
+        verbose_name='Jumlah per Periode',
+    )
+    revenue_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        related_name='recurring_revenue_templates',
+        verbose_name='Akun Pendapatan',
+    )
+    payment_account = models.ForeignKey(
+        'master_data.Akun',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name='recurring_payment_templates',
+        verbose_name='Akun Pembayaran',
+    )
+    payment_type = models.CharField(
+        max_length=10,
+        choices=[('cash', 'Cash'), ('credit', 'Kredit')],
+        default='cash',
+        verbose_name='Tipe Pembayaran',
+    )
+    frekuensi = models.CharField(
+        max_length=20,
+        choices=FREKUENSI_CHOICES,
+        verbose_name='Frekuensi',
+    )
+    tanggal_mulai = models.DateField(verbose_name='Tanggal Mulai')
+    tanggal_selesai = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name='Tanggal Selesai',
+    )
+    tanggal_berikutnya = models.DateField(verbose_name='Tanggal Berikutnya')
+    auto_confirm = models.BooleanField(
+        default=False,
+        verbose_name='Auto Konfirmasi',
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Aktif')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        ordering = ['tanggal_berikutnya']
         verbose_name = 'Recurring Template'
-        verbose_name_plural = 'Recurring Template'
+        verbose_name_plural = 'Recurring Templates'
 
-    def __str__(self) -> str:
+    def __str__(self):
         return self.nama
+
+    def save(self, *args, **kwargs):
+        if not self.pk and not self.tanggal_berikutnya:
+            self.tanggal_berikutnya = self.tanggal_mulai
+        super().save(*args, **kwargs)
 
 
 class DeferredRevenueSchedule(models.Model):
