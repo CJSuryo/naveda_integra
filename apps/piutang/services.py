@@ -570,34 +570,34 @@ def compute_penyisihan_for_piutang(piutang) -> dict:
 
 
 def _next_penyisihan_journal_number(prefix='TRX-PIU-PSH') -> str:
-    with transaction.atomic():
-        last = (
-            JurnalHeader.objects
-            .select_for_update()
-            .filter(nomor_transaksi__startswith=f'{prefix}-')
-            .order_by('-nomor_transaksi')
-            .values_list('nomor_transaksi', flat=True)
-            .first()
-        )
-        seq = 1
-        if last:
-            try:
-                seq = int(last.rsplit('-', 1)[1]) + 1
-            except (ValueError, IndexError):
-                seq = 1
-        return f'{prefix}-{seq:04d}'
+    last = (
+        JurnalHeader.objects
+        .select_for_update()
+        .filter(nomor_transaksi__startswith=f'{prefix}-')
+        .order_by('-nomor_transaksi')
+        .values_list('nomor_transaksi', flat=True)
+        .first()
+    )
+    seq = 1
+    if last:
+        try:
+            seq = int(last.rsplit('-', 1)[1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    return f'{prefix}-{seq:04d}'
 
 
 def create_penyisihan_journal(
     piutang, allowance_account, expense_account, tanggal, catatan='', user=None
 ):
     from .models import PiutangPenyisihan
-    result = compute_penyisihan_for_piutang(piutang)
-    total = result['total_penyisihan']
-    if total <= 0:
-        raise ValueError('Tidak ada penyisihan yang dapat dihitung untuk piutang ini.')
+    piutang_pk = piutang.pk
     with transaction.atomic():
-        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang_pk)
+        result = compute_penyisihan_for_piutang(piutang)
+        total = result['total_penyisihan']
+        if total <= 0:
+            raise ValueError('Tidak ada penyisihan yang dapat dihitung untuk piutang ini.')
         nomor = _next_penyisihan_journal_number('TRX-PIU-PSH')
         header = JurnalHeader.objects.create(
             tanggal=tanggal,
@@ -657,10 +657,9 @@ def reverse_penyisihan_journal(entry, user=None) -> None:
 
 
 def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
-    from .models import PenyisihanRateConfig
     from django.db.models import Sum as DSum
 
-    rates = {r.bucket_key: r.rate_percent for r in PenyisihanRateConfig.objects.all()}
+    rates = _get_rate_config()
     today = tanggal  # caller-supplied date used as "today" for aging classification
     bucket_amounts = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
     piutang_count = 0
