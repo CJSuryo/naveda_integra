@@ -132,6 +132,10 @@ class ComputeNextDateTests(TestCase):
     def test_tahunan(self):
         self.assertEqual(compute_next_date(date(2026, 1, 15), 'tahunan'), date(2027, 1, 15))
 
+    def test_unknown_frekuensi_raises(self):
+        with self.assertRaises(ValueError):
+            compute_next_date(date(2026, 1, 1), 'dekade')
+
 
 class GenerateFromRecurringTests(TestCase):
     def setUp(self):

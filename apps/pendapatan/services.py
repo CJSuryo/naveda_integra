@@ -1,7 +1,9 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
+
+from dateutil.relativedelta import relativedelta
 
 from django.db import transaction
 from django.db.models import Sum
@@ -45,9 +47,7 @@ def _next_journal_number(prefix: str) -> str:
 
 # ── Recurring Utilities ───────────────────────────────────────────────────────
 
-def compute_next_date(current_date, frekuensi: str):
-    from dateutil.relativedelta import relativedelta
-
+def compute_next_date(current_date: date, frekuensi: str) -> date:
     DELTA_MAP = {
         'harian': timedelta(days=1),
         'mingguan': timedelta(weeks=1),
@@ -63,7 +63,12 @@ def compute_next_date(current_date, frekuensi: str):
 
 
 def generate_from_recurring(template, user=None) -> PendapatanHeader:
+    if not template.is_active:
+        raise ValueError(f'Template {template.pk} is not active.')
     with transaction.atomic():
+        template = type(template).objects.select_for_update().get(pk=template.pk)
+        if not template.is_active:
+            raise ValueError(f'Template {template.pk} is not active.')
         header = PendapatanHeader.objects.create(
             tanggal=template.tanggal_berikutnya,
             deskripsi=f'{template.nama} — {template.tanggal_berikutnya}',
@@ -79,6 +84,7 @@ def generate_from_recurring(template, user=None) -> PendapatanHeader:
             entitas_bisnis=template.entitas_bisnis,
             entitas_bisnis_lv2=template.entitas_bisnis_lv2,
             entitas_bisnis_lv3=template.entitas_bisnis_lv3,
+            payment_account=template.payment_account,
         )
 
         PendapatanItem.objects.create(
@@ -94,7 +100,7 @@ def generate_from_recurring(template, user=None) -> PendapatanHeader:
 
         new_next = compute_next_date(template.tanggal_berikutnya, template.frekuensi)
         template.tanggal_berikutnya = new_next
-        if template.tanggal_selesai and new_next > template.tanggal_selesai:
+        if template.tanggal_selesai and new_next >= template.tanggal_selesai:
             template.is_active = False
         template.save(update_fields=['tanggal_berikutnya', 'is_active', 'updated_at'])
 
