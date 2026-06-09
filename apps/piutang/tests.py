@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.test import TestCase
@@ -176,9 +176,6 @@ class ComputeBagianLancarTests(TestCase):
         self.assertEqual(bagian, Decimal('0'))
 
 
-from .services import get_piutang_aging
-
-
 # ── Task 4: Aging bucket tests ────────────────────────────────────────────────
 
 from apps.piutang.services import _classify_bucket, get_piutang_aging
@@ -193,15 +190,12 @@ class ClassifyBucketTest(TestCase):
         assert _classify_bucket(date.today(), date.today()) == 'current'
 
     def test_1_day_overdue(self):
-        from datetime import timedelta
         assert _classify_bucket(date.today() - timedelta(days=1), date.today()) == '1_30'
 
     def test_31_days(self):
-        from datetime import timedelta
         assert _classify_bucket(date.today() - timedelta(days=31), date.today()) == '31_60'
 
     def test_over_365(self):
-        from datetime import timedelta
         assert _classify_bucket(date.today() - timedelta(days=400), date.today()) == 'over_365'
 
     def test_none_returns_current(self):
