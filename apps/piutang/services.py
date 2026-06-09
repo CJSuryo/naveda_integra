@@ -461,27 +461,70 @@ def reverse_piutang_payment(penerimaan: PiutangPenerimaan, user=None) -> JurnalH
     return rev_header
 
 
+_AGING_BUCKET_KEYS = ['current', '1_30', '31_60', '61_90', '91_180', '181_365', 'over_365']
+_AGING_BUCKET_LABELS = {
+    'current':  'Belum Jatuh Tempo',
+    '1_30':     'Lewat 1–30 Hari',
+    '31_60':    'Lewat 31–60 Hari',
+    '61_90':    'Lewat 61–90 Hari',
+    '91_180':   'Lewat 91–180 Hari',
+    '181_365':  'Lewat 181–365 Hari',
+    'over_365': 'Lewat > 365 Hari',
+}
+
+
+def _classify_bucket(tanggal, today) -> str:
+    if tanggal is None:
+        return 'current'
+    delta = (today - tanggal).days
+    if delta <= 0:
+        return 'current'
+    elif delta <= 30:
+        return '1_30'
+    elif delta <= 60:
+        return '31_60'
+    elif delta <= 90:
+        return '61_90'
+    elif delta <= 180:
+        return '91_180'
+    elif delta <= 365:
+        return '181_365'
+    else:
+        return 'over_365'
+
+
 def get_piutang_aging() -> dict:
     today = timezone.now().date()
-    qs = PiutangHeader.objects.filter(status__in=('open', 'partial', 'overdue'))
-    buckets = {
-        'current': Decimal('0'), '1_30': Decimal('0'), '31_60': Decimal('0'),
-        '61_90': Decimal('0'), 'over_90': Decimal('0'),
-    }
-    for p in qs:
-        sisa = p.sisa_piutang
-        if not p.jatuh_tempo or p.jatuh_tempo >= today:
-            buckets['current'] += sisa
-        else:
-            days = (today - p.jatuh_tempo).days
-            if days <= 30:
-                buckets['1_30'] += sisa
-            elif days <= 60:
-                buckets['31_60'] += sisa
-            elif days <= 90:
-                buckets['61_90'] += sisa
-            else:
-                buckets['over_90'] += sisa
+    buckets = {k: [] for k in _AGING_BUCKET_KEYS}
+    qs = (
+        PiutangHeader.objects
+        .filter(status__in=('open', 'partial', 'overdue'))
+        .select_related('entitas_bisnis')
+        .prefetch_related('penerimaan')
+    )
+    for piutang in qs:
+        if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
+            schedule = compute_angsuran_schedule(piutang)
+            if schedule:
+                for row in schedule:
+                    if row['status'] != 'lunas' and row['sisa_bayar'] > 0:
+                        key = _classify_bucket(row['tanggal'], today)
+                        buckets[key].append({
+                            'piutang': piutang,
+                            'angsuran_no': row['no'],
+                            'tanggal_angsuran': row['tanggal'],
+                            'jumlah': row['sisa_bayar'],
+                            'hari_lewat': max(0, (today - row['tanggal']).days),
+                        })
+                continue
+        key = _classify_bucket(piutang.jatuh_tempo, today)
+        buckets[key].append({
+            'piutang': piutang,
+            'angsuran_no': None,
+            'tanggal_angsuran': piutang.jatuh_tempo,
+            'jumlah': piutang.sisa_piutang,
+            'hari_lewat': max(0, (today - piutang.jatuh_tempo).days) if piutang.jatuh_tempo else 0,
+        })
     return buckets
 
 

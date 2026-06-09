@@ -179,6 +179,47 @@ class ComputeBagianLancarTests(TestCase):
 from .services import get_piutang_aging
 
 
+# ── Task 4: Aging bucket tests ────────────────────────────────────────────────
+
+from apps.piutang.services import _classify_bucket, get_piutang_aging
+
+
+class ClassifyBucketTest(TestCase):
+    def test_future(self):
+        future = date(date.today().year + 1, 1, 1)
+        assert _classify_bucket(future, date.today()) == 'current'
+
+    def test_today(self):
+        assert _classify_bucket(date.today(), date.today()) == 'current'
+
+    def test_1_day_overdue(self):
+        from datetime import timedelta
+        assert _classify_bucket(date.today() - timedelta(days=1), date.today()) == '1_30'
+
+    def test_31_days(self):
+        from datetime import timedelta
+        assert _classify_bucket(date.today() - timedelta(days=31), date.today()) == '31_60'
+
+    def test_over_365(self):
+        from datetime import timedelta
+        assert _classify_bucket(date.today() - timedelta(days=400), date.today()) == 'over_365'
+
+    def test_none_returns_current(self):
+        assert _classify_bucket(None, date.today()) == 'current'
+
+
+class GetPiutangAgingTest(TestCase):
+    def test_returns_7_buckets(self):
+        result = get_piutang_aging()
+        expected_keys = {'current', '1_30', '31_60', '61_90', '91_180', '181_365', 'over_365'}
+        assert set(result.keys()) == expected_keys
+
+    def test_each_bucket_is_list(self):
+        result = get_piutang_aging()
+        for v in result.values():
+            assert isinstance(v, list)
+
+
 # ── Task 3: Schedule helpers ───────────────────────────────────────────────────
 
 from apps.piutang.services import _add_months, compute_angsuran_schedule
