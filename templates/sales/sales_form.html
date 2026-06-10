@@ -372,7 +372,7 @@
             '<th class="col-satuan" style="width:6%">Qty</th>' +
             '<th style="width:9%">Harga Jual</th>' +
             '<th class="col-satuan" style="width:7%">Total</th>' +
-            '<th class="col-bulk" style="width:9%">HPP (Nilai Persediaan)</th>' +
+            '<th class="col-bulk" style="width:9%">HPP</th>' +
             '<th style="width:9%">Offset CoA</th>' +
             '<th style="width:9%">Revenue Akun</th>' +
             '<th style="width:9%">Payment Akun</th>' +
@@ -735,7 +735,10 @@
         var price = parseFloat(document.getElementById(rid + '_price').value) || 0;
         var total = qty * price;
         totalSales += total;
-        // HPP for satuan is computed by FIFO at save time, skip here
+        var hppEl2 = document.getElementById(rid + '_hpp');
+        if (hppEl2 && hppEl2.value) {
+          totalHpp += parseFloat(hppEl2.value.replace(/\./g, '').replace(',', '.')) || 0;
+        }
       }
     });
     var hppEl = document.getElementById(gid + '_total_hpp');
