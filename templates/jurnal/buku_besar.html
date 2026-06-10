@@ -12,7 +12,7 @@
 <!-- Filters -->
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:16px;">
-    <form method="get" id="bb-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+    <form method="get" id="bukuBesarFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
       <!-- Akun search -->
       <div class="ni-form-group" style="margin:0;flex:2;min-width:220px;position:relative;">
         <label class="ni-form-label">Akun</label>
@@ -39,15 +39,7 @@
         <label class="ni-form-label">Sampai Tanggal</label>
         <input type="date" name="tanggal_sampai" id="bb-sampai" class="ni-input" value="{{ tanggal_sampai }}">
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <select name="entitas_bisnis" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for eb in eb_list %}
-          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="bukuBesarFilterForm" %}
       <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
         <i data-lucide="search" style="width:14px;height:14px"></i> Tampilkan
       </button>
@@ -219,7 +211,7 @@
   });
 
   // Validate: prevent submit without a selection
-  document.getElementById('bb-form').addEventListener('submit', function (e) {
+  document.getElementById('bukuBesarFilterForm').addEventListener('submit', function (e) {
     if (searchInput.value && !hiddenInput.value) {
       e.preventDefault();
       alert('Pilih akun dari daftar saran.');

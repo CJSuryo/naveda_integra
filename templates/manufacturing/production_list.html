@@ -17,7 +17,7 @@
 <!-- Filter bar -->
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
   <div class="ni-card__body" style="padding:16px 20px">
-    <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+    <form method="get" id="productionFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
       <div class="ni-form-group" style="margin:0;min-width:180px">
         <label class="ni-form-label">Status</label>
         <select name="status" class="ni-input" style="min-width:160px">
@@ -27,17 +27,9 @@
           {% endfor %}
         </select>
       </div>
-      <div class="ni-form-group" style="margin:0;min-width:180px">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <select name="eb" class="ni-input" style="min-width:200px">
-          <option value="">— Semua Entitas —</option>
-          {% for eb in eb_list %}
-          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:"s" %} selected{% endif %}>{{ eb.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="productionFilterForm" %}
       <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-      {% if status_filter or eb_filter %}
+      {% if status_filter or eb_filter_list %}
       <a href="{% url 'manufacturing:production_list' %}" class="ni-btn ni-btn--secondary">Reset</a>
       {% endif %}
     </form>

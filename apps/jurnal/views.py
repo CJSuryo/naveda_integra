@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 from apps.aset_tetap.models import AsetTetapRecord
 from apps.aset_lainnya.models import AsetLainnyaRecord
 
@@ -1018,7 +1019,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
 
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     tampilan = request.GET.get('tampilan', 'ringkas')  # 'ringkas' or 'detail'
 
     # Build period filter
@@ -1027,8 +1028,8 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
         period_filter['jurnal_header__tanggal__gte'] = tanggal_dari
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-    if eb_filter:
-        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # Aggregate by akun
     agg = (
@@ -1129,13 +1130,11 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
     # 9. Laba Bersih
     laba_bersih = laba_operasional + net_non_op
 
-    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
-
     return render(request, 'jurnal/laporan_laba_rugi.html', {
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_filter': eb_filter,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         'tampilan': tampilan,
         # Data
         'pendapatan_op_items': pendapatan_op_items,
@@ -1222,23 +1221,22 @@ def saldo_awal_list(request: HttpRequest) -> HttpResponse:
         ).values_list('entitas_bisnis_id', flat=True)
         qs = qs.filter(entitas_bisnis_id__in=allowed_eb_ids)
 
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
-    if eb_filter:
-        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
 
-    eb_list = EBModel.objects.order_by('nama')
     return render(request, 'jurnal/saldo_awal_list.html', {
         'headers': qs,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_list': eb_list,
+        'eb_tree': _get_eb_tree(),
     })
 
 
@@ -1921,13 +1919,13 @@ def _build_initial_rows_json(header) -> str:
 def neraca(request: HttpRequest) -> HttpResponse:
     """Balance Sheet: Aset, Kewajiban, Ekuitas with balance check."""
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     period_filter: dict = {}
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-    if eb_filter:
-        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # Aggregate all journal details up to tanggal_sampai
     agg = (
@@ -1997,12 +1995,10 @@ def neraca(request: HttpRequest) -> HttpResponse:
     selisih = total_aset - total_kewajiban_ekuitas
     is_balanced = abs(selisih) < Decimal('0.01')
 
-    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
-
     return render(request, 'jurnal/neraca.html', {
         'tanggal_sampai': tanggal_sampai,
-        'eb_filter': eb_filter,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         # Aset
         'aset_lancar_items': aset_lancar_items, 'total_aset_lancar': total_aset_lancar,
         'aset_tetap_items': aset_tetap_items, 'total_aset_tetap': total_aset_tetap,
@@ -2029,7 +2025,7 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
     """Statement of Changes in Equity."""
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     # Build period filter for the reporting period
     period_filter: dict = {}
@@ -2037,13 +2033,13 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
         period_filter['jurnal_header__tanggal__gte'] = tanggal_dari
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-    if eb_filter:
-        period_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # Build filter for before-period (saldo awal)
     before_filter: dict = {}
-    if eb_filter:
-        before_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        before_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # 1. Saldo Awal Ekuitas = net balance of 3.x accounts BEFORE tanggal_dari
     saldo_awal_ekuitas = Decimal('0')
@@ -2097,13 +2093,11 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
     # 4. Saldo Akhir
     saldo_akhir_ekuitas = saldo_awal_ekuitas + laba_bersih - prive
 
-    eb_list = EBModel.objects.filter(status_aktif=True).select_related('tipe_entitas').order_by('nama')
-
     return render(request, 'jurnal/laporan_perubahan_ekuitas.html', {
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_filter': eb_filter,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         'saldo_awal_ekuitas': saldo_awal_ekuitas,
         'laba_bersih': laba_bersih,
         'prive': prive,
@@ -2120,14 +2114,14 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
 
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     tanggal_dari = request.GET.get('tanggal_dari', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     # ── Balance-sheet period filter (cumulative up to tanggal_sampai) ──
     bs_filter: dict = {}
     if tanggal_sampai:
         bs_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-    if eb_filter:
-        bs_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        bs_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # ── P&L period filter (tanggal_dari – tanggal_sampai) ──
     pl_filter: dict = {}
@@ -2135,8 +2129,8 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
         pl_filter['jurnal_header__tanggal__gte'] = tanggal_dari
     if tanggal_sampai:
         pl_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
-    if eb_filter:
-        pl_filter['jurnal_header__entitas_bisnis_id'] = eb_filter
+    if eb_filter_list:
+        pl_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
     # ── Aggregate balance sheet ──
     bs_agg = (
@@ -2262,13 +2256,11 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
         _radar_score('roa', -5, 20),                    # ROA
     ]
 
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
-
     return render(request, 'jurnal/analisis_keuangan.html', {
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_filter': eb_filter,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         # Balance sheet intermediate values
         'total_aset_lancar': total_aset_lancar,
         'total_aset': total_aset,
@@ -2336,10 +2328,9 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
     akun_id = request.GET.get('akun', '')
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     akun_list = get_akun_sorted()
-    eb_list = EBModel.objects.filter(status_aktif=True).order_by('nama')
 
     rows = []
     selected_akun = None
@@ -2359,8 +2350,8 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
 
         # Build filters
         filters: dict = {'akun': selected_akun}
-        if eb_filter:
-            filters['jurnal_header__entitas_bisnis_id'] = eb_filter
+        if eb_filter_list:
+            filters['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
 
         # Saldo awal: sum of all entries before tanggal_dari
         if tanggal_dari:
@@ -2409,12 +2400,12 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
 
     return render(request, 'jurnal/buku_besar.html', {
         'akun_list': akun_list,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         'selected_akun': selected_akun,
         'akun_id': akun_id,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_filter': eb_filter,
         'saldo_awal': saldo_awal,
         'rows': rows,
         'total_debit': sum((r['debit'] for r in rows), Decimal('0')),

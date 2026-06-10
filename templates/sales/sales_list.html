@@ -134,14 +134,14 @@
 </div>
 
 <!-- Filters -->
-<div class="ni-card ni-animate-fade-in ni-filter-card{% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter %} is-open{% endif %}" style="margin-bottom:16px;">
+<div class="ni-card ni-animate-fade-in ni-filter-card{% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter_list %} is-open{% endif %}" style="margin-bottom:16px;">
   <!-- Mobile toggle button (hidden on desktop via CSS) -->
   <button type="button" class="ni-filter-toggle-btn" onclick="toggleFilterCard(this)" aria-expanded="false">
     <span class="ni-filter-toggle-btn__left">
       <i data-lucide="filter" style="width:15px;height:15px;color:var(--ni-primary);"></i>
       Filter &amp; Pencarian
       {% with active_count=0 %}
-      {% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter %}
+      {% if tanggal_dari or tanggal_sampai or item_filter or stt_filter or eb_filter_list %}
       <span class="ni-filter-active-badge" id="filterActiveBadge">aktif</span>
       {% endif %}
       {% endwith %}
@@ -149,7 +149,7 @@
     <svg class="ni-filter-toggle-btn__chevron" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
   </button>
   <div class="ni-card__body" style="padding:16px;">
-    <form method="get" class="ni-sales-filter-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+    <form method="get" id="salesFilterForm" class="ni-sales-filter-form" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
       <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
         <label class="ni-form-label">Dari Tanggal</label>
         <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -176,15 +176,7 @@
           {% endfor %}
         </select>
       </div>
-      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <select name="entitas_bisnis" class="ni-input">
-          <option value="">— Semua —</option>
-          {% for eb in entitas_list %}
-          <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="salesFilterForm" %}
       <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
         <i data-lucide="search" style="width:14px;height:14px"></i> Filter
       </button>

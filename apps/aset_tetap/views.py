@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .forms import AsetTetapRecordForm
 from .models import AsetTetapRecord
@@ -28,7 +29,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     kondisi_filter = request.GET.get('kondisi', '')
     kategori_filter = request.GET.get('kategori', '')
     akun_filter = request.GET.get('coa_account', '')
@@ -39,8 +40,8 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(tanggal_perolehan__lte=tanggal_sampai)
     if item_filter:
         qs = qs.filter(item_id=item_filter)
-    if eb_filter:
-        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
     if kondisi_filter:
         qs = qs.filter(kondisi=kondisi_filter)
     if kategori_filter:
@@ -59,6 +60,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'aset_tetap/aset_tetap_list.html', {
         'records': qs,
         'items': ItemMasterPurchase.objects.filter(tipe_item='ATP').order_by('item_id'),
+        'eb_tree': _get_eb_tree(),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'kondisi_choices': AsetTetapRecord.KONDISI_CHOICES,
         'metode_choices': AsetTetapRecord.METODE_PENYUSUTAN_CHOICES,
@@ -67,7 +69,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
         'kondisi_filter': kondisi_filter,
         'kategori_filter': kategori_filter,
         'akun_filter': akun_filter,

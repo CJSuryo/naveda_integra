@@ -15,6 +15,7 @@ from apps.inventory.models import InventoryRecord
 from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
@@ -117,7 +118,7 @@ def sales_list(request: HttpRequest) -> HttpResponse:
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
     stt_filter = request.GET.get('sub_transaction_type', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
@@ -127,8 +128,8 @@ def sales_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(entitas_groups__items__item_id=item_filter).distinct()
     if stt_filter:
         qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
-    if eb_filter:
-        qs = qs.filter(entitas_groups__entitas_bisnis_id=eb_filter).distinct()
+    if eb_filter_list:
+        qs = qs.filter(entitas_groups__entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list)).distinct()
 
     # Build flat rows
     rows = []
@@ -177,10 +178,10 @@ def sales_list(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'items': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_tree': _get_eb_tree(),
         'item_filter': item_filter,
         'stt_filter': stt_filter,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
     })
 
 

@@ -1,0 +1,121 @@
+{% comment %}
+Reusable EB (Entitas Bisnis) filter modal component.
+
+Required context variables:
+  eb_tree        — list of dicts from _get_eb_tree(): [{'val':'lv1:11','obj':<EB>,'children':[...]}]
+  eb_filter_list — list of currently selected values e.g. ['lv1:11', 'lv2:9']
+
+Optional:
+  filter_form_id — id of the <form> to submit (defaults to 'ebFilterForm')
+{% endcomment %}
+{% if eb_tree is not None %}
+{% with form_id=filter_form_id|default:"ebFilterForm" count=eb_filter_list|length %}
+
+<div class="ni-eb-filter-hidden-inputs" id="ebHiddenInputs">
+  {% for val in eb_filter_list %}<input type="hidden" name="entitas_bisnis" value="{{ val }}">{% endfor %}
+</div>
+
+<button type="button"
+  class="ni-btn ni-btn--secondary ni-eb-filter-trigger"
+  data-modal-id="ebFilterBackdrop"
+  data-inputs-id="ebHiddenInputs"
+  data-form-id="{{ form_id }}">
+  <i data-lucide="building-2" style="width:16px;height:16px"></i>
+  Filter Entitas Bisnis
+  {% if count %}<span class="ni-badge ni-badge--primary ni-eb-filter-badge">{{ count }}</span>{% endif %}
+</button>
+
+<div class="ni-modal-backdrop" id="ebFilterBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Filter Entitas Bisnis</h3>
+      <button class="ni-modal__close" type="button" data-eb-modal-close>
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body">
+      <p>Pilih entitas bisnis untuk memfilter data. Centang pada level manapun.</p>
+      <div class="ni-form-group ni-eb-filter-search-wrap">
+        <input type="text" id="ebFilterSearch" class="ni-input" placeholder="Cari entitas bisnis...">
+      </div>
+      <div class="ni-eb-filter-tree" id="ebFilterTree">
+        {% for lv1 in eb_tree %}
+        <div class="ni-eb-filter-node" data-name="{{ lv1.obj.nama|lower }}">
+          <div class="ni-eb-filter-row ni-eb-filter-row--lv1{% if lv1.children %} ni-eb-filter-row--has-children{% endif %}"
+            {% if lv1.children %}data-children-id="ebfc-lv1-{{ lv1.obj.pk }}"{% endif %}>
+            <span class="ni-eb-filter-cb-cell">
+              <input type="checkbox" class="ni-checkbox ni-eb-filter-cb"
+                value="{{ lv1.val }}"
+                {% if lv1.val in eb_filter_list %}checked{% endif %}>
+            </span>
+            {% if lv1.children %}
+            <i data-lucide="chevron-right"
+              class="ni-eb-filter-arrow{% if lv1.val in eb_filter_list %} ni-eb-filter-arrow--open{% endif %}"
+              style="width:14px;height:14px;flex-shrink:0"
+              aria-hidden="true"></i>
+            {% else %}
+            <span class="ni-eb-filter-arrow-spacer"></span>
+            {% endif %}
+            <span class="ni-eb-filter-label">{{ lv1.obj.nama }}</span>
+            <span class="ni-badge ni-badge--secondary ni-eb-level-badge">Level 1</span>
+          </div>
+          {% if lv1.children %}
+          <div class="ni-eb-filter-children" id="ebfc-lv1-{{ lv1.obj.pk }}">
+            {% for lv2 in lv1.children %}
+            <div class="ni-eb-filter-node" data-name="{{ lv2.obj.nama|lower }}">
+              <div class="ni-eb-filter-row ni-eb-filter-row--lv2{% if lv2.children %} ni-eb-filter-row--has-children{% endif %}"
+                {% if lv2.children %}data-children-id="ebfc-lv2-{{ lv2.obj.pk }}"{% endif %}>
+                <span class="ni-eb-filter-cb-cell">
+                  <input type="checkbox" class="ni-checkbox ni-eb-filter-cb"
+                    value="{{ lv2.val }}"
+                    {% if lv2.val in eb_filter_list %}checked{% endif %}>
+                </span>
+                {% if lv2.children %}
+                <i data-lucide="chevron-right"
+                  class="ni-eb-filter-arrow{% if lv2.val in eb_filter_list %} ni-eb-filter-arrow--open{% endif %}"
+                  style="width:12px;height:12px;flex-shrink:0"
+                  aria-hidden="true"></i>
+                {% else %}
+                <span class="ni-eb-filter-arrow-spacer ni-eb-filter-arrow-spacer--sm"></span>
+                {% endif %}
+                <span class="ni-eb-filter-label">{{ lv2.obj.nama }}</span>
+                <span class="ni-badge ni-badge--secondary ni-eb-level-badge">Level 2</span>
+              </div>
+              {% if lv2.children %}
+              <div class="ni-eb-filter-children ni-eb-filter-children--lv2" id="ebfc-lv2-{{ lv2.obj.pk }}">
+                {% for lv3 in lv2.children %}
+                <div class="ni-eb-filter-node" data-name="{{ lv3.obj.nama|lower }}">
+                  <div class="ni-eb-filter-row ni-eb-filter-row--lv3">
+                    <span class="ni-eb-filter-cb-cell">
+                      <input type="checkbox" class="ni-checkbox ni-eb-filter-cb"
+                        value="{{ lv3.val }}"
+                        {% if lv3.val in eb_filter_list %}checked{% endif %}>
+                    </span>
+                    <span class="ni-eb-filter-arrow-spacer ni-eb-filter-arrow-spacer--sm"></span>
+                    <span class="ni-eb-filter-label">{{ lv3.obj.nama }}</span>
+                    <span class="ni-badge ni-badge--secondary ni-eb-level-badge">Level 3</span>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% empty %}
+        <p class="ni-text-muted" style="padding:8px 0">Belum ada entitas bisnis.</p>
+        {% endfor %}
+        <p class="ni-eb-filter-empty" id="ebFilterEmpty">Tidak ada hasil untuk pencarian ini.</p>
+      </div>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" id="ebFilterClear">Hapus Semua</button>
+      <button type="button" class="ni-btn ni-btn--primary" id="ebFilterApply">Terapkan Filter</button>
+    </div>
+  </div>
+</div>
+
+{% endwith %}
+{% endif %}

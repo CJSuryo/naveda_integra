@@ -17,16 +17,8 @@
 {# ── Filters ──────────────────────────────────────────────────────────────── #}
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:16px 20px;">
-    <form method="get" class="ni-form-row" style="gap:12px;align-items:flex-end;">
-      <div class="ni-form-group" style="margin-bottom:0;flex:1;min-width:160px;">
-        <label class="ni-form-label">Entitas Bisnis</label>
-        <select name="entitas_bisnis" class="ni-input">
-          <option value="">Semua Entitas</option>
-          {% for eb in eb_list %}
-          <option value="{{ eb.pk }}" {% if eb_filter == eb.pk|stringformat:"s" %}selected{% endif %}>{{ eb.nama }}</option>
-          {% endfor %}
-        </select>
-      </div>
+    <form method="get" id="saldoAwalFilterForm" class="ni-form-row" style="gap:12px;align-items:flex-end;">
+      {% include 'components/eb_filter_modal.html' with filter_form_id="saldoAwalFilterForm" %}
       <div class="ni-form-group" style="margin-bottom:0;flex:0 0 140px;">
         <label class="ni-form-label">Tanggal Dari</label>
         <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">

@@ -22,14 +22,7 @@
   <div class="ni-card__body">
     <form id="purchaseFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
-        <div class="ni-form-group ni-form-group--grow">
-          <label class="ni-form-label">Entitas Bisnis</label>
-          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
-            {% for opt in eb_options %}
-            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        {% include 'components/eb_filter_modal.html' with filter_form_id="purchaseFilterForm" %}
         <div class="ni-form-group ni-form-group--narrow">
           <label class="ni-form-label">Dari Tanggal</label>
           <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -130,22 +123,7 @@
     pdfBtn.href = pdfBtn.href.split('?')[0] + window.location.search;
   }
 
-  var ebSel = document.getElementById('ebFilterSelect');
-  var form = document.getElementById('purchaseFilterForm');
-  if (ebSel && window.TomSelect) {
-    var ts = new TomSelect(ebSel, {
-      plugins: ['remove_button'],
-      persist: false,
-      maxOptions: 500,
-      placeholder: 'Pilih entitas bisnis...',
-    });
-    var initialized = false;
-    ts.on('change', function() {
-      if (!initialized) { return; }
-      form.submit();
-    });
-    setTimeout(function() { initialized = true; }, 0);
-  }
+
 })();
 </script>
 {% endblock %}

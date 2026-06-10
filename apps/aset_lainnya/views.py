@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .forms import AsetLainnyaRecordForm
 from .models import AsetLainnyaRecord
@@ -22,7 +23,7 @@ def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     if tanggal_dari:
         qs = qs.filter(tanggal_perolehan__gte=tanggal_dari)
@@ -30,17 +31,17 @@ def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(tanggal_perolehan__lte=tanggal_sampai)
     if item_filter:
         qs = qs.filter(item_id=item_filter)
-    if eb_filter:
-        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
 
     return render(request, 'aset_lainnya/aset_lainnya_list.html', {
         'records': qs,
         'items': ItemMasterPurchase.objects.filter(tipe_item='ALL').order_by('item_id'),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_tree': _get_eb_tree(),
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
     })
 
 

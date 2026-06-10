@@ -118,7 +118,7 @@
         </div>
         <div class="ni-form-group" style="margin:0;" id="field-tanggal">
           <label class="ni-form-label">Tanggal <span style="color:var(--ni-danger)">*</span></label>
-          <input type="date" name="tanggal" id="purchaseTanggal" class="ni-input" value="{{ initial_tanggal|date:'Y-m-d'|default:today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
+          <input type="date" name="tanggal" id="purchaseTanggal" class="ni-input" value="{{ initial_tanggal|default:today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
         </div>
       </div>
       <div class="ni-form-group" style="margin-bottom:24px;" id="field-deskripsi">

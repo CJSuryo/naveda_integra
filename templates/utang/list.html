@@ -16,14 +16,7 @@
   <div class="ni-card__body">
     <form id="utangFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
-        <div class="ni-form-group ni-form-group--grow">
-          <label class="ni-form-label">Entitas Bisnis</label>
-          <select id="ebFilterSelect" name="entitas_bisnis" class="ni-input" multiple placeholder="Pilih entitas bisnis...">
-            {% for opt in eb_options %}
-            <option value="{{ opt.value }}"{% if opt.value in eb_filter_list %} selected{% endif %}>{{ opt.label }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        {% include 'components/eb_filter_modal.html' with filter_form_id="utangFilterForm" %}
         <div class="ni-form-group ni-form-group--grow">
           <label class="ni-form-label">Cari</label>
           <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nomor, kreditor, referensi...">
@@ -104,25 +97,4 @@
   </div>
 </div>
 {% endblock %}
-{% block extra_js %}
-<script>
-(function() {
-  var ebSel = document.getElementById('ebFilterSelect');
-  var form = document.getElementById('utangFilterForm');
-  if (ebSel && window.TomSelect) {
-    var ts = new TomSelect(ebSel, {
-      plugins: ['remove_button'],
-      persist: false,
-      maxOptions: 500,
-      placeholder: 'Pilih entitas bisnis...',
-    });
-    var initialized = false;
-    ts.on('change', function() {
-      if (!initialized) { return; }
-      form.submit();
-    });
-    setTimeout(function() { initialized = true; }, 0);
-  }
-})();
-</script>
 {% endblock %}

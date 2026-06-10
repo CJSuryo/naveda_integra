@@ -9,6 +9,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.purchase.models import ItemMasterPurchase
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .forms import BOMForm, OverheadCategoryForm, OverheadRateForm, ProductionOrderForm, parse_bom_lines
 from .models import BillOfMaterials, BOMLine, OverheadApplied, OverheadCategory, OverheadRate, PeriodClosing, ProductionOrder
@@ -188,20 +189,17 @@ def production_list(request):
 
     # Filters
     status_filter = request.GET.get('status', '')
-    eb_filter = request.GET.get('eb', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     if status_filter:
         orders = orders.filter(status=status_filter)
-    if eb_filter:
-        orders = orders.filter(entitas_bisnis_id=eb_filter)
-
-    from apps.entitas_bisnis.models import EntitasBisnis
-    eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+    if eb_filter_list:
+        orders = orders.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
 
     return render(request, 'manufacturing/production_list.html', {
         'orders': orders,
         'status_filter': status_filter,
-        'eb_filter': eb_filter,
-        'eb_list': eb_list,
+        'eb_filter_list': eb_filter_list,
+        'eb_tree': _get_eb_tree(),
         'status_choices': ProductionOrder.STATUS_CHOICES,
     })
 

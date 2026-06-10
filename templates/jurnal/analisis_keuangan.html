@@ -83,7 +83,7 @@
   <!-- ── Filter bar ── -->
   <div class="ni-card" style="margin-bottom:20px;">
     <div class="ni-card__body" style="padding:14px 16px;">
-      <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+      <form method="get" id="analisisKeuanganFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
         <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
           <label class="ni-form-label">Dari Tanggal</label>
           <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -92,15 +92,7 @@
           <label class="ni-form-label">Sampai Tanggal</label>
           <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-          <label class="ni-form-label">Entitas Bisnis</label>
-          <select name="entitas_bisnis" class="ni-input">
-            <option value="">— Semua —</option>
-            {% for eb in eb_list %}
-            <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        {% include 'components/eb_filter_modal.html' with filter_form_id="analisisKeuanganFilterForm" %}
         <div style="display:flex;gap:8px;align-items:flex-end;">
           <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
             <i data-lucide="bar-chart-2" style="width:14px;height:14px"></i> Analisis
@@ -125,7 +117,7 @@
         {% if tanggal_sampai %}{{ tanggal_sampai }}{% else %}&mdash;{% endif %}
       </div>
       <div class="ak-hero__entity">
-        {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas Bisnis{% endif %}
+        {% if eb_filter_list|length == 1 %}{% for node in eb_tree %}{% if node.val == eb_filter_list.0 %}{{ node.obj.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas Bisnis{% endif %}
       </div>
     </div>
   </div>

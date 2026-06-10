@@ -62,6 +62,51 @@ def _get_eb_dropdown_options() -> list[dict[str, str]]:
     return options
 
 
+def _get_eb_tree() -> list[dict]:
+    """Return nested EntitasBisnis hierarchy for the filter modal component."""
+    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+
+    lv1_list = list(EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'))
+    lv2_list = list(
+        EntitasBisnisLv2.objects.filter(status_aktif=True)
+        .select_related('entitas_bisnis').order_by('nama')
+    )
+    lv3_list = list(
+        EntitasBisnisLv3.objects.filter(status_aktif=True)
+        .select_related('parent_lv2').order_by('nama')
+    )
+
+    lv3_by_lv2: dict[int, list] = {}
+    for lv3 in lv3_list:
+        lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
+
+    lv2_by_lv1: dict[int, list] = {}
+    for lv2 in lv2_list:
+        lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
+
+    tree = []
+    for eb in lv1_list:
+        lv2_nodes = []
+        for lv2 in lv2_by_lv1.get(eb.pk, []):
+            lv3_nodes = [
+                {'val': f'lv3:{lv3.pk}', 'obj': lv3, 'children': []}
+                for lv3 in lv3_by_lv2.get(lv2.pk, [])
+            ]
+            lv2_nodes.append({'val': f'lv2:{lv2.pk}', 'obj': lv2, 'children': lv3_nodes})
+        tree.append({'val': f'lv1:{eb.pk}', 'obj': eb, 'children': lv2_nodes})
+    return tree
+
+
+def _resolve_eb_lv1_ids(eb_filter_list: list[str]) -> set[int]:
+    """Resolve lv1:/lv2:/lv3:-prefixed selections to a set of lv1 PKs."""
+    lv1_ids: set[int] = set()
+    for sel in eb_filter_list:
+        resolved = _resolve_eb_selection(sel)
+        if resolved:
+            lv1_ids.add(resolved['lv1_id'])
+    return lv1_ids
+
+
 def _resolve_eb_selection(selection: str | int | None) -> dict | None:
     """Resolve a lv1:/lv2:/lv3: prefixed selection to a dict of all EB level ids.
 
@@ -244,7 +289,7 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'items': ItemMasterPurchase.objects.all().order_by('nama'),
         'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
-        'eb_options': _get_eb_dropdown_options(),
+        'eb_tree': _get_eb_tree(),
         'item_filter': item_filter,
         'stt_filter': stt_filter,
         'eb_filter_list': eb_filter_list,

@@ -127,6 +127,113 @@
   transform: rotate(90deg);
 }
 
+/* ---------- EB Filter Modal Component ---------- */
+
+.ni-eb-filter-hidden-inputs { display: none; }
+
+.ni-eb-filter-badge { margin-left: 6px; }
+
+.ni-eb-filter-search-wrap { margin-bottom: 16px; }
+
+.ni-eb-filter-tree {
+  max-height: 420px;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.ni-eb-filter-empty {
+  display: none;
+  color: var(--ni-text-muted);
+  font-size: 0.875rem;
+  padding: 8px 0;
+}
+
+.ni-eb-filter-node { }
+
+/* Rows */
+.ni-eb-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  transition: background 120ms ease;
+  user-select: none;
+}
+
+.ni-eb-filter-row--has-children { cursor: pointer; }
+.ni-eb-filter-row--has-children:hover { background: var(--ni-bg-hover, oklch(0.96 0.005 240)); }
+
+.ni-eb-filter-row--lv1 {
+  padding: 7px 8px;
+  font-weight: 600;
+}
+
+.ni-eb-filter-row--lv2 {
+  padding: 5px 8px;
+  font-weight: 400;
+}
+
+.ni-eb-filter-row--lv3 {
+  padding: 4px 8px;
+  font-weight: 400;
+}
+
+/* Checkbox cell — stops click from bubbling to row expand handler */
+.ni-eb-filter-cb-cell {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  margin: -4px;
+  border-radius: 4px;
+  cursor: default;
+}
+
+.ni-eb-filter-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.ni-eb-filter-row--lv1 .ni-eb-filter-label { font-size: 0.9rem; }
+.ni-eb-filter-row--lv2 .ni-eb-filter-label { font-size: 0.875rem; color: var(--ni-text); }
+.ni-eb-filter-row--lv3 .ni-eb-filter-label { font-size: 0.85rem; color: var(--ni-text-muted); }
+
+/* Chevron arrow */
+.ni-eb-filter-arrow {
+  flex-shrink: 0;
+  transition: transform 200ms ease;
+  color: var(--ni-text-muted);
+  pointer-events: none;
+}
+.ni-eb-filter-arrow--open { transform: rotate(90deg); }
+
+.ni-eb-filter-arrow-spacer {
+  display: inline-block;
+  width: 14px;
+  flex-shrink: 0;
+}
+.ni-eb-filter-arrow-spacer--sm { width: 12px; }
+
+/* Level badge */
+.ni-eb-level-badge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  margin-left: auto;
+}
+
+/* Children container — hidden by default, shown by JS */
+.ni-eb-filter-children {
+  display: none;
+  margin-left: 22px;
+}
+.ni-eb-filter-children--lv2 { margin-left: 20px; }
+.ni-eb-filter-children--open { display: block; }
+
 /* ---------- Mobile ---------- */
 @media (max-width: 640px) {
   .ni-eb-row__actions {

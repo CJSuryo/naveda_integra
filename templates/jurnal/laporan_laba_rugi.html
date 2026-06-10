@@ -119,7 +119,7 @@
   </div>
   <div class="ni-card" style="margin-bottom:20px;">
     <div class="ni-card__body" style="padding:16px;">
-      <form method="get" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+      <form method="get" id="labaRugiFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
         <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
           <label class="ni-form-label">Dari Tanggal</label>
           <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
@@ -128,15 +128,7 @@
           <label class="ni-form-label">Sampai Tanggal</label>
           <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
         </div>
-        <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
-          <label class="ni-form-label">Entitas Bisnis</label>
-          <select name="entitas_bisnis" class="ni-input">
-            <option value="">— Semua —</option>
-            {% for eb in eb_list %}
-            <option value="{{ eb.pk }}"{% if eb_filter == eb.pk|stringformat:'d' %} selected{% endif %}>{{ eb.nama }}</option>
-            {% endfor %}
-          </select>
-        </div>
+        {% include 'components/eb_filter_modal.html' with filter_form_id="labaRugiFilterForm" %}
         <div class="ni-form-group" style="margin:0;">
           <label class="ni-form-label">Tampilan</label>
           <div class="lr-toggle">
@@ -148,12 +140,12 @@
           <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
             <i data-lucide="search" style="width:14px;height:14px"></i> Filter
           </button>
-          {% if tanggal_dari or tanggal_sampai or eb_filter %}
+          {% if tanggal_dari or tanggal_sampai or eb_filter_list %}
           <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
           {% endif %}
         </div>
       </form>
-      {% if eb_filter %}
+      {% if eb_filter_list|length == 1 %}
       <div style="padding-top:10px;border-top:1px solid var(--ni-border);margin-top:10px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
         <span style="font-size:0.75rem;color:var(--ni-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Tampilkan di KOP:</span>
         <label style="display:flex;align-items:center;gap:6px;font-size:0.875rem;cursor:pointer;"><input type="checkbox" id="kop-alamat" class="ni-checkbox"> Alamat</label>
@@ -169,13 +161,13 @@
 <div class="doc-lr">
   <!-- KOP -->
   <div class="doc-kop">
-    {% if eb_filter %}
-      {% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}
-      <div class="doc-kop__name">{{ eb.nama }}</div>
-      <div class="doc-kop__sub">{{ eb.tipe_entitas.nama|default:'Entitas Bisnis' }}</div>
-      {% if eb.alamat_lengkap %}<div class="doc-kop__alamat" data-kop="alamat">{{ eb.alamat_lengkap|linebreaksbr }}</div>{% endif %}
-      {% if eb.telepon %}<div class="doc-kop__telepon" data-kop="telepon">{{ eb.telepon }}</div>{% endif %}
-      {% if eb.email %}<div class="doc-kop__email" data-kop="email">{{ eb.email }}</div>{% endif %}
+    {% if eb_filter_list|length == 1 %}
+      {% for node in eb_tree %}{% if node.val == eb_filter_list.0 %}
+      <div class="doc-kop__name">{{ node.obj.nama }}</div>
+      <div class="doc-kop__sub">{{ node.obj.tipe_entitas.nama|default:'Entitas Bisnis' }}</div>
+      {% if node.obj.alamat_lengkap %}<div class="doc-kop__alamat" data-kop="alamat">{{ node.obj.alamat_lengkap|linebreaksbr }}</div>{% endif %}
+      {% if node.obj.telepon %}<div class="doc-kop__telepon" data-kop="telepon">{{ node.obj.telepon }}</div>{% endif %}
+      {% if node.obj.email %}<div class="doc-kop__email" data-kop="email">{{ node.obj.email }}</div>{% endif %}
       {% endif %}{% endfor %}
     {% else %}
       <div class="doc-kop__name">Naveda Integra</div>
@@ -323,7 +315,7 @@
         Laporan ini disiapkan oleh<br>
         <strong>Naveda Integra Finance</strong><br>
         untuk keperluan pelaporan keuangan<br>
-        <strong>{% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</strong>.
+        <strong>{% if eb_filter_list|length == 1 %}{% for node in eb_tree %}{% if node.val == eb_filter_list.0 %}{{ node.obj.nama }}{% endif %}{% endfor %}{% else %}Naveda Integra{% endif %}</strong>.
       </div>
       <div class="doc-ttd-kanan">
         <div class="doc-ttd-gap"></div>
@@ -335,7 +327,7 @@
   </div>
   <!-- Footer bar -->
   <div class="doc-page-foot">
-    <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter %}{% for eb in eb_list %}{% if eb.pk|stringformat:'d' == eb_filter %}{{ eb.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
+    <div class="doc-page-foot__left">Disiapkan oleh <strong>Naveda Integra Finance</strong> &nbsp;&middot;&nbsp; {% if eb_filter_list|length == 1 %}{% for node in eb_tree %}{% if node.val == eb_filter_list.0 %}{{ node.obj.nama }}{% endif %}{% endfor %}{% else %}Semua Entitas{% endif %}</div>
     <div class="doc-page-foot__right">Dicetak: {% now_id %}</div>
   </div>
 </div>

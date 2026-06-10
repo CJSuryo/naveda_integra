@@ -8,7 +8,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.entitas_bisnis.models import EntitasBisnis as EntitasBisnisModel
-from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+from apps.purchase.views import _get_eb_dropdown_options, _get_eb_tree, _resolve_eb_selection
 
 from .forms import UtangAttachmentForm, UtangDetailFormSet, UtangHeaderForm, UtangPembayaranForm
 from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran, UtangReklasifikasi
@@ -93,7 +93,7 @@ def utang_list(request: HttpRequest) -> HttpResponse:
 
     return render(request, 'utang/list.html', {
         'utangs': list(qs),
-        'eb_options': _get_eb_dropdown_options(),
+        'eb_tree': _get_eb_tree(),
         'eb_filter_list': eb_filter_list,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,

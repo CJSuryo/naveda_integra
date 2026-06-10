@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from apps.entitas_bisnis.models import EntitasBisnis
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .models import ModalDisetor, Pemilik
 from .services import (
@@ -24,21 +25,21 @@ from .services import (
 @login_required
 def ekuitas_list(request: HttpRequest) -> HttpResponse:
     qs = list(ModalDisetor.objects.select_related('entitas_bisnis', 'pemilik', 'jurnal_header').all())
-    eb_filter = request.GET.get('entitas_bisnis', '')
-    if eb_filter:
-        qs = [r for r in qs if str(r.entitas_bisnis_id) == eb_filter]
-    if eb_filter:
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        lv1_ids = _resolve_eb_lv1_ids(eb_filter_list)
+        qs = [r for r in qs if r.entitas_bisnis_id in lv1_ids]
+    if eb_filter_list:
         total_all = sum(r.jumlah_modal for r in qs) or Decimal('1')
         for r in qs:
             r.persentase = (r.jumlah_modal / total_all * 100).quantize(Decimal('0.01'))
     else:
         for r in qs:
             r.persentase = None
-    eb_list = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
     return render(request, 'ekuitas/ekuitas_list.html', {
         'records': qs,
-        'entitas_list': eb_list,
-        'eb_filter': eb_filter,
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
     })
 
 

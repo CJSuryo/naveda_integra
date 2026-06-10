@@ -12,6 +12,8 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
+
 from .forms import InventoryRecordForm
 from .models import InventoryRecord
 
@@ -26,7 +28,7 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     item_filter = request.GET.get('item', '')
-    eb_filter = request.GET.get('entitas_bisnis', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     tab = request.GET.get('tab', 'satuan')
 
     if tanggal_dari:
@@ -35,8 +37,8 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(tanggal__lte=tanggal_sampai)
     if item_filter:
         qs = qs.filter(item_id=item_filter)
-    if eb_filter:
-        qs = qs.filter(entitas_bisnis_id=eb_filter)
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
 
     BULK_TYPES = ('RMB', 'FGB', 'ITMB')
     SATUAN_TYPES = ('RM', 'FG', 'ITM')
@@ -49,8 +51,8 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
     from apps.dashboard.models import DashboardInventoryTag
 
     tagged_qs = DashboardInventoryTag.objects
-    if eb_filter:
-        tagged_qs = tagged_qs.filter(entitas_bisnis_id=eb_filter)
+    if eb_filter_list:
+        tagged_qs = tagged_qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
     tagged_ids = set(tagged_qs.values_list('item_id', flat=True))
 
     return render(request, 'inventory/inventory_list.html', {
@@ -59,11 +61,11 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
         'items': ItemMasterPurchase.objects.filter(
             tipe_item__in=list(SATUAN_TYPES) + list(BULK_TYPES),
         ).order_by('item_id'),
-        'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
+        'eb_tree': _get_eb_tree(),
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
-        'eb_filter': eb_filter,
+        'eb_filter_list': eb_filter_list,
         'active_tab': tab,
         'tagged_item_ids': tagged_ids,
     })

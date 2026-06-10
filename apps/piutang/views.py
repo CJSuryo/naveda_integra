@@ -49,7 +49,7 @@ def piutang_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def piutang_list(request: HttpRequest) -> HttpResponse:
-    from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
+    from apps.purchase.views import _get_eb_dropdown_options, _get_eb_tree, _resolve_eb_selection
 
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
@@ -82,7 +82,7 @@ def piutang_list(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari, 'tanggal_sampai': tanggal_sampai,
         'status_filter': status_filter, 'search': search,
         'status_choices': PiutangHeader.STATUS_CHOICES,
-        'eb_options': _get_eb_dropdown_options(),
+        'eb_tree': _get_eb_tree(),
         'eb_filter_list': eb_filter_list,
     })
 
