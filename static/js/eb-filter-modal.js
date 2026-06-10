@@ -12,13 +12,17 @@
     var backdrop  = document.getElementById(modalId);
     var inputs    = document.getElementById(inputsId);
     var form      = document.getElementById(formId);
+
+    if (!backdrop) return;
+
+    // Move backdrop to <body> so position:fixed isn't trapped by ancestor stacking contexts
+    document.body.appendChild(backdrop);
+
     var search    = document.getElementById('ebFilterSearch');
     var tree      = document.getElementById('ebFilterTree');
     var emptyMsg  = document.getElementById('ebFilterEmpty');
     var clearBtn  = document.getElementById('ebFilterClear');
     var applyBtn  = document.getElementById('ebFilterApply');
-
-    if (!backdrop) return;
 
     // ── Open / close ──────────────────────────────────────────────────────
     function openModal() {
