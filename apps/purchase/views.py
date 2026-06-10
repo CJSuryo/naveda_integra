@@ -803,6 +803,9 @@ def _item_master_list_page(request: HttpRequest, page: str) -> HttpResponse:
     search = request.GET.get('q', '')
     if search:
         qs = qs.filter(Q(nama__icontains=search) | Q(item_id__icontains=search))
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis__pk__in=_resolve_eb_lv1_ids(eb_filter_list)).distinct()
     return render(request, 'purchase/item_master_list.html', {
         'object_list': qs,
         'search': search,
@@ -811,6 +814,8 @@ def _item_master_list_page(request: HttpRequest, page: str) -> HttpResponse:
         'item_page': page,
         'list_url': _ITEM_PAGE_LIST_URL[page],
         'create_url': f'purchase:item_master_create',
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
     })
 
 
@@ -939,8 +944,14 @@ def settings_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def kategori_list(request: HttpRequest) -> HttpResponse:
+    qs = KategoriItem.objects.prefetch_related('entitas_bisnis').order_by('nama')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis__pk__in=_resolve_eb_lv1_ids(eb_filter_list)).distinct()
     return render(request, 'purchase/kategori_list.html', {
-        'object_list': KategoriItem.objects.prefetch_related('entitas_bisnis').order_by('nama'),
+        'object_list': qs,
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
     })
 
 

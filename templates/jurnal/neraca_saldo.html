@@ -21,7 +21,7 @@
 
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body">
-    <form method="get" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
+    <form id="neracaSaldoFilterForm" method="get" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap;">
       <div class="ni-form-group" style="margin-bottom:0;">
         <label class="ni-form-label">Tanggal Dari</label>
         <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
@@ -30,10 +30,11 @@
         <label class="ni-form-label">Tanggal Sampai</label>
         <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
       </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="neracaSaldoFilterForm" %}
       <button type="submit" class="ni-btn ni-btn--primary">
         <i data-lucide="search" style="width:16px;height:16px"></i> Filter
       </button>
-      {% if tanggal_dari or tanggal_sampai %}
+      {% if tanggal_dari or tanggal_sampai or eb_filter_list %}
       <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-btn ni-btn--secondary">Reset</a>
       {% endif %}
     </form>

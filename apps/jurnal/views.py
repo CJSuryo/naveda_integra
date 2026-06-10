@@ -422,6 +422,7 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
     """Trial balance with saldo awal, mutasi modul, sebelum & setelah penyesuaian."""
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
     from apps.master_data.utils import get_akun_sorted
     akun_list = get_akun_sorted()
@@ -437,6 +438,10 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         )
         return {row['akun_id']: row for row in result}
 
+    # EB filter: resolve to lv1 PKs
+    eb_lv1_ids = _resolve_eb_lv1_ids(eb_filter_list) if eb_filter_list else None
+    eb_filter_kwargs = {'jurnal_header__entitas_bisnis_id__in': eb_lv1_ids} if eb_lv1_ids is not None else {}
+
     # Period filter
     period_filter = {}
     if tanggal_dari:
@@ -448,12 +453,12 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
     # PLUS all entries (any type) that fall BEFORE tanggal_dari when a date range is active.
     if tanggal_dari:
         sa_qs = JurnalDetail.objects.filter(
-            jurnal_header__tanggal__lt=tanggal_dari
+            jurnal_header__tanggal__lt=tanggal_dari, **eb_filter_kwargs
         ) | JurnalDetail.objects.filter(
-            jurnal_header__is_saldo_awal=True, **period_filter
+            jurnal_header__is_saldo_awal=True, **period_filter, **eb_filter_kwargs
         )
     else:
-        sa_qs = JurnalDetail.objects.filter(jurnal_header__is_saldo_awal=True)
+        sa_qs = JurnalDetail.objects.filter(jurnal_header__is_saldo_awal=True, **eb_filter_kwargs)
     saldo_awal_map = _aggregate(sa_qs)
 
     # Mutasi Modul: automated entries within period, excluding saldo awal entries
@@ -461,7 +466,8 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         JurnalDetail.objects.filter(
             jurnal_header__is_penyesuaian=False,
             jurnal_header__is_saldo_awal=False,
-            **period_filter
+            **period_filter,
+            **eb_filter_kwargs,
         )
     )
 
@@ -470,7 +476,8 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         JurnalDetail.objects.filter(
             jurnal_header__is_penyesuaian=True,
             jurnal_header__is_saldo_awal=False,
-            **period_filter
+            **period_filter,
+            **eb_filter_kwargs,
         )
     )
 
@@ -532,6 +539,8 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         'totals': totals,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
     })
 
 

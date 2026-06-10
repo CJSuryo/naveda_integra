@@ -15,8 +15,9 @@
 
 <div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
   <div class="ni-card__body" style="padding:12px 16px;">
-    <form method="get" style="display:flex;gap:12px;align-items:center;">
-      <input type="text" name="q" class="ni-input" value="{{ search }}" placeholder="Cari item..." style="flex:1;">
+    <form id="itemMasterFilterForm" method="get" class="ni-filter-bar">
+      <input type="text" name="q" class="ni-input" value="{{ search }}" placeholder="Cari item...">
+      {% include 'components/eb_filter_modal.html' with filter_form_id="itemMasterFilterForm" %}
       <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
         <i data-lucide="search" style="width:14px;height:14px"></i> Cari
       </button>

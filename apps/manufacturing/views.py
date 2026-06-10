@@ -41,7 +41,14 @@ def bom_list(request):
         .prefetch_related('lines__raw_material')
         .order_by('-tanggal_dibuat', '-created_at')
     )
-    return render(request, 'manufacturing/bom_list.html', {'bom_list': boms})
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        boms = boms.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+    return render(request, 'manufacturing/bom_list.html', {
+        'bom_list': boms,
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
+    })
 
 
 @login_required

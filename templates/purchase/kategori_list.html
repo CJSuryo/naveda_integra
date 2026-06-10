@@ -12,6 +12,17 @@
     </a>
   </div>
 </div>
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:12px 16px;">
+    <form id="kategoriFilterForm" method="get" class="ni-filter-bar">
+      {% include 'components/eb_filter_modal.html' with filter_form_id="kategoriFilterForm" %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+    </form>
+  </div>
+</div>
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-table-wrapper">
     <table class="ni-table">
