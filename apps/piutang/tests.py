@@ -690,3 +690,50 @@ class CreateReklasifikasiBagianLancarTest(TestCase):
                 piutang=self.piutang, dari_akun=self.coa_lt,
                 ke_akun=self.f['coa_piutang'], tanggal=date.today(),
             )
+
+
+# ── Task 11: update_penyisihan_individual ────────────────────────────────────
+
+class UpdatePenyisihanIndividualTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        defaults = [
+            ('current', 'Belum JT', '0.00', 1), ('1_30', '1-30', '5.00', 2),
+            ('31_60', '31-60', '15.00', 3), ('61_90', '61-90', '25.00', 4),
+            ('91_180', '91-180', '50.00', 5), ('181_365', '181-365', '75.00', 6),
+            ('over_365', '>365', '100.00', 7),
+        ]
+        for key, label, rate, urutan in defaults:
+            PenyisihanRateConfig.objects.get_or_create(
+                bucket_key=key, defaults={'label': label, 'rate_percent': rate, 'urutan': urutan}
+            )
+        self.coa_all = Akun.objects.create(kategori_id='kewajiban', nama='Cad Piutang', kode_akun='2.1.7')
+        self.coa_exp = Akun.objects.create(kategori_id='beban', nama='Beban Penyisihan', kode_akun='6.1.7')
+        self.piutang = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date.today() - timedelta(days=40),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000')}],
+        )
+        self.piutang.status = 'overdue'
+        self.piutang.save()
+        from apps.piutang.services import create_penyisihan_journal
+        self.entry = create_penyisihan_journal(
+            piutang=self.piutang,
+            allowance_account=self.coa_all,
+            expense_account=self.coa_exp,
+            tanggal=date.today(),
+        )
+
+    def test_update_creates_new_entry_and_removes_old(self):
+        from apps.piutang.services import update_penyisihan_individual
+        from apps.piutang.models import PiutangPenyisihan
+        old_pk = self.entry.pk
+        new_entry = update_penyisihan_individual(
+            existing_entry=self.entry,
+            allowance_account=self.coa_all,
+            expense_account=self.coa_exp,
+            tanggal=date.today(),
+        )
+        self.assertFalse(PiutangPenyisihan.objects.filter(pk=old_pk).exists())
+        self.assertTrue(PiutangPenyisihan.objects.filter(pk=new_entry.pk).exists())

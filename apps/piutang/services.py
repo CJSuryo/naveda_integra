@@ -826,6 +826,23 @@ def reverse_penyisihan_journal(entry, user=None) -> None:
             _log(piutang, 'PENYISIHAN', user=user, notes='Jurnal penyisihan dibatalkan')
 
 
+def update_penyisihan_individual(
+    existing_entry, allowance_account, expense_account, tanggal, catatan='', user=None,
+):
+    piutang = existing_entry.piutang_header
+    with transaction.atomic():
+        reverse_penyisihan_journal(existing_entry, user=user)
+        new_entry = create_penyisihan_journal(
+            piutang=piutang,
+            allowance_account=allowance_account,
+            expense_account=expense_account,
+            tanggal=tanggal,
+            catatan=catatan,
+            user=user,
+        )
+    return new_entry
+
+
 def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
     rates = _get_rate_config()
     today = tanggal  # caller-supplied date used as "today" for aging classification

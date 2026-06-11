@@ -32,6 +32,7 @@ from .services import (
     get_aging_schedule_report, get_aging_schedule_workbook,
     get_piutang_aging, get_piutang_dashboard_kpi,
     reverse_piutang_payment, reverse_penyisihan_journal,
+    update_penyisihan_individual,
     write_off_piutang,
 )
 
@@ -600,4 +601,29 @@ def piutang_reklasifikasi_bagian_lancar(request: HttpRequest, pk: int) -> HttpRe
                 dj_messages.success(request, 'Reklasifikasi bagian lancar berhasil dicatat.')
             except ValueError as exc:
                 dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_penyisihan_update(request: HttpRequest, pk: int, ppk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    entry = get_object_or_404(PiutangPenyisihan, pk=ppk, piutang_header=piutang, jenis='manual')
+    if request.method == 'POST':
+        form = PiutangPenyisihanForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                update_penyisihan_individual(
+                    existing_entry=entry,
+                    allowance_account=cd['allowance_account'],
+                    expense_account=cd['expense_account'],
+                    tanggal=cd['tanggal'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Penyisihan berhasil diperbarui.')
+            except ValueError as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
     return redirect('piutang:detail', pk=pk)
