@@ -24,5 +24,6 @@ urlpatterns = [
     path('<int:pk>/penyisihan/', views.piutang_penyisihan_create, name='penyisihan_create'),
     path('<int:pk>/penyisihan/<int:ppk>/cancel/', views.piutang_penyisihan_cancel, name='penyisihan_cancel'),
     path('reports/penyisihan/', views.piutang_report_penyisihan, name='report_penyisihan'),
+    path('reports/penyisihan-history/', views.penyisihan_history, name='penyisihan_history'),
     path('settings/penyisihan-rates/', views.piutang_settings_rates, name='settings_rates'),
 ]

@@ -509,3 +509,29 @@ def piutang_settings_rates(request: HttpRequest) -> HttpResponse:
     else:
         formset = PenyisihanRateConfigFormSet(queryset=qs)
     return render(request, 'piutang/settings_rates.html', {'formset': formset, 'rates': qs})
+
+
+@login_required
+def penyisihan_history(request: HttpRequest) -> HttpResponse:
+    tanggal_dari = request.GET.get('tanggal_dari', '')
+    tanggal_sampai = request.GET.get('tanggal_sampai', '')
+    jenis_filter = request.GET.get('jenis', '')
+
+    qs = (
+        PiutangPenyisihan.objects
+        .select_related('piutang_header', 'allowance_account', 'expense_account', 'jurnal_header', 'created_by')
+        .order_by('-tanggal', '-created_at')
+    )
+    if tanggal_dari:
+        qs = qs.filter(tanggal__gte=tanggal_dari)
+    if tanggal_sampai:
+        qs = qs.filter(tanggal__lte=tanggal_sampai)
+    if jenis_filter:
+        qs = qs.filter(jenis=jenis_filter)
+
+    return render(request, 'piutang/penyisihan_history.html', {
+        'entries': list(qs),
+        'tanggal_dari': tanggal_dari,
+        'tanggal_sampai': tanggal_sampai,
+        'jenis_filter': jenis_filter,
+    })

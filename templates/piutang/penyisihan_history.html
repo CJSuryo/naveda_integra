@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Riwayat Penyisihan Piutang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Riwayat Penyisihan Piutang</h1>
+    <p class="ni-page-header__subtitle">Semua jurnal penyisihan — batch dan per-piutang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--secondary">&#8592; Batch Penyisihan</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Filter</h2></div>
+  <div class="ni-card__body">
+    <form method="get" class="ni-form-grid ni-form-grid--3">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Jenis</label>
+        <select name="jenis" class="ni-input">
+          <option value="">Semua</option>
+          <option value="batch" {% if jenis_filter == 'batch' %}selected{% endif %}>Batch</option>
+          <option value="manual" {% if jenis_filter == 'manual' %}selected{% endif %}>Manual</option>
+        </select>
+      </div>
+      <div class="ni-form-group" style="align-self:end">
+        <button type="submit" class="ni-btn ni-btn--secondary">Filter</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Entri Penyisihan</h2></div>
+  {% if entries %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Jenis</th>
+          <th>Periode</th>
+          <th>Piutang</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Jurnal</th>
+          <th>Catatan</th>
+          <th>Dibuat Oleh</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in entries %}
+        <tr>
+          <td>{{ e.tanggal }}</td>
+          <td><span class="ni-badge {% if e.jenis == 'batch' %}ni-badge--info{% else %}ni-badge--warning{% endif %}">{{ e.get_jenis_display }}</span></td>
+          <td>{{ e.periode_label|default:'-' }}</td>
+          <td>
+            {% if e.piutang_header %}
+            <a href="{% url 'piutang:detail' e.piutang_header.pk %}">{{ e.piutang_header.nomor_piutang }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td class="ni-text-right {% if e.jumlah < 0 %}ni-text-success{% endif %}">{{ e.jumlah|floatformat:0|intcomma }}</td>
+          <td>
+            {% if e.jurnal_header %}
+            <a href="{% url 'jurnal:header_detail' e.jurnal_header.pk %}">{{ e.jurnal_header.nomor_transaksi }}</a>
+            {% else %}-{% endif %}
+          </td>
+          <td>{{ e.catatan|default:'-' }}</td>
+          <td>{{ e.created_by|default:'-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Tidak ada entri penyisihan.</p></div>
+  {% endif %}
+</div>
+{% endblock %}
