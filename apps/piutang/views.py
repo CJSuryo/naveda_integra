@@ -552,6 +552,7 @@ def aging_schedule_report(request: HttpRequest) -> HttpResponse:
         'bucket_keys': _AGING_BUCKET_KEYS,
         'bucket_labels': _AGING_BUCKET_LABELS,
         'as_of_str': as_of_str,
+        'section_info': [('short_term', 'Jangka Pendek'), ('long_term', 'Jangka Panjang')],
     })
 
 

@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% load piutang_extras %}
+{% block title %}Aging Schedule Piutang{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Aging Schedule Piutang</h1>
+    <p class="ni-page-header__subtitle">Rincian per angsuran — Jangka Pendek &amp; Jangka Panjang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:aging_schedule_export' %}{% if as_of_str %}?as_of={{ as_of_str }}{% endif %}"
+       class="ni-btn ni-btn--secondary">Export Excel</a>
+    <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--primary">Buat Penyisihan Batch</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Parameter</h2></div>
+  <div class="ni-card__body">
+    <form method="get" class="ni-form-grid ni-form-grid--2">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Per Tanggal</label>
+        <input type="date" name="as_of" value="{{ as_of_str }}" class="ni-input">
+      </div>
+      <div class="ni-form-group">
+        <button type="submit" class="ni-btn ni-btn--secondary">Tampilkan</button>
+      </div>
+    </form>
+    <p class="ni-text-muted">Per tanggal: <strong>{{ report.as_of_date }}</strong></p>
+  </div>
+</div>
+
+{% for section_key, section_label in section_info %}
+{% with section=report|get_item:section_key %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">{{ section_label }}</h2>
+    <span class="ni-text-muted">Grand Total: <strong>Rp {{ section.grand_total|floatformat:0|intcomma }}</strong></span>
+  </div>
+  {% if section.rows %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>No Piutang</th>
+          <th>Debitur</th>
+          <th>Jatuh Tempo Efektif</th>
+          <th>No Angsuran</th>
+          <th>Bucket</th>
+          <th class="ni-text-right">Hari Lewat</th>
+          <th class="ni-text-right">Jumlah</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in section.rows %}
+        <tr>
+          <td><a href="{% url 'piutang:detail' row.piutang_pk %}">{{ row.nomor_piutang }}</a></td>
+          <td>{{ row.debitur }}</td>
+          <td>{{ row.jatuh_tempo_efektif|default:'-' }}</td>
+          <td>{{ row.angsuran_no|default:'-' }}</td>
+          <td><span class="ni-badge">{{ row.bucket_label }}</span></td>
+          <td class="ni-text-right">{% if row.bucket_key != 'current' %}{{ row.hari_lewat }}{% else %}-{% endif %}</td>
+          <td class="ni-text-right">{{ row.jumlah_piutang|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6"><strong>Total</strong></td>
+          <td class="ni-text-right"><strong>{{ section.grand_total|floatformat:0|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Tidak ada data.</p></div>
+  {% endif %}
+</div>
+{% endwith %}
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Ringkasan Gabungan per Bucket</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Bucket</th><th class="ni-text-right">Total Outstanding</th></tr></thead>
+      <tbody>
+        {% for key in bucket_keys %}
+        <tr>
+          <td>{{ bucket_labels|get_item:key }}</td>
+          <td class="ni-text-right">{{ report.combined_bucket_totals|get_item:key|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>Grand Total</strong></td>
+          <td class="ni-text-right"><strong>{{ report.grand_total|floatformat:0|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endblock %}
