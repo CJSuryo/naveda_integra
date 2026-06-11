@@ -614,3 +614,79 @@ class PiutangReklasifikasiPeriodesTest(TestCase):
         from apps.piutang.models import PiutangReklasifikasi
         self.assertTrue(hasattr(PiutangReklasifikasi, 'periode_bulan'))
         self.assertTrue(hasattr(PiutangReklasifikasi, 'periode_tahun'))
+
+
+# ── Task 9: compute_bagian_lancar fix + create_reklasifikasi_bagian_lancar ─────
+
+class ComputeBagianLancarFixedTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+
+    def test_long_term_returns_only_installments_within_12_months(self):
+        today = date.today()
+        jatuh_tempo = today.replace(year=today.year + 2)
+        p = create_manual_piutang(
+            tanggal=today, entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=jatuh_tempo,
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('24000000')}],
+        )
+        p.status = 'open'
+        p.save()
+        bagian = compute_bagian_lancar(p)
+        self.assertGreater(bagian, Decimal('0'))
+        self.assertLess(bagian, Decimal('24000000'))
+
+    def test_short_term_still_returns_full_amount_within_cutoff(self):
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date.today() + timedelta(days=30),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('500000')}],
+        )
+        p.status = 'open'
+        p.save()
+        self.assertEqual(compute_bagian_lancar(p), Decimal('500000'))
+
+
+class CreateReklasifikasiBagianLancarTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_lt = Akun.objects.create(kategori_id='aset', nama='Piutang JK Panjang', kode_akun='1.2.2')
+        today = date.today()
+        jatuh_tempo = today.replace(year=today.year + 2)
+        self.piutang = create_manual_piutang(
+            tanggal=today, entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.coa_lt,
+            jatuh_tempo=jatuh_tempo,
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('24000000')}],
+        )
+        self.piutang.status = 'open'
+        self.piutang.save()
+
+    def test_creates_reklasifikasi_record(self):
+        from apps.piutang.services import create_reklasifikasi_bagian_lancar
+        rkl = create_reklasifikasi_bagian_lancar(
+            piutang=self.piutang,
+            dari_akun=self.coa_lt,
+            ke_akun=self.f['coa_piutang'],
+            tanggal=date.today(),
+        )
+        from apps.piutang.models import PiutangReklasifikasi
+        self.assertTrue(PiutangReklasifikasi.objects.filter(pk=rkl.pk).exists())
+        self.assertEqual(rkl.periode_bulan, date.today().month)
+        self.assertEqual(rkl.periode_tahun, date.today().year)
+
+    def test_raises_on_duplicate_periode(self):
+        from apps.piutang.services import create_reklasifikasi_bagian_lancar
+        create_reklasifikasi_bagian_lancar(
+            piutang=self.piutang, dari_akun=self.coa_lt,
+            ke_akun=self.f['coa_piutang'], tanggal=date.today(),
+        )
+        with self.assertRaises(ValueError):
+            create_reklasifikasi_bagian_lancar(
+                piutang=self.piutang, dari_akun=self.coa_lt,
+                ke_akun=self.f['coa_piutang'], tanggal=date.today(),
+            )

@@ -385,9 +385,60 @@ def compute_bagian_lancar(piutang: PiutangHeader) -> Decimal:
         return Decimal('0')
     today = timezone.now().date()
     cutoff = today.replace(year=today.year + 1)
-    if piutang.jatuh_tempo <= cutoff:
-        return piutang.sisa_piutang
-    return Decimal('0')
+    if piutang.jenis_jangka_waktu != 'long_term':
+        return piutang.sisa_piutang if piutang.jatuh_tempo <= cutoff else Decimal('0')
+    schedule = compute_angsuran_schedule(piutang)
+    if not schedule:
+        return piutang.sisa_piutang if piutang.jatuh_tempo <= cutoff else Decimal('0')
+    return sum(
+        (row['sisa_bayar'] for row in schedule if row['status'] != 'lunas' and row['tanggal'] <= cutoff),
+        Decimal('0'),
+    )
+
+
+def create_reklasifikasi_bagian_lancar(
+    piutang: PiutangHeader, dari_akun, ke_akun, tanggal, user=None,
+) -> PiutangReklasifikasi:
+    periode_bulan = tanggal.month
+    periode_tahun = tanggal.year
+    if PiutangReklasifikasi.objects.filter(
+        piutang_header=piutang,
+        periode_bulan=periode_bulan,
+        periode_tahun=periode_tahun,
+    ).exists():
+        raise ValueError(
+            f'Reklasifikasi bagian lancar untuk periode {periode_tahun}-{periode_bulan:02d} sudah ada.'
+        )
+    jumlah = compute_bagian_lancar(piutang)
+    if jumlah <= 0:
+        raise ValueError('Tidak ada bagian lancar yang dapat direklasifikasi.')
+    with transaction.atomic():
+        nomor = _next_piutang_journal_number('TRX-PIU-RKL')
+        jurnal = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Reklasifikasi Bagian Lancar {piutang.nomor_piutang}',
+            entitas_bisnis=piutang.entitas_bisnis,
+            is_penyesuaian=False,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=jurnal, akun=dari_akun, debit=Decimal('0'), kredit=jumlah),
+            JurnalDetail(jurnal_header=jurnal, akun=ke_akun, debit=jumlah, kredit=Decimal('0')),
+        ])
+        rkl = PiutangReklasifikasi.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            dari_akun=dari_akun,
+            ke_akun=ke_akun,
+            jumlah=jumlah,
+            keterangan=f'Bagian lancar {periode_tahun}-{periode_bulan:02d}',
+            jurnal=jurnal,
+            periode_bulan=periode_bulan,
+            periode_tahun=periode_tahun,
+            created_by=user,
+        )
+        _log(piutang, 'REKLASIFIKASI', user=user, after={'jumlah': str(jumlah)})
+    return rkl
 
 
 def write_off_piutang(piutang: PiutangHeader, data: dict, user=None) -> PiutangWriteOff:
