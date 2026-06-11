@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Disclosure Piutang — SAK ETAP{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Disclosure Piutang</h1>
+    <p class="ni-page-header__subtitle">Pengungkapan sesuai SAK ETAP Bab 11 &amp; Bab 22</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <form method="get" class="ni-form-inline">
+      <input type="date" name="as_of" value="{{ as_of_str }}" class="ni-input">
+      <button type="submit" class="ni-btn ni-btn--secondary">Tampilkan</button>
+    </form>
+  </div>
+</div>
+
+<div class="ni-kpi-grid">
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Total Outstanding</div>
+    <div class="ni-kpi-card__value">{{ report.total_outstanding|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Total Penyisihan</div>
+    <div class="ni-kpi-card__value">{{ report.total_penyisihan|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--success">
+    <div class="ni-kpi-card__label">Piutang Neto</div>
+    <div class="ni-kpi-card__value">{{ report.piutang_neto|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card ni-kpi-card--danger">
+    <div class="ni-kpi-card__label">Piutang Khusus Disisihkan</div>
+    <div class="ni-kpi-card__value">{{ report.impaired_count }} piutang</div>
+  </div>
+</div>
+
+<div class="ni-grid ni-grid--2">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Komposisi Jangka Waktu</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead><tr><th>Kategori</th><th class="ni-text-right">Jumlah</th></tr></thead>
+        <tbody>
+          <tr><td>Jangka Pendek</td><td class="ni-text-right">{{ report.short_term_total|floatformat:0|intcomma }}</td></tr>
+          <tr><td>Jangka Panjang</td><td class="ni-text-right">{{ report.long_term_total|floatformat:0|intcomma }}</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td><strong>Total</strong></td><td class="ni-text-right"><strong>{{ report.total_outstanding|floatformat:0|intcomma }}</strong></td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Rekonsiliasi Cadangan Kerugian (YTD)</h2></div>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead><tr><th>Keterangan</th><th class="ni-text-right">Jumlah</th></tr></thead>
+        <tbody>
+          <tr><td>Saldo Awal Tahun</td><td class="ni-text-right">{{ report.allowance_reconciliation.opening|floatformat:0|intcomma }}</td></tr>
+          <tr><td>Penambahan Beban</td><td class="ni-text-right">{{ report.allowance_reconciliation.additions|floatformat:0|intcomma }}</td></tr>
+          <tr><td>Pemulihan</td><td class="ni-text-right ni-text-success">{{ report.allowance_reconciliation.reversals|floatformat:0|intcomma }}</td></tr>
+          <tr><td>Write-Off</td><td class="ni-text-right ni-text-danger">{{ report.allowance_reconciliation.write_offs|floatformat:0|intcomma }}</td></tr>
+        </tbody>
+        <tfoot>
+          <tr><td><strong>Saldo Penutup</strong></td><td class="ni-text-right"><strong>{{ report.allowance_reconciliation.closing|floatformat:0|intcomma }}</strong></td></tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Aging Summary</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Bucket</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">Rate</th><th class="ni-text-right">Estimasi Penyisihan</th></tr></thead>
+      <tbody>
+        {% for bucket in report.aging_summary %}
+        <tr>
+          <td>{{ bucket.label }}</td>
+          <td class="ni-text-right">{{ bucket.total|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ bucket.rate }}%</td>
+          <td class="ni-text-right">{{ bucket.penyisihan|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Konsentrasi Risiko Kredit (Top 10)</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Debitur</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">%</th></tr></thead>
+      <tbody>
+        {% for item in report.concentration %}
+        <tr>
+          <td>{{ item.debitur }}</td>
+          <td class="ni-text-right">{{ item.outstanding|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ item.pct }}%</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3" class="ni-text-muted ni-text-center">Tidak ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Piutang Disisihkan Khusus</h2></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Jumlah Piutang</dt><dd>{{ report.impaired_count }}</dd>
+      <dt>Total Outstanding</dt><dd>Rp {{ report.impaired_total|floatformat:0|intcomma }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-card__body ni-text-muted">
+  Per tanggal: {{ report.as_of_date }}. Sesuai SAK ETAP Bab 11 (Instrumen Keuangan) &amp; Bab 22 (Pengungkapan).
+</div>
+{% endblock %}
