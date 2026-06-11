@@ -1106,3 +1106,99 @@ def get_piutang_disclosure_report(as_of_date=None) -> dict:
         'concentration': concentration,
         'aging_summary': aging_summary,
     }
+
+
+# ── Present Value Functions ───────────────────────────────────────────────────
+
+def compute_present_value(piutang: PiutangHeader, market_rate: Decimal) -> Decimal:
+    """Compute PV of all future cash flows discounted at market_rate (% per year).
+
+    At 0% the result equals the sum of angsuran (== jumlah_pokok for tanpa_bunga).
+    """
+    schedule = compute_angsuran_schedule(piutang)
+    if not schedule:
+        return piutang.jumlah_pokok
+    if market_rate == 0:
+        total = sum(Decimal(str(row['angsuran'])) for row in schedule)
+        return total
+    periode_months = _PERIODE_MONTHS_MAP.get(getattr(piutang, 'periode_angsuran', 'bulanan'), 1)
+    r_per_period = float(market_rate) / 100 / 12 * periode_months
+    pv = Decimal('0')
+    for row in schedule:
+        n = row['no']
+        cf = float(row['angsuran'])
+        pv += Decimal(str(round(cf / ((1 + r_per_period) ** n), 4)))
+    return pv.quantize(Decimal('0.0001'))
+
+
+def compute_amortization_schedule_pv(piutang: PiutangHeader) -> list:
+    """Effective-interest amortization table using nilai_wajar_awal and pv_discount_rate."""
+    if not piutang.nilai_wajar_awal or not piutang.pv_discount_rate:
+        return []
+    schedule = compute_angsuran_schedule(piutang)
+    if not schedule:
+        return []
+    periode_months = _PERIODE_MONTHS_MAP.get(getattr(piutang, 'periode_angsuran', 'bulanan'), 1)
+    r_per_period = float(piutang.pv_discount_rate) / 100 / 12 * periode_months
+    carrying = float(piutang.nilai_wajar_awal)
+    rows = []
+    for row in schedule:
+        bunga_efektif = carrying * r_per_period
+        cf = float(row['angsuran'])
+        carrying = carrying * (1 + r_per_period) - cf
+        rows.append({
+            'periode': row['no'],
+            'tanggal': row['tanggal'],
+            'bunga_efektif': Decimal(str(round(bunga_efektif, 4))),
+            'cash_flow': row['angsuran'],
+            'carrying_value': Decimal(str(round(max(0.0, carrying), 4))),
+        })
+    return rows
+
+
+def create_pv_adjustment_journal(
+    piutang: PiutangHeader,
+    interest_income_account,
+    tanggal,
+    periode_no: int,
+    catatan='',
+    user=None,
+) -> JurnalHeader:
+    """Create an amortization journal entry for a single PV discount period."""
+    amort = compute_amortization_schedule_pv(piutang)
+    if not amort or periode_no < 1 or periode_no > len(amort):
+        raise ValueError(f'Periode {periode_no} tidak valid.')
+    row = amort[periode_no - 1]
+    bunga = row['bunga_efektif']
+    if bunga <= 0:
+        raise ValueError('Bunga efektif nol, tidak perlu jurnal.')
+    with transaction.atomic():
+        nomor = _next_piutang_journal_number('TRX-PIU-PV')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=(
+                f'Amortisasi PV Piutang {piutang.nomor_piutang} — Periode {periode_no}'
+            ),
+            entitas_bisnis=piutang.entitas_bisnis,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun=piutang.coa_piutang_account,
+                debit=bunga,
+                kredit=Decimal('0'),
+            ),
+            JurnalDetail(
+                jurnal_header=header,
+                akun=interest_income_account,
+                debit=Decimal('0'),
+                kredit=bunga,
+            ),
+        ])
+        _log(
+            piutang, 'EDITED', user=user,
+            after={'pv_amortisasi': str(bunga), 'periode': periode_no},
+        )
+    return header

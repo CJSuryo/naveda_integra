@@ -10,6 +10,7 @@ from .models import PiutangHeader, PiutangDetail, PiutangAuditLog
 from .services import create_manual_piutang, create_piutang_payment
 from apps.piutang.services import compute_penyisihan_for_piutang
 from apps.piutang.models import PenyisihanRateConfig
+from apps.piutang.services import compute_present_value, compute_amortization_schedule_pv
 
 
 def make_fixtures():
@@ -797,3 +798,52 @@ class AutoReversePenyisihanOnPaymentTest(TestCase):
         )
         remaining = PiutangPenyisihan.objects.filter(piutang_header=self.piutang, jenis='manual').count()
         self.assertEqual(remaining, 1)
+
+
+# ── Task 16: compute_present_value & compute_amortization_schedule_pv ─────────
+
+class ComputePresentValueTest(TestCase):
+    def test_pv_equals_face_at_zero_discount(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('12000000')}],
+        )
+        pv = compute_present_value(p, market_rate=Decimal('0'))
+        self.assertEqual(pv, Decimal('12000000'))
+
+    def test_pv_less_than_face_at_positive_rate(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('12000000')}],
+        )
+        pv = compute_present_value(p, market_rate=Decimal('12'))
+        self.assertLess(pv, Decimal('12000000'))
+        self.assertGreater(pv, Decimal('0'))
+
+
+class ComputeAmortizationSchedulePvTest(TestCase):
+    def test_returns_list_with_period_and_interest_keys(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('12000000')}],
+        )
+        p.nilai_wajar_awal = compute_present_value(p, Decimal('12'))
+        p.pv_discount_rate = Decimal('12')
+        rows = compute_amortization_schedule_pv(p)
+        self.assertIsInstance(rows, list)
+        if rows:
+            row = rows[0]
+            for k in ('periode', 'tanggal', 'bunga_efektif', 'carrying_value'):
+                self.assertIn(k, row)
