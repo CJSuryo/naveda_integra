@@ -13,6 +13,7 @@ from .forms import (
     PenyisihanRateConfigFormSet,
     PiutangAttachmentForm, PiutangDetailFormSet, PiutangHeaderForm,
     PiutangPenerimaanForm, PiutangPenyisihanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
+    PvAdjustmentForm,
 )
 from .models import (
     PenyisihanRateConfig,
@@ -25,9 +26,11 @@ from .services import (
     compute_bagian_lancar,
     compute_batch_penyisihan,
     compute_penyisihan_for_piutang,
+    compute_present_value,
     create_batch_penyisihan_journal,
     create_manual_piutang, create_piutang_payment,
     create_penyisihan_journal,
+    create_pv_adjustment_journal,
     create_reklasifikasi_bagian_lancar,
     get_aging_schedule_report, get_aging_schedule_workbook,
     get_piutang_aging, get_piutang_dashboard_kpi,
@@ -188,6 +191,7 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'penyisihan_preview': penyisihan_preview,
         'penyisihan_form': penyisihan_form,
         'penyisihan_history': penyisihan_history,
+        'pv_form': PvAdjustmentForm(initial={'tanggal': timezone.now().date(), 'periode_no': 1}),
     })
 
 
@@ -643,3 +647,31 @@ def piutang_disclosure_report(request: HttpRequest) -> HttpResponse:
         'report': report,
         'as_of_str': as_of_str,
     })
+
+
+@login_required
+def piutang_pv_adjustment(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PvAdjustmentForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                market_rate = cd['market_rate']
+                if not piutang.is_pv_adjusted:
+                    piutang.is_pv_adjusted = True
+                    piutang.pv_discount_rate = market_rate
+                    piutang.nilai_wajar_awal = compute_present_value(piutang, market_rate)
+                    piutang.save(update_fields=['is_pv_adjusted', 'pv_discount_rate', 'nilai_wajar_awal'])
+                create_pv_adjustment_journal(
+                    piutang=piutang,
+                    interest_income_account=cd['interest_income_account'],
+                    tanggal=cd['tanggal'],
+                    periode_no=cd['periode_no'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Jurnal amortisasi PV berhasil dibuat.')
+            except ValueError as exc:
+                dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)

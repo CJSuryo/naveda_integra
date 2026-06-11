@@ -422,6 +422,38 @@
 {% endif %}
 {% endif %}
 
+{% if piutang.jenis_jangka_waktu == 'long_term' %}
+<div class="ni-card ni-animate-fade-in" id="pv-card">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Nilai Wajar (Present Value)</h2>
+  </div>
+  <div class="ni-card__body">
+    {% if piutang.is_pv_adjusted %}
+    <dl class="ni-detail-grid">
+      <dt>Status PV</dt><dd><span class="ni-badge ni-badge--success">Disesuaikan</span></dd>
+      <dt>Market Rate</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
+      <dt>Nilai Wajar Awal</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
+    </dl>
+    {% else %}
+    <p class="ni-text-muted">Belum disesuaikan nilai wajar.</p>
+    {% endif %}
+    <form method="post" action="{% url 'piutang:pv_adjustment' piutang.pk %}" class="ni-form-grid ni-form-grid--2">
+      {% csrf_token %}
+      {% for field in pv_form %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="ni-form-group">
+        <button type="submit" class="ni-btn ni-btn--secondary">Buat Jurnal Amortisasi</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
 <script>
 function openModal(id) {
   document.getElementById(id).classList.add('ni-modal-backdrop--visible');

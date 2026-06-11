@@ -31,4 +31,5 @@ urlpatterns = [
     path('reports/aging-schedule/', views.aging_schedule_report, name='aging_schedule_report'),
     path('reports/aging-schedule/export/', views.aging_schedule_export, name='aging_schedule_export'),
     path('reports/disclosure/', views.piutang_disclosure_report, name='disclosure_report'),
+    path('<int:pk>/pv-adjustment/', views.piutang_pv_adjustment, name='pv_adjustment'),
 ]

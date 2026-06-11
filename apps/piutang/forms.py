@@ -199,3 +199,31 @@ PenyisihanRateConfigFormSet = modelformset_factory(
         }),
     },
 )
+
+
+class PvAdjustmentForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Jurnal',
+    )
+    market_rate = forms.DecimalField(
+        max_digits=8, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+        label='Market Rate (%/tahun)',
+    )
+    interest_income_account = forms.ModelChoiceField(
+        queryset=Akun.objects.filter(kategori_id='pendapatan').order_by('kode_akun'),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Pendapatan Bunga Efektif',
+        empty_label='— Pilih Akun —',
+    )
+    periode_no = forms.IntegerField(
+        min_value=1,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'min': '1'}),
+        label='Nomor Periode Angsuran',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input'}),
+        label='Catatan',
+    )
