@@ -457,6 +457,11 @@ class PiutangPenyisihan(models.Model):
         null=True, blank=True, related_name='piutang_penyisihan', verbose_name='Jurnal',
     )
     catatan = models.CharField(max_length=512, blank=True, default='', verbose_name='Catatan')
+    periode_label = models.CharField(
+        max_length=20, blank=True, default='', db_index=True,
+        verbose_name='Periode',
+        help_text='YYYY-MM — diisi otomatis untuk jenis batch',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_penyisihan_created', verbose_name='Dibuat Oleh',

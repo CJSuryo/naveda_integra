@@ -449,3 +449,29 @@ class ComputeBatchPenyisihanTest(TestCase):
         )
         result = compute_batch_penyisihan(date.today(), akun)
         assert result['delta'] == result['target_saldo'] - result['saldo_existing']
+
+
+# ── Task 1: periode_label field ──────────────────────────────────────────────
+
+from apps.piutang.models import PiutangPenyisihan
+from apps.jurnal.models import JurnalHeader
+
+
+class PiutangPenyisihanPeriodeLabelTest(TestCase):
+    def test_periode_label_field_exists(self):
+        self.assertTrue(hasattr(PiutangPenyisihan, 'periode_label'))
+
+    def test_periode_label_blank_by_default(self):
+        f = make_fixtures()
+        coa_all = Akun.objects.create(kategori_id='kewajiban', nama='Cad Piutang', kode_akun='2.1.9')
+        coa_exp = Akun.objects.create(kategori_id='beban', nama='Beban Penyisihan', kode_akun='6.1.9')
+        jh = JurnalHeader.objects.create(
+            tanggal=date(2026, 6, 1), nomor_transaksi='TEST-001',
+            uraian_transaksi='Test', is_penyesuaian=True,
+        )
+        p = PiutangPenyisihan.objects.create(
+            tanggal=date(2026, 6, 1), jenis='batch', jumlah=Decimal('100'),
+            allowance_account=coa_all, expense_account=coa_exp,
+            jurnal_header=jh,
+        )
+        self.assertEqual(p.periode_label, '')
