@@ -1011,3 +1011,98 @@ def get_piutang_dashboard_kpi() -> dict:
         'piutang_neto': piutang_neto,
         'aging_summary': aging_summary,
     }
+
+
+def get_piutang_disclosure_report(as_of_date=None) -> dict:
+    from .models import PiutangPenyisihan
+    today = as_of_date or date.today()
+    year_start = today.replace(month=1, day=1)
+
+    outstanding_list = list(
+        PiutangHeader.objects
+        .filter(status__in=('open', 'partial', 'overdue'))
+        .select_related('entitas_bisnis')
+    )
+    total_outstanding = sum(p.sisa_piutang for p in outstanding_list)
+
+    short_term_total = sum(p.sisa_piutang for p in outstanding_list if p.jenis_jangka_waktu == 'short_term')
+    long_term_total = sum(p.sisa_piutang for p in outstanding_list if p.jenis_jangka_waktu == 'long_term')
+
+    penyisihan_opening = (
+        PiutangPenyisihan.objects.filter(tanggal__lt=year_start)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    )
+    penyisihan_ytd_pos = (
+        PiutangPenyisihan.objects
+        .filter(tanggal__gte=year_start, tanggal__lte=today, jumlah__gt=0)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    )
+    penyisihan_ytd_neg = abs(
+        PiutangPenyisihan.objects
+        .filter(tanggal__gte=year_start, tanggal__lte=today, jumlah__lt=0)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    )
+    total_penyisihan = (
+        PiutangPenyisihan.objects.filter(tanggal__lte=today)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    )
+
+    # Write-off total — adapt if PiutangWriteOff doesn't exist
+    try:
+        write_off_total = (
+            PiutangWriteOff.objects.filter(tanggal__gte=year_start, tanggal__lte=today)
+            .aggregate(s=Sum('jumlah_dihapus'))['s'] or Decimal('0')
+        )
+    except Exception:
+        write_off_total = Decimal('0')
+
+    # Impaired piutang — adapt if field doesn't exist
+    try:
+        impaired = [p for p in outstanding_list if p.is_specifically_impaired]
+    except AttributeError:
+        impaired = []
+    impaired_total = sum(p.sisa_piutang for p in impaired)
+
+    concentration = sorted(
+        [{'debitur': p.entitas_display, 'outstanding': p.sisa_piutang} for p in outstanding_list],
+        key=lambda x: x['outstanding'], reverse=True,
+    )[:10]
+    for item in concentration:
+        item['pct'] = (
+            (item['outstanding'] / total_outstanding * 100).quantize(Decimal('0.01'))
+            if total_outstanding else Decimal('0')
+        )
+
+    rates = _get_rate_config()
+    aging_buckets = get_piutang_aging()
+    aging_summary = []
+    for key in _AGING_BUCKET_KEYS:
+        bucket_total = sum(Decimal(str(e['jumlah'])) for e in aging_buckets[key])
+        rate = rates.get(key, Decimal('0'))
+        aging_summary.append({
+            'bucket_key': key,
+            'label': _AGING_BUCKET_LABELS[key],
+            'total': bucket_total,
+            'rate': rate,
+            'penyisihan': (bucket_total * rate / 100).quantize(Decimal('0.01')),
+        })
+
+    return {
+        'as_of_date': today,
+        'total_outstanding': total_outstanding,
+        'short_term_total': short_term_total,
+        'long_term_total': long_term_total,
+        'total_penyisihan': total_penyisihan,
+        'piutang_neto': total_outstanding - total_penyisihan,
+        'allowance_reconciliation': {
+            'opening': penyisihan_opening,
+            'additions': penyisihan_ytd_pos,
+            'reversals': penyisihan_ytd_neg,
+            'write_offs': write_off_total,
+            'closing': penyisihan_opening + penyisihan_ytd_pos - penyisihan_ytd_neg,
+        },
+        'impaired_count': len(impaired),
+        'impaired_total': impaired_total,
+        'concentration': concentration,
+        'aging_summary': aging_summary,
+    }

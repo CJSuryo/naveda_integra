@@ -31,6 +31,7 @@ from .services import (
     create_reklasifikasi_bagian_lancar,
     get_aging_schedule_report, get_aging_schedule_workbook,
     get_piutang_aging, get_piutang_dashboard_kpi,
+    get_piutang_disclosure_report,
     reverse_piutang_payment, reverse_penyisihan_journal,
     update_penyisihan_individual,
     write_off_piutang,
@@ -627,3 +628,18 @@ def piutang_penyisihan_update(request: HttpRequest, pk: int, ppk: int) -> HttpRe
         else:
             dj_messages.error(request, 'Form tidak valid.')
     return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_disclosure_report(request: HttpRequest) -> HttpResponse:
+    from datetime import date as date_cls
+    as_of_str = request.GET.get('as_of', '')
+    try:
+        as_of_date = date_cls.fromisoformat(as_of_str) if as_of_str else None
+    except ValueError:
+        as_of_date = None
+    report = get_piutang_disclosure_report(as_of_date)
+    return render(request, 'piutang/disclosure_report.html', {
+        'report': report,
+        'as_of_str': as_of_str,
+    })
