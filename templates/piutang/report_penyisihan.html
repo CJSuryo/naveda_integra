@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Penyisihan Piutang Batch{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Penyisihan Piutang — Batch</h1>
+    <p class="ni-page-header__subtitle">Hitung dan buat jurnal penyisihan akhir periode</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:report_aging' %}" class="ni-btn ni-btn--secondary">&#8592; Aging</a>
+    <a href="{% url 'piutang:settings_rates' %}" class="ni-btn ni-btn--secondary">Pengaturan Rate</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Parameter Perhitungan</h2></div>
+  <div class="ni-card__body">
+    <form method="post" id="batch-form">
+      {% csrf_token %}
+      <div class="ni-form-grid ni-form-grid--2">
+        {% for field in form %}
+        <div class="ni-form-group {% if field.name == 'catatan' %}ni-form-group--full{% endif %}">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ni-btn-row">
+        <button type="submit" name="action" value="preview" class="ni-btn ni-btn--secondary">Preview</button>
+        {% if batch_preview and batch_preview.delta != 0 %}
+        <button type="submit" name="action" value="post" class="ni-btn ni-btn--primary" onclick="return confirm('Buat jurnal penyisihan batch? Delta: Rp {{ batch_preview.delta|floatformat:0|intcomma }}')">Post Jurnal</button>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if batch_preview %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Preview Perhitungan</h2></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Jumlah Piutang Dihitung</dt><dd>{{ batch_preview.piutang_count }}</dd>
+      <dt>Target Saldo Cadangan</dt><dd><strong>Rp {{ batch_preview.target_saldo|floatformat:0|intcomma }}</strong></dd>
+      <dt>Saldo Existing Akun Cadangan</dt><dd>Rp {{ batch_preview.saldo_existing|floatformat:0|intcomma }}</dd>
+      <dt>Delta (Jurnal yang Akan Dibuat)</dt>
+      <dd>
+        <strong>Rp {{ batch_preview.delta|floatformat:0|intcomma }}</strong>
+        {% if batch_preview.delta > 0 %}<span class="ni-badge ni-badge--danger">Tambah Beban</span>
+        {% elif batch_preview.delta < 0 %}<span class="ni-badge ni-badge--success">Pemulihan</span>
+        {% else %}<span class="ni-badge">Tidak Ada Perubahan</span>{% endif %}
+      </dd>
+    </dl>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Bucket</th><th class="ni-text-right">Jumlah Piutang</th><th class="ni-text-right">Rate (%)</th><th class="ni-text-right">Penyisihan</th></tr></thead>
+      <tbody>
+        {% for b in batch_preview.breakdown %}
+        <tr {% if b.jumlah_piutang == 0 %}class="ni-row--muted"{% endif %}>
+          <td>{{ b.label }}</td>
+          <td class="ni-text-right">{{ b.jumlah_piutang|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ b.rate }}%</td>
+          <td class="ni-text-right">{{ b.penyisihan|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="3"><strong>Target Saldo</strong></td>
+          <td class="ni-text-right"><strong>{{ batch_preview.target_saldo|floatformat:0|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Batch Penyisihan</h2></div>
+  {% if history %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah</th><th>Jurnal</th><th>Catatan</th><th>Dibuat Oleh</th></tr></thead>
+      <tbody>
+        {% for ps in history %}
+        <tr>
+          <td>{{ ps.tanggal }}</td>
+          <td class="ni-text-right {% if ps.jumlah < 0 %}ni-text-success{% endif %}">{{ ps.jumlah|floatformat:0|intcomma }}</td>
+          <td>{% if ps.jurnal_header %}<a href="{% url 'jurnal:header_detail' ps.jurnal_header.pk %}">{{ ps.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
+          <td>{{ ps.catatan|default:'-' }}</td>
+          <td>{{ ps.created_by|default:'-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Belum ada jurnal batch.</p></div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Pengaturan Rate Penyisihan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Pengaturan Rate Penyisihan Piutang</h1>
+    <p class="ni-page-header__subtitle">Atur persentase penyisihan per bucket aging</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Rate per Bucket</h2></div>
+  <form method="post">
+    {% csrf_token %}
+    {{ formset.management_form }}
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr><th>Bucket</th><th>Label</th><th class="ni-text-right" style="width:160px">Rate (%)</th></tr>
+        </thead>
+        <tbody>
+          {% for item_form in formset %}
+          <tr>
+            {{ item_form.id }}
+            <td><code>{{ item_form.instance.bucket_key }}</code></td>
+            <td>{{ item_form.instance.label }}</td>
+            <td class="ni-text-right">{{ item_form.rate_percent }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="ni-card__body">
+      <p class="ni-text-muted">Rate 0–100%. Bucket <code>over_365</code> sebaiknya 100% sesuai SAK.</p>
+    </div>
+    <div class="ni-btn-row" style="padding:1rem">
+      <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

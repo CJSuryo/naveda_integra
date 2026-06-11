@@ -30,40 +30,34 @@
     <div class="ni-kpi-card__label">Collection Rate</div>
     <div class="ni-kpi-card__value">{{ kpi.collection_rate|floatformat:1 }}%</div>
   </div>
+  <div class="ni-kpi-card ni-kpi-card--warning">
+    <div class="ni-kpi-card__label">Estimasi Penyisihan</div>
+    <div class="ni-kpi-card__value">{{ kpi.total_penyisihan_target|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-kpi-card">
+    <div class="ni-kpi-card__label">Piutang Neto</div>
+    <div class="ni-kpi-card__value">{{ kpi.piutang_neto|floatformat:0|intcomma }}</div>
+  </div>
 </div>
 
 <div class="ni-grid ni-grid--2">
   <div class="ni-card ni-animate-fade-in">
-    <div class="ni-card__header"><h2 class="ni-card__title">Aging Piutang</h2></div>
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Aging Piutang</h2>
+      <a href="{% url 'piutang:report_aging' %}" class="ni-btn ni-btn--sm ni-btn--secondary">Detail</a>
+    </div>
     <div class="ni-table-wrapper">
       <table class="ni-table">
-        <thead>
-          <tr>
-            <th>Bucket</th>
-            <th class="ni-text-right">Jumlah</th>
-          </tr>
-        </thead>
+        <thead><tr><th>Bucket</th><th class="ni-text-right">Outstanding</th><th class="ni-text-right">Rate</th><th class="ni-text-right">Penyisihan</th></tr></thead>
         <tbody>
+          {% for key, summary in kpi.aging_summary.items %}
           <tr>
-            <td>Belum Jatuh Tempo</td>
-            <td class="ni-text-right">{{ buckets.current|floatformat:0|intcomma }}</td>
+            <td>{{ summary.label }}</td>
+            <td class="ni-text-right">{{ summary.total_outstanding|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ summary.rate }}%</td>
+            <td class="ni-text-right">{{ summary.penyisihan|floatformat:0|intcomma }}</td>
           </tr>
-          <tr>
-            <td>1–30 Hari</td>
-            <td class="ni-text-right">{{ buckets.1_30|floatformat:0|intcomma }}</td>
-          </tr>
-          <tr>
-            <td>31–60 Hari</td>
-            <td class="ni-text-right">{{ buckets.31_60|floatformat:0|intcomma }}</td>
-          </tr>
-          <tr>
-            <td>61–90 Hari</td>
-            <td class="ni-text-right">{{ buckets.61_90|floatformat:0|intcomma }}</td>
-          </tr>
-          <tr>
-            <td>&gt; 90 Hari</td>
-            <td class="ni-text-right">{{ buckets.over_90|floatformat:0|intcomma }}</td>
-          </tr>
+          {% endfor %}
         </tbody>
       </table>
     </div>

@@ -5,40 +5,84 @@
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Aging Piutang</h1>
-    <p class="ni-page-header__subtitle">Klasifikasi keterlambatan penerimaan piutang</p>
+    <p class="ni-page-header__subtitle">Klasifikasi keterlambatan per angsuran</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--primary">Buat Jurnal Penyisihan Batch</a>
   </div>
 </div>
+
+{% for bucket in bucket_summary %}
 <div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">{{ bucket.label }}</h2>
+    <div style="display:flex;gap:1rem;align-items:center;">
+      <span class="ni-text-muted">Rate: {{ bucket.rate }}%</span>
+      <span class="ni-text-muted">Estimasi Penyisihan: <strong>Rp {{ bucket.penyisihan|floatformat:0|intcomma }}</strong></span>
+    </div>
+  </div>
+  {% if bucket.entries %}
   <div class="ni-table-wrapper">
     <table class="ni-table">
       <thead>
         <tr>
-          <th>Bucket</th>
-          <th class="ni-text-right">Sisa Piutang</th>
+          <th>Nomor Piutang</th>
+          <th>Debitur</th>
+          <th>No Angsuran</th>
+          <th>Tanggal Angsuran</th>
+          <th class="ni-text-right">Hari Lewat</th>
+          <th class="ni-text-right">Jumlah</th>
         </tr>
       </thead>
       <tbody>
+        {% for entry in bucket.entries %}
         <tr>
-          <td>Belum Jatuh Tempo</td>
-          <td class="ni-text-right">{{ buckets.current|floatformat:0|intcomma }}</td>
+          <td><a href="{% url 'piutang:detail' entry.piutang.pk %}">{{ entry.piutang.nomor_piutang }}</a></td>
+          <td>{{ entry.piutang.entitas_display }}</td>
+          <td>{% if entry.angsuran_no %}{{ entry.angsuran_no }}{% else %}-{% endif %}</td>
+          <td>{{ entry.tanggal_angsuran|default:'-' }}</td>
+          <td class="ni-text-right">{% if bucket.key != 'current' %}{{ entry.hari_lewat }}{% else %}-{% endif %}</td>
+          <td class="ni-text-right">{{ entry.jumlah|floatformat:0|intcomma }}</td>
         </tr>
-        <tr>
-          <td>Lewat 1–30 Hari</td>
-          <td class="ni-text-right">{{ buckets.1_30|floatformat:0|intcomma }}</td>
-        </tr>
-        <tr>
-          <td>Lewat 31–60 Hari</td>
-          <td class="ni-text-right">{{ buckets.31_60|floatformat:0|intcomma }}</td>
-        </tr>
-        <tr>
-          <td>Lewat 61–90 Hari</td>
-          <td class="ni-text-right">{{ buckets.61_90|floatformat:0|intcomma }}</td>
-        </tr>
-        <tr class="ni-row--danger">
-          <td>&gt; 90 Hari</td>
-          <td class="ni-text-right">{{ buckets.over_90|floatformat:0|intcomma }}</td>
-        </tr>
+        {% endfor %}
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5"><strong>Subtotal</strong></td>
+          <td class="ni-text-right"><strong>{{ bucket.total|floatformat:0|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Tidak ada piutang di bucket ini.</p></div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Ringkasan</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Bucket</th><th class="ni-text-right">Total Outstanding</th><th class="ni-text-right">Rate</th><th class="ni-text-right">Estimasi Penyisihan</th></tr></thead>
+      <tbody>
+        {% for bucket in bucket_summary %}
+        <tr>
+          <td>{{ bucket.label }}</td>
+          <td class="ni-text-right">{{ bucket.total|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ bucket.rate }}%</td>
+          <td class="ni-text-right">{{ bucket.penyisihan|floatformat:0|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td><strong>Grand Total</strong></td>
+          <td class="ni-text-right"><strong>{{ grand_total_outstanding|floatformat:0|intcomma }}</strong></td>
+          <td></td>
+          <td class="ni-text-right"><strong>{{ grand_total_penyisihan|floatformat:0|intcomma }}</strong></td>
+        </tr>
+      </tfoot>
     </table>
   </div>
 </div>

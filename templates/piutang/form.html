@@ -22,15 +22,40 @@
           </select>
         </div>
         {% for field in form %}
+          {% if field.name != 'jenis_bunga' and field.name != 'suku_bunga' and field.name != 'periode_angsuran' %}
           <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
             <label class="ni-form-label">{{ field.label }}</label>
             {{ field }}
             {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
           </div>
+          {% endif %}
         {% endfor %}
         {% if form.non_field_errors %}
           <div class="ni-form-error ni-form-group--full">{{ form.non_field_errors }}</div>
         {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in" id="bunga-angsuran-card" style="display:none">
+    <div class="ni-card__header"><h2 class="ni-card__title">Bunga &amp; Angsuran</h2></div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--3">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.jenis_bunga.label }}</label>
+          {{ form.jenis_bunga }}
+          {% if form.jenis_bunga.errors %}<div class="ni-form-error">{{ form.jenis_bunga.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group" id="suku-bunga-group">
+          <label class="ni-form-label">{{ form.suku_bunga.label }}</label>
+          {{ form.suku_bunga }}
+          {% if form.suku_bunga.errors %}<div class="ni-form-error">{{ form.suku_bunga.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.periode_angsuran.label }}</label>
+          {{ form.periode_angsuran }}
+          {% if form.periode_angsuran.errors %}<div class="ni-form-error">{{ form.periode_angsuran.errors }}</div>{% endif %}
+        </div>
       </div>
     </div>
   </div>
@@ -139,6 +164,37 @@
       totalForms.value = idx + 1;
       attachRowEvents(newRow);
     });
+  }
+
+  // ── Bunga & Angsuran show/hide ───────────────────────────────
+  var jwtEl = document.getElementById('id_jenis_jangka_waktu');
+  var bungaEl = document.getElementById('id_jenis_bunga');
+  var bungaCard = document.getElementById('bunga-angsuran-card');
+  var sukuBungaGroup = document.getElementById('suku-bunga-group');
+
+  function toggleBungaCard() {
+    if (jwtEl && jwtEl.value === 'long_term') {
+      bungaCard.style.display = '';
+    } else {
+      bungaCard.style.display = 'none';
+    }
+  }
+
+  function toggleSukuBunga() {
+    if (bungaEl && bungaEl.value === 'tanpa_bunga') {
+      sukuBungaGroup.style.display = 'none';
+    } else {
+      sukuBungaGroup.style.display = '';
+    }
+  }
+
+  if (jwtEl) {
+    jwtEl.addEventListener('change', function() { toggleBungaCard(); toggleSukuBunga(); });
+    toggleBungaCard();
+  }
+  if (bungaEl) {
+    bungaEl.addEventListener('change', toggleSukuBunga);
+    toggleSukuBunga();
   }
 
   // ── Entitas Bisnis TomSelect ──────────────────────────────────────────
