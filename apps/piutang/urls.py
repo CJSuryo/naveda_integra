@@ -26,4 +26,6 @@ urlpatterns = [
     path('reports/penyisihan/', views.piutang_report_penyisihan, name='report_penyisihan'),
     path('reports/penyisihan-history/', views.penyisihan_history, name='penyisihan_history'),
     path('settings/penyisihan-rates/', views.piutang_settings_rates, name='settings_rates'),
+    path('reports/aging-schedule/', views.aging_schedule_report, name='aging_schedule_report'),
+    path('reports/aging-schedule/export/', views.aging_schedule_export, name='aging_schedule_export'),
 ]

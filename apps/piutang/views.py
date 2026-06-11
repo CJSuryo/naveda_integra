@@ -28,6 +28,7 @@ from .services import (
     create_batch_penyisihan_journal,
     create_manual_piutang, create_piutang_payment,
     create_penyisihan_journal,
+    get_aging_schedule_report, get_aging_schedule_workbook,
     get_piutang_aging, get_piutang_dashboard_kpi,
     reverse_piutang_payment, reverse_penyisihan_journal,
     write_off_piutang,
@@ -535,3 +536,43 @@ def penyisihan_history(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'jenis_filter': jenis_filter,
     })
+
+
+@login_required
+def aging_schedule_report(request: HttpRequest) -> HttpResponse:
+    from datetime import date as date_cls
+    as_of_str = request.GET.get('as_of', '')
+    try:
+        as_of_date = date_cls.fromisoformat(as_of_str) if as_of_str else None
+    except ValueError:
+        as_of_date = None
+    report = get_aging_schedule_report(as_of_date)
+    return render(request, 'piutang/aging_schedule_report.html', {
+        'report': report,
+        'bucket_keys': _AGING_BUCKET_KEYS,
+        'bucket_labels': _AGING_BUCKET_LABELS,
+        'as_of_str': as_of_str,
+    })
+
+
+@login_required
+def aging_schedule_export(request: HttpRequest) -> HttpResponse:
+    from datetime import date as date_cls
+    from io import BytesIO
+    as_of_str = request.GET.get('as_of', '')
+    try:
+        as_of_date = date_cls.fromisoformat(as_of_str) if as_of_str else None
+    except ValueError:
+        as_of_date = None
+    report = get_aging_schedule_report(as_of_date)
+    wb = get_aging_schedule_workbook(report)
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f'aging_schedule_{report["as_of_date"].strftime("%Y%m%d")}.xlsx'
+    response = HttpResponse(
+        buf.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{fname}"'
+    return response
