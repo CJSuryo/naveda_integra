@@ -14,6 +14,7 @@ urlpatterns = [
     path('<int:pk>/penerimaan/<int:ppk>/cancel/', views.piutang_penerimaan_cancel, name='penerimaan_cancel'),
     path('<int:pk>/write-off/', views.piutang_write_off, name='write_off'),
     path('<int:pk>/reklasifikasi/', views.piutang_reklasifikasi_post, name='reklasifikasi_post'),
+    path('<int:pk>/reklasifikasi/bagian-lancar/', views.piutang_reklasifikasi_bagian_lancar, name='reklasifikasi_bagian_lancar'),
     path('<int:pk>/reklasifikasi/<int:rkl_pk>/reverse/', views.piutang_reklasifikasi_reverse, name='reklasifikasi_reverse'),
     path('<int:pk>/attachments/upload/', views.piutang_attachment_upload, name='attachment_upload'),
     path('<int:pk>/attachments/<int:apk>/delete/', views.piutang_attachment_delete, name='attachment_delete'),

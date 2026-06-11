@@ -28,6 +28,7 @@ from .services import (
     create_batch_penyisihan_journal,
     create_manual_piutang, create_piutang_payment,
     create_penyisihan_journal,
+    create_reklasifikasi_bagian_lancar,
     get_aging_schedule_report, get_aging_schedule_workbook,
     get_piutang_aging, get_piutang_dashboard_kpi,
     reverse_piutang_payment, reverse_penyisihan_journal,
@@ -302,6 +303,8 @@ def piutang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
                 dari_akun=cd['dari_akun'], ke_akun=cd['ke_akun'],
                 jumlah=cd['jumlah'], keterangan=cd.get('keterangan', ''),
                 jurnal=jurnal, created_by=request.user,
+                periode_bulan=cd['tanggal'].month,
+                periode_tahun=cd['tanggal'].year,
             )
             dj_messages.success(request, 'Reklasifikasi berhasil dicatat.')
     return redirect('piutang:detail', pk=pk)
@@ -577,3 +580,24 @@ def aging_schedule_export(request: HttpRequest) -> HttpResponse:
     )
     response['Content-Disposition'] = f'attachment; filename="{fname}"'
     return response
+
+
+@login_required
+def piutang_reklasifikasi_bagian_lancar(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PiutangReklasifikasiForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                create_reklasifikasi_bagian_lancar(
+                    piutang=piutang,
+                    dari_akun=cd['dari_akun'],
+                    ke_akun=cd['ke_akun'],
+                    tanggal=cd['tanggal'],
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Reklasifikasi bagian lancar berhasil dicatat.')
+            except ValueError as exc:
+                dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
