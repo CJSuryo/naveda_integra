@@ -273,6 +273,12 @@ class PiutangReklasifikasi(models.Model):
     )
     jumlah = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah')
     keterangan = models.CharField(max_length=255, blank=True, default='', verbose_name='Keterangan')
+    periode_bulan = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='Periode Bulan',
+    )
+    periode_tahun = models.PositiveSmallIntegerField(
+        null=True, blank=True, verbose_name='Periode Tahun',
+    )
     jurnal = models.OneToOneField(
         'jurnal.JurnalHeader', on_delete=models.CASCADE,
         related_name='piutang_reklasifikasi', verbose_name='Jurnal',
@@ -287,6 +293,13 @@ class PiutangReklasifikasi(models.Model):
         verbose_name = 'Reklasifikasi Piutang'
         verbose_name_plural = 'Reklasifikasi Piutang'
         ordering = ['-tanggal', '-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['piutang_header', 'periode_bulan', 'periode_tahun'],
+                condition=models.Q(periode_bulan__isnull=False, periode_tahun__isnull=False),
+                name='uniq_rkl_header_periode',
+            ),
+        ]
 
     def __str__(self) -> str:
         return f'Reklasifikasi {self.piutang_header.nomor_piutang} — {self.tanggal}'

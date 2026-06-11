@@ -605,3 +605,12 @@ class GetAgingScheduleWorkbookTest(TestCase):
         headers = [cell.value for cell in ws[1]]
         self.assertIn('No Piutang', headers)
         self.assertIn('Total', headers)
+
+
+# ── Task 8: periode_bulan/periode_tahun fields ──────────────────────────────
+
+class PiutangReklasifikasiPeriodesTest(TestCase):
+    def test_periode_fields_exist(self):
+        from apps.piutang.models import PiutangReklasifikasi
+        self.assertTrue(hasattr(PiutangReklasifikasi, 'periode_bulan'))
+        self.assertTrue(hasattr(PiutangReklasifikasi, 'periode_tahun'))
