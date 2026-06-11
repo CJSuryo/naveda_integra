@@ -19,6 +19,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True, db_index=True, default='', max_length=20,
                 verbose_name='Periode',
+                help_text='YYYY-MM — diisi otomatis untuk jenis batch',
             ),
         ),
         migrations.RunPython(backfill_periode_label, migrations.RunPython.noop),
