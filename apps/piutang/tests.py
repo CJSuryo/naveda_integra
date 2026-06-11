@@ -532,3 +532,76 @@ class PiutangPenyisihanPeriodeLabelTest(TestCase):
             jurnal_header=jh,
         )
         self.assertEqual(p.periode_label, '')
+
+
+# ── Task 4 & 5: get_aging_schedule_report / get_aging_schedule_workbook ───────
+
+from apps.piutang.services import get_aging_schedule_report, get_aging_schedule_workbook
+
+
+class GetAgingScheduleReportTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+
+    def test_returns_required_keys(self):
+        result = get_aging_schedule_report()
+        for key in ('as_of_date', 'short_term', 'long_term', 'combined_bucket_totals', 'grand_total'):
+            self.assertIn(key, result)
+
+    def test_section_has_rows_bucket_totals_grand_total(self):
+        result = get_aging_schedule_report()
+        for section_key in ('short_term', 'long_term'):
+            section = result[section_key]
+            for k in ('rows', 'bucket_totals', 'grand_total'):
+                self.assertIn(k, section)
+
+    def test_short_term_piutang_appears_in_short_term_section(self):
+        from datetime import timedelta
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='PT Test', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date.today() - timedelta(days=45),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000')}],
+        )
+        p.status = 'overdue'
+        p.save()
+        result = get_aging_schedule_report()
+        nomors = [r['nomor_piutang'] for r in result['short_term']['rows']]
+        self.assertIn(p.nomor_piutang, nomors)
+        nomors_lt = [r['nomor_piutang'] for r in result['long_term']['rows']]
+        self.assertNotIn(p.nomor_piutang, nomors_lt)
+
+    def test_row_has_required_keys(self):
+        from datetime import timedelta
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='PT Test', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date.today() - timedelta(days=10),
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('500000')}],
+        )
+        p.status = 'overdue'
+        p.save()
+        result = get_aging_schedule_report()
+        row = result['short_term']['rows'][0]
+        for k in ('nomor_piutang', 'debitur', 'tanggal', 'jatuh_tempo_efektif',
+                  'jumlah_piutang', 'bucket_key', 'bucket_label', 'hari_lewat',
+                  'angsuran_no', 'piutang_pk'):
+            self.assertIn(k, row)
+
+
+class GetAgingScheduleWorkbookTest(TestCase):
+    def test_returns_workbook_with_two_sheets(self):
+        report = get_aging_schedule_report()
+        wb = get_aging_schedule_workbook(report)
+        import openpyxl
+        self.assertIsInstance(wb, openpyxl.Workbook)
+        self.assertIn('Jangka Pendek', wb.sheetnames)
+        self.assertIn('Jangka Panjang', wb.sheetnames)
+
+    def test_header_row_has_correct_columns(self):
+        report = get_aging_schedule_report()
+        wb = get_aging_schedule_workbook(report)
+        ws = wb['Jangka Pendek']
+        headers = [cell.value for cell in ws[1]]
+        self.assertIn('No Piutang', headers)
+        self.assertIn('Total', headers)

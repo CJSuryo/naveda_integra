@@ -534,6 +534,119 @@ def get_piutang_aging() -> dict:
     return buckets
 
 
+def get_aging_schedule_report(as_of_date=None) -> dict:
+    today = as_of_date or date.today()
+    short_term_rows = []
+    long_term_rows = []
+
+    qs = (
+        PiutangHeader.objects
+        .filter(status__in=('open', 'partial', 'overdue'))
+        .select_related('entitas_bisnis')
+        .prefetch_related('penerimaan')
+    )
+    for piutang in qs:
+        if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
+            schedule = compute_angsuran_schedule(piutang)
+            if schedule:
+                for row in schedule:
+                    if row['status'] != 'lunas' and row['sisa_bayar'] > 0:
+                        bucket_key = _classify_bucket(row['tanggal'], today)
+                        long_term_rows.append({
+                            'nomor_piutang': piutang.nomor_piutang,
+                            'debitur': piutang.entitas_display,
+                            'tanggal': piutang.tanggal,
+                            'jatuh_tempo_efektif': row['tanggal'],
+                            'jumlah_piutang': row['sisa_bayar'],
+                            'bucket_key': bucket_key,
+                            'bucket_label': _AGING_BUCKET_LABELS[bucket_key],
+                            'hari_lewat': max(0, (today - row['tanggal']).days),
+                            'angsuran_no': row['no'],
+                            'piutang_pk': piutang.pk,
+                        })
+                continue
+        bucket_key = _classify_bucket(piutang.jatuh_tempo, today)
+        short_term_rows.append({
+            'nomor_piutang': piutang.nomor_piutang,
+            'debitur': piutang.entitas_display,
+            'tanggal': piutang.tanggal,
+            'jatuh_tempo_efektif': piutang.jatuh_tempo,
+            'jumlah_piutang': piutang.sisa_piutang,
+            'bucket_key': bucket_key,
+            'bucket_label': _AGING_BUCKET_LABELS[bucket_key],
+            'hari_lewat': max(0, (today - piutang.jatuh_tempo).days) if piutang.jatuh_tempo else 0,
+            'angsuran_no': None,
+            'piutang_pk': piutang.pk,
+        })
+
+    def _section(rows):
+        bucket_totals = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
+        for r in rows:
+            bucket_totals[r['bucket_key']] += r['jumlah_piutang']
+        return {
+            'rows': rows,
+            'bucket_totals': bucket_totals,
+            'grand_total': sum(bucket_totals.values()),
+        }
+
+    st = _section(short_term_rows)
+    lt = _section(long_term_rows)
+    combined = {k: st['bucket_totals'][k] + lt['bucket_totals'][k] for k in _AGING_BUCKET_KEYS}
+    return {
+        'as_of_date': today,
+        'short_term': st,
+        'long_term': lt,
+        'combined_bucket_totals': combined,
+        'grand_total': sum(combined.values()),
+    }
+
+
+def get_aging_schedule_workbook(report_data: dict):
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    bucket_labels_ordered = [_AGING_BUCKET_LABELS[k] for k in _AGING_BUCKET_KEYS]
+    header_row = (
+        ['No Piutang', 'Debitur', 'Tanggal', 'Jatuh Tempo Efektif', 'No Angsuran', 'Total']
+        + bucket_labels_ordered
+    )
+    bold = Font(bold=True)
+    fill = PatternFill(start_color='DDEEFF', end_color='DDEEFF', fill_type='solid')
+
+    for section_key, sheet_name in (('short_term', 'Jangka Pendek'), ('long_term', 'Jangka Panjang')):
+        ws = wb.create_sheet(title=sheet_name)
+        ws.append(header_row)
+        for cell in ws[1]:
+            cell.font = bold
+            cell.fill = fill
+
+        section = report_data[section_key]
+        for row in section['rows']:
+            ws.append([
+                row['nomor_piutang'],
+                row['debitur'],
+                row['tanggal'].isoformat() if row['tanggal'] else '',
+                row['jatuh_tempo_efektif'].isoformat() if row['jatuh_tempo_efektif'] else '',
+                row['angsuran_no'] or '',
+                float(row['jumlah_piutang']),
+            ] + [
+                float(row['jumlah_piutang']) if row['bucket_key'] == k else 0
+                for k in _AGING_BUCKET_KEYS
+            ])
+
+        totals_row = ['', '', '', '', 'TOTAL', float(section['grand_total'])] + [
+            float(section['bucket_totals'][k]) for k in _AGING_BUCKET_KEYS
+        ]
+        ws.append(totals_row)
+        for cell in ws[ws.max_row]:
+            cell.font = bold
+
+    return wb
+
+
 def _get_rate_config() -> dict:
     from .models import PenyisihanRateConfig
     return {r.bucket_key: r.rate_percent for r in PenyisihanRateConfig.objects.all()}
