@@ -147,7 +147,7 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.master_data.models import Akun
     piutang = get_object_or_404(
         PiutangHeader.objects
-        .select_related('entitas_bisnis', 'coa_piutang_account', 'approved_by')
+        .select_related('entitas_bisnis', 'coa_piutang_account')
         .prefetch_related(
             'details', 'penerimaan__payment_account', 'penerimaan__jurnal_header',
             'attachments', 'audit_logs__user', 'reklasifikasi_entries__jurnal',
