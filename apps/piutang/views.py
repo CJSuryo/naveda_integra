@@ -482,6 +482,7 @@ def piutang_report_penyisihan(request: HttpRequest) -> HttpResponse:
                         expense_account=cd['expense_account'],
                         tanggal=cd['tanggal'],
                         catatan=cd.get('catatan', ''),
+                        periode_label=cd['tanggal'].strftime('%Y-%m'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Jurnal penyisihan batch berhasil dibuat. Delta: {batch_data["delta"]}')

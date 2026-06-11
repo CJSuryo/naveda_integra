@@ -457,6 +457,63 @@ from apps.piutang.models import PiutangPenyisihan
 from apps.jurnal.models import JurnalHeader
 
 
+class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
+    def setUp(self):
+        defaults = [
+            ('current', 'Belum JT', '0.00', 1), ('1_30', '1-30', '5.00', 2),
+            ('31_60', '31-60', '15.00', 3), ('61_90', '61-90', '25.00', 4),
+            ('91_180', '91-180', '50.00', 5), ('181_365', '181-365', '75.00', 6),
+            ('over_365', '>365', '100.00', 7),
+        ]
+        for key, label, rate, urutan in defaults:
+            PenyisihanRateConfig.objects.get_or_create(
+                bucket_key=key, defaults={'label': label, 'rate_percent': rate, 'urutan': urutan}
+            )
+        self.coa_all = Akun.objects.create(kategori_id='kewajiban', nama='Cad Piutang', kode_akun='2.1.8')
+        self.coa_exp = Akun.objects.create(kategori_id='beban', nama='Beban Penyisihan', kode_akun='6.1.8')
+
+    def test_saldo_existing_reads_from_piutang_penyisihan_model(self):
+        from apps.piutang.models import PiutangPenyisihan
+        from apps.jurnal.models import JurnalHeader
+        jh = JurnalHeader.objects.create(
+            tanggal=date(2026, 5, 31), nomor_transaksi='TRX-TEST-001',
+            uraian_transaksi='Batch test', is_penyesuaian=True,
+        )
+        PiutangPenyisihan.objects.create(
+            tanggal=date(2026, 5, 31), jenis='batch', jumlah=Decimal('500000'),
+            allowance_account=self.coa_all, expense_account=self.coa_exp,
+            jurnal_header=jh, periode_label='2026-05',
+        )
+        result = compute_batch_penyisihan(date(2026, 6, 30), self.coa_all)
+        self.assertEqual(result['saldo_existing'], Decimal('500000.00'))
+
+    def test_no_duplicate_batch_same_periode(self):
+        from apps.piutang.services import create_batch_penyisihan_journal
+        from apps.piutang.models import PiutangPenyisihan
+        from apps.jurnal.models import JurnalHeader
+        jh = JurnalHeader.objects.create(
+            tanggal=date(2026, 6, 1), nomor_transaksi='TRX-TEST-002',
+            uraian_transaksi='Batch test', is_penyesuaian=True,
+        )
+        PiutangPenyisihan.objects.create(
+            tanggal=date(2026, 6, 1), jenis='batch', jumlah=Decimal('100000'),
+            allowance_account=self.coa_all, expense_account=self.coa_exp,
+            jurnal_header=jh, periode_label='2026-06',
+        )
+        batch_data = {
+            'target_saldo': Decimal('120000'), 'saldo_existing': Decimal('100000'),
+            'delta': Decimal('20000'), 'breakdown': [], 'piutang_count': 0,
+        }
+        with self.assertRaises(ValueError):
+            create_batch_penyisihan_journal(
+                batch_data=batch_data,
+                allowance_account=self.coa_all,
+                expense_account=self.coa_exp,
+                tanggal=date(2026, 6, 30),
+                periode_label='2026-06',
+            )
+
+
 class PiutangPenyisihanPeriodeLabelTest(TestCase):
     def test_periode_label_field_exists(self):
         self.assertTrue(hasattr(PiutangPenyisihan, 'periode_label'))

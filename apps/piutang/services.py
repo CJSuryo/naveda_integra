@@ -663,8 +663,6 @@ def reverse_penyisihan_journal(entry, user=None) -> None:
 
 
 def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
-    from django.db.models import Sum as DSum
-
     rates = _get_rate_config()
     today = tanggal  # caller-supplied date used as "today" for aging classification
     bucket_amounts = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
@@ -703,14 +701,13 @@ def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
             'penyisihan': penyisihan,
         })
 
-    agg = (
-        JurnalDetail.objects
-        .filter(akun=allowance_account, jurnal_header__tanggal__lte=tanggal)
-        .aggregate(total_kredit=DSum('kredit'), total_debit=DSum('debit'))
-    )
+    from .models import PiutangPenyisihan as _PP
     saldo_existing = (
-        (agg['total_kredit'] or Decimal('0')) - (agg['total_debit'] or Decimal('0'))
-    ).quantize(Decimal('0.01'))
+        _PP.objects
+        .filter(jenis='batch', tanggal__lte=tanggal)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    )
+    saldo_existing = Decimal(str(saldo_existing)).quantize(Decimal('0.01'))
 
     delta = (target_saldo - saldo_existing).quantize(Decimal('0.01'))
     return {
@@ -723,12 +720,19 @@ def compute_batch_penyisihan(tanggal, allowance_account) -> dict:
 
 
 def create_batch_penyisihan_journal(
-    batch_data: dict, allowance_account, expense_account, tanggal, catatan='', user=None
+    batch_data: dict, allowance_account, expense_account,
+    tanggal, catatan='', periode_label='', user=None,
 ):
     from .models import PiutangPenyisihan
     delta = batch_data['delta']
     if delta == 0:
         raise ValueError('Delta penyisihan adalah 0, tidak perlu jurnal.')
+    if periode_label and PiutangPenyisihan.objects.filter(
+        jenis='batch', periode_label=periode_label
+    ).exists():
+        raise ValueError(
+            f'Jurnal penyisihan batch untuk periode {periode_label} sudah ada.'
+        )
     with transaction.atomic():
         nomor = _next_penyisihan_journal_number('TRX-PIU-PSH-B')
         header = JurnalHeader.objects.create(
@@ -757,6 +761,7 @@ def create_batch_penyisihan_journal(
             expense_account=expense_account,
             jurnal_header=header,
             catatan=catatan,
+            periode_label=periode_label,
             created_by=user,
         )
     return entry
