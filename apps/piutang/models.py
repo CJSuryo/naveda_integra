@@ -110,6 +110,17 @@ class PiutangHeader(models.Model):
     is_specifically_impaired = models.BooleanField(
         default=False, verbose_name='Sudah Disisihkan Khusus',
     )
+    is_pv_adjusted = models.BooleanField(
+        default=False, verbose_name='Disesuaikan Nilai Wajar (PV)',
+    )
+    pv_discount_rate = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True,
+        verbose_name='Market Rate untuk PV (%/tahun)',
+    )
+    nilai_wajar_awal = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Nilai Wajar Awal (PV)',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_created', verbose_name='Dibuat Oleh',
