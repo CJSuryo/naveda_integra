@@ -350,6 +350,9 @@ def create_piutang_payment(piutang: PiutangHeader, data: dict, user=None) -> Piu
             piutang.status = 'partial'
         piutang.save(update_fields=['jumlah_terbayar', 'status'])
 
+        if piutang.status == 'paid':
+            auto_reverse_penyisihan_on_payment(piutang, user=user)
+
         _log(piutang, 'PAYMENT', user=user, after=_snapshot(piutang))
     return penerimaan
 
@@ -378,6 +381,18 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
         ),
     ])
     return header
+
+
+def auto_reverse_penyisihan_on_payment(piutang: PiutangHeader, user=None) -> None:
+    from .models import PiutangPenyisihan
+    if piutang.status != 'paid':
+        return
+    entries = list(
+        PiutangPenyisihan.objects.filter(piutang_header=piutang, jenis='manual')
+        .select_related('jurnal_header')
+    )
+    for entry in entries:
+        reverse_penyisihan_journal(entry, user=user)
 
 
 def compute_bagian_lancar(piutang: PiutangHeader) -> Decimal:
