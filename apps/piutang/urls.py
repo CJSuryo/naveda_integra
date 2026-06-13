@@ -32,4 +32,8 @@ urlpatterns = [
     path('reports/aging-schedule/export/', views.aging_schedule_export, name='aging_schedule_export'),
     path('reports/disclosure/', views.piutang_disclosure_report, name='disclosure_report'),
     path('<int:pk>/pv-adjustment/', views.piutang_pv_adjustment, name='pv_adjustment'),
+    path('<int:pk>/post/', views.piutang_post, name='post'),
+    path('<int:pk>/submit-approval/', views.piutang_submit_approval, name='submit_approval'),
+    path('<int:pk>/approve/', views.piutang_approve, name='approve'),
+    path('<int:pk>/reject/', views.piutang_reject, name='reject'),
 ]

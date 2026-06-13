@@ -38,6 +38,7 @@ from .services import (
     reverse_piutang_payment, reverse_penyisihan_journal,
     update_penyisihan_individual,
     write_off_piutang,
+    post_piutang, submit_for_approval, approve_piutang, reject_piutang,
 )
 
 
@@ -675,4 +676,53 @@ def piutang_pv_adjustment(request: HttpRequest, pk: int) -> HttpResponse:
                 dj_messages.success(request, 'Jurnal amortisasi PV berhasil dibuat.')
             except ValueError as exc:
                 dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_post(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        try:
+            post_piutang(piutang, user=request.user)
+            dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil diposting.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_submit_approval(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        try:
+            submit_for_approval(piutang, user=request.user)
+            dj_messages.success(request, f'Piutang {piutang.nomor_piutang} disubmit untuk persetujuan.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_approve(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        try:
+            approve_piutang(piutang, user=request.user)
+            dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil disetujui.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_reject(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        alasan = request.POST.get('alasan', '')
+        try:
+            reject_piutang(piutang, user=request.user, alasan=alasan)
+            dj_messages.success(request, f'Piutang {piutang.nomor_piutang} ditolak.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
     return redirect('piutang:detail', pk=pk)
