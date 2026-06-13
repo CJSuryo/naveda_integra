@@ -38,7 +38,7 @@
 
 /* ─── RESET ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { scroll-behavior: smooth; font-size: 16px; }
+html { scroll-behavior: smooth; font-size: 17px; }
 body {
   font-family: var(--ff);
   color: var(--text);
@@ -81,7 +81,7 @@ button { font-family: inherit; cursor: pointer; }
 
 .section-label {
   display: block;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.22em;
   text-transform: uppercase;
@@ -90,7 +90,7 @@ button { font-family: inherit; cursor: pointer; }
 .section-label--light { color: var(--teal-light); }
 
 .section-heading {
-  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-size: clamp(2.1rem, 4.5vw, 3rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.15;
@@ -119,7 +119,7 @@ button { font-family: inherit; cursor: pointer; }
   align-items: center;
   gap: 0.5rem;
   font-family: var(--ff);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -183,7 +183,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-nav__links a {
   color: rgba(255,255,255,0.75);
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -249,7 +249,7 @@ button { font-family: inherit; cursor: pointer; }
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  font-size: 0.65rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.25em;
   text-transform: uppercase;
@@ -289,7 +289,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .l-hero__desc {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   color: rgba(255,255,255,0.90);
   line-height: 1.8;
   max-width: 540px;
@@ -351,7 +351,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-problem__quote em { font-style: normal; color: var(--teal); }
 .l-problem__body {
-  font-size: 0.9rem;
+  font-size: 1rem;
   color: var(--gray-700);
   line-height: 1.9;
 }
@@ -363,7 +363,7 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid rgba(255,255,255,0.05);
   border-radius: 4px;
   color: rgba(255,255,255,0.70);
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-style: italic;
   font-weight: 500;
   line-height: 1.65;
@@ -375,7 +375,7 @@ button { font-family: inherit; cursor: pointer; }
 .l-services__header .rule { margin-left: auto; margin-right: auto; }
 .l-services__sub {
   color: var(--gray-500);
-  font-size: 0.87rem;
+  font-size: 0.95rem;
   margin-top: 1rem;
   max-width: 500px;
   margin-left: auto; margin-right: auto;
@@ -392,7 +392,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .tab-btn {
   font-family: var(--ff);
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -420,7 +420,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-service-card__left { padding: 3.5rem; background: var(--white); }
 .l-service-card__tag {
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -429,7 +429,7 @@ button { font-family: inherit; cursor: pointer; }
   display: block;
 }
 .l-service-card__title {
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-size: clamp(1.75rem, 3vw, 2.4rem);
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -437,7 +437,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 1rem;
 }
 .l-service-card__desc {
-  font-size: 0.875rem;
+  font-size: 0.95rem;
   color: var(--gray-700);
   line-height: 1.8;
   margin-bottom: 2rem;
@@ -447,7 +447,7 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   color: var(--gray-700);
   line-height: 1.6;
 }
@@ -465,7 +465,7 @@ button { font-family: inherit; cursor: pointer; }
   display: block;
   font-weight: 600;
   color: var(--navy);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   margin-bottom: 2px;
 }
 
@@ -495,7 +495,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-credential { position: relative; z-index: 1; margin-bottom: 1.5rem; }
 .l-credential__title {
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--white);
   margin-bottom: 0.35rem;
@@ -506,7 +506,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 0.75rem;
 }
 .l-credential__body {
-  font-size: 0.75rem;
+  font-size: 0.84rem;
   color: rgba(255,255,255,0.50);
   line-height: 1.7;
 }
@@ -519,7 +519,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-top: auto;
 }
 .l-service-model__label {
-  font-size: 0.6rem;
+  font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.2em;
   text-transform: uppercase;
@@ -529,7 +529,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-service-model__chips { display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .chip {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   font-weight: 500;
   padding: 0.3rem 0.85rem;
   border-radius: 100px;
@@ -543,7 +543,7 @@ button { font-family: inherit; cursor: pointer; }
 .l-system__header .rule { margin-left: auto; margin-right: auto; }
 .l-system__sub {
   color: rgba(255,255,255,0.40);
-  font-size: 0.87rem;
+  font-size: 0.95rem;
   margin-top: 1rem;
   max-width: 540px;
   margin-left: auto; margin-right: auto;
@@ -575,13 +575,13 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 1rem;
 }
 .l-system__name {
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-weight: 600;
   color: var(--white);
   margin-bottom: 0.5rem;
   line-height: 1.4;
 }
-.l-system__desc { font-size: 0.75rem; color: rgba(255,255,255,0.45); line-height: 1.7; }
+.l-system__desc { font-size: 0.84rem; color: rgba(255,255,255,0.45); line-height: 1.7; }
 .l-system__cta {
   display: flex;
   align-items: center;
@@ -621,13 +621,13 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-why__item:hover .l-why__number { color: rgba(92,152,146,0.25); }
 .l-why__title {
-  font-size: 0.9rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--navy-dark);
   margin-bottom: 0.75rem;
   line-height: 1.45;
 }
-.l-why__desc { font-size: 0.82rem; color: var(--gray-700); line-height: 1.8; }
+.l-why__desc { font-size: 0.92rem; color: var(--gray-700); line-height: 1.8; }
 
 /* ─── TEAM ───────────────────────────────────────────────────────────────── */
 .l-team { padding: 7rem 0; background: var(--white); }
@@ -671,21 +671,21 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 0.35rem;
 }
 .l-team__role {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--gold);
   margin-bottom: 0.75rem;
 }
-.l-team__bio { font-size: 0.8rem; color: rgba(255,255,255,0.55); line-height: 1.7; }
+.l-team__bio { font-size: 0.88rem; color: rgba(255,255,255,0.55); line-height: 1.7; }
 .l-team__card-bottom { padding: 2rem 2.5rem; }
 .l-team__highlights { display: flex; flex-direction: column; gap: 0.75rem; }
 .l-team__highlight {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  font-size: 0.8rem;
+  font-size: 0.87rem;
   color: var(--gray-700);
   line-height: 1.5;
 }
@@ -720,7 +720,7 @@ button { font-family: inherit; cursor: pointer; }
   border: none;
   text-align: left;
   font-family: var(--ff);
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--navy-dark);
   cursor: pointer;
@@ -743,7 +743,7 @@ button { font-family: inherit; cursor: pointer; }
 .l-faq__row.is-open .l-faq__answer { max-height: 320px; }
 .l-faq__answer p {
   padding: 0 1.75rem 1.5rem;
-  font-size: 0.87rem;
+  font-size: 0.95rem;
   color: var(--gray-700);
   line-height: 1.8;
 }
@@ -762,7 +762,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .l-contact__left .section-label { color: var(--teal); }
 .l-contact__left-desc {
-  font-size: 0.9rem;
+  font-size: 0.97rem;
   color: var(--gray-700);
   line-height: 1.8;
   margin-bottom: 2.5rem;
@@ -794,7 +794,7 @@ button { font-family: inherit; cursor: pointer; }
   margin-bottom: 0.2rem;
 }
 .l-contact__info-value {
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 500;
   color: var(--navy-dark);
   line-height: 1.4;
@@ -821,7 +821,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
 .l-contact__form-group { margin-bottom: 1.1rem; }
 .l-contact__form-label {
   display: block;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -832,7 +832,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
   width: 100%;
   padding: 0.7rem 0.9rem;
   font-family: var(--ff);
-  font-size: 0.87rem;
+  font-size: 0.95rem;
   color: var(--text);
   background: var(--gray-100);
   border: 1px solid var(--gray-200);
@@ -851,7 +851,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
   background: #25D366;
   color: var(--white);
   font-family: var(--ff);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
@@ -869,7 +869,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
   background: transparent;
   color: var(--navy);
   font-family: var(--ff);
-  font-size: 0.78rem;
+  font-size: 0.83rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -881,7 +881,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
 .l-contact__form-alt:hover { border-color: var(--navy); color: var(--navy-dark); }
 .l-contact__form-note {
   margin-top: 1rem;
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   color: var(--muted);
   text-align: center;
 }
@@ -894,7 +894,7 @@ a.l-contact__info-value:hover { color: var(--teal); }
 }
 .l-footer__inner { display: flex; align-items: center; justify-content: space-between; }
 .l-footer__logo { font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.40); letter-spacing: 0.05em; }
-.l-footer__copy { font-size: 0.72rem; color: rgba(255,255,255,0.25); letter-spacing: 0.05em; }
+.l-footer__copy { font-size: 0.78rem; color: rgba(255,255,255,0.25); letter-spacing: 0.05em; }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
