@@ -217,47 +217,29 @@ button { font-family: inherit; cursor: pointer; }
 /* ─── HERO ───────────────────────────────────────────────────────────────── */
 .l-hero {
   min-height: 100dvh;
-  background: var(--navy-deep);
+  background-color: var(--navy-deep);
+  background-image:
+    linear-gradient(
+      to right,
+      rgba(9, 26, 37, 0.88) 0%,
+      rgba(9, 26, 37, 0.72) 45%,
+      rgba(9, 26, 37, 0.36) 100%
+    ),
+    url('../hero.png');
+  background-size: cover;
+  background-position: center 30%;
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   position: relative;
   overflow: hidden;
   padding-top: 5rem;
 }
-.l-hero__grid {
-  position: absolute; inset: 0;
-  background-image: repeating-linear-gradient(
-    -62deg,
-    transparent,
-    transparent 52px,
-    rgba(255, 255, 255, 0.016) 52px,
-    rgba(255, 255, 255, 0.016) 53px
-  );
-  pointer-events: none;
-}
-/* Geometric frame accent — two thin offset rectangles, top-right */
-.l-hero__glow-1 {
-  position: absolute;
-  top: 13%; right: 8%;
-  width: 160px; height: 210px;
-  border: 1px solid rgba(194, 154, 91, 0.16);
-  border-radius: 2px;
-  pointer-events: none;
-}
-.l-hero__glow-1::before {
-  content: '';
-  position: absolute;
-  top: 16px; left: 16px; right: -16px; bottom: -16px;
-  border: 1px solid rgba(92, 152, 146, 0.10);
-  border-radius: 2px;
-}
-/* Clean section-transition fade at hero bottom */
+/* Section-transition fade at hero bottom */
 .l-hero__glow-2 {
   position: absolute; bottom: 0; left: 0; right: 0;
-  height: 90px;
-  background: linear-gradient(to bottom, transparent, rgba(9, 26, 37, 0.50));
-  border-radius: 0;
-  filter: none;
+  height: 120px;
+  background: linear-gradient(to bottom, transparent, var(--offwhite));
   pointer-events: none;
 }
 .l-hero__inner { position: relative; z-index: 2; width: 100%; }
@@ -301,16 +283,16 @@ button { font-family: inherit; cursor: pointer; }
   font-size: clamp(1rem, 2vw, 1.3rem);
   font-weight: 400;
   font-style: italic;
-  color: rgba(255,255,255,0.50);
+  color: rgba(255,255,255,0.72);
   margin-bottom: 2rem;
   animation: fadeUp 0.8s var(--ease) 0.46s both;
 }
 
 .l-hero__desc {
   font-size: 0.95rem;
-  color: rgba(255,255,255,0.82);
+  color: rgba(255,255,255,0.90);
   line-height: 1.8;
-  max-width: 560px;
+  max-width: 540px;
   margin-bottom: 2.75rem;
   padding-left: 1.25rem;
   animation: fadeUp 0.8s var(--ease) 0.60s both;
@@ -325,26 +307,6 @@ button { font-family: inherit; cursor: pointer; }
   animation: fadeUp 0.8s var(--ease) 0.74s both;
 }
 
-.l-hero__meta {
-  display: flex;
-  align-items: center;
-  gap: 0.9rem;
-  flex-wrap: wrap;
-  animation: fadeUp 0.8s var(--ease) 0.88s both;
-}
-.l-hero__meta-item {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,0.40);
-}
-.l-hero__meta-dot {
-  width: 3px; height: 3px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.25);
-  flex-shrink: 0;
-}
 
 .l-hero__scroll {
   position: absolute;
