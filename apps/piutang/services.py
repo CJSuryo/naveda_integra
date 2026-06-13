@@ -1155,22 +1155,25 @@ def _create_piutang_ar_journal(piutang: PiutangHeader) -> JurnalHeader:
         debit=piutang.jumlah_pokok,
         kredit=Decimal('0'),
     )
-    for detail in details:
-        JurnalDetail.objects.create(
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(
             jurnal_header=header,
             akun=detail.revenue_account,
             debit=Decimal('0'),
             kredit=detail.jumlah,
         )
+        for detail in details
+    ])
     return header
 
 
 def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
-    if piutang.status != 'draft':
-        raise ValueError(
-            f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
-        )
     with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if piutang.status != 'draft':
+            raise ValueError(
+                f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
+            )
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1180,17 +1183,20 @@ def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
 
 
 def submit_for_approval(piutang: PiutangHeader, user=None) -> None:
-    if piutang.status != 'draft':
-        raise ValueError('Hanya piutang berstatus draft yang dapat disubmit untuk approval.')
-    piutang.status = 'pending_approval'
-    piutang.save(update_fields=['status'])
-    _log(piutang, 'SUBMITTED', user=user, after={'status': 'pending_approval'})
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if piutang.status != 'draft':
+            raise ValueError('Hanya piutang berstatus draft yang dapat disubmit untuk approval.')
+        piutang.status = 'pending_approval'
+        piutang.save(update_fields=['status'])
+        _log(piutang, 'SUBMITTED', user=user, after={'status': 'pending_approval'})
 
 
 def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
-    if piutang.status != 'pending_approval':
-        raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
     with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if piutang.status != 'pending_approval':
+            raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1202,11 +1208,13 @@ def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
 
 
 def reject_piutang(piutang: PiutangHeader, user=None, alasan: str = '') -> None:
-    if piutang.status != 'pending_approval':
-        raise ValueError('Hanya piutang berstatus pending_approval yang dapat ditolak.')
-    piutang.status = 'draft'
-    piutang.save(update_fields=['status'])
-    _log(piutang, 'REJECTED', user=user, after={'status': 'draft', 'alasan': alasan})
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if piutang.status != 'pending_approval':
+            raise ValueError('Hanya piutang berstatus pending_approval yang dapat ditolak.')
+        piutang.status = 'draft'
+        piutang.save(update_fields=['status'])
+        _log(piutang, 'REJECTED', user=user, after={'status': 'draft', 'alasan': alasan})
 
 
 def compute_amortization_schedule_pv(piutang: PiutangHeader) -> list:
