@@ -984,6 +984,16 @@ class ApprovePiutangTest(TestCase):
         self.piutang.refresh_from_db()
         self.assertEqual(self.piutang.status, 'open')
 
+    def test_approve_records_approved_by_and_at(self):
+        from apps.piutang.services import approve_piutang
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        approver = User.objects.create_user(email='approver_test@test.com', password='x')
+        approve_piutang(self.piutang, user=approver)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.approved_by, approver)
+        self.assertIsNotNone(self.piutang.approved_at)
+
     def test_approve_creates_journal(self):
         from apps.piutang.services import approve_piutang
         from apps.jurnal.models import JurnalHeader
@@ -997,6 +1007,16 @@ class ApprovePiutangTest(TestCase):
         self.piutang.save(update_fields=['status'])
         with self.assertRaises(ValueError):
             approve_piutang(self.piutang)
+
+    def test_approve_records_approval_metadata(self):
+        from apps.piutang.services import approve_piutang
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        approver = User.objects.create_user(email='approver@test.com', password='pass')
+        approve_piutang(self.piutang, user=approver)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.approved_by, approver)
+        self.assertIsNotNone(self.piutang.approved_at)
 
 
 class RejectPiutangTest(TestCase):
