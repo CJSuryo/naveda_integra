@@ -1,0 +1,566 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id" prefix="og: https://ogp.me/ns#">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Primary SEO -->
+  <title>Naveda Integra Finance — Akuntansi, Sistem Keuangan &amp; Data Analytics | Bali, Indonesia</title>
+  <meta name="description" content="Naveda Integra Finance mengintegrasikan layanan akuntansi profesional dengan sistem informasi keuangan proprietary — solusi POS, Inventory, Accounting, dan Data Analytics untuk UMKM, KAP swasta, dan audit pemerintahan di Indonesia.">
+  <meta name="keywords" content="Finance, Accounting, Fintech, Financial Data, Data Keuangan, Naveda Integra, Accounting Data Support, Keuangan, Audit Pemerintahan, Pengembang Counter EETA, ACCA CertDA, Data Analytics, Sistem BOM, Dashboard Bisnis Real-Time, Sistem Akuntansi, Point of Sale POS, Data Analytics Bersertifikat, I Dewa Made Vedanta Dwipayana S.Ak. CertDA, Christian Jehoshaphat Suryo B.Sc">
+  <meta name="robots" content="index, follow">
+  <meta name="author" content="Naveda Integra Finance">
+  <link rel="canonical" href="https://navedafinance.com/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://navedafinance.com/">
+  <meta property="og:title" content="Naveda Integra Finance — Akuntansi &amp; Teknologi Keuangan">
+  <meta property="og:description" content="Satu ekosistem untuk operasional bisnis, pelaporan, dan analitik data. Layanan akuntansi profesional + sistem POS, Inventory &amp; Accounting yang dikembangkan secara internal.">
+  <meta property="og:locale" content="id_ID">
+  <meta property="og:site_name" content="Naveda Integra Finance">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Naveda Integra Finance — Akuntansi &amp; Teknologi Keuangan">
+  <meta name="twitter:description" content="Satu ekosistem untuk operasional bisnis, pelaporan, dan analitik data. Naveda Integra Finance — Bali, Indonesia.">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "ProfessionalService",
+    "name": "Naveda Integra Finance",
+    "description": "Layanan akuntansi profesional dan sistem informasi keuangan terintegrasi untuk UMKM, KAP, dan sektor pemerintahan. Spesialisasi: Sistem Akuntansi, Point of Sale, Data Analytics, Audit Pemerintahan, Counter EETA.",
+    "url": "https://navedafinance.com",
+    "email": "dantadwipayanastan@gmail.com",
+    "telephone": "+6285933570605",
+    "address": {
+      "@type": "PostalAddress",
+      "addressCountry": "ID",
+      "addressRegion": "Bali"
+    },
+    "founder": [
+      {
+        "@type": "Person",
+        "name": "I Dewa Made Vedanta Dwipayana, S.Ak., CertDA",
+        "jobTitle": "Founder & Lead Consultant",
+        "knowsAbout": ["Akuntansi", "Data Analytics", "ACCA CertDA", "Keuangan Pemerintah Daerah", "LKPD", "Counter EETA"]
+      },
+      {
+        "@type": "Person",
+        "name": "Christian Jehoshaphat Suryo, B.Sc",
+        "jobTitle": "Co-Founder & Software Engineer",
+        "knowsAbout": ["Full-Stack Engineering", "POS System", "Financial Technology", "ERP"]
+      }
+    ],
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Layanan Naveda Integra Finance",
+      "itemListElement": [
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Managed Accounting Service", "description": "Pencatatan, rekonsiliasi, dan penyusunan laporan keuangan berkelanjutan"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Sistem POS, Inventory & Accounting Terintegrasi", "description": "Platform Point of Sale, Inventory, dan Accounting berbasis web untuk F&B, Ritel, dan Jasa"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Accounting & Tax Operations untuk KAP", "description": "Back-office akuntansi dan penyiapan data untuk Kantor Akuntan Publik"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Dukungan Audit Pemerintahan", "description": "Data cleansing, desktop reconciliation, dan drafting data dukung CaLK untuk KAP sektor publik"}},
+        {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Financial Data Analytics", "description": "Analisis data keuangan bersertifikat ACCA CertDA"}}
+      ]
+    },
+    "areaServed": "ID",
+    "knowsAbout": ["Akuntansi", "Keuangan", "Fintech", "Data Analytics", "Point of Sale", "Sistem Akuntansi", "Audit Pemerintahan", "Financial Data", "ERP"]
+  }
+  </script>
+
+  <!-- Fonts: Onest — structured, precise, not on training-data reflex list -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+  <!-- Landing Styles -->
+  <link rel="stylesheet" href="{% static 'css/landing.css' %}">
+</head>
+<body>
+
+<!-- ──────────────────────────────── NAV ──────────────────────────────────── -->
+<nav id="lNav" class="l-nav" aria-label="Navigasi Utama">
+  <div class="container l-nav__inner">
+    <a href="{% url 'landing' %}" class="l-nav__logo" aria-label="Naveda Integra Finance — Halaman Utama">
+      <span class="l-nav__logo-name">Naveda Integra</span>
+      <span class="l-nav__logo-sub">Finance</span>
+    </a>
+    <div class="l-nav__links" id="navLinks" role="list">
+      <a href="#services" role="listitem">Layanan</a>
+      <a href="#system" role="listitem">Sistem</a>
+      <a href="#why" role="listitem">Keunggulan</a>
+      <a href="#team" role="listitem">Tim</a>
+      <a href="#contact" class="l-nav__cta" role="listitem">Konsultasi Gratis</a>
+    </div>
+    <button class="l-nav__toggle" id="navToggle" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="navLinks">
+      <i class="fas fa-bars" aria-hidden="true"></i>
+    </button>
+  </div>
+</nav>
+
+<!-- ──────────────────────────────── HERO ─────────────────────────────────── -->
+<section id="hero" class="l-hero" aria-label="Naveda Integra Finance — Data Keuangan Terintegrasi">
+  <div class="l-hero__grid" aria-hidden="true"></div>
+  <div class="l-hero__glow-1" aria-hidden="true"></div>
+  <div class="l-hero__glow-2" aria-hidden="true"></div>
+
+  <div class="container l-hero__inner">
+    <div class="l-hero__content">
+      <span class="l-hero__eyebrow">Integrated Finance &amp; Technology</span>
+      <h1 class="l-hero__headline">
+        Data Keuangan<br>
+        yang <em>Terhubung,</em><br>
+        Keputusan yang<br>
+        Lebih Baik.
+      </h1>
+      <p class="l-hero__tagline">"Transforming Financial Data into Actionable Insights."</p>
+      <p class="l-hero__desc">
+        Naveda Integra Finance menggabungkan layanan akuntansi profesional dengan sistem informasi keuangan yang dikembangkan secara internal — satu ekosistem untuk operasional bisnis, pelaporan, dan analitik data.
+      </p>
+      <div class="l-hero__actions">
+        <a href="#contact" class="btn btn--primary">Mulai Konsultasi &rarr;</a>
+        <a href="#services" class="btn btn--outline">Lihat Layanan</a>
+      </div>
+      <div class="l-hero__meta" aria-label="Fakta singkat">
+        <span class="l-hero__meta-item">5+ Tahun Pengalaman</span>
+        <span class="l-hero__meta-dot" aria-hidden="true"></span>
+        <span class="l-hero__meta-item">2 Disiplin Terintegrasi</span>
+        <span class="l-hero__meta-dot" aria-hidden="true"></span>
+        <span class="l-hero__meta-item">3 Segmen Layanan</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="l-hero__scroll" id="scrollCue" aria-label="Gulir ke bawah">
+    <div class="l-hero__scroll-line" aria-hidden="true"></div>
+    <span>Scroll</span>
+  </button>
+</section>
+
+<!-- ──────────────────────────────── PROBLEM ──────────────────────────────── -->
+<section id="problem" class="l-problem">
+  <div class="container">
+    <div class="l-problem__grid">
+      <div data-reveal>
+        <span class="section-label">Tantangan Nyata</span>
+        <div class="rule"></div>
+        <blockquote class="l-problem__quote-wrap">
+          <span class="l-problem__quote-mark" aria-hidden="true">"</span>
+          <p class="l-problem__quote">
+            Masalahnya bukan kurangnya data. Masalahnya adalah data belum <em>terhubung, belum terstandarisasi,</em> dan belum siap digunakan.
+          </p>
+        </blockquote>
+      </div>
+      <div data-reveal data-delay="2">
+        <div class="l-problem__body">
+          <p>Banyak bisnis tumbuh lebih cepat daripada sistem keuangannya. Di sektor F&amp;B, hotel, dan ritel, transaksi terjadi setiap hari — namun informasi yang dibutuhkan pemilik usaha untuk mengambil keputusan sering kali baru tersedia berminggu-minggu kemudian.</p>
+          <p>Data penjualan, persediaan, biaya operasional, dan arus kas tersebar di berbagai tempat, sehingga laporan keuangan menjadi lambat, tidak konsisten, dan sulit dijadikan dasar pengelolaan bisnis.</p>
+          <p>Di sisi lain, KAP dan KKP dituntut memberikan layanan yang cepat dan bernilai tambah — namun tanpa data yang terstruktur, waktu profesional habis untuk menyiapkan data sebelum pekerjaan utama dapat dimulai.</p>
+        </div>
+        <div class="l-problem__callout">
+          "Naveda Integra Finance menjembatani kesenjangan antara operasional bisnis dan kebutuhan pelaporan profesional."
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── SERVICES ─────────────────────────────── -->
+<section id="services" class="l-services">
+  <div class="container">
+    <div class="l-services__header" data-reveal>
+      <span class="section-label">Layanan Kami</span>
+      <div class="rule rule--center"></div>
+      <h2 class="section-heading">Solusi untuk Setiap <em>Kebutuhan</em></h2>
+      <p class="l-services__sub">Kami melayani tiga segmen klien dengan pendekatan yang dirancang khusus untuk setiap kebutuhan dan lingkungan kerja.</p>
+    </div>
+
+    <div class="l-services__tabs" role="tablist" aria-label="Segmen layanan" data-reveal>
+      <button class="tab-btn is-active" role="tab" aria-selected="true" aria-controls="tab-umkm" data-tab="umkm">UMKM &amp; Bisnis</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-kap-swasta" data-tab="kap-swasta">KAP &middot; Klien Swasta</button>
+      <button class="tab-btn" role="tab" aria-selected="false" aria-controls="tab-kap-pemerintah" data-tab="kap-pemerintah">KAP &middot; Klien Pemerintah</button>
+    </div>
+
+    <!-- Tab 1: UMKM -->
+    <div class="tab-panel is-active" id="tab-umkm" role="tabpanel" aria-labelledby="tab-umkm">
+      <div class="l-service-card" data-reveal>
+        <div class="l-service-card__left">
+          <span class="l-service-card__tag">Untuk F&amp;B, Ritel &amp; Jasa</span>
+          <h3 class="l-service-card__title">Sistem Operasional &amp; Keuangan Terintegrasi</h3>
+          <p class="l-service-card__desc">Satu ekosistem yang menghubungkan POS, inventori, pembelian, dan akuntansi. Didukung tim akuntansi profesional agar Anda dapat fokus mengembangkan bisnis.</p>
+          <ul class="l-service-features" aria-label="Fitur layanan">
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-layer-group"></i></div>
+              <div>
+                <strong>Platform POS, Inventory &amp; Accounting</strong>
+                Ekosistem terintegrasi yang dikembangkan secara internal. Semua data transaksi terhubung dalam satu platform sehingga operasional dan keuangan berjalan konsisten.
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-calculator"></i></div>
+              <div>
+                <strong>Managed Accounting Service</strong>
+                Tim kami menangani pencatatan, rekonsiliasi, dan penyusunan laporan keuangan secara berkelanjutan — akuntansi profesional tanpa perlu membangun tim internal.
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-chart-bar"></i></div>
+              <div>
+                <strong>Business Insight &amp; Tax Support</strong>
+                Analisis margin, profitabilitas, performa produk, dan data pendukung perpajakan agar keputusan bisnis dibuat lebih cepat dan berbasis data.
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="l-service-card__right">
+          <div>
+            <p class="l-credential-heading">Keunggulan Khusus</p>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-utensils" aria-hidden="true"></i>Sistem BOM — Resep Digital untuk F&amp;B</p>
+              <p class="l-credential__body">Jual 1 porsi di kasir, sistem otomatis memotong stok Beras, Telur, dan Bumbu di gudang. Lacak kebocoran bahan baku hingga gramasi terkecil.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-code" aria-hidden="true"></i>Proprietary In-House Technology</p>
+              <p class="l-credential__body">Kami adalah developer sekaligus akuntan. Sistem yang Anda gunakan adalah buatan kami sendiri — berbasis web dan sangat fleksibel untuk disesuaikan dengan alur kerja bisnis Anda.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-mobile-alt" aria-hidden="true"></i>Dashboard Bisnis Real-Time</p>
+              <p class="l-credential__body">Pantau penjualan harian, produk terlaris, sisa kas operasional, dan performa kasir langsung dari HP atau laptop Anda, kapan saja dan di mana saja.</p>
+            </div>
+          </div>
+          <div class="l-service-model">
+            <span class="l-service-model__label">Model Pembayaran</span>
+            <div class="l-service-model__chips">
+              <span class="chip">Retainer Bulanan (Flat)</span>
+              <span class="chip">Termasuk Sistem POS</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: KAP Swasta -->
+    <div class="tab-panel" id="tab-kap-swasta" role="tabpanel" aria-labelledby="tab-kap-swasta">
+      <div class="l-service-card" data-reveal>
+        <div class="l-service-card__left">
+          <span class="l-service-card__tag">Kemitraan Strategis KAP &amp; KKP</span>
+          <h3 class="l-service-card__title">Technology-Driven Accounting &amp; Data Support</h3>
+          <p class="l-service-card__desc">Layanan back-office akuntansi yang membantu KAP/KKP meningkatkan kapasitas layanan tanpa menambah sumber daya internal — sistematis, terdokumentasi, dan white-label.</p>
+          <ul class="l-service-features" aria-label="Fitur layanan">
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-book"></i></div>
+              <div>
+                <strong>Accounting &amp; Tax Operations</strong>
+                Siklus pembukuan, rekonsiliasi, penyesuaian, dan penyusunan data pendukung perpajakan agar pelaporan klien berjalan efisien dan terdokumentasi.
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-filter"></i></div>
+              <div>
+                <strong>Financial Data Preparation</strong>
+                Standardisasi dan validasi data menjadi Trial Balance, Lead Schedule, serta working papers pendukung yang terstruktur untuk efisiensi proses review dan audit.
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-laptop-code"></i></div>
+              <div>
+                <strong>Technology &amp; System Implementation</strong>
+                Implementasi ekosistem terintegrasi untuk klien KAP guna meningkatkan kualitas data keuangan sejak awal proses pencatatan.
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="l-service-card__right">
+          <div>
+            <p class="l-credential-heading">Kapabilitas Inti</p>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-store" aria-hidden="true"></i>Technology-Driven Accounting</p>
+              <p class="l-credential__body">Menggabungkan keahlian akuntansi dengan sistem yang dikembangkan secara internal untuk mempercepat proses pembukuan, rekonsiliasi, validasi, dan penyusunan laporan keuangan.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-bolt" aria-hidden="true"></i>Integrated Business Platform</p>
+              <p class="l-credential__body">Platform POS, Inventory, Sales, Purchasing, dan Accounting yang saling terintegrasi untuk standardisasi data transaksi dan efisiensi operasional klien.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-handshake" aria-hidden="true"></i>White-Label Partnership</p>
+              <p class="l-credential__body">Bekerja sepenuhnya di belakang layar sebagai tim profesional Anda. Seluruh deliverables dan working papers disesuaikan dengan metodologi dan identitas mitra.</p>
+            </div>
+          </div>
+          <div class="l-service-model">
+            <span class="l-service-model__label">Model Kerja Sama</span>
+            <div class="l-service-model__chips">
+              <span class="chip">Retainer Bulanan</span>
+              <span class="chip">Lump Sum per Proyek</span>
+              <span class="chip">NDA Tersedia</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 3: KAP Pemerintah -->
+    <div class="tab-panel" id="tab-kap-pemerintah" role="tabpanel" aria-labelledby="tab-kap-pemerintah">
+      <div class="l-service-card" data-reveal>
+        <div class="l-service-card__left">
+          <span class="l-service-card__tag">Kemitraan Strategis KAP — Sektor Publik</span>
+          <h3 class="l-service-card__title">Dukungan Penyelesaian Audit Pemerintahan</h3>
+          <p class="l-service-card__desc">Mendukung penyiapan data dan rekonsiliasi secara sistematis agar tim audit dapat mengalokasikan lebih banyak waktu pada prosedur audit substantif, analisis, dan penyusunan opini.</p>
+          <ul class="l-service-features" aria-label="Fitur layanan">
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-database"></i></div>
+              <div>
+                <strong>Data Cleansing &amp; Penyiapan Worksheet</strong>
+                Ekstraksi, standardisasi, dan validasi data dari SIPD menjadi worksheet terstruktur yang siap digunakan sebagai data pendukung Kertas Kerja Pemeriksaan (KKP).
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-search-dollar"></i></div>
+              <div>
+                <strong>Desktop Reconciliation — Data Analytics</strong>
+                Rekonsiliasi dan penyandingan data off-site, termasuk identifikasi anomali dan selisih antar sumber data (Neraca vs KIB), untuk konfirmasi dan verifikasi lapangan yang lebih terarah.
+              </div>
+            </li>
+            <li class="l-service-feature">
+              <div class="l-service-feature__icon" aria-hidden="true"><i class="fas fa-book"></i></div>
+              <div>
+                <strong>Drafting Data Dukung CaLK</strong>
+                Penyusunan tabel analitis dan rincian pendukung draf Catatan atas Laporan Keuangan (CaLK) berdasarkan data tervalidasi untuk mempercepat proses reviu tim audit.
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="l-service-card__right">
+          <div>
+            <p class="l-credential-heading">Mengapa Memilih Kami?</p>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-landmark" aria-hidden="true"></i>Praktisi Keuangan Pemerintah Daerah</p>
+              <p class="l-credential__body">Berpengalaman dalam penyusunan LKPD dengan pemahaman menyeluruh terhadap SAP, siklus pelaporan keuangan, dan proses bisnis pada lingkungan perangkat daerah.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-laptop-code" aria-hidden="true"></i>Pengembang Counter EETA</p>
+              <p class="l-credential__body">Inovasi digital pendukung LKPD dengan modul CaLK Otomatis dan Uji Prosedur Analitis — digunakan seluruh SKPD Pemerintah Provinsi Bali dan direplikasi berbagai Kabupaten/Kota.</p>
+            </div>
+            <div class="l-credential">
+              <p class="l-credential__title"><i class="fas fa-chart-pie" aria-hidden="true"></i>ACCA CertDA — Data Analytics</p>
+              <p class="l-credential__body">Sertifikasi ACCA Certificate in Data Analytics dengan kompetensi pengolahan, validasi, rekonsiliasi, dan analisis data berskala besar.</p>
+            </div>
+          </div>
+          <div class="l-service-model">
+            <span class="l-service-model__label">Model Kerja Sama</span>
+            <div class="l-service-model__chips">
+              <span class="chip">Lump Sum per Entitas</span>
+              <span class="chip">Hourly / Daily Rate</span>
+              <span class="chip">NDA Tersedia</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── SYSTEM ───────────────────────────────── -->
+<section id="system" class="l-system">
+  <div class="container">
+    <div class="l-system__header" data-reveal>
+      <span class="section-label section-label--light">Platform Proprietary</span>
+      <div class="rule rule--center"></div>
+      <h2 class="section-heading section-heading--light">Sistem Akuntansi <em>In-House</em></h2>
+      <p class="l-system__sub">Satu platform terintegrasi yang dikembangkan sendiri — bukan rekonfigurasi software pihak ketiga, tetapi sistem yang dirancang dari dasar untuk kebutuhan bisnis Indonesia.</p>
+    </div>
+    <div class="l-system__grid" data-reveal>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-cash-register"></i></div>
+        <p class="l-system__name">Point of Sale (POS)</p>
+        <p class="l-system__desc">Kasir berbasis web, multi-toko, dengan rekap penjualan dan breakdown metode pembayaran otomatis.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-boxes"></i></div>
+        <p class="l-system__name">Inventory &amp; Valuasi Stok</p>
+        <p class="l-system__desc">Mutasi stok otomatis dengan 4 metode valuasi: FIFO, LIFO, Weighted Average, dan Specific Identification.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-industry"></i></div>
+        <p class="l-system__name">Manufacturing &amp; BOM</p>
+        <p class="l-system__desc">Modul produksi dengan Bill of Materials per produk jadi, lengkap dengan Production Order untuk F&amp;B dan manufaktur.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-shopping-cart"></i></div>
+        <p class="l-system__name">Pembelian &amp; Item Master</p>
+        <p class="l-system__desc">Manajemen item terpusat (Raw Material, Finished Good, Aset) dengan kategori, satuan, dan harga pokok lintas modul.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-file-invoice"></i></div>
+        <p class="l-system__name">Piutang &amp; Utang</p>
+        <p class="l-system__desc">Pencatatan dan monitoring piutang/utang lengkap dengan aging report, laporan per subjek, dan notifikasi jatuh tempo.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-chart-line"></i></div>
+        <p class="l-system__name">Dashboard &amp; Analitik</p>
+        <p class="l-system__desc">Ringkasan penjualan, top produk, laba rugi, dan grafik tren harian — real-time dari HP atau laptop.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-journal-whills"></i></div>
+        <p class="l-system__name">Jurnal Akuntansi Otomatis</p>
+        <p class="l-system__desc">Setiap transaksi menghasilkan jurnal otomatis, mendukung period locking dan ekspor laporan keuangan ke PDF.</p>
+      </div>
+      <div class="l-system__item">
+        <div class="l-system__icon" aria-hidden="true"><i class="fas fa-building"></i></div>
+        <p class="l-system__name">Multi-Entitas &amp; Multi-Toko</p>
+        <p class="l-system__desc">Satu platform untuk beberapa entitas bisnis dan banyak cabang toko, dengan kontrol akses berbasis peran per pengguna.</p>
+      </div>
+    </div>
+    <div class="l-system__cta" data-reveal>
+      <p class="l-system__cta-text">Kami bukan hanya <em>akuntan</em> — kami juga <em>developer</em> yang memahami arsitektur database bisnis dari dalam.</p>
+      <a href="#contact" class="btn btn--primary">Jadwalkan Demo &rarr;</a>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── WHY ──────────────────────────────────── -->
+<section id="why" class="l-why">
+  <div class="container">
+    <div class="l-why__header" data-reveal>
+      <span class="section-label">Mengapa Naveda?</span>
+      <div class="rule"></div>
+      <h2 class="section-heading">Keunggulan yang Tidak Bisa<br>Anda Temukan di Tempat Lain</h2>
+    </div>
+    <div class="l-why__grid">
+      <div class="l-why__item" data-reveal data-delay="1">
+        <p class="l-why__number" aria-hidden="true">01</p>
+        <h3 class="l-why__title">Satu Ekosistem, Bukan Patchwork</h3>
+        <p class="l-why__desc">Sistem kami dirancang agar POS, inventory, pembelian, dan akuntansi berbicara dalam satu bahasa. Tidak ada sinkronisasi manual antar aplikasi yang berbeda.</p>
+      </div>
+      <div class="l-why__item" data-reveal data-delay="2">
+        <p class="l-why__number" aria-hidden="true">02</p>
+        <h3 class="l-why__title">Akuntan yang Juga Developer</h3>
+        <p class="l-why__desc">Sistem yang Anda gunakan adalah buatan kami sendiri. Ketika Anda butuh penyesuaian alur kerja, kami bisa mengubahnya — bukan menunggu vendor pihak ketiga.</p>
+      </div>
+      <div class="l-why__item" data-reveal data-delay="3">
+        <p class="l-why__number" aria-hidden="true">03</p>
+        <h3 class="l-why__title">Pengalaman Nyata di Sektor Publik</h3>
+        <p class="l-why__desc">Berpengalaman dalam penyusunan LKPD dan pengembangan Counter EETA yang digunakan seluruh SKPD Pemerintah Provinsi Bali — bukan sekadar teori.</p>
+      </div>
+      <div class="l-why__item" data-reveal data-delay="1">
+        <p class="l-why__number" aria-hidden="true">04</p>
+        <h3 class="l-why__title">Data Analytics Bersertifikat</h3>
+        <p class="l-why__desc">Founder bersertifikat ACCA Certificate in Data Analytics (CertDA). Analisis data bukan fitur tambahan — ini adalah inti dari cara kami bekerja.</p>
+      </div>
+      <div class="l-why__item" data-reveal data-delay="2">
+        <p class="l-why__number" aria-hidden="true">05</p>
+        <h3 class="l-why__title">Kerahasiaan 100% Terjamin</h3>
+        <p class="l-why__desc">Seluruh proses pengolahan data dilaksanakan berdasarkan prinsip kerahasiaan informasi dan dapat didukung dengan Non-Disclosure Agreement (NDA) formal.</p>
+      </div>
+      <div class="l-why__item" data-reveal data-delay="3">
+        <p class="l-why__number" aria-hidden="true">06</p>
+        <h3 class="l-why__title">Pendekatan Adaptif &amp; Praktis</h3>
+        <p class="l-why__desc">Kami tidak datang dengan template kaku. Setiap solusi dirancang memahami konteks bisnis klien sehingga implementasi berjalan lancar dan memberikan dampak nyata.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── TEAM ─────────────────────────────────── -->
+<section id="team" class="l-team">
+  <div class="container">
+    <div class="l-team__header" data-reveal>
+      <span class="section-label">Tim Kami</span>
+      <div class="rule rule--center"></div>
+      <h2 class="section-heading">Dibangun oleh Praktisi,<br>untuk <em>Hasil yang Nyata</em></h2>
+    </div>
+    <div class="l-team__grid">
+      <article class="l-team__card" data-reveal data-delay="1">
+        <div class="l-team__card-top">
+          <div class="l-team__avatar" aria-hidden="true">VD</div>
+          <div>
+            <h3 class="l-team__name">I Dewa Made Vedanta Dwipayana, S.Ak., CertDA</h3>
+            <p class="l-team__role">Founder &amp; Lead Consultant</p>
+            <p class="l-team__bio">Profesional di bidang akuntansi, pengelolaan aset daerah, tata kelola keuangan, dan pengembangan sistem informasi dengan pengalaman di lingkungan Pemerintah Provinsi Bali.</p>
+          </div>
+        </div>
+        <div class="l-team__card-bottom">
+          <ul class="l-team__highlights" aria-label="Pencapaian">
+            <li class="l-team__highlight"><i class="fas fa-graduation-cap" aria-hidden="true"></i><span>Alumnus PKN STAN &middot; Master of Accounting Candidate, Universitas Udayana</span></li>
+            <li class="l-team__highlight"><i class="fas fa-certificate" aria-hidden="true"></i><span>ACCA Certificate in Data Analytics (CertDA)</span></li>
+            <li class="l-team__highlight"><i class="fas fa-trophy" aria-hidden="true"></i><span>ASN Berprestasi Provinsi Bali 2024</span></li>
+            <li class="l-team__highlight"><i class="fas fa-landmark" aria-hidden="true"></i><span>Lead Developer Counter EETA &middot; Anggota TAPD &middot; Koordinator Tim Efektif LKPD EETA Pemprov Bali</span></li>
+          </ul>
+        </div>
+      </article>
+      <article class="l-team__card" data-reveal data-delay="2">
+        <div class="l-team__card-top">
+          <div class="l-team__avatar" aria-hidden="true">CJ</div>
+          <div>
+            <h3 class="l-team__name">Christian Jehoshaphat Suryo, B.Sc</h3>
+            <p class="l-team__role">Co-Founder &amp; Software Engineer</p>
+            <p class="l-team__bio">Pengembang perangkat lunak profesional yang ahli dalam pengembangan full-stack dengan rekam jejak penyelesaian proyek enterprise di berbagai industri.</p>
+          </div>
+        </div>
+        <div class="l-team__card-bottom">
+          <ul class="l-team__highlights" aria-label="Pencapaian">
+            <li class="l-team__highlight"><i class="fas fa-graduation-cap" aria-hidden="true"></i><span>Bachelor of Science (Cum Laude) — University of the People</span></li>
+            <li class="l-team__highlight"><i class="fas fa-code" aria-hidden="true"></i><span>Full-Stack Engineer — POS, CRM, LMS, HRIS, Banking UI</span></li>
+            <li class="l-team__highlight"><i class="fas fa-globe" aria-hidden="true"></i><span>Perwakilan Indonesia, Hackathon for Justice UNODC 2018</span></li>
+            <li class="l-team__highlight"><i class="fas fa-rocket" aria-hidden="true"></i><span>Juara Kedua Kompetisi Global 2019, Silicon Valley — Symantec HQ</span></li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── CONTACT ──────────────────────────────── -->
+<section id="contact" class="l-contact">
+  <div class="container">
+    <div class="l-contact__inner" data-reveal>
+      <span class="section-label section-label--light">Mulai Sekarang</span>
+      <div class="rule rule--center"></div>
+      <h2 class="section-heading section-heading--light">Siap Mengintegrasikan<br><em>Sistem Keuangan</em> Anda?</h2>
+      <p class="l-contact__desc">
+        Konsultasi pertama gratis. Ceritakan kebutuhan Anda — kami akan merancang solusi yang paling sesuai dengan skala dan konteks bisnis atau kebutuhan audit Anda.
+      </p>
+      <div class="l-contact__cards" aria-label="Kontak kami">
+        <div class="l-contact__card">
+          <i class="fas fa-envelope l-contact__card-icon" aria-hidden="true"></i>
+          <span class="l-contact__card-label">Email</span>
+          <p class="l-contact__card-value">dantadwipayanastan@gmail.com</p>
+        </div>
+        <div class="l-contact__card">
+          <i class="fas fa-phone-alt l-contact__card-icon" aria-hidden="true"></i>
+          <span class="l-contact__card-label">WhatsApp / Telepon</span>
+          <p class="l-contact__card-value">0859-3357-0605</p>
+        </div>
+      </div>
+      <div class="l-contact__cta">
+        <a href="https://wa.me/6285933570605" class="btn btn--gold" target="_blank" rel="noopener noreferrer">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i> Chat via WhatsApp
+        </a>
+        <a href="mailto:dantadwipayanastan@gmail.com" class="btn btn--teal">
+          <i class="fas fa-envelope" aria-hidden="true"></i> Kirim Email
+        </a>
+      </div>
+      <p class="l-contact__name">
+        I Dewa Made Vedanta Dwipayana, S.Ak., CertDA
+        <small>Lead Consultant &amp; Founder</small>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ──────────────────────────────── FOOTER ───────────────────────────────── -->
+<footer class="l-footer">
+  <div class="container l-footer__inner">
+    <span class="l-footer__logo">Naveda Integra Finance</span>
+    <span class="l-footer__copy">&copy; 2026 Naveda Integra Finance. Established in Bali, Indonesia.</span>
+  </div>
+</footer>
+
+<script src="{% static 'js/landing.js' %}" defer></script>
+</body>
+</html>

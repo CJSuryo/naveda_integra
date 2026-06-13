@@ -58,9 +58,13 @@ def login_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'accounts/login.html', {'form': form})
 
 
+def landing_view(request: HttpRequest) -> HttpResponse:
+    return render(request, 'landing.html')
+
+
 def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
-    return redirect('accounts:login')
+    return redirect('login')
 
 
 def register_view(request: HttpRequest) -> HttpResponse:

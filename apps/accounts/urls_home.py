@@ -1,7 +1,9 @@
-"""Home URL."""
+"""Root URL configuration — landing page, app home, and top-level login."""
 from django.urls import path
-from apps.accounts.views import home_view
+from apps.accounts.views import home_view, landing_view, login_view
 
 urlpatterns = [
-    path('', home_view, name='home'),
+    path('', landing_view, name='landing'),
+    path('home/', home_view, name='home'),
+    path('login/', login_view, name='login'),
 ]
