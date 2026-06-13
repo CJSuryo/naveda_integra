@@ -16,6 +16,7 @@ class PiutangHeaderForm(forms.ModelForm):
             'tanggal', 'debitur', 'deskripsi', 'jatuh_tempo',
             'jenis_jangka_waktu', 'coa_piutang_account',
             'jenis_bunga', 'suku_bunga', 'periode_angsuran',
+            'is_approval_required',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -27,6 +28,7 @@ class PiutangHeaderForm(forms.ModelForm):
             'jenis_bunga': forms.Select(attrs={'class': 'ni-input', 'id': 'id_jenis_bunga'}),
             'suku_bunga': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
             'periode_angsuran': forms.Select(attrs={'class': 'ni-input'}),
+            'is_approval_required': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
 
     def __init__(self, *args, **kwargs):

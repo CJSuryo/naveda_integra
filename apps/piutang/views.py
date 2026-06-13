@@ -130,6 +130,7 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                         jenis_bunga=cd.get('jenis_bunga', 'tanpa_bunga'),
                         suku_bunga=cd.get('suku_bunga') or Decimal('0'),
                         periode_angsuran=cd.get('periode_angsuran', 'bulanan'),
+                        is_approval_required=cd.get('is_approval_required', False),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
