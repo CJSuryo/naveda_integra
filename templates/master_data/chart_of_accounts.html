@@ -44,7 +44,7 @@
         <div class="ni-coa-lv1" data-toggle="coa-lv1" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--ni-radius-sm);">
           <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:14px;height:14px;flex-shrink:0;transition:transform 200ms;color:var(--ni-text-muted);"></i>
           <span style="font-weight:600;font-size:0.875rem;">{{ lv1.kode }} - {{ lv1.nama }}</span>
-          <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1.children.count }} akun</span>
+          <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1._children|length }} akun</span>
           <div class="ni-btn-row" style="margin-left:auto;" onclick="event.stopPropagation();">
             <button type="button" class="ni-btn ni-btn--success ni-btn--sm ni-btn--icon" title="Tambah Akun Level 2"
               onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})">
@@ -61,7 +61,7 @@
           </div>
         </div>
         <div class="ni-coa-lv2-list" style="display:none;margin-left:28px;border-left:2px solid var(--ni-border);padding-left:12px;margin-top:2px;margin-bottom:4px;">
-          {% for lv2 in lv1.children.all %}
+          {% for lv2 in lv1._children %}
           <div style="padding:5px 0;display:flex;align-items:center;gap:8px;">
             <span style="font-size:0.8125rem;color:var(--ni-text-muted);">{{ lv2.kode }}</span>
             <span style="font-size:0.8125rem;">{{ lv2.nama }}</span>

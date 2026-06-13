@@ -2,6 +2,7 @@ from django import forms
 from django.forms import inlineformset_factory
 
 from apps.master_data.models import Akun
+from apps.master_data.utils import akun_sorted_queryset
 
 from .models import UtangAttachment, UtangDetail, UtangHeader, UtangPembayaran
 
@@ -38,7 +39,7 @@ class UtangHeaderForm(forms.ModelForm):
         self.fields['nomor_referensi'].required = False
         self.fields['tanggal_jatuh_tempo'].required = False
         self.fields['coa_source_account'].required = False
-        self.fields['coa_source_account'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['coa_source_account'].queryset = akun_sorted_queryset()
         self.fields['coa_source_account'].empty_label = '— Pilih Akun Asal (opsional) —'
         self.fields['suku_bunga'].required = False
 
@@ -56,9 +57,7 @@ class UtangDetailForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['description'].required = False
-        self.fields['coa_utang_account'].queryset = Akun.objects.filter(
-            kategori_id='kewajiban'
-        ).order_by('kode_akun')
+        self.fields['coa_utang_account'].queryset = akun_sorted_queryset({'kategori_id': 'kewajiban'})
 
 
 UtangDetailFormSet = inlineformset_factory(
@@ -90,7 +89,7 @@ class UtangPembayaranForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['utang_detail'].required = False
         self.fields['angsuran_no'].required = False
-        self.fields['coa_account'].queryset = Akun.objects.filter(kategori_id='aset').order_by('kode_akun')
+        self.fields['coa_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         if utang_header is not None:
             self.fields['utang_detail'].queryset = UtangDetail.objects.filter(utang_header=utang_header)
         else:

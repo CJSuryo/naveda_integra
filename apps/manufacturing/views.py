@@ -757,8 +757,6 @@ def overhead_monitoring(request):
 @login_required
 def overhead_period_closing(request):
     """Period-end closing: compare applied vs actual, generate adjustment journals."""
-    from apps.master_data.models import Akun
-
     if request.method == 'POST':
         periode = request.POST.get('periode', '').strip()
         cogs_id = request.POST.get('coa_cogs_id', '').strip()
@@ -782,7 +780,8 @@ def overhead_period_closing(request):
     # GET: show form
     from datetime import date
     periode = request.GET.get('periode') or date.today().strftime('%Y-%m')
-    cogs_accounts = Akun.objects.filter(kode_akun__startswith='5').order_by('kode_akun')
+    from apps.master_data.utils import akun_sorted_queryset
+    cogs_accounts = akun_sorted_queryset({'kode_akun__startswith': '5'})
     closing = PeriodClosing.objects.filter(periode_bulan=periode).first()
     preview_results, missing_actual = get_period_closing_preview(periode)
     year, month = map(int, periode.split('-'))

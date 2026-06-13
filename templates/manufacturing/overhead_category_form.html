@@ -133,3 +133,13 @@
 </form>
 
 {% endblock %}
+{% block extra_js %}
+<script>
+if (typeof TomSelect !== 'undefined') {
+  ['#id_coa_expense', '#id_coa_overhead_applied'].forEach(function(sel) {
+    var el = document.querySelector(sel);
+    if (el) new TomSelect(el, { allowEmptyOption: true, maxOptions: 1000 });
+  });
+}
+</script>
+{% endblock %}

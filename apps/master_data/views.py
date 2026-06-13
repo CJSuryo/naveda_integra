@@ -726,10 +726,18 @@ def beban_lv2_delete(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse
 @login_required
 def chart_of_accounts(request: HttpRequest) -> HttpResponse:
     """Chart of Accounts page - shows all account categories with nested hierarchy."""
+    from .utils import natural_sort_key
+
+    def _sorted_items(queryset):
+        items = sorted(list(queryset.prefetch_related('children')), key=lambda x: natural_sort_key(x.kode))
+        for item in items:
+            item._children = sorted(list(item.children.all()), key=lambda c: natural_sort_key(c.kode))
+        return items
+
     categories = [
         {
             'name': 'Aset', 'prefix': '1', 'slug': 'aset',
-            'items': AsetLv1.objects.prefetch_related('children').order_by('kode'),
+            'items': _sorted_items(AsetLv1.objects.all()),
             'lv1_create': 'master_data:aset_lv1_create',
             'lv1_update': 'master_data:aset_lv1_update',
             'lv1_delete': 'master_data:aset_lv1_delete',
@@ -739,7 +747,7 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
         },
         {
             'name': 'Kewajiban', 'prefix': '2', 'slug': 'kewajiban',
-            'items': KewajibanLv1.objects.prefetch_related('children').order_by('kode'),
+            'items': _sorted_items(KewajibanLv1.objects.all()),
             'lv1_create': 'master_data:kewajiban_lv1_create',
             'lv1_update': 'master_data:kewajiban_lv1_update',
             'lv1_delete': 'master_data:kewajiban_lv1_delete',
@@ -749,7 +757,7 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
         },
         {
             'name': 'Ekuitas', 'prefix': '3', 'slug': 'ekuitas',
-            'items': EkuitasLv1.objects.prefetch_related('children').order_by('kode'),
+            'items': _sorted_items(EkuitasLv1.objects.all()),
             'lv1_create': 'master_data:ekuitas_lv1_create',
             'lv1_update': 'master_data:ekuitas_lv1_update',
             'lv1_delete': 'master_data:ekuitas_lv1_delete',
@@ -759,7 +767,7 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
         },
         {
             'name': 'Pendapatan', 'prefix': '4', 'slug': 'pendapatan',
-            'items': PendapatanLv1.objects.prefetch_related('children').order_by('kode'),
+            'items': _sorted_items(PendapatanLv1.objects.all()),
             'lv1_create': 'master_data:pendapatan_lv1_create',
             'lv1_update': 'master_data:pendapatan_lv1_update',
             'lv1_delete': 'master_data:pendapatan_lv1_delete',
@@ -769,7 +777,7 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
         },
         {
             'name': 'Beban', 'prefix': '5', 'slug': 'beban',
-            'items': BebanLv1.objects.prefetch_related('children').order_by('kode'),
+            'items': _sorted_items(BebanLv1.objects.all()),
             'lv1_create': 'master_data:beban_lv1_create',
             'lv1_update': 'master_data:beban_lv1_update',
             'lv1_delete': 'master_data:beban_lv1_delete',

@@ -1,5 +1,6 @@
 from django import forms
 from apps.master_data.models import Akun
+from apps.master_data.utils import akun_sorted_queryset
 from apps.purchase.models import SubTransactionType
 from .models import PendapatanHeader, RecurringTemplate
 
@@ -41,12 +42,12 @@ class PendapatanItemForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0.01'}),
     )
     revenue_account = forms.ModelChoiceField(
-        queryset=Akun.objects.all().order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input revenue-account-field'}),
         empty_label='— Pilih Akun Pendapatan —',
     )
     payment_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='aset').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         required=True,
         widget=forms.Select(attrs={'class': 'ni-input'}),
         empty_label='— Pilih Akun Kas/Bank —',
@@ -57,13 +58,13 @@ class PendapatanItemForm(forms.Form):
         label='Pendapatan Diterima di Muka',
     )
     deferred_account = forms.ModelChoiceField(
-        queryset=Akun.objects.all().order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         required=False,
         widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
         empty_label='— Akun Deferred (Liability) —',
     )
     recognition_account = forms.ModelChoiceField(
-        queryset=Akun.objects.all().order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         required=False,
         widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
         empty_label='— Akun Pengakuan (Revenue) —',
@@ -81,6 +82,13 @@ class PendapatanItemForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['revenue_account'].queryset = akun_sorted_queryset()
+        self.fields['payment_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['deferred_account'].queryset = akun_sorted_queryset()
+        self.fields['recognition_account'].queryset = akun_sorted_queryset()
 
     def clean(self):
         cleaned = super().clean()

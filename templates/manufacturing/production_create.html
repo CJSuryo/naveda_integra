@@ -432,5 +432,10 @@
   if (bomSel) bomSel.addEventListener('change', loadPreview);
   if (qtyInput) qtyInput.addEventListener('input', function () { clearTimeout(debounceTimer); debounceTimer = setTimeout(loadPreview, 400); });
 })();
+
+if (typeof TomSelect !== 'undefined') {
+  var coaProd = document.querySelector('#id_coa_produksi');
+  if (coaProd) new TomSelect(coaProd, { allowEmptyOption: true, maxOptions: 1000 });
+}
 </script>
 {% endblock %}

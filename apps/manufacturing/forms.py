@@ -94,11 +94,12 @@ class ProductionOrderForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['status'].choices = self.STATUS_PRODUKSI_CHOICES
         self.fields['lama_pengerjaan'].required = False
-        # BOM queryset: include FG name in label via select_related
         from .models import BillOfMaterials as BOM
         self.fields['bom'].queryset = (
             BOM.objects.select_related('finished_good', 'entitas_bisnis').order_by('bom_id')
         )
+        from apps.master_data.utils import akun_sorted_queryset
+        self.fields['coa_produksi'].queryset = akun_sorted_queryset()
 
     def clean_tanggal(self):
         tanggal = self.cleaned_data.get('tanggal')
@@ -174,9 +175,10 @@ class OverheadCategoryForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         from apps.master_data.models import Akun
+        from apps.master_data.utils import akun_sorted_queryset
         super().__init__(*args, **kwargs)
-        expense_qs = Akun.objects.filter(kategori_id='beban').order_by('kode_akun')
-        applied_qs = Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun')
+        expense_qs = akun_sorted_queryset({'kategori_id': 'beban'})
+        applied_qs = akun_sorted_queryset({'kategori_id': 'kewajiban'})
         self.fields['coa_expense'].queryset = expense_qs
         self.fields['coa_overhead_applied'].queryset = applied_qs
         self.fields['coa_overhead_applied'].required = False

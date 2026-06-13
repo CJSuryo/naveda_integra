@@ -2,6 +2,7 @@ from django import forms
 from django.forms import inlineformset_factory, modelformset_factory
 
 from apps.master_data.models import Akun
+from apps.master_data.utils import akun_sorted_queryset
 
 from .models import (
     PiutangAttachment, PiutangDetail, PiutangHeader, PiutangPenerimaan,
@@ -36,9 +37,7 @@ class PiutangHeaderForm(forms.ModelForm):
         self.fields['deskripsi'].required = False
         self.fields['jatuh_tempo'].required = False
         self.fields['suku_bunga'].required = False
-        self.fields['coa_piutang_account'].queryset = Akun.objects.filter(
-            kategori_id='aset'
-        ).order_by('kode_akun')
+        self.fields['coa_piutang_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['coa_piutang_account'].empty_label = '— Pilih Akun Piutang —'
 
 
@@ -55,7 +54,7 @@ class PiutangDetailForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['revenue_account'].required = False
-        self.fields['revenue_account'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['revenue_account'].queryset = akun_sorted_queryset()
         self.fields['revenue_account'].empty_label = '— Akun Pendapatan (opsional) —'
 
 
@@ -85,9 +84,7 @@ class PiutangPenerimaanForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['nomor_referensi'].required = False
         self.fields['catatan'].required = False
-        self.fields['payment_account'].queryset = Akun.objects.filter(
-            kategori_id='aset'
-        ).order_by('kode_akun')
+        self.fields['payment_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['payment_account'].empty_label = '— Pilih Akun Kas/Bank —'
 
 
@@ -108,12 +105,12 @@ class PiutangWriteOffForm(forms.Form):
         widget=forms.Select(attrs={'class': 'ni-input'}),
     )
     bad_debt_account = forms.ModelChoiceField(
-        queryset=Akun.objects.all(),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Beban Piutang Tak Tertagih',
     )
     allowance_account = forms.ModelChoiceField(
-        queryset=Akun.objects.all(), required=False,
+        queryset=Akun.objects.none(), required=False,
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Cadangan Kerugian Piutang',
     )
@@ -122,16 +119,21 @@ class PiutangWriteOffForm(forms.Form):
         widget=forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['bad_debt_account'].queryset = akun_sorted_queryset()
+        self.fields['allowance_account'].queryset = akun_sorted_queryset()
+
 
 class PiutangReklasifikasiForm(forms.Form):
     tanggal = forms.DateField(widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}))
     dari_akun = forms.ModelChoiceField(
-        queryset=Akun.objects.all(),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Dari Akun',
     )
     ke_akun = forms.ModelChoiceField(
-        queryset=Akun.objects.all(),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Ke Akun',
     )
@@ -144,6 +146,11 @@ class PiutangReklasifikasiForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'ni-input'}),
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['dari_akun'].queryset = akun_sorted_queryset()
+        self.fields['ke_akun'].queryset = akun_sorted_queryset()
+
 
 class PiutangPenyisihanForm(forms.Form):
     tanggal = forms.DateField(
@@ -151,13 +158,13 @@ class PiutangPenyisihanForm(forms.Form):
         label='Tanggal',
     )
     allowance_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Cadangan Kerugian Piutang',
         empty_label='— Pilih Akun Cadangan —',
     )
     expense_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='beban').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Beban Penyisihan',
         empty_label='— Pilih Akun Beban —',
@@ -166,6 +173,11 @@ class PiutangPenyisihanForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Catatan (opsional)'}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'kewajiban'})
+        self.fields['expense_account'].queryset = akun_sorted_queryset({'kategori_id': 'beban'})
 
 
 class BatchPenyisihanForm(forms.Form):
@@ -174,13 +186,13 @@ class BatchPenyisihanForm(forms.Form):
         label='Tanggal Perhitungan',
     )
     allowance_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='kewajiban').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Cadangan Kerugian Piutang',
         empty_label='— Pilih Akun Cadangan —',
     )
     expense_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='beban').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Beban Penyisihan',
         empty_label='— Pilih Akun Beban —',
@@ -189,6 +201,11 @@ class BatchPenyisihanForm(forms.Form):
         required=False,
         widget=forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Catatan (opsional)'}),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'kewajiban'})
+        self.fields['expense_account'].queryset = akun_sorted_queryset({'kategori_id': 'beban'})
 
 
 PenyisihanRateConfigFormSet = modelformset_factory(
@@ -214,7 +231,7 @@ class PvAdjustmentForm(forms.Form):
         label='Market Rate (%/tahun)',
     )
     interest_income_account = forms.ModelChoiceField(
-        queryset=Akun.objects.filter(kategori_id='pendapatan').order_by('kode_akun'),
+        queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Pendapatan Bunga Efektif',
         empty_label='— Pilih Akun —',
@@ -229,3 +246,7 @@ class PvAdjustmentForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'ni-input'}),
         label='Catatan',
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})

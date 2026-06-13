@@ -344,6 +344,13 @@
 
   renderPreview();
 
+  // ── Akun TomSelect ───────────────────────────────────────────────────
+  if (typeof TomSelect !== 'undefined') {
+    document.querySelectorAll('#id_coa_source_account').forEach(function(el) {
+      new TomSelect(el, { allowEmptyOption: true, maxOptions: 1000 });
+    });
+  }
+
   // ── Entitas Bisnis TomSelect ──────────────────────────────────────────
   var ebOptions = {{ eb_options_json|default:"[]"|safe }};
   var ebSelected = '{{ eb_selected|default:""|escapejs }}';
