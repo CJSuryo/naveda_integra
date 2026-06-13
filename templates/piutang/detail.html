@@ -9,7 +9,30 @@
   </div>
   <div class="ni-page-header__actions">
     {% if piutang.can_edit %}
-      <a href="{% url 'piutang:update' piutang.pk %}" class="ni-btn ni-btn--warning">Edit</a>
+      <a href="{% url 'piutang:update' piutang.pk %}" class="ni-btn ni-btn--secondary">Edit</a>
+    {% endif %}
+    {% if piutang.can_post %}
+      <form method="post" action="{% url 'piutang:post' piutang.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--primary" onclick="return confirm('Post piutang {{ piutang.nomor_piutang }}? Jurnal pengakuan piutang akan dibuat.')">Post Piutang</button>
+      </form>
+    {% endif %}
+    {% if piutang.can_submit_approval %}
+      <form method="post" action="{% url 'piutang:submit_approval' piutang.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--primary">Submit untuk Approval</button>
+      </form>
+    {% endif %}
+    {% if piutang.can_approve %}
+      <form method="post" action="{% url 'piutang:approve' piutang.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--success" onclick="return confirm('Setujui piutang {{ piutang.nomor_piutang }}?')">Setujui</button>
+      </form>
+      <form method="post" action="{% url 'piutang:reject' piutang.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="alasan" value="Ditolak oleh approver">
+        <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Tolak piutang ini?')">Tolak</button>
+      </form>
     {% endif %}
     {% if piutang.can_pay %}
       <button type="button" class="ni-btn ni-btn--primary" onclick="openModal('terimaModal')">Terima Penerimaan</button>
@@ -27,6 +50,9 @@
         <dt>Entitas Bisnis</dt><dd>{{ piutang.entitas_bisnis|default:'-' }}</dd>
 <dt>Tanggal</dt><dd>{{ piutang.tanggal }}</dd>
         <dt>Jatuh Tempo</dt><dd>{{ piutang.jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
+        {% if piutang.approved_by %}
+        <dt>Disetujui Oleh</dt><dd>{{ piutang.approved_by }} — {{ piutang.approved_at|date:"d M Y H:i" }}</dd>
+        {% endif %}
         <dt>Sumber</dt><dd>
           {% if piutang.source_type == 'manual' %}
             <span class="ni-badge">Manual</span>
