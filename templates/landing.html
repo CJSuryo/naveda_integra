@@ -96,8 +96,10 @@
       <a href="#system" role="listitem">Sistem</a>
       <a href="#why" role="listitem">Keunggulan</a>
       <a href="#team" role="listitem">Tim</a>
+      <a href="#faq" role="listitem">FAQ</a>
       <a href="#contact" class="l-nav__cta" role="listitem">Konsultasi Gratis</a>
     </div>
+    <a href="{% if request.user.is_authenticated %}{% url 'home' %}{% else %}{% url 'login' %}{% endif %}" class="l-nav__login">{% if request.user.is_authenticated %}Masuk ke Sistem{% else %}Masuk{% endif %}</a>
     <button class="l-nav__toggle" id="navToggle" aria-label="Buka menu navigasi" aria-expanded="false" aria-controls="navLinks">
       <i class="fas fa-bars" aria-hidden="true"></i>
     </button>
@@ -515,40 +517,147 @@
   </div>
 </section>
 
+<!-- ──────────────────────────────── FAQ ──────────────────────────────────── -->
+<section id="faq" class="l-faq">
+  <div class="container">
+    <div class="l-faq__header" data-reveal>
+      <span class="section-label">Pertanyaan Umum</span>
+      <div class="rule rule--center"></div>
+      <h2 class="section-heading">Hal yang Sering<br><em>Ditanyakan</em></h2>
+    </div>
+    <div class="l-faq__list">
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Apa yang membuat Naveda Integra Finance berbeda?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Kami adalah tim yang menggabungkan dua disiplin yang jarang berdampingan: akuntansi profesional dan pengembangan software. Sistem POS, Inventory, dan Accounting yang klien gunakan adalah buatan kami sendiri, bukan rekonfigurasi software pihak ketiga. Ini berarti kami bisa menyesuaikan sistem dengan alur kerja bisnis, bukan sebaliknya.</p>
+        </div>
+      </div>
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Apakah layanan tersedia untuk bisnis di luar Bali?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Ya. Seluruh sistem kami berbasis web dan dapat diakses dari mana saja. Layanan akuntansi dan dukungan data dapat dilaksanakan secara remote. Kami saat ini mendukung klien dari berbagai daerah di Indonesia.</p>
+        </div>
+      </div>
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Berapa biaya layanan Naveda Integra Finance?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Biaya disesuaikan dengan skala bisnis dan cakupan layanan yang dibutuhkan. Untuk UMKM, tersedia paket retainer bulanan flat yang sudah mencakup sistem POS. Untuk KAP dan proyek audit, tersedia model lump sum per proyek atau per entitas. Konsultasi awal tidak dipungut biaya.</p>
+        </div>
+      </div>
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Bagaimana keamanan dan kerahasiaan data klien?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Kerahasiaan data adalah prioritas utama kami. Seluruh proses pengolahan data dilaksanakan berdasarkan prinsip kerahasiaan informasi. Untuk engagement dengan KAP dan klien korporat, kami menyediakan Non-Disclosure Agreement (NDA) formal. Data klien tidak dibagikan kepada pihak manapun.</p>
+        </div>
+      </div>
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Apakah sistem bisa disesuaikan dengan bisnis saya?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Ya. Karena kami adalah developer sistem kami sendiri, penyesuaian alur kerja, penambahan fitur, atau integrasi dengan proses bisnis spesifik dapat dilakukan. Tidak perlu menunggu update dari vendor pihak ketiga.</p>
+        </div>
+      </div>
+      <div class="l-faq__row" data-reveal>
+        <button class="l-faq__btn" aria-expanded="false">
+          <span>Bagaimana cara memulai kerja sama?</span>
+          <i class="fas fa-plus l-faq__icon" aria-hidden="true"></i>
+        </button>
+        <div class="l-faq__answer" role="region">
+          <p>Langkah pertama adalah konsultasi awal, gratis dan tanpa komitmen. Ceritakan kebutuhan bisnis atau proyek Anda melalui WhatsApp atau email. Kami akan merespons dalam 1x24 jam dan merancang solusi yang paling sesuai dengan konteks dan skala bisnis Anda.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ──────────────────────────────── CONTACT ──────────────────────────────── -->
 <section id="contact" class="l-contact">
   <div class="container">
-    <div class="l-contact__inner" data-reveal>
-      <span class="section-label section-label--light">Mulai Sekarang</span>
-      <div class="rule rule--center"></div>
-      <h2 class="section-heading section-heading--light">Siap Mengintegrasikan<br><em>Sistem Keuangan</em> Anda?</h2>
-      <p class="l-contact__desc">
-        Konsultasi pertama gratis. Ceritakan kebutuhan Anda — kami akan merancang solusi yang paling sesuai dengan skala dan konteks bisnis atau kebutuhan audit Anda.
-      </p>
-      <div class="l-contact__cards" aria-label="Kontak kami">
-        <div class="l-contact__card">
-          <i class="fas fa-envelope l-contact__card-icon" aria-hidden="true"></i>
-          <span class="l-contact__card-label">Email</span>
-          <p class="l-contact__card-value">dantadwipayanastan@gmail.com</p>
-        </div>
-        <div class="l-contact__card">
-          <i class="fas fa-phone-alt l-contact__card-icon" aria-hidden="true"></i>
-          <span class="l-contact__card-label">WhatsApp / Telepon</span>
-          <p class="l-contact__card-value">0859-3357-0605</p>
-        </div>
+    <div class="l-contact__layout">
+      <div class="l-contact__left" data-reveal>
+        <span class="section-label">Hubungi Kami</span>
+        <div class="rule"></div>
+        <h2 class="section-heading">Mari buat angka Anda<br>bekerja untuk <em>Anda</em></h2>
+        <p class="l-contact__left-desc">
+          Konsultasi pertama gratis. Ceritakan kebutuhan Anda dan kami akan merancang solusi yang paling sesuai dengan skala dan konteks bisnis atau kebutuhan audit Anda.
+        </p>
+        <ul class="l-contact__info-list" aria-label="Informasi kontak">
+          <li class="l-contact__info-item">
+            <span class="l-contact__info-icon l-contact__info-icon--wa" aria-hidden="true"><i class="fab fa-whatsapp"></i></span>
+            <div>
+              <span class="l-contact__info-label">WhatsApp</span>
+              <a href="https://wa.me/6285933570605" class="l-contact__info-value" target="_blank" rel="noopener noreferrer">0859-3357-0605</a>
+            </div>
+          </li>
+          <li class="l-contact__info-item">
+            <span class="l-contact__info-icon l-contact__info-icon--em" aria-hidden="true"><i class="fas fa-envelope"></i></span>
+            <div>
+              <span class="l-contact__info-label">Email</span>
+              <a href="mailto:dantadwipayanastan@gmail.com" class="l-contact__info-value">dantadwipayanastan@gmail.com</a>
+            </div>
+          </li>
+          <li class="l-contact__info-item">
+            <span class="l-contact__info-icon l-contact__info-icon--ig" aria-hidden="true"><i class="fab fa-instagram"></i></span>
+            <div>
+              <span class="l-contact__info-label">Instagram</span>
+              <a href="https://www.instagram.com/navedafinance/" class="l-contact__info-value" target="_blank" rel="noopener noreferrer">@navedafinance</a>
+            </div>
+          </li>
+          <li class="l-contact__info-item">
+            <span class="l-contact__info-icon l-contact__info-icon--loc" aria-hidden="true"><i class="fas fa-map-marker-alt"></i></span>
+            <div>
+              <span class="l-contact__info-label">Lokasi</span>
+              <span class="l-contact__info-value">Bali, Indonesia</span>
+            </div>
+          </li>
+        </ul>
       </div>
-      <div class="l-contact__cta">
-        <a href="https://wa.me/6285933570605" class="btn btn--gold" target="_blank" rel="noopener noreferrer">
-          <i class="fab fa-whatsapp" aria-hidden="true"></i> Chat via WhatsApp
-        </a>
-        <a href="mailto:dantadwipayanastan@gmail.com" class="btn btn--teal">
-          <i class="fas fa-envelope" aria-hidden="true"></i> Kirim Email
-        </a>
-      </div>
-      <p class="l-contact__name">
-        I Dewa Made Vedanta Dwipayana, S.Ak., CertDA
-        <small>Lead Consultant &amp; Founder</small>
-      </p>
+      <form class="l-contact__form" id="contactForm" novalidate data-reveal data-delay="2">
+        <h3 class="l-contact__form-title">Kirim Pesan</h3>
+        <div class="l-contact__form-group">
+          <label class="l-contact__form-label" for="cfNama">Nama</label>
+          <input type="text" id="cfNama" name="nama" class="l-contact__form-input" placeholder="Nama lengkap Anda" required>
+        </div>
+        <div class="l-contact__form-group">
+          <label class="l-contact__form-label" for="cfOrg">Bisnis / Organisasi</label>
+          <input type="text" id="cfOrg" name="org" class="l-contact__form-input" placeholder="Nama bisnis atau organisasi">
+        </div>
+        <div class="l-contact__form-group">
+          <label class="l-contact__form-label" for="cfSegment">Saya seorang&hellip;</label>
+          <select id="cfSegment" name="segment" class="l-contact__form-input">
+            <option value="" disabled selected>Pilih kategori</option>
+            <option value="Pemilik UMKM">Pemilik UMKM (F&amp;B / Ritel / Jasa)</option>
+            <option value="KAP/KKP">Kantor Akuntan Publik (KAP/KKP)</option>
+            <option value="Instansi Pemerintah">Instansi Pemerintah</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+        <div class="l-contact__form-group">
+          <label class="l-contact__form-label" for="cfPesan">Pesan</label>
+          <textarea id="cfPesan" name="pesan" class="l-contact__form-input l-contact__form-textarea" placeholder="Ceritakan kebutuhan atau pertanyaan Anda&#8230;" rows="4"></textarea>
+        </div>
+        <button type="submit" class="l-contact__form-submit">
+          <i class="fab fa-whatsapp" aria-hidden="true"></i> Kirim via WhatsApp
+        </button>
+        <button type="button" id="cfEmail" class="l-contact__form-alt">
+          <i class="fas fa-envelope" aria-hidden="true"></i> Kirim via Email
+        </button>
+        <p class="l-contact__form-note">Tidak ada data yang disimpan di halaman ini.</p>
+      </form>
     </div>
   </div>
 </section>

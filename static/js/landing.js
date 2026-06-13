@@ -74,3 +74,56 @@
   if (!cue || !target) return;
   cue.addEventListener('click', () => target.scrollIntoView({ behavior: 'smooth' }));
 })();
+
+// FAQ accordion
+(function () {
+  document.querySelectorAll('.l-faq__btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row = btn.closest('.l-faq__row');
+      const wasOpen = row.classList.contains('is-open');
+      document.querySelectorAll('.l-faq__row.is-open').forEach(r => {
+        r.classList.remove('is-open');
+        r.querySelector('.l-faq__btn').setAttribute('aria-expanded', 'false');
+      });
+      if (!wasOpen) {
+        row.classList.add('is-open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  });
+})();
+
+// Contact form — WhatsApp submit + email fallback
+(function () {
+  const form = document.getElementById('contactForm');
+  const emailBtn = document.getElementById('cfEmail');
+  if (!form) return;
+
+  function buildMessage() {
+    const nama = document.getElementById('cfNama').value.trim();
+    const org = document.getElementById('cfOrg').value.trim();
+    const segment = document.getElementById('cfSegment').value;
+    const pesan = document.getElementById('cfPesan').value.trim();
+    const parts = ['Halo Naveda Integra Finance,'];
+    if (nama) parts.push('Nama: ' + nama);
+    if (org) parts.push('Bisnis/Organisasi: ' + org);
+    if (segment) parts.push('Saya seorang: ' + segment);
+    if (pesan) parts.push('\n' + pesan);
+    return parts.join('\n');
+  }
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const msg = buildMessage();
+    window.open('https://wa.me/6285933570605?text=' + encodeURIComponent(msg), '_blank', 'noopener,noreferrer');
+  });
+
+  if (emailBtn) {
+    emailBtn.addEventListener('click', () => {
+      const nama = document.getElementById('cfNama').value.trim();
+      const subject = 'Konsultasi Naveda Integra Finance' + (nama ? ' — ' + nama : '');
+      const body = buildMessage();
+      window.location.href = 'mailto:dantadwipayanastan@gmail.com?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+    });
+  }
+})();
