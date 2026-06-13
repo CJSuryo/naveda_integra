@@ -170,6 +170,7 @@ def create_manual_piutang(
     jenis_bunga: str = 'tanpa_bunga',
     suku_bunga: Decimal = Decimal('0'),
     periode_angsuran: str = 'bulanan',
+    is_approval_required: bool = False,
     user=None,
 ) -> PiutangHeader:
     if not details:
@@ -192,6 +193,7 @@ def create_manual_piutang(
             jenis_bunga=jenis_bunga,
             suku_bunga=suku_bunga,
             periode_angsuran=periode_angsuran,
+            is_approval_required=is_approval_required,
             created_by=user,
         )
         PiutangDetail.objects.bulk_create([
