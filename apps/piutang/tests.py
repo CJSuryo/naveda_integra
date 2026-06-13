@@ -888,3 +888,139 @@ class PiutangHeaderPostingFieldsTest(TestCase):
         p.save(update_fields=['is_approval_required'])
         self.assertFalse(p.can_post)
         self.assertTrue(p.can_submit_approval)
+
+
+class PostPiutangTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pendapatan Jasa 2', kode_akun='4.1.2',
+        )
+        self.piutang = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': self.coa_rev}],
+        )
+
+    def test_post_piutang_sets_status_open(self):
+        from apps.piutang.services import post_piutang
+        post_piutang(self.piutang)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'open')
+
+    def test_post_piutang_creates_journal(self):
+        from apps.piutang.services import post_piutang
+        from apps.jurnal.models import JurnalHeader
+        count_before = JurnalHeader.objects.count()
+        post_piutang(self.piutang)
+        self.assertEqual(JurnalHeader.objects.count(), count_before + 1)
+
+    def test_post_piutang_raises_if_not_draft(self):
+        from apps.piutang.services import post_piutang
+        self.piutang.status = 'open'
+        self.piutang.save(update_fields=['status'])
+        with self.assertRaises(ValueError):
+            post_piutang(self.piutang)
+
+    def test_post_piutang_raises_if_detail_missing_revenue_account(self):
+        from apps.piutang.services import post_piutang
+        piutang2 = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='Y', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'Y', 'jumlah': Decimal('500000'), 'revenue_account': None}],
+        )
+        with self.assertRaises(ValueError):
+            post_piutang(piutang2)
+
+    def test_post_piutang_locks_piutang(self):
+        from apps.piutang.services import post_piutang
+        post_piutang(self.piutang)
+        self.piutang.refresh_from_db()
+        self.assertTrue(self.piutang.is_locked)
+
+
+class SubmitForApprovalTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.piutang = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': None}],
+        )
+
+    def test_submit_sets_pending_approval(self):
+        from apps.piutang.services import submit_for_approval
+        submit_for_approval(self.piutang)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'pending_approval')
+
+    def test_submit_raises_if_not_draft(self):
+        from apps.piutang.services import submit_for_approval
+        self.piutang.status = 'pending_approval'
+        self.piutang.save(update_fields=['status'])
+        with self.assertRaises(ValueError):
+            submit_for_approval(self.piutang)
+
+
+class ApprovePiutangTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pendapatan Jasa 3', kode_akun='4.1.3',
+        )
+        self.piutang = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': self.coa_rev}],
+        )
+        from apps.piutang.services import submit_for_approval
+        self.piutang.is_approval_required = True
+        self.piutang.save(update_fields=['is_approval_required'])
+        submit_for_approval(self.piutang)
+
+    def test_approve_sets_status_open(self):
+        from apps.piutang.services import approve_piutang
+        approve_piutang(self.piutang)
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'open')
+
+    def test_approve_creates_journal(self):
+        from apps.piutang.services import approve_piutang
+        from apps.jurnal.models import JurnalHeader
+        count_before = JurnalHeader.objects.count()
+        approve_piutang(self.piutang)
+        self.assertEqual(JurnalHeader.objects.count(), count_before + 1)
+
+    def test_approve_raises_if_not_pending(self):
+        from apps.piutang.services import approve_piutang
+        self.piutang.status = 'draft'
+        self.piutang.save(update_fields=['status'])
+        with self.assertRaises(ValueError):
+            approve_piutang(self.piutang)
+
+
+class RejectPiutangTest(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.piutang = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': None}],
+        )
+        from apps.piutang.services import submit_for_approval
+        self.piutang.is_approval_required = True
+        self.piutang.save(update_fields=['is_approval_required'])
+        submit_for_approval(self.piutang)
+
+    def test_reject_sets_status_draft(self):
+        from apps.piutang.services import reject_piutang
+        reject_piutang(self.piutang, alasan='Salah nominal')
+        self.piutang.refresh_from_db()
+        self.assertEqual(self.piutang.status, 'draft')
+
+    def test_reject_raises_if_not_pending(self):
+        from apps.piutang.services import reject_piutang
+        self.piutang.status = 'draft'
+        self.piutang.save(update_fields=['status'])
+        with self.assertRaises(ValueError):
+            reject_piutang(self.piutang)
