@@ -46,6 +46,7 @@ PERIODE_ANGSURAN_CHOICES = [
 class PiutangHeader(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
+        ('pending_approval', 'Menunggu Approval'),
         ('open', 'Terbuka'),
         ('partial', 'Sebagian Diterima'),
         ('paid', 'Lunas'),
@@ -121,6 +122,14 @@ class PiutangHeader(models.Model):
         max_digits=19, decimal_places=4, null=True, blank=True,
         verbose_name='Nilai Wajar Awal (PV)',
     )
+    is_approval_required = models.BooleanField(
+        default=False, verbose_name='Perlu Approval',
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_approved', verbose_name='Disetujui Oleh',
+    )
+    approved_at = models.DateTimeField(null=True, blank=True, verbose_name='Disetujui Pada')
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='piutang_created', verbose_name='Dibuat Oleh',
@@ -196,6 +205,18 @@ class PiutangHeader(models.Model):
     @property
     def can_edit(self) -> bool:
         return self.status == 'draft' and not self.is_locked
+
+    @property
+    def can_post(self) -> bool:
+        return self.status == 'draft' and not self.is_locked and not self.is_approval_required
+
+    @property
+    def can_submit_approval(self) -> bool:
+        return self.status == 'draft' and not self.is_locked and self.is_approval_required
+
+    @property
+    def can_approve(self) -> bool:
+        return self.status == 'pending_approval'
 
     @property
     def entitas_display(self) -> str:

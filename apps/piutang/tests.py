@@ -847,3 +847,35 @@ class ComputeAmortizationSchedulePvTest(TestCase):
             row = rows[0]
             for k in ('periode', 'tanggal', 'bunga_efektif', 'carrying_value'):
                 self.assertIn(k, row)
+
+
+class PiutangHeaderPostingFieldsTest(TestCase):
+    def test_pending_approval_is_valid_status_choice(self):
+        from apps.piutang.models import PiutangHeader
+        valid_keys = [c[0] for c in PiutangHeader.STATUS_CHOICES]
+        self.assertIn('pending_approval', valid_keys)
+
+    def test_is_approval_required_field_exists(self):
+        from apps.piutang.models import PiutangHeader
+        self.assertTrue(hasattr(PiutangHeader, 'is_approval_required'))
+
+    def test_can_post_true_when_draft_no_approval(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': None}],
+        )
+        self.assertTrue(p.can_post)
+
+    def test_can_submit_approval_true_when_draft_with_approval(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': None}],
+        )
+        p.is_approval_required = True
+        p.save(update_fields=['is_approval_required'])
+        self.assertFalse(p.can_post)
+        self.assertTrue(p.can_submit_approval)
