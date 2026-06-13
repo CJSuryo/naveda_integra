@@ -23,69 +23,66 @@
 </div>
 
 {% for category in categories %}
-<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;" data-cat-idx="{{ forloop.counter0 }}">
-  <div class="ni-card__body">
-    <div class="ni-coa-category" data-toggle="coa-category" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:8px 0;">
-      <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:20px;height:20px;transition:transform 200ms;"></i>
-      <strong style="font-size:1.1rem;">{{ category.prefix }}. {{ category.name }}</strong>
-      <span class="ni-badge ni-badge--secondary" style="margin-left:8px;">{{ category.items|length }} sub-kategori</span>
-      <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
-        <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah {{ category.name }} Level 1"
-          onclick="niCoa.openAddLv1('{% url category.lv1_create %}', '{{ category.name }}', {{ forloop.counter0 }})"
-          style="padding:4px 8px;">
-          <i data-lucide="plus" style="width:14px;height:14px"></i>
-        </button>
-      </div>
+<div class="ni-card ni-animate-fade-in" data-cat-idx="{{ forloop.counter0 }}">
+  <div class="ni-card__header ni-coa-category" data-toggle="coa-category" style="cursor:pointer;">
+    <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">
+      <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:18px;height:18px;flex-shrink:0;transition:transform 200ms;color:var(--ni-text-muted);"></i>
+      <span class="ni-card__title">{{ category.prefix }}. {{ category.name }}</span>
+      <span class="ni-badge ni-badge--secondary">{{ category.items|length }} sub-kategori</span>
     </div>
-    <div class="ni-coa-children" style="display:none;margin-left:24px;margin-top:8px;">
+    <div class="ni-card__actions" onclick="event.stopPropagation();">
+      <button type="button" class="ni-btn ni-btn--success ni-btn--sm ni-btn--icon" title="Tambah {{ category.name }} Level 1"
+        onclick="niCoa.openAddLv1('{% url category.lv1_create %}', '{{ category.name }}', {{ forloop.counter0 }})">
+        <i data-lucide="plus"></i>
+      </button>
+    </div>
+  </div>
+  <div class="ni-coa-children" style="display:none;">
+    <div class="ni-card__body" style="padding-top:12px;padding-bottom:12px;">
       {% for lv1 in category.items %}
-      <div style="margin-bottom:8px;">
-        <div class="ni-coa-lv1" data-toggle="coa-lv1" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:4px 0;">
-          <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:16px;height:16px;transition:transform 200ms;"></i>
-          <span style="font-weight:600;">{{ lv1.kode }} - {{ lv1.nama }}</span>
-          <span class="ni-badge ni-badge--secondary" style="font-size:0.75rem;">{{ lv1.children.count }} akun</span>
-          <div style="margin-left:auto;display:flex;gap:4px;" onclick="event.stopPropagation();">
-            <button type="button" class="ni-btn ni-btn--success ni-btn--sm" title="Tambah Akun Level 2"
-              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})"
-              style="padding:4px 8px;">
-              <i data-lucide="plus" style="width:14px;height:14px"></i>
+      <div style="margin-bottom:4px;">
+        <div class="ni-coa-lv1" data-toggle="coa-lv1" style="cursor:pointer;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--ni-radius-sm);">
+          <i data-lucide="chevron-right" class="ni-coa-arrow" style="width:14px;height:14px;flex-shrink:0;transition:transform 200ms;color:var(--ni-text-muted);"></i>
+          <span style="font-weight:600;font-size:0.875rem;">{{ lv1.kode }} - {{ lv1.nama }}</span>
+          <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1.children.count }} akun</span>
+          <div class="ni-btn-row" style="margin-left:auto;" onclick="event.stopPropagation();">
+            <button type="button" class="ni-btn ni-btn--success ni-btn--sm ni-btn--icon" title="Tambah Akun Level 2"
+              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})">
+              <i data-lucide="plus"></i>
             </button>
-            <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-              onclick="niCoa.openEditLv1('{% url category.lv1_update lv1.pk %}', '{{ lv1.kode }}', '{{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})"
-              style="padding:4px 8px;">
-              <i data-lucide="pencil" style="width:14px;height:14px"></i>
+            <button type="button" class="ni-btn ni-btn--warning ni-btn--sm ni-btn--icon" title="Edit"
+              onclick="niCoa.openEditLv1('{% url category.lv1_update lv1.pk %}', '{{ lv1.kode }}', '{{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})">
+              <i data-lucide="pencil"></i>
             </button>
-            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-              onclick="niCoa.openDeleteLv1('{% url category.lv1_delete lv1.pk %}', '{{ lv1.kode }} - {{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }})"
-              style="padding:4px 8px;">
-              <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+            <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm ni-btn--icon" title="Hapus"
+              onclick="niCoa.openDeleteLv1('{% url category.lv1_delete lv1.pk %}', '{{ lv1.kode }} - {{ lv1.nama|escapejs }}', {{ forloop.parentloop.counter0 }})">
+              <i data-lucide="trash-2"></i>
             </button>
           </div>
         </div>
-        <div class="ni-coa-lv2-list" style="display:none;margin-left:24px;">
+        <div class="ni-coa-lv2-list" style="display:none;margin-left:28px;border-left:2px solid var(--ni-border);padding-left:12px;margin-top:2px;margin-bottom:4px;">
           {% for lv2 in lv1.children.all %}
-          <div style="padding:4px 0;color:var(--ni-text-muted);display:flex;align-items:center;gap:8px;">
-            <span>{{ lv2.kode }} - {{ lv2.nama }}</span>
-            <div style="margin-left:auto;display:flex;gap:4px;">
-              <button type="button" class="ni-btn ni-btn--warning ni-btn--sm" title="Edit"
-                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})"
-                style="padding:4px 8px;">
-                <i data-lucide="pencil" style="width:14px;height:14px"></i>
+          <div style="padding:5px 0;display:flex;align-items:center;gap:8px;">
+            <span style="font-size:0.8125rem;color:var(--ni-text-muted);">{{ lv2.kode }}</span>
+            <span style="font-size:0.8125rem;">{{ lv2.nama }}</span>
+            <div class="ni-btn-row" style="margin-left:auto;">
+              <button type="button" class="ni-btn ni-btn--warning ni-btn--sm ni-btn--icon" title="Edit"
+                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})">
+                <i data-lucide="pencil"></i>
               </button>
-              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" title="Hapus"
-                onclick="niCoa.openDeleteLv2('{% url category.lv2_delete lv1.pk lv2.pk %}', '{{ lv2.kode }} - {{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})"
-                style="padding:4px 8px;">
-                <i data-lucide="trash-2" style="width:14px;height:14px"></i>
+              <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm ni-btn--icon" title="Hapus"
+                onclick="niCoa.openDeleteLv2('{% url category.lv2_delete lv1.pk lv2.pk %}', '{{ lv2.kode }} - {{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})">
+                <i data-lucide="trash-2"></i>
               </button>
             </div>
           </div>
           {% empty %}
-          <div style="padding:4px 0;color:var(--ni-text-muted);font-style:italic;">Belum ada akun.</div>
+          <div style="padding:6px 0;color:var(--ni-text-muted);font-style:italic;font-size:0.8125rem;">Belum ada akun.</div>
           {% endfor %}
         </div>
       </div>
       {% empty %}
-      <div style="padding:8px 0;color:var(--ni-text-muted);font-style:italic;">Belum ada sub-kategori.</div>
+      <div style="padding:8px 0;color:var(--ni-text-muted);font-style:italic;font-size:0.875rem;">Belum ada sub-kategori.</div>
       {% endfor %}
     </div>
   </div>

@@ -122,6 +122,9 @@ def _renumber_lv1_kode(lv1_model, lv2_model, lv2_parent_field: str, instance, ol
                 except ValueError:
                     pass
 
+        # Free the instance's current slot before shifting siblings into it.
+        lv1_model.objects.filter(pk=instance.pk).update(kode=f'_tmp_{instance.pk}')
+
         if new_n < old_n:
             for n in sorted(siblings_in_range.keys(), reverse=True):
                 s = siblings_in_range[n]
@@ -179,6 +182,9 @@ def _renumber_lv2_kode(lv2_model, lv2_parent_field: str, instance, old_kode: str
                         siblings_in_range[m] = s
                 except ValueError:
                     pass
+
+        # Free the instance's current slot before shifting siblings into it.
+        lv2_model.objects.filter(pk=instance.pk).update(kode=f'_tmp_{instance.pk}')
 
         if new_m < old_m:
             for m in sorted(siblings_in_range.keys(), reverse=True):
