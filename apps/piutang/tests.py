@@ -856,8 +856,17 @@ class PiutangHeaderPostingFieldsTest(TestCase):
         self.assertIn('pending_approval', valid_keys)
 
     def test_is_approval_required_field_exists(self):
-        from apps.piutang.models import PiutangHeader
-        self.assertTrue(hasattr(PiutangHeader, 'is_approval_required'))
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date.today(), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'], jatuh_tempo=None,
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('1000000'), 'revenue_account': None}],
+        )
+        self.assertFalse(p.is_approval_required)
+        p.is_approval_required = True
+        p.save(update_fields=['is_approval_required'])
+        p.refresh_from_db()
+        self.assertTrue(p.is_approval_required)
 
     def test_can_post_true_when_draft_no_approval(self):
         f = make_fixtures()

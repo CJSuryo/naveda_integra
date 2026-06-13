@@ -216,7 +216,7 @@ class PiutangHeader(models.Model):
 
     @property
     def can_approve(self) -> bool:
-        return self.status == 'pending_approval'
+        return self.status == 'pending_approval' and not self.is_locked
 
     @property
     def entitas_display(self) -> str:
