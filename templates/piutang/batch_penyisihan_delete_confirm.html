@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Hapus Jurnal Penyisihan Batch{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Konfirmasi Hapus Jurnal Penyisihan Batch</h1>
+    <p class="ni-page-header__subtitle">Jurnal ini akan dihapus permanen dari buku besar.</p>
+  </div>
+</div>
+
+<div class="ni-alert ni-alert--danger ni-animate-fade-in" style="margin-bottom:20px">
+  <i data-lucide="triangle-alert" style="flex-shrink:0"></i>
+  <div>
+    Penghapusan jurnal penyisihan batch ini bersifat <strong>permanen dan tidak dapat dibatalkan</strong>.
+    Jurnal dan entri penyisihan terkait akan dihapus dari buku besar.
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Detail Jurnal yang Dihapus</h2></div>
+  <div class="ni-card__body">
+    <dl class="ni-detail-grid">
+      <dt>Tanggal</dt><dd>{{ entry.tanggal }}</dd>
+      <dt>Periode</dt><dd>{{ entry.periode_label|default:'—' }}</dd>
+      <dt>Entitas Bisnis</dt><dd>{{ entry.entitas_bisnis.nama|default:'—' }}</dd>
+      <dt>Akun Cadangan</dt>
+      <dd>{% if entry.allowance_account %}{{ entry.allowance_account.kode_akun }} — {{ entry.allowance_account.nama }}{% else %}—{% endif %}</dd>
+      <dt>Akun Beban</dt>
+      <dd>{% if entry.expense_account %}{{ entry.expense_account.kode_akun }} — {{ entry.expense_account.nama }}{% else %}—{% endif %}</dd>
+      <dt>Jumlah</dt>
+      <dd class="{% if entry.jumlah < 0 %}ni-text-success{% endif %}">
+        Rp {{ entry.jumlah|floatformat:0|intcomma }}
+      </dd>
+      <dt>Jurnal</dt>
+      <dd>{% if entry.jurnal_header %}<a href="{% url 'jurnal:header_detail' entry.jurnal_header.pk %}">{{ entry.jurnal_header.nomor_transaksi }}</a>{% else %}—{% endif %}</dd>
+      <dt>Catatan</dt><dd>{{ entry.catatan|default:'—' }}</dd>
+      <dt>Dibuat Oleh</dt><dd>{{ entry.created_by|default:'—' }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="text-align:center">
+    <p style="margin-bottom:16px">Anda yakin ingin menghapus jurnal penyisihan batch ini?</p>
+    <form method="post" style="display:inline">
+      {% csrf_token %}
+      <div class="ni-btn-row ni-btn-row--center">
+        <button type="submit" class="ni-btn ni-btn--danger">
+          <i data-lucide="trash-2"></i> Ya, Hapus
+        </button>
+        <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

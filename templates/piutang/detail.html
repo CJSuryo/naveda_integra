@@ -48,21 +48,38 @@
         <dt>Nomor Piutang</dt><dd>{{ piutang.nomor_piutang }}</dd>
         <dt>Debitur</dt><dd>{{ piutang.debitur|default:'-' }}</dd>
         <dt>Entitas Bisnis</dt><dd>{{ piutang.entitas_bisnis|default:'-' }}</dd>
-<dt>Tanggal</dt><dd>{{ piutang.tanggal }}</dd>
-        <dt>Jatuh Tempo</dt><dd>{{ piutang.jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
+        <dt>Tanggal</dt><dd>{{ piutang.tanggal }}</dd>
+        <dt>Jatuh Tempo</dt>
+        <dd>{{ piutang.jatuh_tempo|default:'-' }}{% if piutang.is_overdue %} <span class="ni-badge ni-badge--danger">Terlambat {{ piutang.days_overdue }} hari</span>{% endif %}</dd>
+        <dt>Jenis Jangka Waktu</dt>
+        <dd>
+          {% if piutang.jenis_jangka_waktu == 'long_term' %}
+            <span class="ni-badge ni-badge--info">Jangka Panjang</span>
+          {% else %}
+            <span class="ni-badge">Jangka Pendek</span>
+          {% endif %}
+        </dd>
+        {% if piutang.jenis_jangka_waktu == 'long_term' %}
+        <dt>Jenis Bunga</dt><dd>{{ piutang.get_jenis_bunga_display }}</dd>
+        {% if piutang.jenis_bunga != 'tanpa_bunga' %}
+        <dt>Suku Bunga</dt><dd>{{ piutang.suku_bunga }}% / tahun</dd>
+        {% endif %}
+        <dt>Periode Angsuran</dt><dd>{{ piutang.get_periode_angsuran_display }}</dd>
+        {% if piutang.pv_discount_rate %}
+        <dt>Market Rate (PV)</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
+        {% endif %}
+        {% endif %}
+        <dt>Perlu Approval</dt>
+        <dd>{% if piutang.is_approval_required %}<span class="ni-badge ni-badge--warning">Ya</span>{% else %}<span class="ni-badge">Tidak</span>{% endif %}</dd>
         {% if piutang.approved_by %}
         <dt>Disetujui Oleh</dt><dd>{{ piutang.approved_by }} — {{ piutang.approved_at|date:"d M Y H:i" }}</dd>
         {% endif %}
-        <dt>Sumber</dt><dd>
-          {% if piutang.source_type == 'manual' %}
-            <span class="ni-badge">Manual</span>
-          {% elif piutang.source_type == 'from_sales' %}
-            <span class="ni-badge ni-badge--info">Dari Penjualan</span>
-          {% elif piutang.source_type == 'from_pendapatan' %}
-            <span class="ni-badge ni-badge--info">Dari Pendapatan</span>
-          {% else %}
-            {{ piutang.source_type|default:'-' }}
-          {% endif %}
+        <dt>Sumber</dt>
+        <dd>
+          {% if piutang.source_type == 'manual' %}<span class="ni-badge">Manual</span>
+          {% elif piutang.source_type == 'from_sales' %}<span class="ni-badge ni-badge--info">Dari Penjualan</span>
+          {% elif piutang.source_type == 'from_pendapatan' %}<span class="ni-badge ni-badge--info">Dari Pendapatan</span>
+          {% else %}{{ piutang.source_type|default:'-' }}{% endif %}
         </dd>
         <dt>Deskripsi</dt><dd>{{ piutang.deskripsi|default:'-' }}</dd>
       </dl>
@@ -73,10 +90,44 @@
     <div class="ni-card__header"><h2 class="ni-card__title">Posisi Keuangan</h2></div>
     <div class="ni-card__body">
       <dl class="ni-detail-grid">
-        <dt>Total Piutang</dt><dd><strong>{{ piutang.jumlah_pokok|floatformat:0|intcomma }}</strong></dd>
-        <dt>Diterima</dt><dd>{{ piutang.jumlah_terbayar|floatformat:0|intcomma }}</dd>
-        <dt>Sisa</dt><dd><strong>{{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong></dd>
         <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span></dd>
+        <dt>Nilai Nominal (Pokok)</dt><dd><strong>Rp {{ piutang.jumlah_pokok|floatformat:0|intcomma }}</strong></dd>
+        <dt>Jumlah Diterima</dt><dd>Rp {{ piutang.jumlah_terbayar|floatformat:0|intcomma }}</dd>
+        <dt>Sisa Piutang</dt><dd><strong>Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong></dd>
+        {% if piutang.is_pv_adjusted and piutang.nilai_wajar_awal %}
+        <dt>Nilai Wajar Awal</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
+        <dt>Nilai Tercatat (Carrying Amount)</dt>
+        <dd><strong>Rp {{ pv_carrying_value|floatformat:0|intcomma }}</strong>
+          <span class="ni-text-muted" style="font-size:.82em"> (nominal − diskonto tersisa)</span>
+        </dd>
+        {% if pv_unamortized_deferred is not None %}
+        <dt>Diskonto Belum Diamortisasi</dt>
+        <dd>{% if pv_unamortized_deferred >= 0 %}Rp {{ pv_unamortized_deferred|floatformat:0|intcomma }}{% else %}<span class="ni-badge ni-badge--danger">Negatif</span>{% endif %}</dd>
+        {% endif %}
+        {% endif %}
+        {% if piutang.jenis_jangka_waktu == 'long_term' and bagian_lancar is not None %}
+        <dt>Bagian Lancar (&le;12 bln)</dt><dd>Rp {{ bagian_lancar|floatformat:0|intcomma }}</dd>
+        {% endif %}
+        <dt style="margin-top:8px;border-top:1px solid var(--ni-border);padding-top:8px">Akun Piutang</dt>
+        <dd style="margin-top:8px;border-top:1px solid var(--ni-border);padding-top:8px">
+          {{ piutang.coa_piutang_account.kode_akun }} — {{ piutang.coa_piutang_account.nama_akun }}
+        </dd>
+        {% if piutang.coa_piutang_lancar_account %}
+        <dt>Akun Piutang Bagian Lancar</dt>
+        <dd>{{ piutang.coa_piutang_lancar_account.kode_akun }} — {{ piutang.coa_piutang_lancar_account.nama_akun }}</dd>
+        {% endif %}
+        {% if piutang.deferred_income_account %}
+        <dt>Akun Pend. Bunga Ditangguhkan</dt>
+        <dd>{{ piutang.deferred_income_account.kode_akun }} — {{ piutang.deferred_income_account.nama_akun }}</dd>
+        {% endif %}
+        {% if piutang.deferred_income_lancar_account %}
+        <dt>Akun Pend. Bunga Ditangguhkan BL</dt>
+        <dd>{{ piutang.deferred_income_lancar_account.kode_akun }} — {{ piutang.deferred_income_lancar_account.nama_akun }}</dd>
+        {% endif %}
+        {% if piutang.interest_income_account %}
+        <dt>Akun Pend. Bunga Efektif</dt>
+        <dd>{{ piutang.interest_income_account.kode_akun }} — {{ piutang.interest_income_account.nama_akun }}</dd>
+        {% endif %}
       </dl>
     </div>
   </div>
@@ -116,10 +167,13 @@
           <td>{{ penerimaan.catatan|default:'-' }}</td>
           <td>{% if penerimaan.jurnal_header %}<a href="{% url 'jurnal:header_detail' penerimaan.jurnal_header.pk %}">{{ penerimaan.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
           <td>
-            {% if not piutang.is_locked %}
+            {% if piutang.status != 'written_off' and piutang.status != 'cancelled' %}
             <form method="post" action="{% url 'piutang:penerimaan_cancel' piutang.pk penerimaan.pk %}" class="ni-form-inline">
               {% csrf_token %}
-              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan penerimaan ini?')">Batal</button>
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger"
+                onclick="return confirm('Hapus penerimaan ini?\n\nJurnal pembayaran akan dibalik otomatis.')">
+                Hapus
+              </button>
             </form>
             {% endif %}
           </td>
@@ -151,6 +205,18 @@
           <th class="ni-text-right">Sisa Bayar</th>
           <th class="ni-text-center">Status</th>
         </tr>
+        {% if angsuran_totals %}
+        <tr style="background:var(--ni-surface-alt,#f5f5f5);font-weight:600;border-top:2px solid var(--ni-border,#e0e0e0)">
+          <td colspan="2" class="ni-text-muted" style="font-size:0.85em">TOTAL</td>
+          <td class="ni-text-right">{{ angsuran_totals.pokok|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ angsuran_totals.bunga|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ angsuran_totals.angsuran|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right ni-text-muted">—</td>
+          <td class="ni-text-right">{{ angsuran_totals.paid|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ angsuran_totals.sisa_bayar|floatformat:0|intcomma }}</td>
+          <td></td>
+        </tr>
+        {% endif %}
       </thead>
       <tbody>
         {% for row in angsuran_schedule %}
@@ -221,25 +287,69 @@
 {% if reklasifikasi_form %}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header">
-    <h2 class="ni-card__title">Reklasifikasi Piutang</h2>
-    <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('reklasifikasiModal')">+ Buat Jurnal Reklasifikasi</button>
+    <h2 class="ni-card__title">Reklasifikasi Bagian Lancar</h2>
+    <div style="display:flex;gap:.5rem;align-items:center;">
+      {% if bagian_lancar %}
+      <span class="ni-text-muted" style="font-size:.85em">Bagian lancar: <strong>Rp {{ bagian_lancar|floatformat:0|intcomma }}</strong></span>
+      {% endif %}
+      <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('reklasifikasiBLModal')">+ Reklasifikasi Bagian Lancar</button>
+      <button type="button" class="ni-btn ni-btn--sm ni-btn--secondary" onclick="openModal('reklasifikasiModal')">+ Reklasifikasi Manual</button>
+    </div>
   </div>
+  {% if piutang.coa_piutang_lancar_account %}
+  <div class="ni-card__body" style="padding-bottom:0;display:flex;align-items:center;gap:12px;">
+    <p class="ni-text-muted" style="font-size:.85em;margin:0;">
+      Dari: <strong>{{ piutang.coa_piutang_account.kode_akun }} — {{ piutang.coa_piutang_account.nama_akun }}</strong>
+      &rarr; Ke: <strong>{{ piutang.coa_piutang_lancar_account.kode_akun }} — {{ piutang.coa_piutang_lancar_account.nama_akun }}</strong>
+      {% if piutang.deferred_income_lancar_account %}
+      | Diskonto: <strong>{{ piutang.deferred_income_account.kode_akun }}</strong> &rarr; <strong>{{ piutang.deferred_income_lancar_account.kode_akun }}</strong>
+      {% endif %}
+    </p>
+    <button type="button" class="ni-btn ni-btn--xs ni-btn--outline" onclick="openModal('setAkunLancarModal')">Ubah</button>
+  </div>
+  {% else %}
+  <div class="ni-card__body" style="padding-bottom:0;display:flex;align-items:center;gap:12px;">
+    <p class="ni-text-muted" style="font-size:.85em;margin:0;">Akun Piutang Bagian Lancar belum diset.</p>
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--outline" onclick="openModal('setAkunLancarModal')">Set Akun</button>
+  </div>
+  {% endif %}
   {% if piutang.reklasifikasi_entries.all %}
   <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>Tanggal</th><th>Nomor Jurnal</th><th class="ni-text-right">Jumlah</th><th>Catatan</th><th>Dibuat Oleh</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th>Tanggal</th><th>Nomor Jurnal</th>
+          <th class="ni-text-right">Nominal (Dr Piutang BL)</th>
+          <th class="ni-text-right">Diskonto (Cr Pend. BL)</th>
+          <th class="ni-text-right">Nilai Buku BL</th>
+          <th>Catatan</th><th></th>
+        </tr>
+      </thead>
       <tbody>
         {% for rkl in piutang.reklasifikasi_entries.all %}
         <tr>
           <td>{{ rkl.tanggal }}</td>
           <td><a href="{% url 'jurnal:header_detail' rkl.jurnal.pk %}">{{ rkl.jurnal.nomor_transaksi }}</a></td>
           <td class="ni-text-right">{{ rkl.jumlah|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">
+            {% if rkl.jumlah_deferred %}{{ rkl.jumlah_deferred|floatformat:0|intcomma }}{% else %}—{% endif %}
+          </td>
+          <td class="ni-text-right">
+            {% if rkl.jumlah_deferred %}
+              {% widthratio rkl.jumlah 1 1 as nom %}
+              {{ rkl.jumlah|add:"-0"|floatformat:0|intcomma }}
+              <span class="ni-text-muted" style="font-size:.8em">(≈ {{ rkl.jumlah|floatformat:0|intcomma }} − {{ rkl.jumlah_deferred|floatformat:0|intcomma }})</span>
+            {% else %}{{ rkl.jumlah|floatformat:0|intcomma }}{% endif %}
+          </td>
           <td>{{ rkl.keterangan|default:'-' }}</td>
-          <td>{{ rkl.created_by|default:'-' }}</td>
-          <td>
+          <td style="display:flex;gap:.35rem;">
             <form method="post" action="{% url 'piutang:reklasifikasi_reverse' piutang.pk rkl.pk %}" class="ni-form-inline">
               {% csrf_token %}
-              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan jurnal {{ rkl.jurnal.nomor_transaksi }}?')">Batalkan</button>
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--warning" onclick="return confirm('Batalkan jurnal {{ rkl.jurnal.nomor_transaksi }}?\n\nJurnal pembalik akan dibuat.')">Batalkan</button>
+            </form>
+            <form method="post" action="{% url 'piutang:reklasifikasi_delete' piutang.pk rkl.pk %}" class="ni-form-inline">
+              {% csrf_token %}
+              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Hapus permanen data reklasifikasi dan jurnal {{ rkl.jurnal.nomor_transaksi }}?\n\nTindakan ini tidak dapat dibatalkan.')">Hapus</button>
             </form>
           </td>
         </tr>
@@ -291,20 +401,31 @@
   {% if penyisihan_history %}
   <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>Tanggal</th><th>Jenis</th><th class="ni-text-right">Jumlah</th><th>Jurnal</th><th>Dibuat Oleh</th><th></th></tr></thead>
+      <thead><tr><th>Tanggal</th><th>Jenis</th><th>Periode</th><th class="ni-text-right">Jumlah</th><th>Jurnal</th><th>Dibuat Oleh</th><th></th></tr></thead>
       <tbody>
         {% for ps in penyisihan_history %}
         <tr>
           <td>{{ ps.tanggal }}</td>
-          <td>{{ ps.get_jenis_display }}</td>
-          <td class="ni-text-right">{{ ps.jumlah|floatformat:0|intcomma }}</td>
+          <td>
+            {% if ps.jenis == 'batch' %}
+              <span class="ni-badge ni-badge--info">Batch</span>
+            {% else %}
+              <span class="ni-badge">{{ ps.get_jenis_display }}</span>
+            {% endif %}
+          </td>
+          <td>{{ ps.periode_label|default:'-' }}</td>
+          <td class="ni-text-right {% if ps.jumlah < 0 %}ni-text-success{% endif %}">{{ ps.jumlah|floatformat:0|intcomma }}</td>
           <td>{% if ps.jurnal_header %}<a href="{% url 'jurnal:header_detail' ps.jurnal_header.pk %}">{{ ps.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
           <td>{{ ps.created_by|default:'-' }}</td>
           <td>
-            <form method="post" action="{% url 'piutang:penyisihan_cancel' piutang.pk ps.pk %}" class="ni-form-inline">
-              {% csrf_token %}
-              <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan jurnal penyisihan ini?')">Batalkan</button>
-            </form>
+            {% if ps.jenis == 'batch' %}
+              <a href="{% url 'piutang:report_penyisihan' %}" class="ni-btn ni-btn--xs ni-btn--secondary" title="Lihat di halaman batch">Batch</a>
+            {% else %}
+              <form method="post" action="{% url 'piutang:penyisihan_cancel' piutang.pk ps.pk %}" class="ni-form-inline">
+                {% csrf_token %}
+                <button type="submit" class="ni-btn ni-btn--xs ni-btn--danger" onclick="return confirm('Batalkan jurnal penyisihan ini?')">Batalkan</button>
+              </form>
+            {% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -314,6 +435,56 @@
   {% endif %}
 </div>
 {% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Jurnal</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Nomor Jurnal</th>
+          <th>Jenis</th>
+          <th>Keterangan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in riwayat_jurnal %}
+        <tr>
+          <td>{{ entry.jurnal.tanggal }}</td>
+          <td><a href="{% url 'jurnal:header_detail' entry.jurnal.pk %}">{{ entry.jurnal.nomor_transaksi }}</a></td>
+          <td>
+            {% if entry.jenis == 'Pengakuan Piutang' %}
+              <span class="ni-badge ni-badge--info">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Penerimaan' %}
+              <span class="ni-badge ni-badge--success">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Reversal Penerimaan' %}
+              <span class="ni-badge ni-badge--warning">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Write-Off' %}
+              <span class="ni-badge ni-badge--danger">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Reklasifikasi' %}
+              <span class="ni-badge ni-badge--info">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Reversal Reklasifikasi' %}
+              <span class="ni-badge ni-badge--warning">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Penyisihan' %}
+              <span class="ni-badge">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Penyisihan Batch' %}
+              <span class="ni-badge ni-badge--info">{{ entry.jenis }}</span>
+            {% elif entry.jenis == 'Amortisasi PV' %}
+              <span class="ni-badge ni-badge--info">{{ entry.jenis }}</span>
+            {% else %}
+              <span class="ni-badge">{{ entry.jenis }}</span>
+            {% endif %}
+          </td>
+          <td>{{ entry.jurnal.uraian_transaksi }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada jurnal terkait.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Audit Log</h2></div>
@@ -338,9 +509,7 @@
 
 <div class="ni-page-actions">
   <a href="{% url 'piutang:list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
-  {% if not piutang.is_locked %}
   <a href="{% url 'piutang:delete' piutang.pk %}" class="ni-btn ni-btn--danger">Hapus</a>
-  {% endif %}
 </div>
 
 <!-- ── Terima Penerimaan Modal ────────────────────────────────── -->
@@ -352,7 +521,12 @@
       <button class="ni-modal__close" type="button" onclick="closeModal('terimaModal')">&times;</button>
     </div>
     <div class="ni-modal__body">
-      <p class="ni-text-muted">Sisa: <strong>Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong></p>
+      <p class="ni-text-muted">
+        Sisa Tagihan: <strong>Rp {{ sisa_total_bayar|floatformat:0|intcomma }}</strong>
+        {% if piutang.jenis_bunga != 'tanpa_bunga' %}
+        <span style="font-size:0.85em"> (pokok + bunga kontrak)</span>
+        {% endif %}
+      </p>
       <form method="post" action="{% url 'piutang:terima' piutang.pk %}">
         {% csrf_token %}
         <div class="ni-form-grid ni-form-grid--2">
@@ -369,8 +543,18 @@
           <div class="ni-form-group">
             <label class="ni-form-label">{{ penerimaan_form.payment_account.label }}</label>
             {{ penerimaan_form.payment_account }}
+            {% if penerimaan_form.payment_account.errors %}<div class="ni-form-error">{{ penerimaan_form.payment_account.errors }}</div>{% endif %}
           </div>
-          <div class="ni-form-group ni-form-group--full">
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ penerimaan_form.metode_penerimaan.label }}</label>
+            {{ penerimaan_form.metode_penerimaan }}
+            {% if penerimaan_form.metode_penerimaan.errors %}<div class="ni-form-error">{{ penerimaan_form.metode_penerimaan.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">{{ penerimaan_form.nomor_referensi.label }}</label>
+            {{ penerimaan_form.nomor_referensi }}
+          </div>
+          <div class="ni-form-group">
             <label class="ni-form-label">{{ penerimaan_form.catatan.label }}</label>
             {{ penerimaan_form.catatan }}
           </div>
@@ -385,16 +569,84 @@
 </div>
 {% endif %}
 
-<!-- ── Reklasifikasi Modal ────────────────────────────────────── -->
+<!-- ── Reklasifikasi Bagian Lancar Modal (auto) ──────────────── -->
 {% if reklasifikasi_form %}
+<!-- ── Set Akun Bagian Lancar Modal ──────────────────────────── -->
+<div class="ni-modal-backdrop" id="setAkunLancarModal">
+  <div class="ni-modal ni-modal--sm">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Set Akun Bagian Lancar</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('setAkunLancarModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <form method="post" action="{% url 'piutang:set_akun_lancar' piutang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Akun Piutang Bagian Lancar <span style="color:var(--ni-danger)">*</span></label>
+          <select name="coa_piutang_lancar_account" class="ni-input" required>
+            <option value="">— Pilih Akun Piutang (Aset) —</option>
+            {% for akun in akun_piutang_list %}
+            <option value="{{ akun.pk }}" {% if piutang.coa_piutang_lancar_account_id == akun.pk %}selected{% endif %}>
+              {{ akun.kode_akun }} — {{ akun.nama_akun }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Akun Pend. Bunga Ditangguhkan Bagian Lancar <span class="ni-text-muted" style="font-size:.85em">(opsional)</span></label>
+          <select name="deferred_income_lancar_account" class="ni-input">
+            <option value="">— Tidak ada —</option>
+            {% for akun in akun_all_list %}
+            <option value="{{ akun.pk }}" {% if piutang.deferred_income_lancar_account_id == akun.pk %}selected{% endif %}>
+              {{ akun.kode_akun }} — {{ akun.nama_akun }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('setAkunLancarModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="ni-modal-backdrop" id="reklasifikasiBLModal">
+  <div class="ni-modal">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Reklasifikasi Bagian Lancar</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('reklasifikasiBLModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <p class="ni-text-muted" style="margin-bottom:12px">
+        Jurnal akan dibuat otomatis menggunakan akun yang sudah diset pada piutang ini.
+        {% if bagian_lancar %}<br>Estimasi bagian lancar: <strong>Rp {{ bagian_lancar|floatformat:0|intcomma }}</strong> (nominal).{% endif %}
+      </p>
+      <form method="post" action="{% url 'piutang:reklasifikasi_bagian_lancar' piutang.pk %}">
+        {% csrf_token %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tanggal Jurnal</label>
+          <input type="date" name="tanggal" class="ni-input" required>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Konfirmasi &amp; Post</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('reklasifikasiBLModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Reklasifikasi Manual Modal ────────────────────────────── -->
 <div class="ni-modal-backdrop" id="reklasifikasiModal">
   <div class="ni-modal ni-modal--lg">
     <div class="ni-modal__header">
-      <h3 class="ni-modal__title">Buat Jurnal Reklasifikasi</h3>
+      <h3 class="ni-modal__title">Reklasifikasi Manual</h3>
       <button class="ni-modal__close" type="button" onclick="closeModal('reklasifikasiModal')">&times;</button>
     </div>
     <div class="ni-modal__body">
-      <p class="ni-text-muted">Reklasifikasi piutang.</p>
+      <p class="ni-text-muted">Tentukan akun secara manual untuk reklasifikasi piutang.</p>
       <form method="post" action="{% url 'piutang:reklasifikasi_post' piutang.pk %}">
         {% csrf_token %}
         <div class="ni-form-grid ni-form-grid--2">
@@ -451,18 +703,40 @@
 {% if piutang.jenis_jangka_waktu == 'long_term' %}
 <div class="ni-card ni-animate-fade-in" id="pv-card">
   <div class="ni-card__header">
-    <h2 class="ni-card__title">Nilai Wajar (Present Value)</h2>
+    <h2 class="ni-card__title">Nilai Wajar SAK ETAP (Present Value)</h2>
   </div>
   <div class="ni-card__body">
     {% if piutang.is_pv_adjusted %}
     <dl class="ni-detail-grid">
       <dt>Status PV</dt><dd><span class="ni-badge ni-badge--success">Disesuaikan</span></dd>
-      <dt>Market Rate</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
-      <dt>Nilai Wajar Awal</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
+      <dt>Suku Bunga Pasar (Market Rate)</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
+      <dt>Nilai Wajar Awal (Harga Perolehan)</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
+      <dt>Jumlah Bruto Piutang (Nilai Nominal)</dt>
+      <dd>Rp {{ pv_pokok_remaining|floatformat:0|intcomma }}
+        <span class="ni-text-muted" style="font-size:0.85em"> (pokok saja, ekskl. bunga kontrak)</span>
+      </dd>
+      <dt>Nilai Tercatat (Carrying Amount)</dt><dd>Rp {{ pv_carrying_value|floatformat:0|intcomma }}</dd>
+      <dt>Saldo Pendapatan Bunga Ditangguhkan Belum Diamortisasi</dt>
+      <dd>
+        {% if pv_unamortized_deferred is not None %}
+          <strong>Rp {{ pv_unamortized_deferred|floatformat:0|intcomma }}</strong>
+          <span class="ni-text-muted" style="font-size:0.85em"> (Diskonto Awal − Amortisasi s.d. kini)</span>
+          {% if pv_unamortized_deferred < 0 %}
+            <span class="ni-badge ni-badge--danger" style="margin-left:4px">Negatif</span>
+          {% endif %}
+        {% endif %}
+      </dd>
+      <dt>Tanggal Bunga Efektif Terakhir Diakui</dt><dd>{{ pv_last_amort_date|date:"d M Y" }}</dd>
+      <dt>Akun Pendapatan Bunga Ditangguhkan</dt>
+      <dd>{% if piutang.deferred_income_account %}{{ piutang.deferred_income_account.kode_akun }} — {{ piutang.deferred_income_account.nama_akun }}{% else %}<span class="ni-text-muted">—</span>{% endif %}</dd>
+      <dt>Akun Pendapatan Bunga Efektif</dt>
+      <dd>{% if piutang.interest_income_account %}{{ piutang.interest_income_account.kode_akun }} — {{ piutang.interest_income_account.nama_akun }}{% else %}<span class="ni-badge ni-badge--warning">Belum diset — amortisasi tidak otomatis</span>{% endif %}</dd>
     </dl>
-    {% else %}
-    <p class="ni-text-muted">Belum disesuaikan nilai wajar.</p>
-    {% endif %}
+
+    <hr style="margin:12px 0">
+
+    <p class="ni-text-muted" style="margin-bottom:8px"><strong>Amortisasi Manual (per periode tabel)</strong> — gunakan jika tidak ada auto-amortisasi.</p>
+    <p class="ni-text-muted" style="margin:0 0 6px">Periode berikutnya: <strong>{{ pv_next_periode }}</strong> / {{ pv_total_periode }}</p>
     <form method="post" action="{% url 'piutang:pv_adjustment' piutang.pk %}" class="ni-form-grid ni-form-grid--2">
       {% csrf_token %}
       {% for field in pv_form %}
@@ -472,10 +746,39 @@
         {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
       </div>
       {% endfor %}
-      <div class="ni-form-group">
-        <button type="submit" class="ni-btn ni-btn--secondary">Buat Jurnal Amortisasi</button>
+      <div class="ni-form-group" style="align-self:flex-end">
+        <button type="submit" class="ni-btn ni-btn--secondary">Buat Jurnal Amortisasi Periode {{ pv_next_periode }}</button>
       </div>
     </form>
+
+    <hr style="margin:12px 0">
+
+    <p class="ni-text-muted" style="margin-bottom:8px"><strong>Akrual Akhir Periode</strong> — jika tanggal angsuran ≠ tutup buku.</p>
+    {% if pv_has_pending_accrual %}
+    <p class="ni-badge ni-badge--warning" style="margin-bottom:8px">Ada akrual yang belum dibalik</p>
+    <form method="post" action="{% url 'piutang:pv_accrual_reversal' piutang.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="tanggal" value="{{ today|date:'Y-m-d' }}">
+      <button type="submit" class="ni-btn ni-btn--danger ni-btn--sm">Balik Jurnal Akrual</button>
+    </form>
+    {% else %}
+    <form method="post" action="{% url 'piutang:pv_accrual' piutang.pk %}" class="ni-form-grid ni-form-grid--2" style="margin-top:8px">
+      {% csrf_token %}
+      {% for field in pv_accrual_form %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      </div>
+      {% endfor %}
+      <div class="ni-form-group" style="align-self:flex-end">
+        <button type="submit" class="ni-btn ni-btn--secondary">Buat Jurnal Akrual</button>
+      </div>
+    </form>
+    {% endif %}
+    {% else %}
+    <p class="ni-text-muted">Piutang ini belum menggunakan penyesuaian nilai wajar (PV). Isi <em>Market Rate</em> dan <em>Akun Pendapatan Bunga Ditangguhkan</em> pada form piutang sebelum posting untuk mengaktifkan SAK ETAP gross method.</p>
+    {% endif %}
   </div>
 </div>
 {% endif %}

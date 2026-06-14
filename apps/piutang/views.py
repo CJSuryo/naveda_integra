@@ -3,17 +3,17 @@ from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
+from django.db import transaction
 from django.db.models import Q
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from .forms import (
-    BatchPenyisihanForm,
     PenyisihanRateConfigFormSet,
     PiutangAttachmentForm, PiutangDetailFormSet, PiutangHeaderForm,
     PiutangPenerimaanForm, PiutangPenyisihanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
-    PvAdjustmentForm,
+    PvAccrualForm, PvAdjustmentForm,
 )
 from .models import (
     PenyisihanRateConfig,
@@ -22,6 +22,7 @@ from .models import (
 from .services import (
     _AGING_BUCKET_KEYS,
     _AGING_BUCKET_LABELS,
+    compute_amortization_schedule_pv,
     compute_angsuran_schedule,
     compute_bagian_lancar,
     compute_batch_penyisihan,
@@ -39,7 +40,131 @@ from .services import (
     update_penyisihan_individual,
     write_off_piutang,
     post_piutang, submit_for_approval, approve_piutang, reject_piutang,
+    create_pv_accrual_journal, create_pv_accrual_reversal,
+    _pv_carrying_value, _pv_last_amortization_date, _pv_effective_interest_days,
+    _pv_net_amortized, _pv_pokok_paid,
 )
+
+
+def _piutang_deletion_preview(piutang) -> dict:
+    """
+    Collect every record that will be removed when this piutang is deleted.
+    Returns a dict suitable for the confirmation template.
+    """
+    from apps.jurnal.models import JurnalHeader
+    from .models import PiutangPenyisihan
+
+    nom = piutang.nomor_piutang
+    jurnal_map: dict[int, JurnalHeader] = {}
+
+    def _add(j):
+        if j:
+            jurnal_map[j.pk] = j
+
+    # 1. AR posting journal
+    posting_journals = list(
+        JurnalHeader.objects.filter(uraian_transaksi=f'Pengakuan Piutang {nom}')
+    )
+    for j in posting_journals:
+        _add(j)
+
+    # 2. Payment & payment-reversal journals
+    penerimaan_entries = list(
+        piutang.penerimaan.select_related('jurnal_header', 'payment_account').all()
+    )
+    for p in penerimaan_entries:
+        _add(p.jurnal_header)
+
+    reversal_payments = list(
+        JurnalHeader.objects.filter(uraian_transaksi=f'Reversal Penerimaan {nom}')
+    )
+    for j in reversal_payments:
+        _add(j)
+
+    # 3. PV amortization / accrual / reversal-accrual journals
+    from django.db.models import Q
+    pv_journals = list(
+        JurnalHeader.objects.filter(
+            Q(uraian_transaksi__startswith=f'Amortisasi PV Piutang {nom}') |
+            Q(uraian_transaksi__startswith=f'Akrual PV Piutang {nom}') |
+            Q(uraian_transaksi__startswith=f'Balik Akrual PV Piutang {nom}')
+        )
+    )
+    for j in pv_journals:
+        _add(j)
+
+    # 4. Reklasifikasi journals + their reversals
+    reklasifikasi_entries = list(
+        piutang.reklasifikasi_entries.select_related('jurnal', 'dari_akun', 'ke_akun').all()
+    )
+    for rkl in reklasifikasi_entries:
+        _add(rkl.jurnal)
+        reversal = JurnalHeader.objects.filter(
+            nomor_transaksi=f'TRX-PIU-RKLR-{rkl.pk}'
+        ).first()
+        _add(reversal)
+
+    # 5. Write-off journal
+    write_off = None
+    try:
+        write_off = piutang.write_off
+        _add(write_off.jurnal if write_off.jurnal_id else None)
+    except Exception:
+        pass
+
+    # 6. Penyisihan records + journals
+    penyisihan_entries = list(
+        PiutangPenyisihan.objects.filter(piutang_header=piutang)
+        .select_related('jurnal_header').all()
+    )
+    penyisihan_reversal_journals = list(
+        JurnalHeader.objects.filter(uraian_transaksi=f'Reversal Penyisihan {nom}')
+    )
+    for ps in penyisihan_entries:
+        _add(ps.jurnal_header)
+    for j in penyisihan_reversal_journals:
+        _add(j)
+
+    # 7. Lampiran
+    lampiran = list(piutang.attachments.all())
+
+    # Sorted journals for display
+    journals_sorted = sorted(jurnal_map.values(), key=lambda j: (j.tanggal, j.nomor_transaksi))
+
+    return {
+        'posting_journals': posting_journals,
+        'penerimaan_entries': penerimaan_entries,
+        'reversal_payments': reversal_payments,
+        'pv_journals': pv_journals,
+        'reklasifikasi_entries': reklasifikasi_entries,
+        'write_off': write_off,
+        'penyisihan_entries': penyisihan_entries,
+        'penyisihan_reversal_journals': penyisihan_reversal_journals,
+        'lampiran': lampiran,
+        'all_journals': journals_sorted,
+        'jurnal_count': len(jurnal_map),
+    }
+
+
+def _pv_next_periode(piutang) -> int:
+    """Returns the next unrecorded amortization period number for a piutang."""
+    if not piutang.is_pv_adjusted:
+        return 1
+    from apps.jurnal.models import JurnalHeader as _JH
+    prefix = f'Amortisasi PV Piutang {piutang.nomor_piutang}'
+    recorded = _JH.objects.filter(uraian_transaksi__startswith=prefix).count()
+    return recorded + 1
+
+
+def _pv_has_pending_accrual(piutang) -> bool:
+    """True when there is at least one accrual journal not yet reversed."""
+    if not piutang.is_pv_adjusted:
+        return False
+    from apps.jurnal.models import JurnalHeader as _JH
+    nom = piutang.nomor_piutang
+    n_acc = _JH.objects.filter(uraian_transaksi__startswith=f'Akrual PV Piutang {nom}').count()
+    n_rev = _JH.objects.filter(uraian_transaksi__startswith=f'Balik Akrual PV Piutang {nom}').count()
+    return n_acc > n_rev
 
 
 @login_required
@@ -132,6 +257,11 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                         suku_bunga=cd.get('suku_bunga') or Decimal('0'),
                         periode_angsuran=cd.get('periode_angsuran', 'bulanan'),
                         is_approval_required=cd.get('is_approval_required', False),
+                        pv_discount_rate=cd.get('pv_discount_rate'),
+                        deferred_income_account=cd.get('deferred_income_account'),
+                        interest_income_account=cd.get('interest_income_account'),
+                        coa_piutang_lancar_account=cd.get('coa_piutang_lancar_account'),
+                        deferred_income_lancar_account=cd.get('deferred_income_lancar_account'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
@@ -151,12 +281,76 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
     })
 
 
+def _collect_riwayat_jurnal(piutang, penyisihan_history) -> list:
+    from apps.jurnal.models import JurnalHeader
+
+    entries = []
+
+    # AR posting journal
+    for j in JurnalHeader.objects.filter(
+        uraian_transaksi=f'Pengakuan Piutang {piutang.nomor_piutang}'
+    ):
+        entries.append({'jurnal': j, 'jenis': 'Pengakuan Piutang'})
+
+    # Payment journals (prefetched via penerimaan__jurnal_header)
+    for p in piutang.penerimaan.all():
+        if p.jurnal_header_id:
+            entries.append({'jurnal': p.jurnal_header, 'jenis': 'Penerimaan'})
+
+    # Payment reversal journals (standalone — created after penerimaan is deleted)
+    for j in JurnalHeader.objects.filter(
+        uraian_transaksi__startswith=f'Reversal Penerimaan {piutang.nomor_piutang}'
+    ):
+        entries.append({'jurnal': j, 'jenis': 'Reversal Penerimaan'})
+
+    # Write-off journal
+    try:
+        wo = piutang.write_off
+        if wo.jurnal_id:
+            entries.append({'jurnal': wo.jurnal, 'jenis': 'Write-Off'})
+    except Exception:
+        pass
+
+    # Reklasifikasi journals (prefetched) and their reversal counterparts
+    rkl_pks = []
+    for rkl in piutang.reklasifikasi_entries.all():
+        if rkl.jurnal_id:
+            entries.append({'jurnal': rkl.jurnal, 'jenis': 'Reklasifikasi'})
+        rkl_pks.append(rkl.pk)
+    if rkl_pks:
+        for j in JurnalHeader.objects.filter(
+            nomor_transaksi__in=[f'TRX-PIU-RKLR-{pk}' for pk in rkl_pks]
+        ):
+            entries.append({'jurnal': j, 'jenis': 'Reversal Reklasifikasi'})
+
+    # Penyisihan journals (reuse already-fetched list)
+    for ps in penyisihan_history:
+        if ps.jurnal_header_id:
+            jenis = 'Penyisihan Batch' if ps.jenis == 'batch' else 'Penyisihan'
+            entries.append({'jurnal': ps.jurnal_header, 'jenis': jenis})
+
+    # PV amortization journals
+    for j in JurnalHeader.objects.filter(
+        nomor_transaksi__startswith='TRX-PIU-PV-',
+        uraian_transaksi__startswith=f'Amortisasi PV Piutang {piutang.nomor_piutang}',
+    ):
+        entries.append({'jurnal': j, 'jenis': 'Amortisasi PV'})
+
+    entries.sort(key=lambda x: (x['jurnal'].tanggal, x['jurnal'].nomor_transaksi))
+    return entries
+
+
 @login_required
 def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.master_data.models import Akun
     piutang = get_object_or_404(
         PiutangHeader.objects
-        .select_related('entitas_bisnis', 'coa_piutang_account')
+        .select_related(
+            'entitas_bisnis', 'coa_piutang_account',
+            'coa_piutang_lancar_account', 'deferred_income_account',
+            'interest_income_account', 'deferred_income_lancar_account',
+            'approved_by',
+        )
         .prefetch_related(
             'details', 'penerimaan__payment_account', 'penerimaan__jurnal_header',
             'attachments', 'audit_logs__user', 'reklasifikasi_entries__jurnal',
@@ -167,19 +361,50 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
     attachment_form = PiutangAttachmentForm()
     bagian_lancar = compute_bagian_lancar(piutang) if piutang.can_reklasifikasi else None
     akun_piutang_list = list(Akun.objects.filter(kategori_id='aset').order_by('kode_akun'))
+    akun_all_list = list(Akun.objects.order_by('kode_akun'))
 
     angsuran_schedule = []
+    angsuran_totals = {}
+    sisa_total_bayar = piutang.sisa_piutang  # default: principal only (tanpa_bunga)
     if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
         angsuran_schedule = compute_angsuran_schedule(piutang)
+        if angsuran_schedule:
+            angsuran_totals = {
+                'pokok':     sum(r['pokok']     for r in angsuran_schedule),
+                'bunga':     sum(r['bunga']     for r in angsuran_schedule),
+                'angsuran':  sum(r['angsuran']  for r in angsuran_schedule),
+                'paid':      sum(r['paid']      for r in angsuran_schedule),
+                'sisa_bayar':sum(r['sisa_bayar']for r in angsuran_schedule),
+            }
+            if piutang.jenis_bunga != 'tanpa_bunga':
+                sisa_total_bayar = angsuran_totals['sisa_bayar']
 
     penyisihan_preview = compute_penyisihan_for_piutang(piutang)
     penyisihan_form = PiutangPenyisihanForm(initial={'tanggal': timezone.now().date()})
-    penyisihan_history = (
-        PiutangPenyisihan.objects
-        .filter(piutang_header=piutang)
-        .select_related('jurnal_header', 'allowance_account', 'expense_account', 'created_by')
-        .order_by('-tanggal')
+
+    _psh_qs = PiutangPenyisihan.objects.select_related(
+        'jurnal_header', 'allowance_account', 'expense_account', 'created_by',
     )
+    manual_penyisihan = list(
+        _psh_qs.filter(piutang_header=piutang).order_by('-tanggal')
+    )
+    # Batch penyisihan entries that cover this piutang's EB + allowance account group
+    batch_penyisihan = []
+    if piutang.penyisihan_allowance_account_id:
+        batch_penyisihan = list(
+            _psh_qs.filter(
+                jenis='batch',
+                entitas_bisnis=piutang.entitas_bisnis,
+                allowance_account_id=piutang.penyisihan_allowance_account_id,
+            ).order_by('-tanggal')
+        )
+    penyisihan_history = sorted(
+        manual_penyisihan + batch_penyisihan,
+        key=lambda x: (x.tanggal, x.pk),
+        reverse=True,
+    )
+
+    riwayat_jurnal = _collect_riwayat_jurnal(piutang, penyisihan_history)
 
     return render(request, 'piutang/detail.html', {
         'piutang': piutang,
@@ -187,13 +412,32 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'attachment_form': attachment_form,
         'bagian_lancar': bagian_lancar,
         'akun_piutang_list': akun_piutang_list,
+        'akun_all_list': akun_all_list,
         'write_off_form': PiutangWriteOffForm(initial={'tanggal': timezone.now().date()}),
         'reklasifikasi_form': PiutangReklasifikasiForm(initial={'tanggal': timezone.now().date()}),
         'angsuran_schedule': angsuran_schedule,
+        'angsuran_totals': angsuran_totals,
+        'sisa_total_bayar': sisa_total_bayar,
         'penyisihan_preview': penyisihan_preview,
         'penyisihan_form': penyisihan_form,
         'penyisihan_history': penyisihan_history,
-        'pv_form': PvAdjustmentForm(initial={'tanggal': timezone.now().date(), 'periode_no': 1}),
+        'pv_form': PvAdjustmentForm(initial={'tanggal': timezone.now().date()}),
+        'pv_accrual_form': PvAccrualForm(initial={'tanggal': timezone.now().date()}),
+        'riwayat_jurnal': riwayat_jurnal,
+        'pv_next_periode': _pv_next_periode(piutang),
+        'pv_total_periode': len(compute_amortization_schedule_pv(piutang)) if piutang.is_pv_adjusted else 0,
+        'pv_carrying_value': _pv_carrying_value(piutang) if piutang.is_pv_adjusted else None,
+        'pv_last_amort_date': _pv_last_amortization_date(piutang) if piutang.is_pv_adjusted else None,
+        # Saldo Pend. Bunga Ditangguhkan = initial discount − net amortized so far
+        'pv_unamortized_deferred': (
+            (piutang.jumlah_pokok - piutang.nilai_wajar_awal) - _pv_net_amortized(piutang)
+        ) if (piutang.is_pv_adjusted and piutang.nilai_wajar_awal) else None,
+        # Face value net of principal payments only (excludes contractual interest)
+        'pv_pokok_remaining': (
+            piutang.jumlah_pokok - _pv_pokok_paid(piutang)
+        ) if piutang.is_pv_adjusted else None,
+        'pv_has_pending_accrual': _pv_has_pending_accrual(piutang),
+        'today': timezone.now().date(),
     })
 
 
@@ -235,13 +479,87 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def piutang_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    from django.db.models import Q
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if request.method == 'POST':
-        nomor = piutang.nomor_piutang
-        piutang.delete()
-        dj_messages.success(request, f'Piutang {nomor} dihapus.')
+        from apps.jurnal.models import JurnalHeader
+        from .models import PiutangPenyisihan
+
+        nom = piutang.nomor_piutang
+        with transaction.atomic():
+            journal_ids = set()
+
+            # AR posting journal
+            journal_ids.update(
+                JurnalHeader.objects.filter(
+                    uraian_transaksi=f'Pengakuan Piutang {nom}'
+                ).values_list('pk', flat=True)
+            )
+
+            # Payment journals + payment reversal journals
+            for penerimaan in piutang.penerimaan.all():
+                if penerimaan.jurnal_header_id:
+                    journal_ids.add(penerimaan.jurnal_header_id)
+            journal_ids.update(
+                JurnalHeader.objects.filter(
+                    uraian_transaksi=f'Reversal Penerimaan {nom}'
+                ).values_list('pk', flat=True)
+            )
+
+            # Write-off journal
+            try:
+                wo = piutang.write_off
+                if wo.jurnal_id:
+                    journal_ids.add(wo.jurnal_id)
+            except Exception:
+                pass
+
+            # Reklasifikasi journals and their reversal counterparts
+            for rkl in piutang.reklasifikasi_entries.all():
+                if rkl.jurnal_id:
+                    journal_ids.add(rkl.jurnal_id)
+                reversal_pk = (
+                    JurnalHeader.objects
+                    .filter(nomor_transaksi=f'TRX-PIU-RKLR-{rkl.pk}')
+                    .values_list('pk', flat=True)
+                    .first()
+                )
+                if reversal_pk:
+                    journal_ids.add(reversal_pk)
+
+            # Penyisihan journals + penyisihan reversal journals
+            for ps in PiutangPenyisihan.objects.filter(piutang_header=piutang):
+                if ps.jurnal_header_id:
+                    journal_ids.add(ps.jurnal_header_id)
+            journal_ids.update(
+                JurnalHeader.objects.filter(
+                    uraian_transaksi=f'Reversal Penyisihan {nom}'
+                ).values_list('pk', flat=True)
+            )
+
+            # PV amortization / accrual / reversal-accrual journals
+            journal_ids.update(
+                JurnalHeader.objects.filter(
+                    Q(uraian_transaksi__startswith=f'Amortisasi PV Piutang {nom}') |
+                    Q(uraian_transaksi__startswith=f'Akrual PV Piutang {nom}') |
+                    Q(uraian_transaksi__startswith=f'Balik Akrual PV Piutang {nom}')
+                ).values_list('pk', flat=True)
+            )
+
+            # Delete penyisihan records (piutang_header is SET_NULL so orphaned otherwise)
+            PiutangPenyisihan.objects.filter(piutang_header=piutang).delete()
+
+            nomor = piutang.nomor_piutang
+            piutang.delete()
+
+            if journal_ids:
+                JurnalHeader.objects.filter(pk__in=journal_ids).delete()
+
+        dj_messages.success(request, f'Piutang {nomor} dan seluruh jurnal terkait dihapus.')
         return redirect('piutang:list')
-    return render(request, 'piutang/delete.html', {'piutang': piutang})
+
+    preview = _piutang_deletion_preview(piutang)
+    return render(request, 'piutang/delete.html', {'piutang': piutang, 'preview': preview})
 
 
 @login_required
@@ -315,6 +633,18 @@ def piutang_reklasifikasi_post(request: HttpRequest, pk: int) -> HttpResponse:
                 periode_tahun=cd['tanggal'].year,
             )
             dj_messages.success(request, 'Reklasifikasi berhasil dicatat.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_reklasifikasi_delete(request: HttpRequest, pk: int, rkl_pk: int) -> HttpResponse:
+    rkl = get_object_or_404(PiutangReklasifikasi, pk=rkl_pk, piutang_header_id=pk)
+    if request.method == 'POST':
+        jurnal = rkl.jurnal
+        rkl.delete()
+        if jurnal:
+            jurnal.delete()
+        dj_messages.success(request, 'Data reklasifikasi dan jurnal terkait berhasil dihapus.')
     return redirect('piutang:detail', pk=pk)
 
 
@@ -469,43 +799,151 @@ def piutang_penyisihan_cancel(request: HttpRequest, pk: int, ppk: int) -> HttpRe
 
 @login_required
 def piutang_report_penyisihan(request: HttpRequest) -> HttpResponse:
+    from apps.master_data.models import Akun
+    from apps.master_data.utils import akun_sorted_queryset
+
     batch_preview = None
-    form = BatchPenyisihanForm(initial={'tanggal': timezone.now().date()})
+    tanggal_val = timezone.now().date()
+    catatan_val = ''
     history = (
         PiutangPenyisihan.objects
         .filter(jenis='batch')
-        .select_related('jurnal_header', 'allowance_account', 'expense_account', 'created_by')
+        .select_related('jurnal_header', 'allowance_account', 'expense_account', 'created_by', 'entitas_bisnis')
         .order_by('-tanggal')[:20]
+    )
+
+    # Entitas bisnis filter from GET param
+    from apps.entitas_bisnis.models import EntitasBisnis
+    eb_filter_pk = request.GET.get('eb', '')
+    eb_filter_obj = None
+    if eb_filter_pk:
+        try:
+            eb_filter_obj = EntitasBisnis.objects.get(pk=eb_filter_pk)
+        except (EntitasBisnis.DoesNotExist, ValueError):
+            eb_filter_pk = ''
+
+    eligible_qs = (
+        PiutangHeader.objects
+        .filter(status__in=('open', 'partial', 'overdue'), is_specifically_impaired=False)
+        .select_related(
+            'penyisihan_allowance_account', 'penyisihan_expense_account', 'entitas_bisnis',
+        )
+        .order_by('nomor_piutang')
+    )
+    if eb_filter_obj:
+        eligible_qs = eligible_qs.filter(entitas_bisnis=eb_filter_obj)
+    eligible_piutangs = eligible_qs
+
+    # All distinct entitas bisnis that appear in eligible piutangs (for filter dropdown)
+    eb_choices = (
+        EntitasBisnis.objects
+        .filter(piutang_headers__status__in=('open', 'partial', 'overdue'),
+                piutang_headers__is_specifically_impaired=False)
+        .distinct()
+        .order_by('nama')
     )
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
-        form = BatchPenyisihanForm(request.POST)
-        if form.is_valid():
-            cd = form.cleaned_data
+        tanggal_str = request.POST.get('tanggal', '')
+        catatan_val = request.POST.get('catatan', '')
+        try:
+            from datetime import date as _date
+            tanggal_val = _date.fromisoformat(tanggal_str)
+        except (ValueError, TypeError):
+            dj_messages.error(request, 'Tanggal tidak valid.')
+        else:
             if action == 'preview':
-                batch_preview = compute_batch_penyisihan(cd['tanggal'], cd['allowance_account'])
+                batch_preview = compute_batch_penyisihan(tanggal_val)
             elif action == 'post':
-                batch_data = compute_batch_penyisihan(cd['tanggal'], cd['allowance_account'])
+                batch_data = compute_batch_penyisihan(tanggal_val)
                 try:
-                    create_batch_penyisihan_journal(
+                    entries = create_batch_penyisihan_journal(
                         batch_data=batch_data,
-                        allowance_account=cd['allowance_account'],
-                        expense_account=cd['expense_account'],
-                        tanggal=cd['tanggal'],
-                        catatan=cd.get('catatan', ''),
-                        periode_label=cd['tanggal'].strftime('%Y-%m'),
+                        tanggal=tanggal_val,
+                        catatan=catatan_val,
+                        periode_label=tanggal_val.strftime('%Y-%m'),
                         user=request.user,
                     )
-                    dj_messages.success(request, f'Jurnal penyisihan batch berhasil dibuat. Delta: {batch_data["delta"]}')
+                    n = len(entries)
+                    dj_messages.success(
+                        request,
+                        f'{n} jurnal penyisihan batch berhasil dibuat. '
+                        f'Total delta: {batch_data["total_delta"]:,.0f}',
+                    )
                     return redirect('piutang:report_penyisihan')
                 except ValueError as exc:
                     dj_messages.error(request, str(exc))
                     batch_preview = batch_data
 
+    akun_aset_qs = list(
+        akun_sorted_queryset({'kategori_id': 'aset'}).values('id', 'kode_akun', 'nama')
+    )
+    akun_beban_qs = list(
+        akun_sorted_queryset({'kategori_id': 'beban'}).values('id', 'kode_akun', 'nama')
+    )
+
     return render(request, 'piutang/report_penyisihan.html', {
-        'form': form, 'batch_preview': batch_preview, 'history': history,
+        'tanggal_val': tanggal_val,
+        'catatan_val': catatan_val,
+        'batch_preview': batch_preview,
+        'history': history,
+        'eligible_piutangs': eligible_piutangs,
+        'eb_choices': eb_choices,
+        'eb_filter_pk': eb_filter_pk,
+        'akun_aset_json': json.dumps(akun_aset_qs),
+        'akun_beban_json': json.dumps(akun_beban_qs),
     })
+
+
+@login_required
+def piutang_penyisihan_set_accounts(request: HttpRequest, pk: int) -> JsonResponse:
+    """AJAX: save penyisihan_allowance_account and penyisihan_expense_account per piutang."""
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'Method not allowed'}, status=405)
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    try:
+        body = json.loads(request.body)
+        allowance_id = body.get('allowance_account_id') or None
+        expense_id = body.get('expense_account_id') or None
+    except (json.JSONDecodeError, AttributeError):
+        return JsonResponse({'ok': False, 'error': 'Invalid JSON'}, status=400)
+    from apps.master_data.models import Akun
+    update_fields = []
+    if allowance_id is not None:
+        try:
+            piutang.penyisihan_allowance_account = Akun.objects.get(pk=allowance_id)
+        except Akun.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Akun cadangan tidak ditemukan'}, status=400)
+    else:
+        piutang.penyisihan_allowance_account = None
+    update_fields.append('penyisihan_allowance_account')
+    if expense_id is not None:
+        try:
+            piutang.penyisihan_expense_account = Akun.objects.get(pk=expense_id)
+        except Akun.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'Akun beban tidak ditemukan'}, status=400)
+    else:
+        piutang.penyisihan_expense_account = None
+    update_fields.append('penyisihan_expense_account')
+    piutang.save(update_fields=update_fields)
+    return JsonResponse({'ok': True})
+
+
+@login_required
+def piutang_batch_penyisihan_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a batch penyisihan entry and its associated journal."""
+    from .models import PiutangPenyisihan
+    from .services import reverse_batch_penyisihan_journal
+    entry = get_object_or_404(PiutangPenyisihan, pk=pk, jenis='batch')
+    if request.method == 'POST':
+        try:
+            reverse_batch_penyisihan_journal(entry, user=request.user)
+            dj_messages.success(request, 'Jurnal penyisihan batch berhasil dihapus.')
+        except Exception as exc:
+            dj_messages.error(request, f'Gagal menghapus jurnal: {exc}')
+        return redirect('piutang:report_penyisihan')
+    return render(request, 'piutang/batch_penyisihan_delete_confirm.html', {'entry': entry})
 
 
 @login_required
@@ -591,23 +1029,63 @@ def aging_schedule_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def piutang_set_akun_lancar(request: HttpRequest, pk: int) -> HttpResponse:
+    """Update coa_piutang_lancar_account and deferred_income_lancar_account on any active piutang."""
+    from apps.master_data.models import Akun
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if piutang.status in ('cancelled', 'written_off'):
+        dj_messages.error(request, 'Piutang ini sudah dibatalkan/dihapusbukukan.')
+        return redirect('piutang:detail', pk=pk)
+    if request.method == 'POST':
+        lancar_id = request.POST.get('coa_piutang_lancar_account') or None
+        deferred_lancar_id = request.POST.get('deferred_income_lancar_account') or None
+        try:
+            piutang.coa_piutang_lancar_account = Akun.objects.get(pk=lancar_id) if lancar_id else None
+            piutang.deferred_income_lancar_account = Akun.objects.get(pk=deferred_lancar_id) if deferred_lancar_id else None
+            piutang.save(update_fields=['coa_piutang_lancar_account', 'deferred_income_lancar_account'])
+            dj_messages.success(request, 'Akun bagian lancar berhasil disimpan.')
+        except Akun.DoesNotExist:
+            dj_messages.error(request, 'Akun tidak ditemukan.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
 def piutang_reklasifikasi_bagian_lancar(request: HttpRequest, pk: int) -> HttpResponse:
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if request.method == 'POST':
-        form = PiutangReklasifikasiForm(request.POST)
-        if form.is_valid():
-            cd = form.cleaned_data
-            try:
-                create_reklasifikasi_bagian_lancar(
-                    piutang=piutang,
-                    dari_akun=cd['dari_akun'],
-                    ke_akun=cd['ke_akun'],
-                    tanggal=cd['tanggal'],
-                    user=request.user,
-                )
-                dj_messages.success(request, 'Reklasifikasi bagian lancar berhasil dicatat.')
-            except ValueError as exc:
-                dj_messages.error(request, str(exc))
+        from datetime import date as date_cls
+        tanggal_str = request.POST.get('tanggal', '')
+        try:
+            tanggal = date_cls.fromisoformat(tanggal_str)
+        except ValueError:
+            dj_messages.error(request, 'Tanggal tidak valid.')
+            return redirect('piutang:detail', pk=pk)
+
+        dari_akun = piutang.coa_piutang_account
+        ke_akun = piutang.coa_piutang_lancar_account
+        dari_akun_deferred = piutang.deferred_income_account
+        ke_akun_deferred = piutang.deferred_income_lancar_account
+
+        if not ke_akun:
+            dj_messages.error(
+                request,
+                'Akun Piutang Bagian Lancar belum diset pada piutang ini. '
+                'Edit piutang dan isi kolom tersebut terlebih dahulu.',
+            )
+            return redirect('piutang:detail', pk=pk)
+        try:
+            create_reklasifikasi_bagian_lancar(
+                piutang=piutang,
+                dari_akun=dari_akun,
+                ke_akun=ke_akun,
+                tanggal=tanggal,
+                user=request.user,
+                dari_akun_deferred=dari_akun_deferred,
+                ke_akun_deferred=ke_akun_deferred,
+            )
+            dj_messages.success(request, 'Reklasifikasi bagian lancar berhasil dicatat.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
     return redirect('piutang:detail', pk=pk)
 
 
@@ -652,6 +1130,49 @@ def piutang_disclosure_report(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def piutang_pv_accrual(request: HttpRequest, pk: int) -> HttpResponse:
+    """Create period-end accrual journal for effective interest not yet amortised."""
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PvAccrualForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                create_pv_accrual_journal(
+                    piutang=piutang,
+                    tanggal=cd['tanggal'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Jurnal akrual bunga efektif berhasil dibuat.')
+            except ValueError as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_pv_accrual_reversal(request: HttpRequest, pk: int) -> HttpResponse:
+    """Reverse the last un-reversed period-end accrual journal."""
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        tanggal_str = request.POST.get('tanggal', '')
+        try:
+            from datetime import date as date_cls
+            tanggal = date_cls.fromisoformat(tanggal_str) if tanggal_str else timezone.now().date()
+            create_pv_accrual_reversal(
+                piutang=piutang,
+                tanggal=tanggal,
+                user=request.user,
+            )
+            dj_messages.success(request, 'Jurnal akrual berhasil dibalik.')
+        except ValueError as exc:
+            dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
 def piutang_pv_adjustment(request: HttpRequest, pk: int) -> HttpResponse:
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if request.method == 'POST':
@@ -659,17 +1180,10 @@ def piutang_pv_adjustment(request: HttpRequest, pk: int) -> HttpResponse:
         if form.is_valid():
             cd = form.cleaned_data
             try:
-                market_rate = cd['market_rate']
-                if not piutang.is_pv_adjusted:
-                    piutang.is_pv_adjusted = True
-                    piutang.pv_discount_rate = market_rate
-                    piutang.nilai_wajar_awal = compute_present_value(piutang, market_rate)
-                    piutang.save(update_fields=['is_pv_adjusted', 'pv_discount_rate', 'nilai_wajar_awal'])
                 create_pv_adjustment_journal(
                     piutang=piutang,
                     interest_income_account=cd['interest_income_account'],
                     tanggal=cd['tanggal'],
-                    periode_no=cd['periode_no'],
                     catatan=cd.get('catatan', ''),
                     user=request.user,
                 )

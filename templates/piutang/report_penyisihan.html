@@ -5,7 +5,7 @@
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Penyisihan Piutang — Batch</h1>
-    <p class="ni-page-header__subtitle">Hitung dan buat jurnal penyisihan akhir periode</p>
+    <p class="ni-page-header__subtitle">Konfigurasi akun per piutang, lalu preview dan posting jurnal akhir periode</p>
   </div>
   <div class="ni-page-header__actions">
     <a href="{% url 'piutang:report_aging' %}" class="ni-btn ni-btn--secondary">&#8592; Aging</a>
@@ -13,85 +13,262 @@
   </div>
 </div>
 
+{# ── Konfigurasi Akun per Piutang ─────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Konfigurasi Akun Penyisihan per Piutang</h2>
+    <span class="ni-text-muted" style="font-size:0.85rem">Pilih akun cadangan dan beban untuk setiap piutang. Pilihan disimpan otomatis.</span>
+  </div>
+
+  {# Filter entitas bisnis #}
+  <div class="ni-card__body" style="padding-bottom:0">
+    <form method="get" class="ni-form-grid ni-form-grid--3" style="align-items:flex-end;gap:8px">
+      <div class="ni-form-group" style="margin:0">
+        <label class="ni-form-label">Filter Entitas Bisnis</label>
+        <select name="eb" class="ni-input" id="eb-filter-select" onchange="this.form.submit()">
+          <option value="">— Semua Entitas —</option>
+          {% for eb in eb_choices %}
+          <option value="{{ eb.pk }}" {% if eb_filter_pk == eb.pk|stringformat:'s' %}selected{% endif %}>
+            {{ eb.nama }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% if eb_filter_pk %}
+      <div class="ni-form-group" style="margin:0">
+        <a href="?" class="ni-btn ni-btn--secondary ni-btn--sm">Reset Filter</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if eligible_piutangs %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table" id="config-table">
+      <thead>
+        <tr>
+          <th>Nomor</th>
+          <th>Entitas Bisnis</th>
+          <th>Debitur</th>
+          <th class="ni-text-right">Sisa Piutang</th>
+          <th>Akun Cadangan Kerugian Piutang</th>
+          <th>Akun Beban Penyisihan</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in eligible_piutangs %}
+        <tr id="row-{{ p.pk }}">
+          <td><a href="{% url 'piutang:detail' p.pk %}">{{ p.nomor_piutang }}</a></td>
+          <td>{{ p.entitas_bisnis.nama|default:'-' }}</td>
+          <td>{{ p.entitas_display }}</td>
+          <td class="ni-text-right">{{ p.sisa_piutang|floatformat:0|intcomma }}</td>
+          <td>
+            <select class="ni-input ni-input--sm acct-allowance" data-pk="{{ p.pk }}"
+                    data-selected="{{ p.penyisihan_allowance_account_id|default:'' }}">
+              <option value="">— Pilih Akun Cadangan —</option>
+            </select>
+          </td>
+          <td>
+            <select class="ni-input ni-input--sm acct-expense" data-pk="{{ p.pk }}"
+                    data-selected="{{ p.penyisihan_expense_account_id|default:'' }}">
+              <option value="">— Pilih Akun Beban —</option>
+            </select>
+          </td>
+          <td>
+            <span class="save-status" id="status-{{ p.pk }}" style="font-size:0.8rem">
+              {% if p.penyisihan_allowance_account_id and p.penyisihan_expense_account_id %}
+              <span class="ni-badge ni-badge--success">Terkonfigurasi</span>
+              {% else %}
+              <span class="ni-badge ni-badge--warning">Belum</span>
+              {% endif %}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Tidak ada piutang aktif yang memerlukan penyisihan.</p></div>
+  {% endif %}
+</div>
+
+{# ── Parameter & Preview/Post ─────────────────────────────────────────── #}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Parameter Perhitungan</h2></div>
   <div class="ni-card__body">
     <form method="post" id="batch-form">
       {% csrf_token %}
-      <div class="ni-form-grid ni-form-grid--2">
-        {% for field in form %}
-        <div class="ni-form-group {% if field.name == 'catatan' %}ni-form-group--full{% endif %}">
-          <label class="ni-form-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      <div class="ni-form-grid ni-form-grid--3">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Tanggal Perhitungan</label>
+          <input type="date" name="tanggal" class="ni-input" value="{{ tanggal_val|date:'Y-m-d' }}" required>
         </div>
-        {% endfor %}
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label">Catatan</label>
+          <input type="text" name="catatan" class="ni-input" value="{{ catatan_val }}" placeholder="Catatan (opsional)">
+        </div>
       </div>
       <div class="ni-btn-row">
         <button type="submit" name="action" value="preview" class="ni-btn ni-btn--secondary">Preview</button>
-        {% if batch_preview and batch_preview.delta != 0 %}
-        <button type="submit" name="action" value="post" class="ni-btn ni-btn--primary" onclick="return confirm('Buat jurnal penyisihan batch? Delta: Rp {{ batch_preview.delta|floatformat:0|intcomma }}')">Post Jurnal</button>
+        {% if batch_preview and batch_preview.total_delta != 0 %}
+        <button type="submit" name="action" value="post" class="ni-btn ni-btn--primary"
+                onclick="return confirm('Buat jurnal penyisihan batch? Total delta: Rp {{ batch_preview.total_delta|floatformat:0|intcomma }}')">
+          Post Jurnal
+        </button>
         {% endif %}
       </div>
     </form>
   </div>
 </div>
 
+{# ── Preview hasil per grup akun ──────────────────────────────────────── #}
 {% if batch_preview %}
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__header"><h2 class="ni-card__title">Preview Perhitungan</h2></div>
-  <div class="ni-card__body">
-    <dl class="ni-detail-grid">
-      <dt>Jumlah Piutang Dihitung</dt><dd>{{ batch_preview.piutang_count }}</dd>
-      <dt>Target Saldo Cadangan</dt><dd><strong>Rp {{ batch_preview.target_saldo|floatformat:0|intcomma }}</strong></dd>
-      <dt>Saldo Existing Akun Cadangan</dt><dd>Rp {{ batch_preview.saldo_existing|floatformat:0|intcomma }}</dd>
-      <dt>Delta (Jurnal yang Akan Dibuat)</dt>
-      <dd>
-        <strong>Rp {{ batch_preview.delta|floatformat:0|intcomma }}</strong>
-        {% if batch_preview.delta > 0 %}<span class="ni-badge ni-badge--danger">Tambah Beban</span>
-        {% elif batch_preview.delta < 0 %}<span class="ni-badge ni-badge--success">Pemulihan</span>
-        {% else %}<span class="ni-badge">Tidak Ada Perubahan</span>{% endif %}
-      </dd>
-    </dl>
-  </div>
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead><tr><th>Bucket</th><th class="ni-text-right">Jumlah Piutang</th><th class="ni-text-right">Rate (%)</th><th class="ni-text-right">Penyisihan</th></tr></thead>
-      <tbody>
-        {% for b in batch_preview.breakdown %}
-        <tr {% if b.jumlah_piutang == 0 %}class="ni-row--muted"{% endif %}>
-          <td>{{ b.label }}</td>
-          <td class="ni-text-right">{{ b.jumlah_piutang|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{{ b.rate }}%</td>
-          <td class="ni-text-right">{{ b.penyisihan|floatformat:0|intcomma }}</td>
-        </tr>
+  {% if batch_preview.unconfigured %}
+  <div class="ni-card ni-animate-fade-in" style="border-left:4px solid var(--ni-color-warning)">
+    <div class="ni-card__header"><h2 class="ni-card__title">Piutang Belum Terkonfigurasi ({{ batch_preview.unconfigured|length }})</h2></div>
+    <div class="ni-card__body">
+      <p class="ni-text-muted">Piutang berikut tidak disertakan dalam perhitungan karena akun penyisihan belum diset:</p>
+      <ul style="margin:8px 0 0 16px">
+        {% for p in batch_preview.unconfigured %}
+        <li><a href="{% url 'piutang:detail' p.pk %}">{{ p.nomor_piutang }}</a> — {{ p.entitas_display }}</li>
         {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colspan="3"><strong>Target Saldo</strong></td>
-          <td class="ni-text-right"><strong>{{ batch_preview.target_saldo|floatformat:0|intcomma }}</strong></td>
-        </tr>
-      </tfoot>
-    </table>
+      </ul>
+    </div>
   </div>
-</div>
+  {% endif %}
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Preview Perhitungan</h2>
+    </div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Piutang Dihitung</dt><dd>{{ batch_preview.piutang_count }}</dd>
+        <dt>Total Target Saldo</dt><dd><strong>Rp {{ batch_preview.total_target|floatformat:0|intcomma }}</strong></dd>
+        <dt>Total Delta</dt>
+        <dd>
+          <strong>Rp {{ batch_preview.total_delta|floatformat:0|intcomma }}</strong>
+          {% if batch_preview.total_delta > 0 %}<span class="ni-badge ni-badge--danger">Tambah Beban</span>
+          {% elif batch_preview.total_delta < 0 %}<span class="ni-badge ni-badge--success">Pemulihan</span>
+          {% else %}<span class="ni-badge">Tidak Ada Perubahan</span>{% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+
+  {% for g in batch_preview.groups %}
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">
+        {% if g.entitas_bisnis %}{{ g.entitas_bisnis.nama }} — {% endif %}Cadangan: {{ g.allowance_account.kode_akun }} — {{ g.allowance_account.nama }}
+      </h2>
+      <span class="ni-text-muted" style="font-size:0.85rem">
+        Beban: {{ g.expense_account.kode_akun }} — {{ g.expense_account.nama }}
+      </span>
+    </div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Target Saldo</dt><dd>Rp {{ g.target_saldo|floatformat:0|intcomma }}</dd>
+        <dt>Saldo Existing</dt><dd>Rp {{ g.saldo_existing|floatformat:0|intcomma }}</dd>
+        <dt>Delta</dt>
+        <dd>
+          <strong>Rp {{ g.delta|floatformat:0|intcomma }}</strong>
+          {% if g.delta > 0 %}<span class="ni-badge ni-badge--danger">Tambah Beban</span>
+          {% elif g.delta < 0 %}<span class="ni-badge ni-badge--success">Pemulihan</span>
+          {% else %}<span class="ni-badge">Tidak Ada Perubahan</span>{% endif %}
+        </dd>
+      </dl>
+    </div>
+
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Bucket Aging</th>
+            <th class="ni-text-right">Jumlah Piutang</th>
+            <th class="ni-text-right">Rate (%)</th>
+            <th class="ni-text-right">Penyisihan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in g.breakdown %}
+          <tr {% if b.jumlah_piutang == 0 %}class="ni-row--muted"{% endif %}>
+            <td>{{ b.label }}</td>
+            <td class="ni-text-right">{{ b.jumlah_piutang|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ b.rate }}%</td>
+            <td class="ni-text-right">{{ b.penyisihan|floatformat:0|intcomma }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"><strong>Target Saldo</strong></td>
+            <td class="ni-text-right"><strong>{{ g.target_saldo|floatformat:0|intcomma }}</strong></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    {% if g.piutang_list %}
+    <details style="padding:12px 16px">
+      <summary style="cursor:pointer;font-weight:600">Detail Piutang ({{ g.piutang_list|length }})</summary>
+      <table class="ni-table" style="margin-top:8px">
+        <thead><tr><th>Nomor</th><th>Debitur</th><th class="ni-text-right">Penyisihan</th></tr></thead>
+        <tbody>
+          {% for row in g.piutang_list %}
+          <tr>
+            <td><a href="{% url 'piutang:detail' row.piutang.pk %}">{{ row.piutang.nomor_piutang }}</a></td>
+            <td>{{ row.piutang.entitas_display }}</td>
+            <td class="ni-text-right">{{ row.penyisihan|floatformat:0|intcomma }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
+  </div>
+  {% endfor %}
 {% endif %}
 
+{# ── Riwayat ──────────────────────────────────────────────────────────── #}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Riwayat Batch Penyisihan</h2></div>
   {% if history %}
   <div class="ni-table-wrapper">
     <table class="ni-table">
-      <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah</th><th>Jurnal</th><th>Catatan</th><th>Dibuat Oleh</th></tr></thead>
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
+          <th class="ni-text-right">Jumlah</th>
+          <th>Akun Cadangan</th>
+          <th>Jurnal</th>
+          <th>Catatan</th>
+          <th>Dibuat Oleh</th>
+          <th></th>
+        </tr>
+      </thead>
       <tbody>
         {% for ps in history %}
         <tr>
           <td>{{ ps.tanggal }}</td>
-          <td class="ni-text-right {% if ps.jumlah < 0 %}ni-text-success{% endif %}">{{ ps.jumlah|floatformat:0|intcomma }}</td>
+          <td>{{ ps.entitas_bisnis.nama|default:'—' }}</td>
+          <td class="ni-text-right {% if ps.jumlah < 0 %}ni-text-success{% endif %}">
+            {{ ps.jumlah|floatformat:0|intcomma }}
+          </td>
+          <td>{% if ps.allowance_account %}{{ ps.allowance_account.kode_akun }} — {{ ps.allowance_account.nama }}{% else %}-{% endif %}</td>
           <td>{% if ps.jurnal_header %}<a href="{% url 'jurnal:header_detail' ps.jurnal_header.pk %}">{{ ps.jurnal_header.nomor_transaksi }}</a>{% else %}-{% endif %}</td>
           <td>{{ ps.catatan|default:'-' }}</td>
           <td>{{ ps.created_by|default:'-' }}</td>
+          <td>
+            <a href="{% url 'piutang:batch_penyisihan_delete' ps.pk %}"
+               class="ni-btn ni-btn--danger ni-btn--sm"
+               title="Hapus jurnal">
+              <i data-lucide="trash-2"></i>
+            </a>
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -101,4 +278,76 @@
   <div class="ni-card__body"><p class="ni-text-muted">Belum ada jurnal batch.</p></div>
   {% endif %}
 </div>
+
+<script>
+(function () {
+  const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] ?? '';
+  const akunAset = {{ akun_aset_json|safe }};
+  const akunBeban = {{ akun_beban_json|safe }};
+
+  function populateSelect(sel, opts, selectedId) {
+    opts.forEach(function (o) {
+      const opt = document.createElement('option');
+      opt.value = o.id;
+      opt.textContent = o.kode_akun + ' — ' + o.nama;
+      if (String(o.id) === String(selectedId)) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    if (typeof TomSelect !== 'undefined' && !sel._tomSelect) {
+      new TomSelect(sel, { allowEmptyOption: true, maxOptions: 1000 });
+    }
+  }
+
+  document.querySelectorAll('.acct-allowance').forEach(function (sel) {
+    populateSelect(sel, akunAset, sel.dataset.selected);
+  });
+  document.querySelectorAll('.acct-expense').forEach(function (sel) {
+    populateSelect(sel, akunBeban, sel.dataset.selected);
+  });
+
+  function saveRow(pk) {
+    const row = document.getElementById('row-' + pk);
+    const allowSel = row.querySelector('.acct-allowance');
+    const expSel   = row.querySelector('.acct-expense');
+    const statusEl = document.getElementById('status-' + pk);
+    statusEl.innerHTML = '<span class="ni-badge">Menyimpan…</span>';
+
+    fetch('/piutang/' + pk + '/penyisihan/set-accounts/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF,
+      },
+      body: JSON.stringify({
+        allowance_account_id: allowSel.value || null,
+        expense_account_id:   expSel.value   || null,
+      }),
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data.ok) {
+        const both = allowSel.value && expSel.value;
+        statusEl.innerHTML = both
+          ? '<span class="ni-badge ni-badge--success">Tersimpan</span>'
+          : '<span class="ni-badge ni-badge--warning">Belum lengkap</span>';
+      } else {
+        statusEl.innerHTML = '<span class="ni-badge ni-badge--danger">Error: ' + (data.error || '?') + '</span>';
+      }
+    })
+    .catch(function () {
+      statusEl.innerHTML = '<span class="ni-badge ni-badge--danger">Gagal</span>';
+    });
+  }
+
+  // Save on change with short debounce
+  const timers = {};
+  document.querySelectorAll('.acct-allowance, .acct-expense').forEach(function (sel) {
+    sel.addEventListener('change', function () {
+      const pk = sel.dataset.pk;
+      clearTimeout(timers[pk]);
+      timers[pk] = setTimeout(function () { saveRow(pk); }, 300);
+    });
+  });
+})();
+</script>
 {% endblock %}

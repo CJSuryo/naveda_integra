@@ -1,19 +1,291 @@
 {% extends 'base.html' %}
-{% block title %}Hapus Piutang{% endblock %}
+{% block title %}Hapus Piutang — {{ piutang.nomor_piutang }}{% endblock %}
 {% block content %}
-<div class="ni-card ni-animate-fade-in ni-card--centered">
-  <div class="ni-card__body ni-card__body--centered">
-    <div class="ni-icon-circle ni-icon-circle--danger">
-      <i data-lucide="trash-2"></i>
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Konfirmasi Hapus Piutang</h1>
+    <p class="ni-page-header__subtitle">Tinjau semua data yang akan terhapus sebelum melanjutkan.</p>
+  </div>
+</div>
+
+{# ── Warning banner ─────────────────────────────────────────────────────── #}
+<div class="ni-alert ni-alert--danger ni-animate-fade-in" style="margin-bottom:20px">
+  <i data-lucide="triangle-alert" style="flex-shrink:0"></i>
+  <div>
+    Penghapusan <strong>{{ piutang.nomor_piutang }}</strong> bersifat permanen dan tidak dapat dibatalkan.
+    Seluruh <strong>{{ preview.jurnal_count }} jurnal</strong> terkait akan ikut dihapus dari buku besar.
+  </div>
+</div>
+
+{# ── Piutang header ──────────────────────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Piutang yang Dihapus</h2>
+  </div>
+  <div class="ni-card__body">
+    <div class="ni-form-grid ni-form-grid--3">
+      <div><span class="ni-text-muted">Nomor</span><br><strong>{{ piutang.nomor_piutang }}</strong></div>
+      <div><span class="ni-text-muted">Debitur</span><br><strong>{{ piutang.debitur }}</strong></div>
+      <div><span class="ni-text-muted">Tanggal</span><br><strong>{{ piutang.tanggal }}</strong></div>
+      <div><span class="ni-text-muted">Jumlah Pokok</span><br><strong>{{ piutang.jumlah_pokok|floatformat:2 }}</strong></div>
+      <div><span class="ni-text-muted">Status</span><br><span class="ni-badge ni-badge--{{ piutang.status }}">{{ piutang.get_status_display }}</span></div>
+      <div><span class="ni-text-muted">Jatuh Tempo</span><br><strong>{{ piutang.jatuh_tempo|default:"—" }}</strong></div>
     </div>
-    <p class="ni-confirm-text">Hapus <strong>{{ piutang.nomor_piutang }}</strong>?</p>
-    <form method="post">
+  </div>
+</div>
+
+{# ── Detail baris ────────────────────────────────────────────────────────── #}
+{% with details=piutang.details.all %}
+{% if details %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Detail Baris Piutang ({{ details|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Deskripsi</th><th class="ni-text-right">Jumlah</th><th>Akun Pendapatan</th></tr></thead>
+      <tbody>
+        {% for d in details %}
+        <tr>
+          <td>{{ d.deskripsi }}</td>
+          <td class="ni-text-right">{{ d.jumlah|floatformat:2 }}</td>
+          <td>{% if d.revenue_account %}{{ d.revenue_account.kode_akun }} — {{ d.revenue_account.nama_akun }}{% else %}<span class="ni-text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endwith %}
+
+{# ── Penerimaan ──────────────────────────────────────────────────────────── #}
+{% if preview.penerimaan_entries %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Penerimaan ({{ preview.penerimaan_entries|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Referensi</th><th class="ni-text-right">Jumlah</th><th>Akun Kas</th><th>Jurnal</th></tr></thead>
+      <tbody>
+        {% for p in preview.penerimaan_entries %}
+        <tr>
+          <td>{{ p.tanggal_terima }}</td>
+          <td>{{ p.nomor_referensi|default:"—" }}</td>
+          <td class="ni-text-right">{{ p.jumlah_diterima|floatformat:2 }}</td>
+          <td>{% if p.payment_account %}{{ p.payment_account.kode_akun }}{% else %}—{% endif %}</td>
+          <td>{% if p.jurnal_header %}<span class="ni-badge ni-badge--info">{{ p.jurnal_header.nomor_transaksi }}</span>{% else %}<span class="ni-text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Reversal penerimaan ─────────────────────────────────────────────────── #}
+{% if preview.reversal_payments %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Reversal Penerimaan ({{ preview.reversal_payments|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Uraian</th></tr></thead>
+      <tbody>
+        {% for j in preview.reversal_payments %}
+        <tr>
+          <td><span class="ni-badge ni-badge--warning">{{ j.nomor_transaksi }}</span></td>
+          <td>{{ j.tanggal }}</td>
+          <td>{{ j.uraian_transaksi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── PV journals ─────────────────────────────────────────────────────────── #}
+{% if preview.pv_journals %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Jurnal SAK ETAP — Amortisasi / Akrual PV ({{ preview.pv_journals|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Uraian</th></tr></thead>
+      <tbody>
+        {% for j in preview.pv_journals %}
+        <tr>
+          <td><span class="ni-badge ni-badge--info">{{ j.nomor_transaksi }}</span></td>
+          <td>{{ j.tanggal }}</td>
+          <td>{{ j.uraian_transaksi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Reklasifikasi ───────────────────────────────────────────────────────── #}
+{% if preview.reklasifikasi_entries %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Reklasifikasi ({{ preview.reklasifikasi_entries|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th>Dari Akun</th><th>Ke Akun</th><th class="ni-text-right">Jumlah</th><th>Jurnal</th></tr></thead>
+      <tbody>
+        {% for rkl in preview.reklasifikasi_entries %}
+        <tr>
+          <td>{{ rkl.tanggal }}</td>
+          <td>{% if rkl.dari_akun %}{{ rkl.dari_akun.kode_akun }}{% else %}—{% endif %}</td>
+          <td>{% if rkl.ke_akun %}{{ rkl.ke_akun.kode_akun }}{% else %}—{% endif %}</td>
+          <td class="ni-text-right">{{ rkl.jumlah|floatformat:2 }}</td>
+          <td>{% if rkl.jurnal %}<span class="ni-badge ni-badge--info">{{ rkl.jurnal.nomor_transaksi }}</span>{% else %}<span class="ni-text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Write-off ───────────────────────────────────────────────────────────── #}
+{% if preview.write_off %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Write-Off</h2>
+  </div>
+  <div class="ni-card__body">
+    <div class="ni-form-grid ni-form-grid--3">
+      <div><span class="ni-text-muted">Tanggal</span><br><strong>{{ preview.write_off.tanggal }}</strong></div>
+      <div><span class="ni-text-muted">Metode</span><br><strong>{{ preview.write_off.get_metode_display }}</strong></div>
+      <div><span class="ni-text-muted">Jurnal</span><br>
+        {% if preview.write_off.jurnal %}<span class="ni-badge ni-badge--info">{{ preview.write_off.jurnal.nomor_transaksi }}</span>{% else %}<span class="ni-text-muted">—</span>{% endif %}
+      </div>
+      {% if preview.write_off.alasan %}
+      <div class="ni-form-group--full"><span class="ni-text-muted">Alasan</span><br>{{ preview.write_off.alasan }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ── Penyisihan ──────────────────────────────────────────────────────────── #}
+{% if preview.penyisihan_entries %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Penyisihan Kerugian Piutang ({{ preview.penyisihan_entries|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah</th><th>Akun Cadangan</th><th>Jurnal</th></tr></thead>
+      <tbody>
+        {% for ps in preview.penyisihan_entries %}
+        <tr>
+          <td>{{ ps.tanggal }}</td>
+          <td class="ni-text-right">{{ ps.jumlah|floatformat:2 }}</td>
+          <td>{% if ps.allowance_account %}{{ ps.allowance_account.kode_akun }}{% else %}—{% endif %}</td>
+          <td>{% if ps.jurnal_header %}<span class="ni-badge ni-badge--info">{{ ps.jurnal_header.nomor_transaksi }}</span>{% else %}<span class="ni-text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if preview.penyisihan_reversal_journals %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Reversal Penyisihan ({{ preview.penyisihan_reversal_journals|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Uraian</th></tr></thead>
+      <tbody>
+        {% for j in preview.penyisihan_reversal_journals %}
+        <tr>
+          <td><span class="ni-badge ni-badge--warning">{{ j.nomor_transaksi }}</span></td>
+          <td>{{ j.tanggal }}</td>
+          <td>{{ j.uraian_transaksi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Lampiran ────────────────────────────────────────────────────────────── #}
+{% if preview.lampiran %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Lampiran ({{ preview.lampiran|length }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Nama File</th><th>Jenis Dokumen</th><th>Diunggah</th></tr></thead>
+      <tbody>
+        {% for att in preview.lampiran %}
+        <tr>
+          <td>{{ att.file_name|default:att.file }}</td>
+          <td>{{ att.get_jenis_dokumen_display|default:"—" }}</td>
+          <td>{{ att.uploaded_at|date:"d M Y" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Ringkasan jurnal ────────────────────────────────────────────────────── #}
+{% if preview.all_journals %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Ringkasan Jurnal yang Akan Dihapus ({{ preview.jurnal_count }})</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>No. Transaksi</th><th>Tanggal</th><th>Uraian</th></tr></thead>
+      <tbody>
+        {% for j in preview.all_journals %}
+        <tr>
+          <td><span class="ni-badge ni-badge--neutral">{{ j.nomor_transaksi }}</span></td>
+          <td>{{ j.tanggal }}</td>
+          <td>{{ j.uraian_transaksi }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Confirm / cancel buttons ────────────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="text-align:center">
+    <p style="margin-bottom:16px">
+      Anda yakin ingin menghapus <strong>{{ piutang.nomor_piutang }}</strong> beserta
+      <strong>{{ preview.jurnal_count }} jurnal</strong> dan semua data terkait di atas?
+    </p>
+    <form method="post" style="display:inline">
       {% csrf_token %}
       <div class="ni-btn-row ni-btn-row--center">
-        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <button type="submit" class="ni-btn ni-btn--danger">
+          <i data-lucide="trash-2"></i> Ya, Hapus Permanen
+        </button>
         <a href="{% url 'piutang:detail' piutang.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
 </div>
+
 {% endblock %}

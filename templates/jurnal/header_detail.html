@@ -7,7 +7,11 @@
     <h1 class="ni-page-header__title">{% if object.transaction_prefix %}{{ object.transaction_prefix.kode }}-{% endif %}{{ object.nomor_transaksi }}</h1>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'jurnal:rekap_jurnal' %}" class="ni-btn ni-btn--secondary"><i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali ke Rekap</a>
+    <a href="{% url 'jurnal:rekap_jurnal' %}"
+       onclick="if(document.referrer && document.referrer !== window.location.href){ history.back(); return false; }"
+       class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
   </div>
 </div>
 

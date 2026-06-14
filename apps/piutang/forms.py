@@ -18,6 +18,8 @@ class PiutangHeaderForm(forms.ModelForm):
             'jenis_jangka_waktu', 'coa_piutang_account',
             'jenis_bunga', 'suku_bunga', 'periode_angsuran',
             'is_approval_required',
+            'pv_discount_rate', 'deferred_income_account', 'interest_income_account',
+            'coa_piutang_lancar_account', 'deferred_income_lancar_account',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -30,6 +32,11 @@ class PiutangHeaderForm(forms.ModelForm):
             'suku_bunga': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
             'periode_angsuran': forms.Select(attrs={'class': 'ni-input'}),
             'is_approval_required': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
+            'pv_discount_rate': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+            'deferred_income_account': forms.Select(attrs={'class': 'ni-input'}),
+            'interest_income_account': forms.Select(attrs={'class': 'ni-input'}),
+            'coa_piutang_lancar_account': forms.Select(attrs={'class': 'ni-input'}),
+            'deferred_income_lancar_account': forms.Select(attrs={'class': 'ni-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -37,8 +44,21 @@ class PiutangHeaderForm(forms.ModelForm):
         self.fields['deskripsi'].required = False
         self.fields['jatuh_tempo'].required = False
         self.fields['suku_bunga'].required = False
+        self.fields['pv_discount_rate'].required = False
+        self.fields['deferred_income_account'].required = False
+        self.fields['interest_income_account'].required = False
+        self.fields['coa_piutang_lancar_account'].required = False
+        self.fields['deferred_income_lancar_account'].required = False
         self.fields['coa_piutang_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['coa_piutang_account'].empty_label = '— Pilih Akun Piutang —'
+        self.fields['deferred_income_account'].queryset = akun_sorted_queryset()
+        self.fields['deferred_income_account'].empty_label = '— Pilih Akun Pend. Bunga Ditangguhkan —'
+        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})
+        self.fields['interest_income_account'].empty_label = '— Pilih Akun Pendapatan Bunga Efektif —'
+        self.fields['coa_piutang_lancar_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['coa_piutang_lancar_account'].empty_label = '— Pilih Akun Piutang Bagian Lancar —'
+        self.fields['deferred_income_lancar_account'].queryset = akun_sorted_queryset()
+        self.fields['deferred_income_lancar_account'].empty_label = '— Pilih Akun Pend. Bunga Ditangguhkan BL —'
 
 
 class PiutangDetailForm(forms.ModelForm):
@@ -176,7 +196,7 @@ class PiutangPenyisihanForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'kewajiban'})
+        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['expense_account'].queryset = akun_sorted_queryset({'kategori_id': 'beban'})
 
 
@@ -204,7 +224,7 @@ class BatchPenyisihanForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'kewajiban'})
+        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['expense_account'].queryset = akun_sorted_queryset({'kategori_id': 'beban'})
 
 
@@ -225,21 +245,11 @@ class PvAdjustmentForm(forms.Form):
         widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
         label='Tanggal Jurnal',
     )
-    market_rate = forms.DecimalField(
-        max_digits=8, decimal_places=4,
-        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
-        label='Market Rate (%/tahun)',
-    )
     interest_income_account = forms.ModelChoiceField(
         queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Pendapatan Bunga Efektif',
         empty_label='— Pilih Akun —',
-    )
-    periode_no = forms.IntegerField(
-        min_value=1,
-        widget=forms.NumberInput(attrs={'class': 'ni-input', 'min': '1'}),
-        label='Nomor Periode Angsuran',
     )
     catatan = forms.CharField(
         required=False,
@@ -250,3 +260,15 @@ class PvAdjustmentForm(forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})
+
+
+class PvAccrualForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Akrual (Akhir Periode)',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input'}),
+        label='Catatan',
+    )

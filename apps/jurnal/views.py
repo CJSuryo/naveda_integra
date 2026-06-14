@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
+from apps.master_data.utils import natural_sort_key
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 from apps.aset_tetap.models import AsetTetapRecord
 from apps.aset_lainnya.models import AsetLainnyaRecord
@@ -562,7 +563,6 @@ def akun_autocomplete(request: HttpRequest) -> JsonResponse:
     return_all = request.GET.get('all', '')
     prefix = request.GET.get('prefix', '')
 
-    from apps.master_data.utils import natural_sort_key
 
     qs = Akun.objects.filter(
         Q(nama__icontains=term) | Q(kode_akun__icontains=term)
@@ -1070,7 +1070,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
         """Collect all akun rows matching prefix, sorted by kode."""
         return sorted(
             [v for k, v in akun_data.items() if _is_prefix(k, prefix)],
-            key=lambda x: x['kode'],
+            key=lambda x: natural_sort_key(x['kode']),
         )
 
     def _sum_net(items: list[dict], net_type: str = 'kredit') -> Decimal:
@@ -1119,7 +1119,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
                         beban_op_items.append(data)
                 except ValueError:
                     pass
-    beban_op_items.sort(key=lambda x: x['kode'])
+    beban_op_items.sort(key=lambda x: natural_sort_key(x['kode']))
     total_beban_op = _sum_net(beban_op_items, 'debit')
 
     # 5. Laba Operasional
@@ -1964,7 +1964,7 @@ def neraca(request: HttpRequest) -> HttpResponse:
         """
         items = []
         total = Decimal('0')
-        for kode, data in sorted(akun_balances.items(), key=lambda x: x[0]):
+        for kode, data in sorted(akun_balances.items(), key=lambda x: natural_sort_key(x[0])):
             if kode.startswith(prefix + '.') or kode == prefix:
                 if normal == 'debit':
                     net = data['debit'] - data['kredit']

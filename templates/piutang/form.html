@@ -22,7 +22,7 @@
           </select>
         </div>
         {% for field in form %}
-          {% if field.name != 'jenis_bunga' and field.name != 'suku_bunga' and field.name != 'periode_angsuran' %}
+          {% if field.name != 'jenis_bunga' and field.name != 'suku_bunga' and field.name != 'periode_angsuran' and field.name != 'pv_discount_rate' and field.name != 'deferred_income_account' and field.name != 'interest_income_account' and field.name != 'coa_piutang_lancar_account' and field.name != 'deferred_income_lancar_account' %}
           <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
             <label class="ni-form-label">{{ field.label }}</label>
             {{ field }}
@@ -55,6 +55,49 @@
           <label class="ni-form-label">{{ form.periode_angsuran.label }}</label>
           {{ form.periode_angsuran }}
           {% if form.periode_angsuran.errors %}<div class="ni-form-error">{{ form.periode_angsuran.errors }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in" id="pv-setup-card" style="display:none">
+    <div class="ni-card__header"><h2 class="ni-card__title">Nilai Wajar SAK ETAP (Opsional)</h2></div>
+    <div class="ni-card__body">
+      <p class="ni-text-muted" style="margin-bottom:12px">
+        Isi jika suku bunga kontrak di bawah pasar. Contoh: kontrak 1%, bunga pasar (BI) 5,5% — maka isi <em>Market Rate</em> = 5,5%. Nilai wajar dihitung dari arus kas kontrak yang didiskon pada rate pasar (majemuk). Selisih face − PV dicatat sebagai Pendapatan Bunga Ditangguhkan.
+      </p>
+      <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.pv_discount_rate.label }}</label>
+          {{ form.pv_discount_rate }}
+          {% if form.pv_discount_rate.errors %}<div class="ni-form-error">{{ form.pv_discount_rate.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.deferred_income_account.label }}</label>
+          {{ form.deferred_income_account }}
+          {% if form.deferred_income_account.errors %}<div class="ni-form-error">{{ form.deferred_income_account.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.interest_income_account.label }}</label>
+          {{ form.interest_income_account }}
+          {% if form.interest_income_account.errors %}<div class="ni-form-error">{{ form.interest_income_account.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <hr style="margin:16px 0">
+      <p class="ni-text-muted" style="margin-bottom:12px">
+        <strong>Reklasifikasi Bagian Lancar</strong> — isi untuk mengaktifkan jurnal reklasifikasi otomatis per periode tutup buku.
+        Bagian nominal direklasifikasi ke akun piutang bagian lancar; porsi diskonto proporsional ke akun Pend. Bunga Ditangguhkan bagian lancar.
+      </p>
+      <div class="ni-form-grid ni-form-grid--2">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.coa_piutang_lancar_account.label }}</label>
+          {{ form.coa_piutang_lancar_account }}
+          {% if form.coa_piutang_lancar_account.errors %}<div class="ni-form-error">{{ form.coa_piutang_lancar_account.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.deferred_income_lancar_account.label }}</label>
+          {{ form.deferred_income_lancar_account }}
+          {% if form.deferred_income_lancar_account.errors %}<div class="ni-form-error">{{ form.deferred_income_lancar_account.errors }}</div>{% endif %}
         </div>
       </div>
     </div>
@@ -170,14 +213,13 @@
   var jwtEl = document.getElementById('id_jenis_jangka_waktu');
   var bungaEl = document.getElementById('id_jenis_bunga');
   var bungaCard = document.getElementById('bunga-angsuran-card');
+  var pvSetupCard = document.getElementById('pv-setup-card');
   var sukuBungaGroup = document.getElementById('suku-bunga-group');
 
   function toggleBungaCard() {
-    if (jwtEl && jwtEl.value === 'long_term') {
-      bungaCard.style.display = '';
-    } else {
-      bungaCard.style.display = 'none';
-    }
+    var isLongTerm = jwtEl && jwtEl.value === 'long_term';
+    if (bungaCard) bungaCard.style.display = isLongTerm ? '' : 'none';
+    if (pvSetupCard) pvSetupCard.style.display = isLongTerm ? '' : 'none';
   }
 
   function toggleSukuBunga() {

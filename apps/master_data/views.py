@@ -731,7 +731,7 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
     def _sorted_items(queryset):
         items = sorted(list(queryset.prefetch_related('children')), key=lambda x: natural_sort_key(x.kode))
         for item in items:
-            item._children = sorted(list(item.children.all()), key=lambda c: natural_sort_key(c.kode))
+            item.sorted_children = sorted(list(item.children.all()), key=lambda c: natural_sort_key(c.kode))
         return items
 
     categories = [

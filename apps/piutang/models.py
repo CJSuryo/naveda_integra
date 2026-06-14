@@ -111,16 +111,52 @@ class PiutangHeader(models.Model):
     is_specifically_impaired = models.BooleanField(
         default=False, verbose_name='Sudah Disisihkan Khusus',
     )
+    penyisihan_allowance_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_psh_allowance',
+        verbose_name='Akun Cadangan Kerugian Piutang (Penyisihan)',
+    )
+    penyisihan_expense_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_psh_expense',
+        verbose_name='Akun Beban Penyisihan',
+    )
     is_pv_adjusted = models.BooleanField(
         default=False, verbose_name='Disesuaikan Nilai Wajar (PV)',
     )
     pv_discount_rate = models.DecimalField(
         max_digits=8, decimal_places=4, null=True, blank=True,
-        verbose_name='Market Rate untuk PV (%/tahun)',
+        verbose_name='Market Rate / Bunga Pasar untuk PV (%/tahun)',
     )
     nilai_wajar_awal = models.DecimalField(
         max_digits=19, decimal_places=4, null=True, blank=True,
         verbose_name='Nilai Wajar Awal (PV)',
+    )
+    deferred_income_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_deferred_income',
+        verbose_name='Akun Pendapatan Bunga Ditangguhkan',
+    )
+    interest_income_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_interest_income',
+        verbose_name='Akun Pendapatan Bunga Efektif',
+    )
+    coa_piutang_lancar_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_lancar_headers',
+        verbose_name='Akun Piutang Bagian Lancar',
+    )
+    deferred_income_lancar_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_deferred_income_lancar',
+        verbose_name='Akun Pend. Bunga Ditangguhkan Bagian Lancar',
     )
     is_approval_required = models.BooleanField(
         default=False, verbose_name='Perlu Approval',
@@ -192,7 +228,7 @@ class PiutangHeader(models.Model):
 
     @property
     def can_pay(self) -> bool:
-        return self.status in ('open', 'partial', 'overdue') and not self.is_locked
+        return self.status in ('open', 'partial', 'overdue')
 
     @property
     def can_reklasifikasi(self) -> bool:
@@ -310,6 +346,22 @@ class PiutangReklasifikasi(models.Model):
     )
     periode_tahun = models.PositiveSmallIntegerField(
         null=True, blank=True, verbose_name='Periode Tahun',
+    )
+    jumlah_deferred = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Jumlah Diskonto Direklasifikasi',
+    )
+    dari_akun_deferred = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_rkl_deferred_dari',
+        verbose_name='Dari Akun Diskonto (LT)',
+    )
+    ke_akun_deferred = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_rkl_deferred_ke',
+        verbose_name='Ke Akun Diskonto (BL)',
     )
     jurnal = models.OneToOneField(
         'jurnal.JurnalHeader', on_delete=models.CASCADE,
@@ -482,6 +534,11 @@ class PiutangPenyisihan(models.Model):
         PiutangHeader, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='penyisihan_entries',
         verbose_name='Piutang Header',
+    )
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_penyisihan_entries',
+        verbose_name='Entitas Bisnis',
     )
     tanggal = models.DateField(verbose_name='Tanggal')
     jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, verbose_name='Jenis')
