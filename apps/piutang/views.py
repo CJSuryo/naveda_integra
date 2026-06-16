@@ -42,7 +42,6 @@ from .services import (
     post_piutang, submit_for_approval, approve_piutang, reject_piutang,
     create_pv_accrual_journal, create_pv_accrual_reversal,
     _pv_carrying_value, _pv_last_amortization_date, _pv_effective_interest_days,
-    _pv_pokok_paid,
 )
 
 
@@ -430,9 +429,7 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'pv_last_amort_date': _pv_last_amortization_date(piutang) if piutang.is_pv_adjusted else None,
         'pv_unamortized_deferred': None,
         # Face value net of principal payments only (excludes contractual interest)
-        'pv_pokok_remaining': (
-            piutang.jumlah_pokok - _pv_pokok_paid(piutang)
-        ) if piutang.is_pv_adjusted else None,
+        'pv_pokok_remaining': None,
         'pv_has_pending_accrual': _pv_has_pending_accrual(piutang),
         'today': timezone.now().date(),
     })
@@ -1060,8 +1057,6 @@ def piutang_reklasifikasi_bagian_lancar(request: HttpRequest, pk: int) -> HttpRe
 
         dari_akun = piutang.coa_piutang_account
         ke_akun = piutang.coa_piutang_lancar_account
-        dari_akun_deferred = piutang.deferred_income_account
-        ke_akun_deferred = piutang.deferred_income_lancar_account
 
         if not ke_akun:
             dj_messages.error(
@@ -1077,8 +1072,6 @@ def piutang_reklasifikasi_bagian_lancar(request: HttpRequest, pk: int) -> HttpRe
                 ke_akun=ke_akun,
                 tanggal=tanggal,
                 user=request.user,
-                dari_akun_deferred=dari_akun_deferred,
-                ke_akun_deferred=ke_akun_deferred,
             )
             dj_messages.success(request, 'Reklasifikasi bagian lancar berhasil dicatat.')
         except ValueError as exc:

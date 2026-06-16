@@ -813,7 +813,6 @@ def reverse_piutang_payment(penerimaan: PiutangPenerimaan, user=None) -> JurnalH
     with transaction.atomic():
         piutang = PiutangHeader.objects.select_for_update().get(pk=penerimaan.piutang_header_id)
         tanggal_terima = penerimaan.tanggal_terima
-        was_paid = piutang.status == 'paid'
         orig = penerimaan.jurnal_header
         nomor = _next_piutang_journal_number('TRX-PIU-PR')
         rev_header = JurnalHeader.objects.create(
@@ -1571,82 +1570,6 @@ def get_piutang_disclosure_report(as_of_date=None) -> dict:
 
 
 # ── PV Carrying-Value Helpers ────────────────────────────────────────────────
-
-def _pv_net_amortized(piutang: PiutangHeader) -> Decimal:
-    """
-    Net deferred income unwound so far = Σdebits − Σcredits from amortization,
-    accrual, and accrual-reversal journals, tracking both the LT deferred account
-    and the current-portion (bagian lancar) deferred account.
-    Credits come from accrual-reversal journals only.
-    """
-    nom = piutang.nomor_piutang
-    from django.db.models import Q
-    # Use ' —' suffix guard: all amortisation/accrual uraian always include ' — ' after the nomor.
-    # This prevents PIU-001 from matching PIU-0010's journals via startswith.
-    uraian_q = (
-        Q(jurnal_header__uraian_transaksi__startswith=f'Amortisasi PV Piutang {nom} —') |
-        Q(jurnal_header__uraian_transaksi__startswith=f'Akrual PV Piutang {nom} —') |
-        Q(jurnal_header__uraian_transaksi__startswith=f'Balik Akrual PV Piutang {nom} —')
-    )
-    account_q = Q(akun_id=piutang.deferred_income_account_id)
-    if piutang.deferred_income_lancar_account_id:
-        account_q |= Q(akun_id=piutang.deferred_income_lancar_account_id)
-    result = (
-        JurnalDetail.objects
-        .filter(account_q)
-        .filter(uraian_q)
-        .aggregate(debit=Sum('debit'), kredit=Sum('kredit'))
-    )
-    return (result['debit'] or Decimal('0')) - (result['kredit'] or Decimal('0'))
-
-
-def _contractual_interest_in_period(
-    piutang: PiutangHeader, from_date: date, to_date: date
-) -> Decimal:
-    """
-    Sum of contractual coupon interest for angsuran whose due dates fall in (from_date, to_date].
-    Returns 0 for tanpa_bunga piutang.
-    Used to compute NET discount amortization = effective_interest − contractual_interest.
-    """
-    if piutang.jenis_bunga == 'tanpa_bunga':
-        return Decimal('0')
-    schedule = compute_angsuran_schedule(piutang)
-    total = Decimal('0')
-    for row in schedule:
-        due: date = row['tanggal']
-        if from_date < due <= to_date:
-            total += Decimal(str(row['bunga']))
-    return total
-
-
-def _pv_pokok_paid(piutang: PiutangHeader) -> Decimal:
-    """
-    Principal (pokok) repaid so far.
-    Derived by allocating jumlah_terbayar bunga-first across the angsuran schedule,
-    matching the split logic in the payment journal.
-    For tanpa_bunga piutang, all payments are principal (same as jumlah_terbayar).
-    """
-    if piutang.jenis_bunga == 'tanpa_bunga' or not piutang.jumlah_terbayar:
-        return piutang.jumlah_terbayar
-    schedule = compute_angsuran_schedule(piutang)
-    if not schedule:
-        return piutang.jumlah_terbayar
-    pokok_total = Decimal('0')
-    remaining = piutang.jumlah_terbayar
-    for row in schedule:
-        if remaining <= 0:
-            break
-        angsuran = Decimal(str(row['angsuran']))
-        bunga = Decimal(str(row['bunga']))
-        pokok = Decimal(str(row['pokok']))
-        if remaining >= angsuran:
-            pokok_total += pokok
-            remaining -= angsuran
-        elif remaining >= bunga:
-            pokok_total += remaining - bunga
-            remaining = Decimal('0')
-        # else: remaining < bunga → pays into coupon only, no principal
-    return pokok_total
 
 
 def _pv_carrying_value(piutang: PiutangHeader) -> Decimal:
