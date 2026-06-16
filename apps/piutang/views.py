@@ -42,7 +42,7 @@ from .services import (
     post_piutang, submit_for_approval, approve_piutang, reject_piutang,
     create_pv_accrual_journal, create_pv_accrual_reversal,
     _pv_carrying_value, _pv_last_amortization_date, _pv_effective_interest_days,
-    _pv_net_amortized, _pv_pokok_paid,
+    _pv_pokok_paid,
 )
 
 
@@ -428,10 +428,7 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'pv_total_periode': len(compute_amortization_schedule_pv(piutang)) if piutang.is_pv_adjusted else 0,
         'pv_carrying_value': _pv_carrying_value(piutang) if piutang.is_pv_adjusted else None,
         'pv_last_amort_date': _pv_last_amortization_date(piutang) if piutang.is_pv_adjusted else None,
-        # Saldo Pend. Bunga Ditangguhkan = initial discount − net amortized so far
-        'pv_unamortized_deferred': (
-            (piutang.jumlah_pokok - piutang.nilai_wajar_awal) - _pv_net_amortized(piutang)
-        ) if (piutang.is_pv_adjusted and piutang.nilai_wajar_awal) else None,
+        'pv_unamortized_deferred': None,
         # Face value net of principal payments only (excludes contractual interest)
         'pv_pokok_remaining': (
             piutang.jumlah_pokok - _pv_pokok_paid(piutang)
