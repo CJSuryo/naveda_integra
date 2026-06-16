@@ -1298,3 +1298,74 @@ class PvAccrualJournalPSAK71Test(TestCase):
         total_debit = sum(d.debit for d in j.details.all())
         total_kredit = sum(d.kredit for d in j.details.all())
         self.assertAlmostEqual(float(total_debit), float(total_kredit), places=2)
+
+
+class PaymentJournalPSAK71Test(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend Pay', kode_akun='4.1.75',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD Pay', kode_akun='1.3.54',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE Pay', kode_akun='4.2.14',
+        )
+        from apps.piutang.services import post_piutang
+        self.p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2027, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(self.p)
+        self.p.refresh_from_db()
+
+    def test_payment_credits_piutang_for_full_cash_flow(self):
+        from apps.jurnal.models import JurnalDetail
+        create_piutang_payment(
+            self.p,
+            {'tanggal_terima': date(2026, 2, 1), 'jumlah_diterima': Decimal('600000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        payment_credits = JurnalDetail.objects.filter(
+            akun=self.f['coa_piutang'],
+            kredit=Decimal('600000'),
+            jurnal_header__uraian_transaksi__startswith='Penerimaan Piutang',
+        )
+        self.assertGreater(payment_credits.count(), 0)
+
+    def test_payment_does_not_credit_deferred_account(self):
+        from apps.jurnal.models import JurnalDetail
+        create_piutang_payment(
+            self.p,
+            {'tanggal_terima': date(2026, 2, 1), 'jumlah_diterima': Decimal('600000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        deferred_hits = JurnalDetail.objects.filter(akun=self.coa_deferred)
+        self.assertEqual(deferred_hits.count(), 0)
+
+    def test_pre_payment_eir_journal_debits_piutang(self):
+        from apps.jurnal.models import JurnalDetail
+        create_piutang_payment(
+            self.p,
+            {'tanggal_terima': date(2026, 2, 1), 'jumlah_diterima': Decimal('600000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        eir_debits = JurnalDetail.objects.filter(
+            akun=self.f['coa_piutang'],
+            debit__gt=0,
+            jurnal_header__uraian_transaksi__startswith='Amortisasi PV Piutang',
+        )
+        self.assertGreater(eir_debits.count(), 0)

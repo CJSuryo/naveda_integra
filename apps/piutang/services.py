@@ -519,99 +519,47 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
     tanggal = penerimaan.tanggal_terima
     jumlah = penerimaan.jumlah_diterima
 
-    # ── SAK ETAP: auto-amortise net discount on payment ─────────────────────
-    # Amortisation journal debits Pendapatan Bunga Ditangguhkan for the NET
-    # discount unwinding only (effective interest − contractual coupon for the
-    # period).  Contractual interest is recognised separately in the payment
-    # journal, so the deferred account never goes negative.
-    # Per SAK ETAP: after reklasifikasi, amortize from bagian-lancar deferred
-    # account (1.1.11), not the long-term account (1.3.5).
+    # ── PSAK 71: Pre-payment EIR accrual ────────────────────────────────────────
+    # Recognise gross effective interest from last amortisation to payment date.
+    # Dr. Piutang / Cr. Pendapatan Bunga Efektif (increases carrying amount).
     if (piutang.is_pv_adjusted
-            and piutang.deferred_income_account_id
             and piutang.interest_income_account_id
             and piutang.pv_discount_rate):
         from_date = _pv_last_amortization_date(piutang)
         bunga_efektif = _pv_effective_interest_days(piutang, from_date, tanggal)
-        bunga_kontrak_period = _contractual_interest_in_period(piutang, from_date, tanggal)
-        net_amortization = bunga_efektif - bunga_kontrak_period
-        if abs(net_amortization) >= Decimal('0.005'):
-            # Build journal lines first; only create the header if there is
-            # something real to post (prevents orphan headers and ensures the
-            # deferred accounts never go below zero due to rounding/method
-            # differences between daily and period compound rates).
-            _amort_entries = []  # list of (akun, debit, kredit)
-            if net_amortization > 0:
-                # Normal discount unwind: BL first, overflow to LT — each
-                # capped at the account's actual remaining credit balance.
-                remaining = net_amortization
-                if piutang.deferred_income_lancar_account_id:
-                    bal_bl = max(
-                        Decimal('0'),
-                        -_net_debit_balance_for_piutang(
-                            piutang.deferred_income_lancar_account, piutang
-                        ),
-                    )
-                    dr_bl = min(remaining, bal_bl)
-                    if dr_bl > Decimal('0'):
-                        _amort_entries.append(
-                            (piutang.deferred_income_lancar_account, dr_bl, Decimal('0'))
-                        )
-                        remaining -= dr_bl
-                if remaining > Decimal('0.005'):
-                    bal_lt = max(
-                        Decimal('0'),
-                        -_net_debit_balance_for_piutang(
-                            piutang.deferred_income_account, piutang
-                        ),
-                    )
-                    dr_lt = min(remaining, bal_lt)
-                    if dr_lt > Decimal('0.005'):
-                        _amort_entries.append(
-                            (piutang.deferred_income_account, dr_lt, Decimal('0'))
-                        )
-                total_dr = sum(a for _, a, _ in _amort_entries)
-                if total_dr > Decimal('0.005'):
-                    _amort_entries.append(
-                        (piutang.interest_income_account, Decimal('0'), total_dr)
-                    )
-            else:
-                # Negative: effective < contractual coupon — re-deferral.
-                # Dr Income / Cr Deferred BL (current payment period).
-                abs_amort = abs(net_amortization)
-                cr_deferred = (
-                    piutang.deferred_income_lancar_account
-                    if piutang.deferred_income_lancar_account_id
-                    else piutang.deferred_income_account
-                )
-                _amort_entries = [
-                    (piutang.interest_income_account, abs_amort, Decimal('0')),
-                    (cr_deferred, Decimal('0'), abs_amort),
-                ]
-            if len(_amort_entries) >= 2:
-                amort_nomor = _next_piutang_journal_number('TRX-PIU-PV')
-                amort_header = JurnalHeader.objects.create(
-                    tanggal=tanggal,
-                    nomor_transaksi=amort_nomor,
-                    uraian_transaksi=(
-                        f'Amortisasi PV Piutang {piutang.nomor_piutang} — '
-                        f'{from_date} s.d. {tanggal}'
-                    ),
-                    entitas_bisnis=piutang.entitas_bisnis,
-                    is_penyesuaian=False,
-                )
-                JurnalDetail.objects.bulk_create([
-                    JurnalDetail(
-                        jurnal_header=amort_header,
-                        akun=akun,
-                        debit=dr,
-                        kredit=kr,
-                    )
-                    for akun, dr, kr in _amort_entries
-                ])
+        if abs(bunga_efektif) >= Decimal('0.005'):
+            ar_account_eir = (
+                piutang.coa_piutang_lancar_account
+                if piutang.coa_piutang_lancar_account_id
+                else piutang.coa_piutang_account
+            )
+            amort_nomor = _next_piutang_journal_number('TRX-PIU-PV')
+            amort_header = JurnalHeader.objects.create(
+                tanggal=tanggal,
+                nomor_transaksi=amort_nomor,
+                uraian_transaksi=(
+                    f'Amortisasi PV Piutang {piutang.nomor_piutang} — '
+                    f'{from_date} s.d. {tanggal}'
+                ),
+                entitas_bisnis=piutang.entitas_bisnis,
+                is_penyesuaian=False,
+            )
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(
+                    jurnal_header=amort_header,
+                    akun=ar_account_eir,
+                    debit=bunga_efektif,
+                    kredit=Decimal('0'),
+                ),
+                JurnalDetail(
+                    jurnal_header=amort_header,
+                    akun=piutang.interest_income_account,
+                    debit=Decimal('0'),
+                    kredit=bunga_efektif,
+                ),
+            ])
 
-    # ── Payment journal ──────────────────────────────────────────────────────
-    # Per SAK ETAP: after reklasifikasi, payments reduce bagian-lancar AR (1.1.9)
-    # not the long-term AR account (1.3.3).
+    # ── Payment journal ──────────────────────────────────────────────────────────
     ar_account = (
         piutang.coa_piutang_lancar_account
         if piutang.coa_piutang_lancar_account_id
@@ -626,6 +574,41 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
         is_penyesuaian=False,
     )
 
+    if piutang.is_pv_adjusted and piutang.pv_discount_rate:
+        # PSAK 71: full cash flow reduces carrying amount.
+        # Contractual interest was already in the carrying amount via EIR; no split needed.
+        if piutang.coa_piutang_lancar_account_id:
+            bal_lancar = max(
+                Decimal('0'),
+                _net_debit_balance_for_piutang(piutang.coa_piutang_lancar_account, piutang),
+            )
+            credit_lancar = min(jumlah, bal_lancar)
+            credit_lt = jumlah - credit_lancar
+            payment_lines = [
+                JurnalDetail(jurnal_header=header, akun=penerimaan.payment_account,
+                             debit=jumlah, kredit=Decimal('0')),
+            ]
+            if credit_lancar > 0:
+                payment_lines.append(JurnalDetail(
+                    jurnal_header=header, akun=piutang.coa_piutang_lancar_account,
+                    debit=Decimal('0'), kredit=credit_lancar,
+                ))
+            if credit_lt > 0:
+                payment_lines.append(JurnalDetail(
+                    jurnal_header=header, akun=piutang.coa_piutang_account,
+                    debit=Decimal('0'), kredit=credit_lt,
+                ))
+            JurnalDetail.objects.bulk_create(payment_lines)
+        else:
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(jurnal_header=header, akun=penerimaan.payment_account,
+                             debit=jumlah, kredit=Decimal('0')),
+                JurnalDetail(jurnal_header=header, akun=ar_account,
+                             debit=Decimal('0'), kredit=jumlah),
+            ])
+        return header
+
+    # ── Non-PV-adjusted: existing logic ──────────────────────────────────────────
     # For interest-bearing piutang with angsuran_no: split payment bunga dulu, sisanya pokok
     if (piutang.jenis_bunga != 'tanpa_bunga'
             and penerimaan.angsuran_no
@@ -660,10 +643,7 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
             JurnalDetail.objects.bulk_create(entries)
             return header
 
-    # Default: Dr. Kas / Cr. Piutang (tanpa_bunga or no angsuran_no)
-    # Post-reklasifikasi, split the credit between 1.1.9 (up to its actual remaining
-    # balance) and 1.3.3 (remainder), so a large unstructured payment never over-credits
-    # the current-portion account and drives it abnormally negative.
+    # Default non-PV: Dr. Kas / Cr. Piutang (tanpa_bunga or no angsuran_no)
     if piutang.coa_piutang_lancar_account_id:
         bal_lancar = max(
             Decimal('0'),
