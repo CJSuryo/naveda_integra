@@ -1415,3 +1415,87 @@ class SettlementCatchupRemovedTest(TestCase):
             uraian_transaksi__contains='Pelunasan'
         )
         self.assertEqual(catchup.count(), 0)
+
+
+class ReklasifikasiPSAK71Test(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_lt = Akun.objects.create(
+            kategori_id='aset', nama='Piutang JK Panjang PSAK71', kode_akun='1.3.3',
+        )
+        self.coa_bl = Akun.objects.create(
+            kategori_id='aset', nama='Piutang Bagian Lancar PSAK71', kode_akun='1.1.9',
+        )
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend Rkl', kode_akun='4.1.77',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD Rkl', kode_akun='1.3.56',
+        )
+        self.coa_deferred_bl = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD BL Rkl', kode_akun='1.1.11',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE Rkl', kode_akun='4.2.16',
+        )
+        from apps.piutang.services import post_piutang
+        self.p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.coa_lt,
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            coa_piutang_lancar_account=self.coa_bl,
+            deferred_income_lancar_account=self.coa_deferred_bl,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('24000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(self.p)
+        self.p.refresh_from_db()
+
+    def test_reklasifikasi_journal_has_exactly_two_lines(self):
+        from apps.piutang.services import create_reklasifikasi_bagian_lancar
+        rkl = create_reklasifikasi_bagian_lancar(
+            piutang=self.p,
+            dari_akun=self.coa_lt,
+            ke_akun=self.coa_bl,
+            tanggal=date(2026, 12, 31),
+            dari_akun_deferred=self.coa_deferred,
+            ke_akun_deferred=self.coa_deferred_bl,
+        )
+        details = list(rkl.jurnal.details.all())
+        self.assertEqual(len(details), 2)
+
+    def test_reklasifikasi_debits_current_account_not_deferred(self):
+        from apps.piutang.services import create_reklasifikasi_bagian_lancar
+        from apps.jurnal.models import JurnalDetail
+        rkl = create_reklasifikasi_bagian_lancar(
+            piutang=self.p,
+            dari_akun=self.coa_lt,
+            ke_akun=self.coa_bl,
+            tanggal=date(2026, 12, 31),
+            dari_akun_deferred=self.coa_deferred,
+            ke_akun_deferred=self.coa_deferred_bl,
+        )
+        deferred_hits = JurnalDetail.objects.filter(
+            jurnal_header=rkl.jurnal,
+            akun__in=[self.coa_deferred, self.coa_deferred_bl],
+        )
+        self.assertEqual(deferred_hits.count(), 0)
+        dr_line = rkl.jurnal.details.get(debit__gt=0)
+        self.assertEqual(dr_line.akun, self.coa_bl)
+
+    def test_reklasifikasi_amount_is_carrying_not_nominal(self):
+        from apps.piutang.services import create_reklasifikasi_bagian_lancar
+        rkl = create_reklasifikasi_bagian_lancar(
+            piutang=self.p,
+            dari_akun=self.coa_lt,
+            ke_akun=self.coa_bl,
+            tanggal=date(2026, 12, 31),
+        )
+        self.assertLess(rkl.jumlah, Decimal('24000000'))
+        self.assertGreater(rkl.jumlah, Decimal('0'))

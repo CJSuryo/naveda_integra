@@ -641,24 +641,14 @@ def compute_bagian_lancar(piutang: PiutangHeader) -> Decimal:
     )
 
 
-def _compute_rkl_detail(piutang: PiutangHeader, as_of_date) -> tuple[Decimal, Decimal]:
+def _compute_rkl_detail(piutang: PiutangHeader, as_of_date) -> Decimal:
     """
-    Returns (nominal_current, deferred_current) for bagian-lancar reklasifikasi.
+    PSAK 71: carrying amount of current-year installments.
 
-    as_of_date:       the balance-sheet / reklasifikasi date.
-    nominal_current:  sum of POKOK (principal only) for unpaid installments due in
-                      (as_of_date, as_of_date+12mo].  Bunga kontraktual is NOT
-                      included — it is a separate income item, not part of piutang
-                      pokok tracked in accounts 1.1.9 / 1.3.3.
-    deferred_current: EIR discount attributable to the current-year installments.
-                      Derived from compute_amortization_schedule_pv (the EIR table)
-                      as Σ net_amortization for current-window periods, i.e.:
-                        deferred_current = Σ(bunga_efektif_gross − bunga_kontrak)
-                                           for periods in (as_of_date, cutoff]
-                      Consistent with the periodic amortization journals.
-                      CAN BE NEGATIVE when effective < contractual coupon for those
-                      periods (premium portion on the current slice — valid SAK consequence
-                      of flat coupon vs market rate combination).
+    carrying_current = nominal_current − net_amort_current
+    where net_amort_current = Σ(bunga_efektif) [net EIR] for current-window periods.
+
+    Returns Decimal('0') if no current installments exist.
     """
     try:
         cutoff = as_of_date.replace(year=as_of_date.year + 1)
@@ -672,7 +662,6 @@ def _compute_rkl_detail(piutang: PiutangHeader, as_of_date) -> tuple[Decimal, De
             r for r in all_unpaid
             if as_of_date < r['tanggal'] <= cutoff
         ]
-        # nominal_current uses POKOK only (not total angsuran)
         nominal_current = sum(
             max(
                 Decimal('0'),
@@ -680,49 +669,40 @@ def _compute_rkl_detail(piutang: PiutangHeader, as_of_date) -> tuple[Decimal, De
             )
             for row in current_rows
         )
-        total_nominal = sum(row['pokok'] for row in all_unpaid)
     else:
         nominal_current = (
             piutang.sisa_piutang
             if piutang.jatuh_tempo and as_of_date < piutang.jatuh_tempo <= cutoff
             else Decimal('0')
         )
-        total_nominal = piutang.sisa_piutang
 
-    if (
-        not piutang.is_pv_adjusted
-        or not piutang.nilai_wajar_awal
-        or not piutang.deferred_income_account_id
-        or total_nominal <= 0
-        or nominal_current <= 0
-    ):
-        return nominal_current, Decimal('0')
+    if nominal_current <= 0:
+        return Decimal('0')
+
+    if not piutang.is_pv_adjusted or not piutang.nilai_wajar_awal:
+        return nominal_current
 
     if schedule:
-        # Bug 3 fix: derive deferred_current from the EIR amortization table so it
-        # is internally consistent with the periodic amortization journals.
-        # deferred_current = Σ net_amortization for unpaid installments in current window.
-        # Result can be negative when effective interest < flat coupon (premium on current slice).
         amort = compute_amortization_schedule_pv(piutang)
         if amort:
             amort_by_date = {r['tanggal']: r['bunga_efektif'] for r in amort}
-            deferred_current = sum(
+            net_amort_current = sum(
                 amort_by_date.get(row['tanggal'], Decimal('0'))
                 for row in current_rows
             ).quantize(Decimal('0.0001'))
         else:
-            deferred_current = Decimal('0')
+            net_amort_current = Decimal('0')
     else:
-        # Bullet loan: no installment schedule — PV-based fallback for the single maturity.
         i_daily = (1 + float(piutang.pv_discount_rate) / 100) ** (1 / 365) - 1
         pv_current = Decimal('0')
         if piutang.jatuh_tempo:
             days = (piutang.jatuh_tempo - as_of_date).days
             if days > 0:
                 pv_current = piutang.sisa_piutang / Decimal(str((1 + i_daily) ** days))
-        deferred_current = (nominal_current - pv_current).quantize(Decimal('0.0001'))
+        net_amort_current = (nominal_current - pv_current).quantize(Decimal('0.0001'))
 
-    return nominal_current, deferred_current
+    carrying_current = (nominal_current - net_amort_current).quantize(Decimal('0.0001'))
+    return max(Decimal('0'), carrying_current)
 
 
 def create_reklasifikasi_bagian_lancar(
@@ -734,6 +714,10 @@ def create_reklasifikasi_bagian_lancar(
     dari_akun_deferred=None,
     ke_akun_deferred=None,
 ) -> PiutangReklasifikasi:
+    """
+    PSAK 71: reklasifikasi carrying amount (not nominal + deferred separately).
+    dari_akun_deferred / ke_akun_deferred are accepted for signature compatibility but ignored.
+    """
     periode_bulan = tanggal.month
     periode_tahun = tanggal.year
     if PiutangReklasifikasi.objects.filter(
@@ -745,17 +729,9 @@ def create_reklasifikasi_bagian_lancar(
             f'Reklasifikasi bagian lancar untuk periode {periode_tahun}-{periode_bulan:02d} sudah ada.'
         )
 
-    nominal_current, proportional_deferred = _compute_rkl_detail(piutang, tanggal)
-    if nominal_current <= 0:
+    carrying_current = _compute_rkl_detail(piutang, tanggal)
+    if carrying_current <= 0:
         raise ValueError('Tidak ada bagian lancar yang dapat direklasifikasi.')
-
-    # Apply deferred reklasifikasi when both accounts are supplied and deferred != 0.
-    # proportional_deferred can be negative (premium case: effective < coupon for current slice).
-    do_deferred = (
-        proportional_deferred != 0
-        and dari_akun_deferred is not None
-        and ke_akun_deferred is not None
-    )
 
     with transaction.atomic():
         nomor = _next_piutang_journal_number('TRX-PIU-RKL')
@@ -766,38 +742,22 @@ def create_reklasifikasi_bagian_lancar(
             entitas_bisnis=piutang.entitas_bisnis,
             is_penyesuaian=False,
         )
-        lines = [
-            # Nominal piutang: Cr Piutang JJ Panjang / Dr Piutang Bagian Lancar
+        JurnalDetail.objects.bulk_create([
             JurnalDetail(jurnal_header=jurnal, akun=dari_akun,
-                         debit=Decimal('0'), kredit=nominal_current),
+                         debit=Decimal('0'), kredit=carrying_current),
             JurnalDetail(jurnal_header=jurnal, akun=ke_akun,
-                         debit=nominal_current, kredit=Decimal('0')),
-        ]
-        if do_deferred:
-            abs_deferred = abs(proportional_deferred)
-            if proportional_deferred > 0:
-                # Discount: Dr Pend. Bunga Ditangguhkan LT / Cr Pend. Bunga Ditangguhkan BL
-                dr_def, cr_def = dari_akun_deferred, ke_akun_deferred
-            else:
-                # Premium (current slice): Dr Pend. Bunga Ditangguhkan BL / Cr Pend. Bunga Ditangguhkan LT
-                dr_def, cr_def = ke_akun_deferred, dari_akun_deferred
-            lines += [
-                JurnalDetail(jurnal_header=jurnal, akun=dr_def,
-                             debit=abs_deferred, kredit=Decimal('0')),
-                JurnalDetail(jurnal_header=jurnal, akun=cr_def,
-                             debit=Decimal('0'), kredit=abs_deferred),
-            ]
-        JurnalDetail.objects.bulk_create(lines)
+                         debit=carrying_current, kredit=Decimal('0')),
+        ])
 
         rkl = PiutangReklasifikasi.objects.create(
             piutang_header=piutang,
             tanggal=tanggal,
             dari_akun=dari_akun,
             ke_akun=ke_akun,
-            jumlah=nominal_current,
-            jumlah_deferred=proportional_deferred if do_deferred else None,
-            dari_akun_deferred=dari_akun_deferred if do_deferred else None,
-            ke_akun_deferred=ke_akun_deferred if do_deferred else None,
+            jumlah=carrying_current,
+            jumlah_deferred=None,
+            dari_akun_deferred=None,
+            ke_akun_deferred=None,
             keterangan=f'Bagian lancar {periode_tahun}-{periode_bulan:02d}',
             jurnal=jurnal,
             periode_bulan=periode_bulan,
@@ -805,7 +765,7 @@ def create_reklasifikasi_bagian_lancar(
             created_by=user,
         )
         _log(piutang, 'REKLASIFIKASI', user=user,
-             after={'jumlah': str(nominal_current), 'deferred': str(proportional_deferred)})
+             after={'jumlah': str(carrying_current)})
     return rkl
 
 
