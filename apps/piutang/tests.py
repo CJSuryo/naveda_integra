@@ -848,6 +848,24 @@ class ComputeAmortizationSchedulePvTest(TestCase):
             for k in ('periode', 'tanggal', 'bunga_efektif', 'carrying_value'):
                 self.assertIn(k, row)
 
+    def test_schedule_has_bunga_efektif_gross(self):
+        f = make_fixtures()
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            details=[{'deskripsi': 'X', 'jumlah': Decimal('12000000')}],
+        )
+        p.nilai_wajar_awal = compute_present_value(p, Decimal('12'))
+        p.pv_discount_rate = Decimal('12')
+        rows = compute_amortization_schedule_pv(p)
+        self.assertTrue(len(rows) > 0)
+        for row in rows:
+            self.assertIn('bunga_efektif_gross', row)
+            self.assertGreaterEqual(row['bunga_efektif_gross'], Decimal('0'))
+            self.assertGreaterEqual(row['bunga_efektif_gross'], row['bunga_efektif'])
+
 
 class PiutangHeaderPostingFieldsTest(TestCase):
     def test_pending_approval_is_valid_status_choice(self):
