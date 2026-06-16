@@ -1062,3 +1062,122 @@ class RejectPiutangTest(TestCase):
         self.piutang.save(update_fields=['status'])
         with self.assertRaises(ValueError):
             reject_piutang(self.piutang)
+
+
+class PostPiutangPSAK71Test(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pendapatan PSAK71', kode_akun='4.1.71',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='Pend. Bunga Ditangguhkan', kode_akun='1.3.5',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pendapatan Bunga Efektif', kode_akun='4.2.1',
+        )
+
+    def _make_pv_piutang(self):
+        from apps.piutang.services import post_piutang
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(p)
+        p.refresh_from_db()
+        return p
+
+    def test_posting_debits_piutang_at_fair_value_not_face(self):
+        from apps.jurnal.models import JurnalDetail
+        p = self._make_pv_piutang()
+        pv = p.nilai_wajar_awal
+        # The initial posting journal should debit piutang at PV, not 12_000_000
+        debit_lines = JurnalDetail.objects.filter(
+            akun=self.f['coa_piutang'], debit__gt=0
+        )
+        self.assertEqual(debit_lines.count(), 1)
+        self.assertAlmostEqual(float(debit_lines.first().debit), float(pv), places=0)
+        self.assertLess(debit_lines.first().debit, Decimal('12000000'))
+
+    def test_posting_does_not_create_deferred_income_credit(self):
+        from apps.jurnal.models import JurnalDetail
+        p = self._make_pv_piutang()
+        deferred_credits = JurnalDetail.objects.filter(
+            akun=self.coa_deferred, kredit__gt=0
+        )
+        self.assertEqual(deferred_credits.count(), 0)
+
+    def test_posting_journal_is_balanced(self):
+        from apps.jurnal.models import JurnalDetail, JurnalHeader
+        p = self._make_pv_piutang()
+        journal = JurnalHeader.objects.filter(
+            uraian_transaksi__startswith=f'Pengakuan Piutang {p.nomor_piutang}'
+        ).first()
+        self.assertIsNotNone(journal)
+        total_debit = sum(d.debit for d in journal.details.all())
+        total_kredit = sum(d.kredit for d in journal.details.all())
+        self.assertAlmostEqual(float(total_debit), float(total_kredit), places=2)
+
+
+class PvCarryingValuePSAK71Test(TestCase):
+    """Under PSAK 71, carrying value = net debit on piutang accounts from all journals."""
+
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend PSAK71 CV', kode_akun='4.1.72',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD CV', kode_akun='1.3.51',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE CV', kode_akun='4.2.11',
+        )
+
+    def _posted_pv_piutang(self):
+        from apps.piutang.services import post_piutang
+        p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(p)
+        p.refresh_from_db()
+        return p
+
+    def test_carrying_value_equals_pv_immediately_after_posting(self):
+        from apps.piutang.services import _pv_carrying_value
+        p = self._posted_pv_piutang()
+        cv = _pv_carrying_value(p)
+        self.assertAlmostEqual(float(cv), float(p.nilai_wajar_awal), places=0)
+
+    def test_carrying_value_reduces_after_payment(self):
+        from apps.piutang.services import _pv_carrying_value
+        p = self._posted_pv_piutang()
+        cv_before = _pv_carrying_value(p)
+        create_piutang_payment(
+            p,
+            {'tanggal_terima': date(2026, 2, 1), 'jumlah_diterima': Decimal('500000'),
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        p.refresh_from_db()
+        cv_after = _pv_carrying_value(p)
+        self.assertLess(cv_after, cv_before)
