@@ -1728,9 +1728,8 @@ def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
             raise ValueError(
                 f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
             )
-        # SAK ETAP: compute PV at posting if deferred_income_account and pv_discount_rate are set
         update_fields = ['status', 'is_locked']
-        if piutang.deferred_income_account_id and piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+        if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
             piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
             piutang.is_pv_adjusted = True
             update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
@@ -1758,7 +1757,7 @@ def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
         if piutang.status != 'pending_approval':
             raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
         update_fields = ['status', 'is_locked', 'approved_by', 'approved_at']
-        if piutang.deferred_income_account_id and piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+        if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
             piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
             piutang.is_pv_adjusted = True
             update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']

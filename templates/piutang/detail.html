@@ -98,12 +98,8 @@
         <dt>Nilai Wajar Awal</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
         <dt>Nilai Tercatat (Carrying Amount)</dt>
         <dd><strong>Rp {{ pv_carrying_value|floatformat:0|intcomma }}</strong>
-          <span class="ni-text-muted" style="font-size:.82em"> (nominal − diskonto tersisa)</span>
+          <span class="ni-text-muted" style="font-size:.82em"> (amortised cost, PSAK 71)</span>
         </dd>
-        {% if pv_unamortized_deferred is not None %}
-        <dt>Diskonto Belum Diamortisasi</dt>
-        <dd>{% if pv_unamortized_deferred >= 0 %}Rp {{ pv_unamortized_deferred|floatformat:0|intcomma }}{% else %}<span class="ni-badge ni-badge--danger">Negatif</span>{% endif %}</dd>
-        {% endif %}
         {% endif %}
         {% if piutang.jenis_jangka_waktu == 'long_term' and bagian_lancar is not None %}
         <dt>Bagian Lancar (&le;12 bln)</dt><dd>Rp {{ bagian_lancar|floatformat:0|intcomma }}</dd>
@@ -115,14 +111,6 @@
         {% if piutang.coa_piutang_lancar_account %}
         <dt>Akun Piutang Bagian Lancar</dt>
         <dd>{{ piutang.coa_piutang_lancar_account.kode_akun }} — {{ piutang.coa_piutang_lancar_account.nama_akun }}</dd>
-        {% endif %}
-        {% if piutang.deferred_income_account %}
-        <dt>Akun Pend. Bunga Ditangguhkan</dt>
-        <dd>{{ piutang.deferred_income_account.kode_akun }} — {{ piutang.deferred_income_account.nama_akun }}</dd>
-        {% endif %}
-        {% if piutang.deferred_income_lancar_account %}
-        <dt>Akun Pend. Bunga Ditangguhkan BL</dt>
-        <dd>{{ piutang.deferred_income_lancar_account.kode_akun }} — {{ piutang.deferred_income_lancar_account.nama_akun }}</dd>
         {% endif %}
         {% if piutang.interest_income_account %}
         <dt>Akun Pend. Bunga Efektif</dt>
@@ -301,9 +289,6 @@
     <p class="ni-text-muted" style="font-size:.85em;margin:0;">
       Dari: <strong>{{ piutang.coa_piutang_account.kode_akun }} — {{ piutang.coa_piutang_account.nama_akun }}</strong>
       &rarr; Ke: <strong>{{ piutang.coa_piutang_lancar_account.kode_akun }} — {{ piutang.coa_piutang_lancar_account.nama_akun }}</strong>
-      {% if piutang.deferred_income_lancar_account %}
-      | Diskonto: <strong>{{ piutang.deferred_income_account.kode_akun }}</strong> &rarr; <strong>{{ piutang.deferred_income_lancar_account.kode_akun }}</strong>
-      {% endif %}
     </p>
     <button type="button" class="ni-btn ni-btn--xs ni-btn--outline" onclick="openModal('setAkunLancarModal')">Ubah</button>
   </div>
@@ -319,9 +304,7 @@
       <thead>
         <tr>
           <th>Tanggal</th><th>Nomor Jurnal</th>
-          <th class="ni-text-right">Nominal (Dr Piutang BL)</th>
-          <th class="ni-text-right">Diskonto (Cr Pend. BL)</th>
-          <th class="ni-text-right">Nilai Buku BL</th>
+          <th class="ni-text-right">Carrying Amount BL (Dr)</th>
           <th>Catatan</th><th></th>
         </tr>
       </thead>
@@ -331,16 +314,6 @@
           <td>{{ rkl.tanggal }}</td>
           <td><a href="{% url 'jurnal:header_detail' rkl.jurnal.pk %}">{{ rkl.jurnal.nomor_transaksi }}</a></td>
           <td class="ni-text-right">{{ rkl.jumlah|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">
-            {% if rkl.jumlah_deferred %}{{ rkl.jumlah_deferred|floatformat:0|intcomma }}{% else %}—{% endif %}
-          </td>
-          <td class="ni-text-right">
-            {% if rkl.jumlah_deferred %}
-              {% widthratio rkl.jumlah 1 1 as nom %}
-              {{ rkl.jumlah|add:"-0"|floatformat:0|intcomma }}
-              <span class="ni-text-muted" style="font-size:.8em">(≈ {{ rkl.jumlah|floatformat:0|intcomma }} − {{ rkl.jumlah_deferred|floatformat:0|intcomma }})</span>
-            {% else %}{{ rkl.jumlah|floatformat:0|intcomma }}{% endif %}
-          </td>
           <td>{{ rkl.keterangan|default:'-' }}</td>
           <td style="display:flex;gap:.35rem;">
             <form method="post" action="{% url 'piutang:reklasifikasi_reverse' piutang.pk rkl.pk %}" class="ni-form-inline">
@@ -592,17 +565,6 @@
             {% endfor %}
           </select>
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">Akun Pend. Bunga Ditangguhkan Bagian Lancar <span class="ni-text-muted" style="font-size:.85em">(opsional)</span></label>
-          <select name="deferred_income_lancar_account" class="ni-input">
-            <option value="">— Tidak ada —</option>
-            {% for akun in akun_all_list %}
-            <option value="{{ akun.pk }}" {% if piutang.deferred_income_lancar_account_id == akun.pk %}selected{% endif %}>
-              {{ akun.kode_akun }} — {{ akun.nama_akun }}
-            </option>
-            {% endfor %}
-          </select>
-        </div>
         <div class="ni-btn-row">
           <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
           <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('setAkunLancarModal')">Batal</button>
@@ -703,40 +665,58 @@
 {% if piutang.jenis_jangka_waktu == 'long_term' %}
 <div class="ni-card ni-animate-fade-in" id="pv-card">
   <div class="ni-card__header">
-    <h2 class="ni-card__title">Nilai Wajar SAK ETAP (Present Value)</h2>
+    <h2 class="ni-card__title">Nilai Wajar PSAK 71 (Amortised Cost)</h2>
   </div>
   <div class="ni-card__body">
     {% if piutang.is_pv_adjusted %}
     <dl class="ni-detail-grid">
-      <dt>Status PV</dt><dd><span class="ni-badge ni-badge--success">Disesuaikan</span></dd>
-      <dt>Suku Bunga Pasar (Market Rate)</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
+      <dt>Status</dt><dd><span class="ni-badge ni-badge--success">Amortised Cost Aktif</span></dd>
+      <dt>Suku Bunga Efektif (EIR / Market Rate)</dt><dd>{{ piutang.pv_discount_rate }}% / tahun</dd>
       <dt>Nilai Wajar Awal (Harga Perolehan)</dt><dd>Rp {{ piutang.nilai_wajar_awal|floatformat:0|intcomma }}</dd>
-      <dt>Jumlah Bruto Piutang (Nilai Nominal)</dt>
-      <dd>Rp {{ pv_pokok_remaining|floatformat:0|intcomma }}
-        <span class="ni-text-muted" style="font-size:0.85em"> (pokok saja, ekskl. bunga kontrak)</span>
+      <dt>Nilai Tercatat (Carrying Amount)</dt>
+      <dd><strong>Rp {{ pv_carrying_value|floatformat:0|intcomma }}</strong>
+        <span class="ni-text-muted" style="font-size:0.85em"> (amortised cost, PSAK 71)</span>
       </dd>
-      <dt>Nilai Tercatat (Carrying Amount)</dt><dd>Rp {{ pv_carrying_value|floatformat:0|intcomma }}</dd>
-      <dt>Saldo Pendapatan Bunga Ditangguhkan Belum Diamortisasi</dt>
-      <dd>
-        {% if pv_unamortized_deferred is not None %}
-          <strong>Rp {{ pv_unamortized_deferred|floatformat:0|intcomma }}</strong>
-          <span class="ni-text-muted" style="font-size:0.85em"> (Diskonto Awal − Amortisasi s.d. kini)</span>
-          {% if pv_unamortized_deferred < 0 %}
-            <span class="ni-badge ni-badge--danger" style="margin-left:4px">Negatif</span>
-          {% endif %}
-        {% endif %}
-      </dd>
-      <dt>Tanggal Bunga Efektif Terakhir Diakui</dt><dd>{{ pv_last_amort_date|date:"d M Y" }}</dd>
-      <dt>Akun Pendapatan Bunga Ditangguhkan</dt>
-      <dd>{% if piutang.deferred_income_account %}{{ piutang.deferred_income_account.kode_akun }} — {{ piutang.deferred_income_account.nama_akun }}{% else %}<span class="ni-text-muted">—</span>{% endif %}</dd>
+      <dt>Tanggal Bunga Efektif Terakhir Diakui</dt><dd>{{ pv_last_amort_date|date:"d M Y"|default:"—" }}</dd>
       <dt>Akun Pendapatan Bunga Efektif</dt>
       <dd>{% if piutang.interest_income_account %}{{ piutang.interest_income_account.kode_akun }} — {{ piutang.interest_income_account.nama_akun }}{% else %}<span class="ni-badge ni-badge--warning">Belum diset — amortisasi tidak otomatis</span>{% endif %}</dd>
     </dl>
 
+    {% if pv_amort_schedule %}
+    <hr style="margin:12px 0">
+    <p class="ni-text-muted" style="margin-bottom:8px"><strong>Tabel Amortisasi EIR (PSAK 71)</strong></p>
+    <div class="ni-table-wrapper">
+      <table class="ni-table" style="font-size:.85em">
+        <thead>
+          <tr>
+            <th>No</th>
+            <th>Tanggal</th>
+            <th class="ni-text-right">Carrying Awal</th>
+            <th class="ni-text-right">Bunga Efektif (Dr)</th>
+            <th class="ni-text-right">Cash Flow</th>
+            <th class="ni-text-right">Carrying Akhir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in pv_amort_schedule %}
+          <tr>
+            <td>{{ row.periode }}</td>
+            <td>{{ row.tanggal }}</td>
+            <td class="ni-text-right">{{ row.carrying_awal|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.bunga_efektif_gross|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.cash_flow|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right"><strong>{{ row.carrying_value|floatformat:0|intcomma }}</strong></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
     <hr style="margin:12px 0">
 
-    <p class="ni-text-muted" style="margin-bottom:8px"><strong>Amortisasi Manual (per periode tabel)</strong> — gunakan jika tidak ada auto-amortisasi.</p>
-    <p class="ni-text-muted" style="margin:0 0 6px">Periode berikutnya: <strong>{{ pv_next_periode }}</strong> / {{ pv_total_periode }}</p>
+    <p class="ni-text-muted" style="margin-bottom:8px"><strong>Amortisasi Manual (per periode tabel)</strong> — buat jurnal Dr. Piutang / Cr. Pendapatan Bunga Efektif.</p>
+    <p class="ni-text-muted" style="margin:0 0 6px">Periode berikutnya: <strong>{{ pv_next_periode }}</strong> / {{ pv_amort_schedule|length }}</p>
     <form method="post" action="{% url 'piutang:pv_adjustment' piutang.pk %}" class="ni-form-grid ni-form-grid--2">
       {% csrf_token %}
       {% for field in pv_form %}
@@ -777,7 +757,7 @@
     </form>
     {% endif %}
     {% else %}
-    <p class="ni-text-muted">Piutang ini belum menggunakan penyesuaian nilai wajar (PV). Isi <em>Market Rate</em> dan <em>Akun Pendapatan Bunga Ditangguhkan</em> pada form piutang sebelum posting untuk mengaktifkan SAK ETAP gross method.</p>
+    <p class="ni-text-muted">Piutang ini belum menggunakan penyesuaian nilai wajar (PV). Isi <em>Market Rate</em> dan <em>Akun Pendapatan Bunga Efektif</em> pada form piutang sebelum posting untuk mengaktifkan amortisasi PSAK 71.</p>
     {% endif %}
   </div>
 </div>

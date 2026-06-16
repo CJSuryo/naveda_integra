@@ -18,8 +18,8 @@ class PiutangHeaderForm(forms.ModelForm):
             'jenis_jangka_waktu', 'coa_piutang_account',
             'jenis_bunga', 'suku_bunga', 'periode_angsuran',
             'is_approval_required',
-            'pv_discount_rate', 'deferred_income_account', 'interest_income_account',
-            'coa_piutang_lancar_account', 'deferred_income_lancar_account',
+            'pv_discount_rate', 'interest_income_account',
+            'coa_piutang_lancar_account',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -33,10 +33,8 @@ class PiutangHeaderForm(forms.ModelForm):
             'periode_angsuran': forms.Select(attrs={'class': 'ni-input'}),
             'is_approval_required': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
             'pv_discount_rate': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
-            'deferred_income_account': forms.Select(attrs={'class': 'ni-input'}),
             'interest_income_account': forms.Select(attrs={'class': 'ni-input'}),
             'coa_piutang_lancar_account': forms.Select(attrs={'class': 'ni-input'}),
-            'deferred_income_lancar_account': forms.Select(attrs={'class': 'ni-input'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -45,20 +43,14 @@ class PiutangHeaderForm(forms.ModelForm):
         self.fields['jatuh_tempo'].required = False
         self.fields['suku_bunga'].required = False
         self.fields['pv_discount_rate'].required = False
-        self.fields['deferred_income_account'].required = False
         self.fields['interest_income_account'].required = False
         self.fields['coa_piutang_lancar_account'].required = False
-        self.fields['deferred_income_lancar_account'].required = False
         self.fields['coa_piutang_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['coa_piutang_account'].empty_label = '— Pilih Akun Piutang —'
-        self.fields['deferred_income_account'].queryset = akun_sorted_queryset()
-        self.fields['deferred_income_account'].empty_label = '— Pilih Akun Pend. Bunga Ditangguhkan —'
         self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})
         self.fields['interest_income_account'].empty_label = '— Pilih Akun Pendapatan Bunga Efektif —'
         self.fields['coa_piutang_lancar_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
         self.fields['coa_piutang_lancar_account'].empty_label = '— Pilih Akun Piutang Bagian Lancar —'
-        self.fields['deferred_income_lancar_account'].queryset = akun_sorted_queryset()
-        self.fields['deferred_income_lancar_account'].empty_label = '— Pilih Akun Pend. Bunga Ditangguhkan BL —'
 
 
 class PiutangDetailForm(forms.ModelForm):

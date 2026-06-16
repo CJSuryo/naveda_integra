@@ -155,6 +155,13 @@ def _pv_next_periode(piutang) -> int:
     return recorded + 1
 
 
+def _annotate_carrying_awal(schedule: list) -> list:
+    """Add carrying_awal to each amortization row: carrying_akhir - EIR + cash_flow."""
+    for row in schedule:
+        row['carrying_awal'] = row['carrying_value'] - row['bunga_efektif_gross'] + row['cash_flow']
+    return schedule
+
+
 def _pv_has_pending_accrual(piutang) -> bool:
     """True when there is at least one accrual journal not yet reversed."""
     if not piutang.is_pv_adjusted:
@@ -257,10 +264,8 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                         periode_angsuran=cd.get('periode_angsuran', 'bulanan'),
                         is_approval_required=cd.get('is_approval_required', False),
                         pv_discount_rate=cd.get('pv_discount_rate'),
-                        deferred_income_account=cd.get('deferred_income_account'),
                         interest_income_account=cd.get('interest_income_account'),
                         coa_piutang_lancar_account=cd.get('coa_piutang_lancar_account'),
-                        deferred_income_lancar_account=cd.get('deferred_income_lancar_account'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
@@ -346,8 +351,7 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         PiutangHeader.objects
         .select_related(
             'entitas_bisnis', 'coa_piutang_account',
-            'coa_piutang_lancar_account', 'deferred_income_account',
-            'interest_income_account', 'deferred_income_lancar_account',
+            'coa_piutang_lancar_account', 'interest_income_account',
             'approved_by',
         )
         .prefetch_related(
@@ -424,12 +428,9 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'pv_accrual_form': PvAccrualForm(initial={'tanggal': timezone.now().date()}),
         'riwayat_jurnal': riwayat_jurnal,
         'pv_next_periode': _pv_next_periode(piutang),
-        'pv_total_periode': len(compute_amortization_schedule_pv(piutang)) if piutang.is_pv_adjusted else 0,
+        'pv_amort_schedule': _annotate_carrying_awal(compute_amortization_schedule_pv(piutang)) if piutang.is_pv_adjusted else [],
         'pv_carrying_value': _pv_carrying_value(piutang) if piutang.is_pv_adjusted else None,
         'pv_last_amort_date': _pv_last_amortization_date(piutang) if piutang.is_pv_adjusted else None,
-        'pv_unamortized_deferred': None,
-        # Face value net of principal payments only (excludes contractual interest)
-        'pv_pokok_remaining': None,
         'pv_has_pending_accrual': _pv_has_pending_accrual(piutang),
         'today': timezone.now().date(),
     })
@@ -1024,7 +1025,7 @@ def aging_schedule_export(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def piutang_set_akun_lancar(request: HttpRequest, pk: int) -> HttpResponse:
-    """Update coa_piutang_lancar_account and deferred_income_lancar_account on any active piutang."""
+    """Update coa_piutang_lancar_account on any active piutang."""
     from apps.master_data.models import Akun
     piutang = get_object_or_404(PiutangHeader, pk=pk)
     if piutang.status in ('cancelled', 'written_off'):
@@ -1032,11 +1033,9 @@ def piutang_set_akun_lancar(request: HttpRequest, pk: int) -> HttpResponse:
         return redirect('piutang:detail', pk=pk)
     if request.method == 'POST':
         lancar_id = request.POST.get('coa_piutang_lancar_account') or None
-        deferred_lancar_id = request.POST.get('deferred_income_lancar_account') or None
         try:
             piutang.coa_piutang_lancar_account = Akun.objects.get(pk=lancar_id) if lancar_id else None
-            piutang.deferred_income_lancar_account = Akun.objects.get(pk=deferred_lancar_id) if deferred_lancar_id else None
-            piutang.save(update_fields=['coa_piutang_lancar_account', 'deferred_income_lancar_account'])
+            piutang.save(update_fields=['coa_piutang_lancar_account'])
             dj_messages.success(request, 'Akun bagian lancar berhasil disimpan.')
         except Akun.DoesNotExist:
             dj_messages.error(request, 'Akun tidak ditemukan.')
