@@ -2098,27 +2098,21 @@ def create_pv_accrual_journal(
     user=None,
 ) -> JurnalHeader:
     """
-    Period-end accrual journal (is_penyesuaian=True).
-    Recognises effective interest from last amortisation date to tanggal.
-    Uraian: 'Akrual PV Piutang {nomor} — s.d. {tanggal}'
+    PSAK 71: period-end accrual journal.
+    Dr. Piutang (gross EIR for days elapsed) / Cr. Pendapatan Bunga Efektif.
     Must be paired with a reversal at start of next period.
     """
     if not piutang.is_pv_adjusted or not piutang.pv_discount_rate:
         raise ValueError('Piutang belum disesuaikan nilai wajar (PV).')
-    if not piutang.deferred_income_account_id:
-        raise ValueError('Akun Pendapatan Bunga Ditangguhkan belum diset.')
     income_account = interest_income_account or piutang.interest_income_account
     if not income_account:
         raise ValueError('Akun Pendapatan Bunga Efektif diperlukan.')
 
     from_date = _pv_last_amortization_date(piutang)
-    bunga_efektif = _pv_effective_interest_days(piutang, from_date, tanggal)
-    bunga_kontrak_period = _contractual_interest_in_period(piutang, from_date, tanggal)
-    bunga = bunga_efektif - bunga_kontrak_period
-    if bunga == 0:
+    bunga = _pv_effective_interest_days(piutang, from_date, tanggal)
+    if bunga <= Decimal('0'):
         raise ValueError('Tidak ada selisih bunga efektif yang dapat diakrualkan untuk periode ini.')
 
-    # Guard: no un-reversed accrual already exists
     nom = piutang.nomor_piutang
     n_accrual = JurnalHeader.objects.filter(
         uraian_transaksi__startswith=f'Akrual PV Piutang {nom} —'
@@ -2131,7 +2125,11 @@ def create_pv_accrual_journal(
             'Masih ada jurnal akrual yang belum dibalik. Balik akrual sebelumnya terlebih dahulu.'
         )
 
-    abs_bunga = abs(bunga)
+    ar_account = (
+        piutang.coa_piutang_lancar_account
+        if piutang.coa_piutang_lancar_account_id
+        else piutang.coa_piutang_account
+    )
     with transaction.atomic():
         nomor = _next_piutang_journal_number('TRX-PIU-PV')
         header = JurnalHeader.objects.create(
@@ -2141,64 +2139,20 @@ def create_pv_accrual_journal(
             entitas_bisnis=piutang.entitas_bisnis,
             is_penyesuaian=True,
         )
-        if bunga > 0:
-            # Normal: Dr. Pend. Bunga Ditangguhkan / Cr. Pend. Bunga Efektif
-            # Use BL account first (mirrors payment amortization ordering).
-            remaining = abs_bunga
-            accrual_lines = []
-            if piutang.deferred_income_lancar_account_id:
-                bal_bl = max(
-                    Decimal('0'),
-                    -_net_debit_balance_for_piutang(
-                        piutang.deferred_income_lancar_account, piutang
-                    ),
-                )
-                dr_bl = min(remaining, bal_bl)
-                if dr_bl > Decimal('0.005'):
-                    accrual_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=piutang.deferred_income_lancar_account,
-                        debit=dr_bl, kredit=Decimal('0'),
-                    ))
-                    remaining -= dr_bl
-            if remaining > Decimal('0.005'):
-                bal_lt = max(
-                    Decimal('0'),
-                    -_net_debit_balance_for_piutang(
-                        piutang.deferred_income_account, piutang
-                    ),
-                )
-                dr_lt = min(remaining, bal_lt)
-                if dr_lt > Decimal('0.005'):
-                    accrual_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=piutang.deferred_income_account,
-                        debit=dr_lt, kredit=Decimal('0'),
-                    ))
-            if not accrual_lines:
-                raise ValueError(
-                    'Tidak ada saldo Pendapatan Bunga Ditangguhkan yang tersisa untuk diakrualkan.'
-                )
-            total_dr = sum(l.debit for l in accrual_lines)
-            accrual_lines.append(JurnalDetail(
-                jurnal_header=header, akun=income_account,
-                debit=Decimal('0'), kredit=total_dr,
-            ))
-            JurnalDetail.objects.bulk_create(accrual_lines)
-        else:
-            # Negative: effective < contractual coupon — re-deferral accrual.
-            # Mirrors the re-deferral direction in the payment amortization.
-            cr_def = (
-                piutang.deferred_income_lancar_account
-                if piutang.deferred_income_lancar_account_id
-                else piutang.deferred_income_account
-            )
-            JurnalDetail.objects.bulk_create([
-                JurnalDetail(jurnal_header=header, akun=income_account,
-                             debit=abs_bunga, kredit=Decimal('0')),
-                JurnalDetail(jurnal_header=header, akun=cr_def,
-                             debit=Decimal('0'), kredit=abs_bunga),
-            ])
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun=ar_account,
+                debit=bunga,
+                kredit=Decimal('0'),
+            ),
+            JurnalDetail(
+                jurnal_header=header,
+                akun=income_account,
+                debit=Decimal('0'),
+                kredit=bunga,
+            ),
+        ])
         _log(piutang, 'EDITED', user=user,
              after={'pv_akrual': str(bunga), 'tanggal': str(tanggal)})
     return header

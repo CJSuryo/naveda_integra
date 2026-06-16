@@ -1241,3 +1241,60 @@ class PvAdjustmentJournalPSAK71Test(TestCase):
         total_debit = sum(d.debit for d in journal.details.all())
         total_kredit = sum(d.kredit for d in journal.details.all())
         self.assertAlmostEqual(float(total_debit), float(total_kredit), places=2)
+
+
+class PvAccrualJournalPSAK71Test(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend Akrual', kode_akun='4.1.74',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD Akrual', kode_akun='1.3.53',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE Akrual', kode_akun='4.2.13',
+        )
+        from apps.piutang.services import post_piutang
+        self.p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(self.p)
+        self.p.refresh_from_db()
+
+    def test_accrual_debits_piutang_not_deferred(self):
+        from apps.piutang.services import create_pv_accrual_journal
+        from apps.jurnal.models import JurnalDetail
+        create_pv_accrual_journal(
+            piutang=self.p,
+            tanggal=date(2026, 3, 31),
+            interest_income_account=self.coa_income,
+        )
+        deferred_hits = JurnalDetail.objects.filter(akun=self.coa_deferred)
+        self.assertEqual(deferred_hits.count(), 0)
+        piutang_debits = JurnalDetail.objects.filter(
+            akun=self.f['coa_piutang'], debit__gt=0,
+            jurnal_header__is_penyesuaian=True,
+        )
+        self.assertGreater(piutang_debits.count(), 0)
+
+    def test_accrual_journal_is_balanced(self):
+        from apps.piutang.services import create_pv_accrual_journal
+        j = create_pv_accrual_journal(
+            piutang=self.p,
+            tanggal=date(2026, 3, 31),
+            interest_income_account=self.coa_income,
+        )
+        total_debit = sum(d.debit for d in j.details.all())
+        total_kredit = sum(d.kredit for d in j.details.all())
+        self.assertAlmostEqual(float(total_debit), float(total_kredit), places=2)
