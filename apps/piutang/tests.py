@@ -1181,3 +1181,63 @@ class PvCarryingValuePSAK71Test(TestCase):
         p.refresh_from_db()
         cv_after = _pv_carrying_value(p)
         self.assertLess(cv_after, cv_before)
+
+
+class PvAdjustmentJournalPSAK71Test(TestCase):
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend Adj', kode_akun='4.1.73',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD Adj', kode_akun='1.3.52',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE Adj', kode_akun='4.2.12',
+        )
+        from apps.piutang.services import post_piutang
+        self.p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2028, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(self.p)
+        self.p.refresh_from_db()
+
+    def test_amortization_journal_debits_piutang_not_deferred(self):
+        from apps.piutang.services import create_pv_adjustment_journal
+        from apps.jurnal.models import JurnalDetail
+        create_pv_adjustment_journal(
+            piutang=self.p,
+            interest_income_account=self.coa_income,
+            tanggal=date(2026, 2, 1),
+            periode_no=1,
+        )
+        deferred_hits = JurnalDetail.objects.filter(akun=self.coa_deferred)
+        self.assertEqual(deferred_hits.count(), 0)
+        piutang_debits = JurnalDetail.objects.filter(
+            akun=self.f['coa_piutang'], debit__gt=0
+        ).exclude(
+            jurnal_header__uraian_transaksi__startswith='Pengakuan'
+        )
+        self.assertGreater(piutang_debits.count(), 0)
+
+    def test_amortization_journal_is_balanced(self):
+        from apps.piutang.services import create_pv_adjustment_journal
+        journal = create_pv_adjustment_journal(
+            piutang=self.p,
+            interest_income_account=self.coa_income,
+            tanggal=date(2026, 2, 1),
+            periode_no=1,
+        )
+        total_debit = sum(d.debit for d in journal.details.all())
+        total_kredit = sum(d.kredit for d in journal.details.all())
+        self.assertAlmostEqual(float(total_debit), float(total_kredit), places=2)

@@ -2033,21 +2033,14 @@ def create_pv_adjustment_journal(
     user=None,
     periode_no: int | None = None,
 ) -> JurnalHeader:
-    """Create amortization journal for next unrecorded PV discount period.
-
-    SAK ETAP gross method: Dr. Pendapatan Bunga Ditangguhkan / Cr. Pendapatan Bunga.
-    periode_no is auto-detected from existing journals if not supplied.
-    """
+    """PSAK 71: Dr. Piutang (gross EIR) / Cr. Pendapatan Bunga Efektif."""
     if not piutang.is_pv_adjusted or not piutang.nilai_wajar_awal or not piutang.pv_discount_rate:
         raise ValueError('Piutang belum disesuaikan nilai wajar (PV).')
-    if not piutang.deferred_income_account_id:
-        raise ValueError('Akun Pendapatan Bunga Ditangguhkan belum diset pada piutang ini.')
     amort = compute_amortization_schedule_pv(piutang)
     if not amort:
         raise ValueError('Jadwal amortisasi PV tidak tersedia.')
 
     if periode_no is None:
-        # Auto-detect: count existing TRX-PIU-PV-* journals for this piutang
         prefix_pattern = f'Amortisasi PV Piutang {piutang.nomor_piutang}'
         recorded = JurnalHeader.objects.filter(
             uraian_transaksi__startswith=prefix_pattern,
@@ -2058,11 +2051,15 @@ def create_pv_adjustment_journal(
         raise ValueError(f'Periode {periode_no} tidak valid (total {len(amort)} periode).')
 
     row = amort[periode_no - 1]
-    bunga = row['bunga_efektif']
-    if bunga == 0:
+    bunga = row['bunga_efektif_gross']
+    if bunga <= Decimal('0.005'):
         raise ValueError('Bunga efektif nol, tidak perlu jurnal.')
 
-    abs_bunga = abs(bunga)
+    ar_account = (
+        piutang.coa_piutang_lancar_account
+        if piutang.coa_piutang_lancar_account_id
+        else piutang.coa_piutang_account
+    )
     with transaction.atomic():
         nomor = _next_piutang_journal_number('TRX-PIU-PV')
         header = JurnalHeader.objects.create(
@@ -2072,76 +2069,20 @@ def create_pv_adjustment_journal(
             entitas_bisnis=piutang.entitas_bisnis,
             is_penyesuaian=True,
         )
-        if bunga > 0:
-            # Normal (discount unwinding): Dr. Pend. Bunga Ditangguhkan / Cr. Pend. Bunga Efektif
-            # Use BL account first (after reklasifikasi the balance is there), overflow to LT.
-            # Each account is capped at its actual remaining credit balance to prevent going negative.
-            remaining = abs_bunga
-            detail_lines = []
-            if piutang.deferred_income_lancar_account_id:
-                bal_bl = max(
-                    Decimal('0'),
-                    -_net_debit_balance_for_piutang(
-                        piutang.deferred_income_lancar_account, piutang
-                    ),
-                )
-                dr_bl = min(remaining, bal_bl)
-                if dr_bl > Decimal('0.005'):
-                    detail_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=piutang.deferred_income_lancar_account,
-                        debit=dr_bl, kredit=Decimal('0'),
-                    ))
-                    remaining -= dr_bl
-            if remaining > Decimal('0.005'):
-                bal_lt = max(
-                    Decimal('0'),
-                    -_net_debit_balance_for_piutang(
-                        piutang.deferred_income_account, piutang
-                    ),
-                )
-                dr_lt = min(remaining, bal_lt)
-                if dr_lt > Decimal('0.005'):
-                    detail_lines.append(JurnalDetail(
-                        jurnal_header=header,
-                        akun=piutang.deferred_income_account,
-                        debit=dr_lt, kredit=Decimal('0'),
-                    ))
-            if not detail_lines:
-                raise ValueError(
-                    'Tidak ada saldo Pendapatan Bunga Ditangguhkan yang tersisa untuk '
-                    'diamortisasi. Periksa apakah amortisasi periode ini sudah dibuat sebelumnya.'
-                )
-            total_dr = sum(l.debit for l in detail_lines)
-            detail_lines.append(JurnalDetail(
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun=ar_account,
+                debit=bunga,
+                kredit=Decimal('0'),
+            ),
+            JurnalDetail(
                 jurnal_header=header,
                 akun=interest_income_account,
-                debit=Decimal('0'), kredit=total_dr,
-            ))
-            JurnalDetail.objects.bulk_create(detail_lines)
-        else:
-            # Negative (re-deferral): effective < contractual coupon for this period.
-            # Dr. Pend. Bunga Efektif / Cr. Pend. Bunga Ditangguhkan (adds back to deferred).
-            # Re-deferral goes to BL account first (mirrors where the positive entries landed).
-            cr_def = (
-                piutang.deferred_income_lancar_account
-                if piutang.deferred_income_lancar_account_id
-                else piutang.deferred_income_account
-            )
-            JurnalDetail.objects.bulk_create([
-                JurnalDetail(
-                    jurnal_header=header,
-                    akun=interest_income_account,
-                    debit=abs_bunga,
-                    kredit=Decimal('0'),
-                ),
-                JurnalDetail(
-                    jurnal_header=header,
-                    akun=cr_def,
-                    debit=Decimal('0'),
-                    kredit=abs_bunga,
-                ),
-            ])
+                debit=Decimal('0'),
+                kredit=bunga,
+            ),
+        ])
         _log(
             piutang, 'EDITED', user=user,
             after={'pv_amortisasi': str(bunga), 'periode': periode_no},
