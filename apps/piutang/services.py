@@ -447,69 +447,6 @@ def create_piutang_payment(piutang: PiutangHeader, data: dict, user=None) -> Piu
 
         if piutang.status == 'paid':
             auto_reverse_penyisihan_on_payment(piutang, user=user)
-            # Settlement catch-up: zero out every remaining deferred-income balance so
-            # Pendapatan Bunga Ditangguhkan reaches exactly zero on full settlement.
-            # We query each account's actual running balance (credits − debits from all
-            # journals for this piutang) and debit only what is truly still there.
-            # This prevents 1.1.11 from going abnormally positive when a large unstructured
-            # payment triggers the catch-up while most discount is still sitting on 1.3.5.
-            if (piutang.is_pv_adjusted
-                    and piutang.nilai_wajar_awal
-                    and piutang.deferred_income_account_id
-                    and piutang.interest_income_account_id):
-                nom = piutang.nomor_piutang
-                # Build catch-up lines that zero every deferred account.
-                # Positive credit balance → remaining discount not yet recognised:
-                #   Dr. Deferred / Cr. Income (normal unwind)
-                # Negative debit balance → over-amortised (pre-fix rounding):
-                #   Dr. Income / Cr. Deferred (reversal of excess)
-                catch_detail_lines = []  # (akun, debit, kredit)
-                net_income_credit = Decimal('0')
-
-                def _add_catchup(account):
-                    nonlocal net_income_credit
-                    bal = -_net_debit_balance_for_piutang(account, piutang)
-                    if bal > Decimal('0.005'):
-                        catch_detail_lines.append((account, bal, Decimal('0')))
-                        net_income_credit += bal
-                    elif bal < Decimal('-0.005'):
-                        excess = -bal
-                        catch_detail_lines.append((account, Decimal('0'), excess))
-                        net_income_credit -= excess
-
-                if piutang.deferred_income_lancar_account_id:
-                    _add_catchup(piutang.deferred_income_lancar_account)
-                _add_catchup(piutang.deferred_income_account)
-
-                if catch_detail_lines and abs(net_income_credit) > Decimal('0.005'):
-                    catch_nomor = _next_piutang_journal_number('TRX-PIU-PV')
-                    catch_header = JurnalHeader.objects.create(
-                        tanggal=penerimaan.tanggal_terima,
-                        nomor_transaksi=catch_nomor,
-                        uraian_transaksi=(
-                            f'Amortisasi PV Piutang {nom} — Pelunasan {penerimaan.tanggal_terima}'
-                        ),
-                        entitas_bisnis=piutang.entitas_bisnis,
-                        is_penyesuaian=False,
-                    )
-                    income_dr = max(Decimal('0'), -net_income_credit)
-                    income_cr = max(Decimal('0'), net_income_credit)
-                    JurnalDetail.objects.bulk_create([
-                        JurnalDetail(
-                            jurnal_header=catch_header,
-                            akun=akun,
-                            debit=dr,
-                            kredit=kr,
-                        )
-                        for akun, dr, kr in catch_detail_lines
-                    ] + [
-                        JurnalDetail(
-                            jurnal_header=catch_header,
-                            akun=piutang.interest_income_account,
-                            debit=income_dr,
-                            kredit=income_cr,
-                        )
-                    ])
 
         _log(piutang, 'PAYMENT', user=user, after=_snapshot(piutang))
     return penerimaan
@@ -959,15 +896,6 @@ def reverse_piutang_payment(penerimaan: PiutangPenerimaan, user=None) -> JurnalH
                     period_amort.details.all().delete()
                     period_amort.delete()
 
-            # 2. Settlement catch-up journal: only exists when the piutang was
-            #    fully paid, so only check when was_paid is True.
-            if was_paid:
-                catch_up = JurnalHeader.objects.filter(
-                    uraian_transaksi__startswith=f'Amortisasi PV Piutang {nom} — Pelunasan',
-                ).first()
-                if catch_up:
-                    catch_up.details.all().delete()
-                    catch_up.delete()
 
         penerimaan.delete()
 

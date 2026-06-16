@@ -1369,3 +1369,49 @@ class PaymentJournalPSAK71Test(TestCase):
             jurnal_header__uraian_transaksi__startswith='Amortisasi PV Piutang',
         )
         self.assertGreater(eir_debits.count(), 0)
+
+
+class SettlementCatchupRemovedTest(TestCase):
+    """Under PSAK 71, full payment should NOT create a separate catchup journal."""
+
+    def setUp(self):
+        self.f = make_fixtures()
+        self.coa_rev = Akun.objects.create(
+            kategori_id='pendapatan', nama='Pend Catchup', kode_akun='4.1.76',
+        )
+        self.coa_deferred = Akun.objects.create(
+            kategori_id='kewajiban', nama='PBD Catchup', kode_akun='1.3.55',
+        )
+        self.coa_income = Akun.objects.create(
+            kategori_id='pendapatan', nama='PBE Catchup', kode_akun='4.2.15',
+        )
+        from apps.piutang.services import post_piutang
+        self.p = create_manual_piutang(
+            tanggal=date(2026, 1, 1), entitas_bisnis=None, debitur='X', deskripsi='',
+            coa_piutang_account=self.f['coa_piutang'],
+            jatuh_tempo=date(2027, 1, 1),
+            jenis_jangka_waktu='long_term',
+            pv_discount_rate=Decimal('12'),
+            deferred_income_account=self.coa_deferred,
+            interest_income_account=self.coa_income,
+            details=[{
+                'deskripsi': 'X', 'jumlah': Decimal('12000000'),
+                'revenue_account': self.coa_rev,
+            }],
+        )
+        post_piutang(self.p)
+        self.p.refresh_from_db()
+
+    def test_full_payment_creates_no_pelunasan_catchup_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        create_piutang_payment(
+            self.p,
+            {'tanggal_terima': date(2026, 6, 1),
+             'jumlah_diterima': self.p.jumlah_pokok,
+             'payment_account': self.f['coa_kas'], 'metode_penerimaan': 'transfer',
+             'nomor_referensi': '', 'catatan': ''},
+        )
+        catchup = JurnalHeader.objects.filter(
+            uraian_transaksi__contains='Pelunasan'
+        )
+        self.assertEqual(catchup.count(), 0)
