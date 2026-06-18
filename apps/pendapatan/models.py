@@ -35,6 +35,11 @@ TAX_PAYMENT_CHOICES = [
 ]
 
 
+class StandarAkuntansi(models.TextChoices):
+    PSAK_71_72 = 'PSAK_71_72', 'PSAK 71/72'
+    SAK_ETAP = 'SAK_ETAP', 'SAK ETAP'
+
+
 class PendapatanHeader(models.Model):
     STATUS_CHOICES = [
         ('draft', 'Draft'),
@@ -71,6 +76,12 @@ class PendapatanHeader(models.Model):
         max_length=20, choices=STATUS_CHOICES, default='draft', verbose_name='Status',
     )
     is_locked = models.BooleanField(default=False, verbose_name='Terkunci')
+    standar_akuntansi = models.CharField(
+        max_length=20,
+        choices=StandarAkuntansi.choices,
+        default=StandarAkuntansi.PSAK_71_72,
+        verbose_name='Standar Akuntansi',
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
         null=True, blank=True, related_name='pendapatan_created', verbose_name='Dibuat Oleh',
