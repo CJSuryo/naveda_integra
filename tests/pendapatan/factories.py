@@ -50,13 +50,10 @@ def make_header(user=None, **kwargs):
     from apps.pendapatan.models import PendapatanHeader
     if user is None:
         user = make_user()
-    return PendapatanHeader.objects.create(
-        deskripsi='Test Header',
-        payment_type='cash',
-        status='draft',
-        created_by=user,
-        **kwargs,
-    )
+    kwargs.setdefault('deskripsi', 'Test Header')
+    kwargs.setdefault('payment_type', 'cash')
+    kwargs.setdefault('status', 'draft')
+    return PendapatanHeader.objects.create(created_by=user, **kwargs)
 
 
 def make_pendapatan_eb(header, eb=None, payment_account=None):

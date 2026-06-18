@@ -72,6 +72,27 @@ class ConfirmPendapatanPointInTimeTest(TestCase):
         self.assertEqual(kp.harga_j, Decimal('500.0000'))
 
 
+class ConfirmPendapatanCreditOnePerHeaderTest(TestCase):
+    """Multiple credit point_in_time KPs must produce exactly one piutang."""
+
+    def setUp(self):
+        self.user = make_user('credit_confirmer')
+        self.akun_kas = make_akun('1001-CR', 'Kas Kredit')
+        self.akun_pendapatan = make_akun('4001-CR', 'Pendapatan Kredit')
+
+    def test_two_credit_pit_kps_create_exactly_one_piutang(self):
+        from apps.piutang.models import PiutangHeader
+        header = make_header(self.user, payment_type='credit')
+        peb = make_pendapatan_eb(header, payment_account=self.akun_kas)
+        make_kp(peb, '500', recognition_type='point_in_time',
+                revenue_account=self.akun_pendapatan)
+        make_kp(peb, '700', recognition_type='point_in_time',
+                revenue_account=self.akun_pendapatan)
+        confirm_pendapatan(header, self.user)
+        piutang_count = PiutangHeader.objects.filter(source_pendapatan=header).count()
+        self.assertEqual(piutang_count, 1)
+
+
 class ConfirmPendapatanOverTimeTest(TestCase):
     def setUp(self):
         self.user = make_user('confirmer_ot')
@@ -257,6 +278,17 @@ class KonversiAsetKontrakTest(TestCase):
         self.assertIsNotNone(self.aset.jurnal_header)
         details = JurnalDetail.objects.filter(jurnal_header=self.aset.jurnal_header)
         self.assertEqual(details.count(), 2)
+
+    def test_konversi_creates_piutang_and_links_to_aset(self):
+        from apps.piutang.models import PiutangHeader
+        from apps.pendapatan.services import konversi_aset_kontrak_ke_piutang
+        konversi_aset_kontrak_ke_piutang(self.aset.id, self.user)
+        self.aset.refresh_from_db()
+        self.assertIsNotNone(self.aset.piutang_id)
+        piutang = PiutangHeader.objects.get(pk=self.aset.piutang_id)
+        self.assertEqual(piutang.jumlah_pokok, Decimal('2000'))
+        self.assertEqual(piutang.status, 'open')
+        self.assertEqual(piutang.coa_piutang_account, self.akun_kas)
 
 
 # ── Task 12: void_pendapatan cleanup ─────────────────────────────────────────

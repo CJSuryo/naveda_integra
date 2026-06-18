@@ -249,6 +249,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                 kp.save(update_fields=['harga_j'])
 
         # Step 2: per-group per-KP processing
+        has_credit_pit = False
         for eb_group in header.entitas_groups.prefetch_related(
             'items__revenue_account', 'items__payment_account',
             'items__ot_liabilitas_kontrak_acct', 'items__ot_aset_kontrak_acct',
@@ -267,10 +268,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                         user=user,
                     )
                     if header.payment_type == 'credit':
-                        # Case 2: also create piutang
-                        from apps.piutang.services import create_piutang_from_pendapatan
-                        piutang = create_piutang_from_pendapatan(header, user)
-                        _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
+                        has_credit_pit = True
 
                 elif kp.recognition_type == KewajibabPelaksanaan.RecognitionType.OVER_TIME:
                     tipe = kp.ot_tipe_aliran
@@ -320,6 +318,12 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                                    description=f'KP {kp.pk} — performance_first', actor=user)
                         _log_event(header, 'JOURNAL_PSAK72',
                                    description=f'KP {kp.pk} — aset kontrak created', actor=user)
+
+        # Case 2: create exactly one piutang for all point_in_time credit KPs
+        if has_credit_pit:
+            from apps.piutang.services import create_piutang_from_pendapatan
+            piutang = create_piutang_from_pendapatan(header, user)
+            _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
 
         header.status = 'confirmed'
         header.save(update_fields=['status'])
@@ -593,6 +597,7 @@ def konversi_aset_kontrak_ke_piutang(aset_id: int, user) -> None:
         'kp__pendapatan_eb__entitas_bisnis',
         'kp__payment_account',
         'kp__ot_aset_kontrak_acct',
+        'kp__revenue_account',
     ).get(pk=aset_id)
 
     if aset.status != AsetKontrak.Status.ACTIVE:
@@ -607,6 +612,7 @@ def konversi_aset_kontrak_ke_piutang(aset_id: int, user) -> None:
 
     pay_acct = kp.payment_account or eb_group.payment_account
     aset_acct = kp.ot_aset_kontrak_acct
+    nilai_konversi = aset.nilai_tersisa
 
     with transaction.atomic():
         # Swap journal: Dr payment/piutang, Cr aset kontrak
@@ -621,8 +627,9 @@ def konversi_aset_kontrak_ke_piutang(aset_id: int, user) -> None:
 
         nomor = _next_journal_number('TRX-PND-AK')
         from django.utils import timezone as tz
+        today = tz.now().date()
         jh = JurnalHeader.objects.create(
-            tanggal=tz.now().date(),
+            tanggal=today,
             nomor_transaksi=nomor,
             uraian_transaksi=(
                 f'Konversi Aset Kontrak ke Piutang {header.transaction_id} — KP {kp.pk}'
@@ -631,19 +638,54 @@ def konversi_aset_kontrak_ke_piutang(aset_id: int, user) -> None:
             is_penyesuaian=False,
         )
         JurnalDetail.objects.bulk_create([
-            JurnalDetail(jurnal_header=jh, akun=pay_acct, debit=aset.nilai_tersisa, kredit=Decimal('0')),
-            JurnalDetail(jurnal_header=jh, akun=aset_acct, debit=Decimal('0'), kredit=aset.nilai_tersisa),
+            JurnalDetail(jurnal_header=jh, akun=pay_acct, debit=nilai_konversi, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=jh, akun=aset_acct, debit=Decimal('0'), kredit=nilai_konversi),
         ])
         _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
 
-        # Update aset
+        # Create piutang for the converted amount
+        from apps.piutang.models import PiutangHeader as _PH, PiutangDetail as _PD, PiutangAuditLog as _PAL
+        piutang = _PH.objects.create(
+            tanggal=today,
+            entitas_bisnis=eb_group.entitas_bisnis,
+            debitur=str(eb_group.entitas_bisnis),
+            deskripsi=(
+                f'Piutang dari Konversi Aset Kontrak {header.transaction_id} — KP {kp.pk}'
+            ),
+            source_type='from_pendapatan',
+            source_pendapatan=header,
+            jumlah_pokok=nilai_konversi,
+            status='open',
+            coa_piutang_account=pay_acct,
+            created_by=user,
+        )
+        _PD.objects.create(
+            piutang_header=piutang,
+            deskripsi=kp.deskripsi_item[:255],
+            jumlah=nilai_konversi,
+            revenue_account=kp.revenue_account,
+        )
+        _PAL.objects.create(
+            piutang_header=piutang,
+            nomor_piutang=piutang.nomor_piutang,
+            action='CREATED',
+            user=user,
+            before_json={},
+            after_json={'status': 'open', 'jumlah_pokok': str(nilai_konversi)},
+        )
+
+        # Update aset — link to piutang and zero out
         aset.status = AsetKontrak.Status.CONVERTED
         aset.nilai_tersisa = Decimal('0')
         aset.jurnal_header = jh
-        aset.save(update_fields=['status', 'nilai_tersisa', 'jurnal_header'])
+        aset.piutang = piutang
+        aset.save(update_fields=['status', 'nilai_tersisa', 'jurnal_header', 'piutang'])
 
         _log_event(header, 'ASSET_CONVERTED',
-                   description=f'AsetKontrak {aset.pk} dikonversi ke piutang',
+                   description=f'AsetKontrak {aset.pk} → {piutang.nomor_piutang}',
+                   actor=user)
+        _log_event(header, 'PIUTANG_CREATED_KP',
+                   description=f'{piutang.nomor_piutang} dari KP {kp.pk}',
                    actor=user)
 
 
