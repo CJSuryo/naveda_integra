@@ -159,7 +159,11 @@ class PendapatanEntitasBisnis(models.Model):
         return f'{self.pendapatan_header.transaction_id} → {self.entitas_bisnis.nama}'
 
 
-class PendapatanItem(models.Model):
+class KewajibabPelaksanaan(models.Model):
+    class RecognitionType(models.TextChoices):
+        POINT_IN_TIME = 'point_in_time', 'Point-in-Time'
+        OVER_TIME = 'over_time', 'Over Time'
+
     pendapatan_eb = models.ForeignKey(
         PendapatanEntitasBisnis, on_delete=models.CASCADE, related_name='items',
         verbose_name='Pendapatan EB Group',
@@ -205,10 +209,41 @@ class PendapatanItem(models.Model):
         max_length=20, choices=DEFERRED_METODE_CHOICES, blank=True, default='straight_line',
         verbose_name='Metode Pengakuan',
     )
+    # PSAK 72 fields
+    harga_j = models.DecimalField(
+        max_digits=19, decimal_places=4, default=0,
+        verbose_name='Harga Alokasi (PSAK 72)',
+    )
+    recognition_type = models.CharField(
+        max_length=20,
+        choices=RecognitionType.choices,
+        default=RecognitionType.POINT_IN_TIME,
+        verbose_name='Tipe Pengakuan',
+    )
+    # Over-time staging fields (set by form, consumed at confirm)
+    ot_tipe_aliran = models.CharField(max_length=30, blank=True, default='', verbose_name='Tipe Aliran')
+    ot_progress_method = models.CharField(max_length=30, blank=True, default='', verbose_name='Metode Progress')
+    ot_tanggal_mulai = models.DateField(null=True, blank=True, verbose_name='Tanggal Mulai OT')
+    ot_tanggal_selesai = models.DateField(null=True, blank=True, verbose_name='Tanggal Selesai OT')
+    ot_liabilitas_kontrak_acct = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
+        verbose_name='Akun Liabilitas Kontrak',
+    )
+    ot_aset_kontrak_acct = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
+        verbose_name='Akun Aset Kontrak',
+    )
+    ot_biaya_estimasi_total = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Biaya Estimasi Total',
+    )
 
     class Meta:
-        verbose_name = 'Pendapatan Item'
-        verbose_name_plural = 'Pendapatan Item'
+        db_table = 'pendapatan_pendapatanitem'
+        verbose_name = 'Kewajiban Pelaksanaan'
+        verbose_name_plural = 'Kewajiban Pelaksanaan'
         indexes = [
             models.Index(fields=['pendapatan_eb'], name='idx_pend_pi_eb'),
             models.Index(fields=['sub_transaction_type'], name='idx_pend_pi_stt'),
@@ -216,6 +251,10 @@ class PendapatanItem(models.Model):
 
     def __str__(self) -> str:
         return f'{self.pendapatan_eb.pendapatan_header.transaction_id} — {self.deskripsi_item[:40]}'
+
+
+# Backward-compat alias — remove after all references updated in Task 9
+PendapatanItem = KewajibabPelaksanaan
 
 
 class PendapatanEventLog(models.Model):
