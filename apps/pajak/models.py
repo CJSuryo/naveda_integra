@@ -73,8 +73,8 @@ class BracketPPhOP(models.Model):
         ordering = ['berlaku_mulai', 'batas_bawah']
 
     def __str__(self):
-        atas = f'{self.batas_atas:,}' if self.batas_atas else '∞'
-        return f'{self.batas_bawah:,} – {atas} → {self.tarif_persen}%'
+        atas = f'{int(self.batas_atas):,}' if self.batas_atas else '∞'
+        return f'{int(self.batas_bawah):,} – {atas} → {self.tarif_persen}%'
 
 
 class MasaPajak(models.Model):
@@ -129,6 +129,7 @@ class PajakTransaksi(models.Model):
     class Meta:
         verbose_name = 'Pajak Transaksi'
         verbose_name_plural = 'Pajak Transaksi'
+        ordering = ['-created_at']
         indexes = [
             models.Index(fields=['source_type', 'source_id'], name='idx_pajak_trx_source'),
             models.Index(fields=['masa_pajak', 'jenis_pajak'], name='idx_pajak_trx_masa_jenis'),
