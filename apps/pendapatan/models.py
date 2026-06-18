@@ -174,7 +174,7 @@ class KewajibabPelaksanaan(models.Model):
         'purchase.SubTransactionType', on_delete=models.PROTECT,
         related_name='pendapatan_items', verbose_name='Sub-Tipe Transaksi',
     )
-    jumlah_bruto = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Jumlah Bruto')
+    nilai_kontrak = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Nilai Kontrak')
     revenue_account = models.ForeignKey(
         'master_data.Akun', on_delete=models.PROTECT,
         related_name='pendapatan_item_revenue', verbose_name='Akun Pendapatan',
@@ -241,13 +241,21 @@ class KewajibabPelaksanaan(models.Model):
     )
 
     class Meta:
-        db_table = 'pendapatan_pendapatanitem'
         verbose_name = 'Kewajiban Pelaksanaan'
         verbose_name_plural = 'Kewajiban Pelaksanaan'
         indexes = [
             models.Index(fields=['pendapatan_eb'], name='idx_pend_pi_eb'),
             models.Index(fields=['sub_transaction_type'], name='idx_pend_pi_stt'),
         ]
+
+    @property
+    def jumlah_bruto(self):
+        """Backward-compat alias for nilai_kontrak."""
+        return self.nilai_kontrak
+
+    @jumlah_bruto.setter
+    def jumlah_bruto(self, value):
+        self.nilai_kontrak = value
 
     def __str__(self) -> str:
         return f'{self.pendapatan_eb.pendapatan_header.transaction_id} — {self.deskripsi_item[:40]}'
