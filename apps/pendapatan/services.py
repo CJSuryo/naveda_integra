@@ -11,7 +11,46 @@ from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
 
-from .models import PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem
+from .models import KewajibabPelaksanaan, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem
+
+
+# ── PSAK 72 Step 4: Price Allocation ─────────────────────────────────────────
+
+def compute_alokasi_harga(header: PendapatanHeader) -> dict[int, Decimal]:
+    """
+    PSAK 72 Step 4: allocate total transaction price across KPs proportionally
+    by nilai_kontrak (standalone selling price proxy).
+    Returns {kp_id: alokasi_harga}. Last KP absorbs any rounding remainder.
+    """
+    from decimal import ROUND_HALF_UP
+
+    kps = list(
+        KewajibabPelaksanaan.objects.filter(pendapatan_eb__pendapatan_header=header)
+    )
+    if not kps:
+        return {}
+
+    total_ssp = sum(kp.nilai_kontrak for kp in kps)
+    if total_ssp == 0:
+        return {kp.id: Decimal('0') for kp in kps}
+
+    # Transaction price = sum of SSPs (no bundle discount model yet)
+    transaction_price = total_ssp
+
+    alokasi = {}
+    total_allocated = Decimal('0')
+
+    for i, kp in enumerate(kps):
+        if i == len(kps) - 1:
+            # Last item absorbs rounding remainder
+            alokasi[kp.id] = transaction_price - total_allocated
+        else:
+            raw = kp.nilai_kontrak / total_ssp * transaction_price
+            amount = raw.quantize(Decimal('0.0001'), rounding=ROUND_HALF_UP)
+            alokasi[kp.id] = amount
+            total_allocated += amount
+
+    return alokasi
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
