@@ -1,20 +1,28 @@
 # Desain Modul Pajak — naveda_integra
 
 **Tanggal:** 2026-06-19
+**Revisi:** 2 — 2026-06-19 (koreksi post_jurnal_pajak, tambah akun_lawan + sifat_pajak, sentralisasi total)
 **Status:** Disetujui — siap implementasi
 
 ---
 
 ## 1. Tujuan
 
-Membangun `apps/pajak` sebagai **tax management hub** yang menjadi pusat seluruh logika perpajakan Indonesia dalam sistem naveda_integra. Modul ini:
+Membangun `apps/pajak` sebagai **tax management hub** yang menjadi pusat seluruh logika perpajakan Indonesia dalam sistem naveda_integra.
 
+### Prinsip Sentralisasi Total
+**Semua logika pajak — kalkulasi, jurnal, pelaporan — hanya ada di modul pajak.** Modul lain (pendapatan, sales, purchase, piutang, utang) tidak boleh membuat jurnal pajak sendiri. Modul lain hanya bertanggung jawab atas:
+1. Jurnal utama transaksi (DPP saja, tanpa komponen pajak)
+2. Memanggil `pajak.services.sync_pajak(...)` dan `confirm_pajak(...)`
+
+Ini berarti **existing code di modul lain yang saat ini menangani pajak akan di-refactor** untuk menyerahkan semua tax logic ke modul pajak.
+
+Modul ini:
 - Menyimpan master data tarif pajak (editable tanpa deploy ulang)
 - Menghitung pajak secara otomatis saat transaksi dikonfirmasi di modul lain
 - Menyimpan ledger pajak per transaksi (`PajakTransaksi`)
 - Membuat jurnal pajak terpisah (auditability)
 - Mengizinkan intervensi manual jika diperlukan
-- Menjadi titik integrasi semua modul yang mengandung komponen pajak
 
 **Regulasi dasar:** UU No. 7/2021 (HPP), PP No. 55/2022, PP No. 58/2023, PP No. 20/2026, PMK No. 131/2024, PMK No. 11/2025.
 
@@ -46,23 +54,25 @@ Membangun `apps/pajak` sebagai **tax management hub** yang menjadi pusat seluruh
 
 ## 3. Arsitektur
 
-### Pola integrasi: Explicit Service Call (Opsi B)
+### Pola integrasi: Explicit Service Call
 
-Modul lain memanggil `pajak.services` secara eksplisit dari dalam service-nya sendiri. Tidak ada Django signal. Alur:
+Modul lain memanggil `pajak.services` secara eksplisit. Tidak ada Django signal.
 
+**Alur konfirmasi:**
 ```
 [Modul Asal].services.confirm_*()
-  └─ for each item bertanda pajak:
-       1. Buat jurnal utama (sudah ada di modul asal)
-       2. pajak_trx = sync_pajak(source_type, item, tanggal)
-       3. confirm_pajak(pajak_trx)  →  jurnal pajak dibuat
+  └─ for each item:
+       1. Buat jurnal utama (DPP saja — tanpa komponen pajak)
+       2. if item.tax_type:
+            pajak_trx = sync_pajak(source_type, item, tanggal)
+            confirm_pajak(pajak_trx)  →  buat jurnal pajak terpisah
 ```
 
-Saat void:
+**Alur void:**
 ```
 [Modul Asal].services.void_*()
-  └─ for each PajakTransaksi terkait:
-       batal_pajak(pajak_trx)  →  jurnal pajak di-reverse
+  └─ PajakTransaksi.objects.filter(source_type=..., source_id__in=ids)
+       → batal_pajak(pt) untuk setiap record  →  reverse jurnal pajak
 ```
 
 ### Struktur file
@@ -85,15 +95,21 @@ apps/pajak/
 Master data tarif. Mendukung perubahan regulasi dengan `berlaku_mulai/sampai`.
 
 ```python
-jenis_pajak   CharField(max_length=40, choices=JENIS_PAJAK_CHOICES)
-nama          CharField(max_length=100)
-tarif_persen  DecimalField(max_digits=7, decimal_places=4)
-berlaku_mulai DateField
+jenis_pajak    CharField(max_length=40, choices=JENIS_PAJAK_CHOICES)
+nama           CharField(max_length=100)
+tarif_persen   DecimalField(max_digits=7, decimal_places=4)
+berlaku_mulai  DateField
 berlaku_sampai DateField(null=True, blank=True)  # null = masih berlaku
-keterangan    TextField(blank=True)
+keterangan     TextField(blank=True)
 ```
 
-Query aktif: `TarifPajak.objects.filter(jenis_pajak=x, berlaku_mulai__lte=tgl).filter(Q(berlaku_sampai__gte=tgl) | Q(berlaku_sampai__isnull=True)).latest('berlaku_mulai')`
+Query aktif:
+```python
+TarifPajak.objects
+    .filter(jenis_pajak=x, berlaku_mulai__lte=tgl)
+    .filter(Q(berlaku_sampai__gte=tgl) | Q(berlaku_sampai__isnull=True))
+    .latest('berlaku_mulai')
+```
 
 ### 4.2 `BracketPPhOP`
 Layer tarif progresif Pasal 17 untuk perhitungan PPh 21 bukan pegawai.
@@ -117,34 +133,42 @@ Ledger pajak per line item. Satu record per komponen pajak per item transaksi.
 
 ```python
 # Source reference (lightweight generic FK)
-source_type   CharField(max_length=40, choices=SOURCE_TYPE_CHOICES, db_index=True)
-              # 'pendapatan_kp', 'sales_item', 'purchase_item', 'piutang_item', ...
-source_id     PositiveIntegerField(db_index=True)
+source_type    CharField(max_length=40, choices=SOURCE_TYPE_CHOICES, db_index=True)
+               # 'pendapatan_kp', 'sales_item', 'purchase_item', 'piutang_item', ...
+source_id      PositiveIntegerField(db_index=True)
 
 # Masa pajak
-masa_pajak    DateField(db_index=True)  # selalu disimpan sebagai YYYY-MM-01
+masa_pajak     DateField(db_index=True)  # selalu disimpan sebagai YYYY-MM-01
 
 # Pajak
-jenis_pajak   CharField(max_length=40, choices=JENIS_PAJAK_CHOICES)
-dpp           DecimalField(max_digits=19, decimal_places=4)
-tarif_persen  DecimalField(max_digits=7, decimal_places=4)
-jumlah_pajak  DecimalField(max_digits=19, decimal_places=4)
+jenis_pajak    CharField(max_length=40, choices=JENIS_PAJAK_CHOICES)
+dpp            DecimalField(max_digits=19, decimal_places=4)
+tarif_persen   DecimalField(max_digits=7, decimal_places=4)
+jumlah_pajak   DecimalField(max_digits=19, decimal_places=4)
+
+# Sifat pajak — menentukan arah jurnal
+sifat_pajak    CharField(max_length=20, choices=[
+                   ('potong_pungut', 'Potong/Pungut'),   # Dr akun_lawan | Cr akun_pajak
+                   ('prepaid', 'Prepaid/Dipotong Lawan'), # Dr akun_pajak  | Cr akun_lawan
+               ])
 
 # Status
-status        CharField(choices=['draft','final','disetor','dibatalkan'], default='draft')
-is_overridden BooleanField(default=False)
+status         CharField(choices=['draft','final','disetor','dibatalkan'], default='draft')
+is_overridden  BooleanField(default=False)
 
-# Akun
-akun_pajak    FK → master_data.Akun
+# Akun — keduanya wajib diisi oleh sync_pajak
+akun_pajak     FK → master_data.Akun  # sisi pajak: Utang PPN, Utang PPh, Uang Muka PPh
+akun_lawan     FK → master_data.Akun  # sisi offset: Piutang, Utang Usaha, Kas, Beban
+
 entitas_bisnis FK → entitas_bisnis.EntitasBisnis (null=True)
 
 # Jurnal
-jurnal_header FK → jurnal.JurnalHeader (null=True)
+jurnal_header  FK → jurnal.JurnalHeader (null=True)
 
 # Audit
-created_at    DateTimeField(auto_now_add=True)
-modified_by   FK → AUTH_USER_MODEL (null=True)
-modified_at   DateTimeField(null=True)
+created_at     DateTimeField(auto_now_add=True)
+modified_by    FK → AUTH_USER_MODEL (null=True)
+modified_at    DateTimeField(null=True)
 ```
 
 Index: `(source_type, source_id)`, `(masa_pajak, jenis_pajak)`, `(status,)`
@@ -161,7 +185,7 @@ class Meta:
     unique_together = ('tahun', 'bulan')
 ```
 
-`MasaPajak` dibuat otomatis (get_or_create) oleh `sync_pajak` saat pertama ada transaksi di masa tersebut.
+`MasaPajak` dibuat otomatis (get_or_create) oleh `sync_pajak`.
 
 ---
 
@@ -170,14 +194,13 @@ class Meta:
 ### 5.1 `get_tarif(jenis_pajak: str, tanggal: date) → Decimal`
 Ambil `tarif_persen` aktif dari `TarifPajak`. Raise `TarifPajakTidakDitemukan` jika tidak ada.
 
-### 5.2 `compute_pajak(jenis_pajak, dpp, tanggal, extra=None) → dict`
+### 5.2 `compute_pajak(jenis_pajak, dpp, tanggal) → dict`
 Engine kalkulasi sentral. Returns `{dpp_efektif, tarif_persen, jumlah_pajak}`.
 
-Logika per jenis:
 ```
 ppn_umum:
   dpp_efektif = Decimal('11') / Decimal('12') * dpp
-  jumlah = dpp_efektif * Decimal('0.12')  # = 11% dari DPP asli
+  jumlah = dpp_efektif * Decimal('0.12')         # = 11% efektif dari DPP asli
 
 ppn_mewah:
   dpp_efektif = dpp
@@ -186,79 +209,116 @@ ppn_mewah:
 ppn_ekspor:
   jumlah = Decimal('0')
 
-ppn_bm:
-  tarif = get_tarif('ppn_bm', tanggal)  # varies by goods type
-  jumlah = dpp * tarif / 100
-
-pph_23_*:
-  tarif = get_tarif(jenis_pajak, tanggal)
-  jumlah = dpp * tarif / 100
-
-pph_4_2_*:
+ppn_bm / pph_23_* / pph_4_2_*:
   tarif = get_tarif(jenis_pajak, tanggal)
   jumlah = dpp * tarif / 100
 
 pph_21_bukan_pegawai:
-  pkp = dpp * Decimal('0.50')          # 50% × bruto
+  pkp = dpp * Decimal('0.50')                    # 50% × bruto
   jumlah = hitung_progresif(pkp, tanggal)
 
 pph_umkm:
-  jumlah = dpp * Decimal('0.005')      # 0.5%
-  # Logika threshold Rp 500jt kumulatif (OP) dihandle di caller
+  jumlah = dpp * Decimal('0.005')                # 0.5%
 ```
 
 ### 5.3 `hitung_progresif(pkp, tanggal) → Decimal`
 Iterasi `BracketPPhOP` yang berlaku pada `tanggal`, potong PKP per layer, sum hasilnya.
 
-### 5.4 `sync_pajak(source_type, source_obj, tanggal) → PajakTransaksi`
-Entry point generik. Dipanggil modul lain.
+### 5.4 `sync_pajak(source_type, source_obj, tanggal, akun_pajak, akun_lawan, sifat_pajak) → PajakTransaksi`
+Entry point generik. Dipanggil modul lain saat konfirmasi.
 
-- Baca `jenis_pajak`, `dpp`, `akun_pajak` dari `source_obj`
-- Jika `source_obj` sudah punya nilai pajak manual → gunakan sebagai `jumlah_pajak` dan set `is_overridden=True`
+- Baca `jenis_pajak`, `dpp` dari `source_obj`
+- Jika `source_obj` sudah punya nilai pajak manual (`kp.tax > 0`) → gunakan sebagai `jumlah_pajak`, set `is_overridden=True`
 - Jika tidak → panggil `compute_pajak`
-- `get_or_create` `MasaPajak` untuk bulan tersebut
-- Buat `PajakTransaksi` status `draft`
-- Return `PajakTransaksi`
+- `get_or_create` `MasaPajak` untuk bulan transaksi
+- Buat dan return `PajakTransaksi` status `draft`
+
+Akun pajak dan akun lawan dikirim eksplisit oleh caller (modul asal yang tahu konteks akun transaksinya).
 
 ### 5.5 `confirm_pajak(pajak_trx) → JurnalHeader`
-- Set status `draft → final`
+- Validasi status `draft`
+- Set status → `final`
 - Panggil `post_jurnal_pajak(pajak_trx)`
-- Return `JurnalHeader` yang dibuat
+- Return `JurnalHeader`
 
 ### 5.6 `batal_pajak(pajak_trx)`
 - Set status → `dibatalkan`
-- Jika `jurnal_header` sudah ada: buat jurnal pembalik (reverse entry)
+- Jika `jurnal_header` sudah ada: buat `JurnalHeader` pembalik (swap debit/kredit)
 
 ### 5.7 `override_pajak(pajak_trx, jumlah_baru, modified_by) → PajakTransaksi`
 Intervensi manual:
-- Reverse jurnal lama (jika ada)
-- Update `jumlah_pajak = jumlah_baru`, `is_overridden = True`
-- Set `modified_by`, `modified_at`
-- Buat jurnal baru dengan nilai yang dioverride
-- Return `PajakTransaksi`
+1. Jika jurnal sudah ada → batal_pajak (reverse)
+2. Update `jumlah_pajak = jumlah_baru`, `is_overridden = True`, `modified_by`, `modified_at`
+3. Set status → `final`
+4. Buat jurnal baru dengan nilai yang dioverride
+5. Return `PajakTransaksi`
 
 ### 5.8 `post_jurnal_pajak(pajak_trx) → JurnalHeader`
-Buat `JurnalHeader` + `JurnalDetail` dengan mapping:
+Membuat `JurnalHeader` + dua `JurnalDetail`. Arah jurnal dikontrol oleh `sifat_pajak`:
 
-| Jenis Pajak | Debit | Kredit |
-|-------------|-------|--------|
-| PPN Keluaran (ppn_umum / ppn_mewah) | Piutang PPN / Kas | Utang PPN (`akun_pajak`) |
-| PPh 23 dipotong oleh lawan (kita yang dipotong) | Piutang PPh 23 | Pendapatan (offset) |
-| PPh 23 kita memotong | Beban jasa / biaya (bruto) | Utang PPh 23 (`akun_pajak`) |
-| PPh 21 bukan pegawai | Beban honorarium | Utang PPh 21 (`akun_pajak`) |
-| PPh 4(2) | Beban sewa/bunga (bruto) | Utang PPh 4(2) (`akun_pajak`) |
-| PPh UMKM | Beban PPh | Utang PPh UMKM (`akun_pajak`) |
+```python
+if pajak_trx.sifat_pajak == 'potong_pungut':
+    akun_debit  = pajak_trx.akun_lawan   # Kas, Piutang, Utang Usaha, Beban
+    akun_kredit = pajak_trx.akun_pajak   # Utang PPN, Utang PPh
+else:  # 'prepaid'
+    akun_debit  = pajak_trx.akun_pajak   # Uang Muka PPh
+    akun_kredit = pajak_trx.akun_lawan   # Piutang Usaha
+```
 
-`akun_pajak` diambil dari `PajakTransaksi.akun_pajak` (diset oleh `sync_pajak` dari field `tax_account` source_obj, atau dari `TarifPajak.default_akun` jika tersedia).
+Hasilnya:
+```
+Dr. akun_debit   jumlah_pajak
+  Cr. akun_kredit  jumlah_pajak
+```
+
+#### Tabel mapping per konteks
+
+| Konteks | jenis_pajak | sifat_pajak | akun_pajak | akun_lawan |
+|---------|-------------|-------------|------------|------------|
+| Pendapatan — PPN tagih ke klien | ppn_umum / ppn_mewah | potong_pungut | Utang PPN | Kas / Piutang |
+| Pendapatan — PPh 23 dipotong klien | pph_23_jasa | prepaid | Uang Muka PPh 23 | Piutang Usaha |
+| Pendapatan — PPh 21 dipotong klien | pph_21_bukan_pegawai | prepaid | Uang Muka PPh 21 | Piutang Usaha |
+| Pendapatan — PPh 4(2) dipotong klien | pph_4_2_sewa | prepaid | Uang Muka PPh 4(2) | Piutang Usaha |
+| Purchase — PPh 23 kita potong vendor | pph_23_jasa | potong_pungut | Utang PPh 23 | Utang Usaha |
+| Purchase — PPh 21 kita potong vendor | pph_21_bukan_pegawai | potong_pungut | Utang PPh 21 | Utang Usaha |
+| Purchase — PPh 4(2) kita potong | pph_4_2_sewa | potong_pungut | Utang PPh 4(2) | Utang Usaha |
+| UMKM — PPh atas pendapatan sendiri | pph_umkm | potong_pungut | Utang PPh UMKM | Beban PPh Final |
+| Ekspor | ppn_ekspor | potong_pungut | — | — (jumlah=0, no journal) |
+
+**Catatan:** Untuk `ppn_ekspor`, `jumlah_pajak = 0` sehingga tidak ada `JurnalDetail` yang dibuat, tapi `PajakTransaksi` tetap dibuat untuk kelengkapan laporan.
 
 ---
 
-## 6. Integrasi Modul
+## 6. Integrasi Modul & Refactoring Existing Code
 
-### 6.1 `apps/pendapatan` (phase ini)
-`KewajibabPelaksanaan` sudah punya `tax`, `tax_type`, `tax_account`.
+### Prinsip umum
+Setiap modul yang di-refactor harus:
+1. Menghapus semua tax logic dari `confirm_*` service-nya
+2. Memastikan jurnal utama hanya booking DPP (tanpa pajak)
+3. Memanggil `sync_pajak + confirm_pajak` setelah jurnal utama selesai
 
-Mapping `tax_type` → `jenis_pajak`:
+### 6.1 `apps/pendapatan` (phase ini — refactoring required)
+
+**Yang harus diubah di `pendapatan/services.py`:**
+
+`_create_kp_journal` saat ini:
+```python
+# SEBELUM — tax embedded dalam jurnal utama:
+debit_total = amount + tax_amount
+Dr. debit_acct  (amount + tax)
+  Cr. credit_acct (amount)
+  Cr. tax_account (tax)         # ← HAPUS ini
+```
+
+`_create_kp_journal` setelah refactor:
+```python
+# SESUDAH — jurnal utama hanya DPP:
+Dr. debit_acct  (amount)
+  Cr. credit_acct (amount)
+# Hapus parameter include_tax, hapus blok if has_tax
+```
+
+**Mapping `tax_type` lama → `jenis_pajak` baru:**
 ```python
 TAX_TYPE_MAP = {
     'ppn_keluaran': 'ppn_umum',
@@ -268,31 +328,57 @@ TAX_TYPE_MAP = {
 }
 ```
 
-Di `pendapatan.services.confirm_pendapatan(header)`:
+**Penentuan `sifat_pajak` di context pendapatan:**
+- `ppn_keluaran` → `potong_pungut` (kita pungut PPN dari klien)
+- `pph_23`, `pph_21`, `pph_4_2` → `prepaid` (klien memotong dari pembayaran ke kita)
+
+**Panggilan di `confirm_pendapatan`:**
 ```python
 from apps.pajak.services import sync_pajak, confirm_pajak
-for kp in header_kps_with_tax:
-    pajak_trx = sync_pajak('pendapatan_kp', kp, header.tanggal)
+
+# Setelah _create_kp_journal:
+if kp.tax_type and kp.tax_account_id:
+    jenis = TAX_TYPE_MAP.get(kp.tax_type)
+    sifat = 'potong_pungut' if kp.tax_type == 'ppn_keluaran' else 'prepaid'
+    akun_lawan = pay_acct  # Kas/Piutang — sama dengan debit_acct jurnal utama
+    pajak_trx = sync_pajak(
+        source_type='pendapatan_kp',
+        source_obj=kp,
+        tanggal=header.tanggal,
+        akun_pajak=kp.tax_account,
+        akun_lawan=akun_lawan,
+        sifat_pajak=sifat,
+    )
     confirm_pajak(pajak_trx)
 ```
 
-Di `pendapatan.services.void_pendapatan(header)`:
+**Panggilan di `void_pendapatan`:**
 ```python
 from apps.pajak.services import batal_pajak
 from apps.pajak.models import PajakTransaksi
+
+kp_ids = list(KewajibabPelaksanaan.objects.filter(
+    pendapatan_eb__pendapatan_header=header
+).values_list('id', flat=True))
+
 for pt in PajakTransaksi.objects.filter(source_type='pendapatan_kp', source_id__in=kp_ids):
     batal_pajak(pt)
 ```
 
-### 6.2 Modul lain (antrian)
-Urutan integrasi yang direncanakan:
-1. `apps/pendapatan` — phase ini
-2. `apps/sales` — berikutnya
-3. `apps/purchase`
-4. `apps/piutang`
-5. `apps/utang`
+### 6.2 Modul lain (antrian integrasi)
 
-Setiap modul baru hanya perlu: menambahkan `source_type` baru ke `SOURCE_TYPE_CHOICES` dan memanggil `sync_pajak` / `confirm_pajak` / `batal_pajak` di service-nya.
+| Urutan | Modul | Catatan |
+|--------|-------|---------|
+| 1 | `apps/pendapatan` | Phase ini |
+| 2 | `apps/sales` | PPh 23 / PPN atas penjualan |
+| 3 | `apps/purchase` | PPh 21/23/4(2) kita memotong |
+| 4 | `apps/piutang` | PPN terkait piutang usaha |
+| 5 | `apps/utang` | PPh terkait utang usaha |
+
+Setiap modul baru hanya perlu:
+- Tambah `source_type` ke `SOURCE_TYPE_CHOICES` di `pajak/models.py`
+- Panggil `sync_pajak / confirm_pajak / batal_pajak` di service-nya
+- Hapus tax logic yang ada dari service-nya sendiri
 
 ---
 
@@ -300,7 +386,7 @@ Setiap modul baru hanya perlu: menambahkan `source_type` baru ke `SOURCE_TYPE_CH
 
 | View | URL | Deskripsi |
 |------|-----|-----------|
-| `PajakTransaksiListView` | `/pajak/transaksi/` | Ledger, filter masa/jenis/status |
+| `PajakTransaksiListView` | `/pajak/transaksi/` | Ledger, filter masa/jenis/status/sifat |
 | `PajakTransaksiEditView` | `/pajak/transaksi/<id>/edit/` | Form intervensi manual (override) |
 | `MasaPajakListView` | `/pajak/masa/` | Daftar masa pajak + status |
 | `MasaPajakDetailView` | `/pajak/masa/<tahun>/<bulan>/` | Summary masa pajak, tombol lock |
@@ -313,10 +399,10 @@ URL prefix: `/pajak/` didaftarkan di `naveda_integra/urls.py`.
 
 ## 8. Data Seed
 
-Perlu initial data (migration atau fixture) untuk:
+Perlu initial data (migration data) untuk:
 
 **`TarifPajak` (berlaku_mulai = 2025-01-01):**
-- `ppn_umum` → 12% (dengan DPP nilai lain 11/12, efektif 11%)
+- `ppn_umum` → 12% (DPP nilai lain 11/12, efektif 11%)
 - `ppn_mewah` → 12%
 - `pph_23_jasa` → 2%
 - `pph_23_royalti` → 15%
@@ -332,13 +418,17 @@ Lima layer sesuai Pasal 17 UU PPh jo. UU HPP.
 
 ## 9. Testing
 
-- `test_compute_pajak_ppn_umum` — verifikasi 11/12 × DPP logic
+- `test_compute_pajak_ppn_umum` — verifikasi 11/12 × DPP logic, jumlah = 11% dari DPP asli
 - `test_compute_pajak_pph_21_bukan_pegawai` — verifikasi 50% × PKP progresif
-- `test_sync_pajak_pendapatan_kp` — integrasi: KP confirmed → PajakTransaksi terbuat
-- `test_override_pajak` — verifikasi reverse jurnal + nilai baru
-- `test_batal_pajak` — verifikasi jurnal pembalik
-- `test_tarif_berlaku_historis` — tarif lama tetap dipakai untuk tanggal lama
+- `test_sync_pajak_pendapatan_kp_ppn` — KP confirmed → PajakTransaksi potong_pungut terbuat
+- `test_sync_pajak_pendapatan_kp_pph23` — KP confirmed → PajakTransaksi prepaid terbuat
+- `test_post_jurnal_potong_pungut` — Dr akun_lawan, Cr akun_pajak
+- `test_post_jurnal_prepaid` — Dr akun_pajak, Cr akun_lawan
+- `test_override_pajak` — reverse jurnal + nilai baru + jurnal baru
+- `test_batal_pajak` — jurnal pembalik (swap debit/kredit)
+- `test_tarif_berlaku_historis` — tarif lama dipakai untuk tanggal lama
 - `test_masa_pajak_autocreate` — MasaPajak dibuat otomatis
+- `test_pendapatan_confirm_no_double_journal` — jurnal utama DPP saja, jurnal pajak terpisah, total balance
 
 ---
 
@@ -346,8 +436,12 @@ Lima layer sesuai Pasal 17 UU PPh jo. UU HPP.
 
 | Keputusan | Alasan |
 |-----------|--------|
+| Sentralisasi total — semua pajak di modul pajak | Konsistensi, auditability, single source of truth untuk kewajiban pajak |
+| Refactor `_create_kp_journal` hapus `include_tax` | Jurnal utama hanya DPP; mencegah double-count saat pajak module aktif |
+| `akun_pajak` + `akun_lawan` + `sifat_pajak` | Tiga field ini cukup untuk menentukan arah jurnal apapun tanpa conditional logic kompleks |
+| `sifat_pajak`: `potong_pungut` vs `prepaid` | Membedakan liability (Utang PPh) dari prepaid asset (Uang Muka PPh) — kritis untuk balance sheet |
+| Jurnal pajak terpisah dari jurnal utama | Cross-reference via `PajakTransaksi.jurnal_header`; memudahkan rekonsiliasi masa pajak |
 | Explicit service call, bukan signal | Mudah di-trace, di-test, konsisten dengan pola existing |
 | `source_type + source_id` bukan `GenericFK` | Konsisten dengan codebase, tidak perlu `contenttypes` framework |
-| Jurnal pajak terpisah dari jurnal utama | Auditability: jurnal utama dan pajak cross-reference via `PajakTransaksi.jurnal_header` |
-| `TarifPajak` di DB bukan hardcode | Perubahan regulasi (e.g. tarif PMK baru) tidak butuh deploy |
+| `TarifPajak` di DB bukan hardcode | Perubahan regulasi tidak butuh deploy ulang |
 | PPh 21 pegawai tetap out of scope | Modul HR/penggajian belum ada; akan diintegrasikan di phase HR |
