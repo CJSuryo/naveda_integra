@@ -194,7 +194,7 @@ def create_pendapatan_header(
                 deskripsi_item=item['deskripsi_item'],
                 kategori=item['kategori'],
                 sub_transaction_type=item['sub_transaction_type'],
-                jumlah_bruto=item['jumlah_bruto'],
+                nilai_kontrak=item.get('nilai_kontrak') or item.get('jumlah_bruto'),
                 revenue_account=item['revenue_account'],
                 payment_account=item.get('payment_account'),
                 tax=item.get('tax'),
@@ -202,6 +202,14 @@ def create_pendapatan_header(
                 tax_account=item.get('tax_account'),
                 tax_payment=item.get('tax_payment', ''),
                 tax_payment_account=item.get('tax_payment_account'),
+                recognition_type=item.get('recognition_type', 'point_in_time'),
+                ot_tipe_aliran=item.get('ot_tipe_aliran', ''),
+                ot_progress_method=item.get('ot_progress_method', ''),
+                ot_tanggal_mulai=item.get('ot_tanggal_mulai'),
+                ot_tanggal_selesai=item.get('ot_tanggal_selesai'),
+                ot_liabilitas_kontrak_acct=item.get('ot_liabilitas_kontrak_acct'),
+                ot_aset_kontrak_acct=item.get('ot_aset_kontrak_acct'),
+                ot_biaya_estimasi_total=item.get('ot_biaya_estimasi_total'),
             )
             for item in items
         ])

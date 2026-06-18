@@ -1,0 +1,25 @@
+<div class="modal fade" id="modal-recognize-{{ entri.id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <form method="post" action="{% url 'pendapatan:recognize_entry' entri.id %}">
+      {% csrf_token %}
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Akui Pendapatan</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Nilai: <strong>{{ entri.nilai|floatformat:0 }}</strong></p>
+          <div class="mb-2">
+            <label class="form-label form-label-sm">Tanggal Jurnal</label>
+            <input type="date" name="journal_date" class="form-control form-control-sm"
+                   value="{{ entri.tanggal_target|date:'Y-m-d' }}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+          <button type="submit" class="btn btn-success btn-sm">Akui</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>

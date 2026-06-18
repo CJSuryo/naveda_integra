@@ -12,6 +12,9 @@ urlpatterns = [
     path('<int:pk>/confirm/', views.pendapatan_confirm, name='confirm'),
     path('<int:pk>/void/', views.pendapatan_void, name='void'),
     path('api/stt-defaults/', views.stt_defaults, name='stt_defaults'),
+    # PSAK 72 actions
+    path('entri/<int:entry_id>/recognize/', views.recognize_entry_view, name='recognize_entry'),
+    path('aset/<int:aset_id>/konversi/', views.konversi_aset_kontrak_view, name='konversi_aset_kontrak'),
     # Recurring Templates
     path('recurring/', views.recurring_list, name='recurring_list'),
     path('recurring/create/', views.recurring_create, name='recurring_create'),

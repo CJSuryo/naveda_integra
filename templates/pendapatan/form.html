@@ -42,12 +42,12 @@
 
   <div class="ni-card ni-animate-fade-in">
     <div class="ni-card__header">
-      <h2 class="ni-card__title">Item Pendapatan</h2>
+      <h2 class="ni-card__title">Item Pendapatan (Kewajiban Pelaksanaan)</h2>
       <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" id="add-item-btn">+ Tambah Item</button>
     </div>
     <div id="item-rows-container">
       {% for item_form in item_forms %}
-      <div class="ni-item-row ni-card ni-mb-3" data-index="{{ forloop.counter0 }}">
+      <div class="ni-item-row kp-formrow ni-card ni-mb-3" data-index="{{ forloop.counter0 }}">
         <div class="ni-card__body">
           <div class="ni-form-grid ni-form-grid--2">
             <div class="ni-form-group ni-form-group--full">
@@ -66,9 +66,9 @@
               {% if item_form.sub_transaction_type.errors %}<div class="ni-form-error">{{ item_form.sub_transaction_type.errors }}</div>{% endif %}
             </div>
             <div class="ni-form-group">
-              <label class="ni-form-label">Jumlah Bruto</label>
-              {{ item_form.jumlah_bruto }}
-              {% if item_form.jumlah_bruto.errors %}<div class="ni-form-error">{{ item_form.jumlah_bruto.errors }}</div>{% endif %}
+              <label class="ni-form-label">Nilai Kontrak</label>
+              {{ item_form.nilai_kontrak }}
+              {% if item_form.nilai_kontrak.errors %}<div class="ni-form-error">{{ item_form.nilai_kontrak.errors }}</div>{% endif %}
             </div>
             <div class="ni-form-group">
               <label class="ni-form-label">Akun Pendapatan</label>
@@ -80,41 +80,70 @@
               {{ item_form.payment_account }}
               {% if item_form.payment_account.errors %}<div class="ni-form-error">{{ item_form.payment_account.errors }}</div>{% endif %}
             </div>
-            <div class="ni-form-group ni-form-group--full">
-              <label class="ni-form-label">
-                {{ item_form.is_deferred }}
-                Pendapatan Diterima di Muka
-              </label>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Pajak (Nominal)</label>
+              {{ item_form.tax }}
+              {% if item_form.tax.errors %}<div class="ni-form-error">{{ item_form.tax.errors }}</div>{% endif %}
             </div>
-            <div class="ni-deferred-fields" style="display:none;">
-              <div class="ni-form-grid ni-form-grid--2">
-                <div class="ni-form-group">
-                  <label class="ni-form-label">Akun Deferred (Liability)</label>
-                  {{ item_form.deferred_account }}
-                  {% if item_form.deferred_account.errors %}<div class="ni-form-error">{{ item_form.deferred_account.errors }}</div>{% endif %}
-                </div>
-                <div class="ni-form-group">
-                  <label class="ni-form-label">Akun Pengakuan</label>
-                  {{ item_form.recognition_account }}
-                  {% if item_form.recognition_account.errors %}<div class="ni-form-error">{{ item_form.recognition_account.errors }}</div>{% endif %}
-                </div>
-                <div class="ni-form-group">
-                  <label class="ni-form-label">Tanggal Mulai</label>
-                  {{ item_form.deferred_tanggal_mulai }}
-                  {% if item_form.deferred_tanggal_mulai.errors %}<div class="ni-form-error">{{ item_form.deferred_tanggal_mulai.errors }}</div>{% endif %}
-                </div>
-                <div class="ni-form-group">
-                  <label class="ni-form-label">Tanggal Selesai</label>
-                  {{ item_form.deferred_tanggal_selesai }}
-                  {% if item_form.deferred_tanggal_selesai.errors %}<div class="ni-form-error">{{ item_form.deferred_tanggal_selesai.errors }}</div>{% endif %}
-                </div>
-                <div class="ni-form-group">
-                  <label class="ni-form-label">Metode</label>
-                  {{ item_form.deferred_metode }}
-                </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Tipe Pajak</label>
+              {{ item_form.tax_type }}
+              {% if item_form.tax_type.errors %}<div class="ni-form-error">{{ item_form.tax_type.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Akun Pajak</label>
+              {{ item_form.tax_account }}
+              {% if item_form.tax_account.errors %}<div class="ni-form-error">{{ item_form.tax_account.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Tipe Pengakuan (PSAK 72)</label>
+              {{ item_form.recognition_type }}
+              {% if item_form.recognition_type.errors %}<div class="ni-form-error">{{ item_form.recognition_type.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          {# Over-time configuration fields — shown/hidden by JS #}
+          <div class="ot-fields" style="display:none;border-top:1px dashed #ccc;margin-top:1rem;padding-top:1rem;">
+            <h4 style="font-size:0.95rem;margin-bottom:0.75rem;">Konfigurasi Over Time</h4>
+            <div class="ni-form-grid ni-form-grid--2">
+              <div class="ni-form-group">
+                <label class="ni-form-label">Tipe Aliran</label>
+                {{ item_form.ot_tipe_aliran }}
+                {% if item_form.ot_tipe_aliran.errors %}<div class="ni-form-error">{{ item_form.ot_tipe_aliran.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Metode Progress</label>
+                {{ item_form.ot_progress_method }}
+                {% if item_form.ot_progress_method.errors %}<div class="ni-form-error">{{ item_form.ot_progress_method.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Tanggal Mulai OT</label>
+                {{ item_form.ot_tanggal_mulai }}
+                {% if item_form.ot_tanggal_mulai.errors %}<div class="ni-form-error">{{ item_form.ot_tanggal_mulai.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Tanggal Selesai OT</label>
+                {{ item_form.ot_tanggal_selesai }}
+                {% if item_form.ot_tanggal_selesai.errors %}<div class="ni-form-error">{{ item_form.ot_tanggal_selesai.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Akun Liabilitas Kontrak</label>
+                {{ item_form.ot_liabilitas_kontrak_acct }}
+                {% if item_form.ot_liabilitas_kontrak_acct.errors %}<div class="ni-form-error">{{ item_form.ot_liabilitas_kontrak_acct.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Akun Aset Kontrak</label>
+                {{ item_form.ot_aset_kontrak_acct }}
+                {% if item_form.ot_aset_kontrak_acct.errors %}<div class="ni-form-error">{{ item_form.ot_aset_kontrak_acct.errors }}</div>{% endif %}
+              </div>
+              <div class="ni-form-group">
+                <label class="ni-form-label">Biaya Estimasi Total</label>
+                {{ item_form.ot_biaya_estimasi_total }}
+                {% if item_form.ot_biaya_estimasi_total.errors %}<div class="ni-form-error">{{ item_form.ot_biaya_estimasi_total.errors }}</div>{% endif %}
               </div>
             </div>
           </div>
+
           {% if not forloop.first %}
           <div class="ni-btn-row">
             <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>
@@ -142,16 +171,37 @@
     return container.querySelectorAll('.ni-item-row').length;
   }
 
-  function attachRowEvents(row) {
-    var deferredCb = row.querySelector('input[type=checkbox][name$="-is_deferred"]');
-    var deferredFields = row.querySelector('.ni-deferred-fields');
-    if (deferredCb && deferredFields) {
-      function toggleDeferred() {
-        deferredFields.style.display = deferredCb.checked ? 'block' : 'none';
-      }
-      deferredCb.addEventListener('change', toggleDeferred);
-      toggleDeferred();
+  function toggleOverTimeFields(formRow) {
+    var recTypeSelect = formRow.querySelector('[id$="-recognition_type"]');
+    var otFields = formRow.querySelector('.ot-fields');
+    if (!recTypeSelect || !otFields) return;
+
+    function update() {
+      var isOT = recTypeSelect.value === 'over_time';
+      otFields.style.display = isOT ? '' : 'none';
     }
+    recTypeSelect.addEventListener('change', update);
+    update();
+  }
+
+  function updateSSPHints() {
+    var inputs = document.querySelectorAll('[id$="-nilai_kontrak"]');
+    var total = 0;
+    inputs.forEach(function(inp) { total += parseFloat(inp.value || 0); });
+    inputs.forEach(function(inp) {
+      var pct = total > 0 ? (parseFloat(inp.value || 0) / total * 100).toFixed(1) : '0.0';
+      var hint = inp.parentElement.querySelector('.ssp-pct');
+      if (!hint) {
+        hint = document.createElement('small');
+        hint.className = 'form-text text-muted ssp-pct';
+        inp.parentElement.appendChild(hint);
+      }
+      hint.textContent = 'SSP ' + pct + '% dari total kontrak';
+    });
+  }
+
+  function attachRowEvents(row) {
+    toggleOverTimeFields(row);
 
     var sttSelect = row.querySelector('select[name$="-sub_transaction_type"]');
     var revenueSelect = row.querySelector('select[name$="-revenue_account"]');
@@ -170,11 +220,17 @@
       });
     }
 
+    var nilaiInput = row.querySelector('[id$="-nilai_kontrak"]');
+    if (nilaiInput) {
+      nilaiInput.addEventListener('input', updateSSPHints);
+    }
+
     var removeBtn = row.querySelector('.remove-item-btn');
     if (removeBtn) {
       removeBtn.addEventListener('click', function () {
         row.remove();
         reindexRows();
+        updateSSPHints();
       });
     }
   }
@@ -195,6 +251,7 @@
   }
 
   container.querySelectorAll('.ni-item-row').forEach(attachRowEvents);
+  updateSSPHints();
 
   addBtn.addEventListener('click', function () {
     var firstRow = container.querySelector('.ni-item-row');
@@ -222,6 +279,7 @@
     container.appendChild(newRow);
     itemCountInput.value = getItemCount();
     attachRowEvents(newRow);
+    updateSSPHints();
   });
 
   // EB TomSelect

@@ -34,6 +34,7 @@
       <dt>Tipe Pembayaran</dt><dd>{{ header.get_payment_type_display }}</dd>
       <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span></dd>
       <dt>Sumber</dt><dd>{{ header.get_source_type_display }}</dd>
+      <dt>Standar Akuntansi</dt><dd>{{ header.get_standar_akuntansi_display }}</dd>
       <dt>Deskripsi</dt><dd>{{ header.deskripsi|default:'-' }}</dd>
       <dt>Dibuat</dt><dd>{{ header.created_at }}</dd>
     </dl>
@@ -46,33 +47,89 @@
     <h2 class="ni-card__title">{{ eb_group.entitas_bisnis.nama }}</h2>
     {% if eb_group.payment_account %}<span class="ni-text-muted">Akun: {{ eb_group.payment_account }}</span>{% endif %}
   </div>
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead>
-        <tr>
-          <th>Deskripsi</th>
-          <th>Kategori</th>
-          <th>STT</th>
-          <th class="ni-text-right">Jumlah Bruto</th>
-          <th>Akun Pendapatan</th>
-          <th>Deferred</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for item in eb_group.items.all %}
-        <tr>
-          <td>{{ item.deskripsi_item }}</td>
-          <td>{{ item.get_kategori_display }}</td>
-          <td>{{ item.sub_transaction_type.nama }}</td>
-          <td class="ni-text-right">{{ item.jumlah_bruto|floatformat:0|intcomma }}</td>
-          <td>{{ item.revenue_account }}</td>
-          <td>{% if item.is_deferred %}<span class="ni-badge ni-badge--warning">Ya</span>{% else %}—{% endif %}</td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="6" class="ni-text-muted ni-text-center">Tidak ada item.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+  <div class="ni-card__body">
+    {% for kp in eb_group.items.all %}
+    <div class="card mb-3 border">
+      <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fa;padding:0.75rem 1rem;">
+        <strong>{{ kp.deskripsi_item }}</strong>
+        <div>
+          <span class="badge bg-secondary">{{ kp.get_recognition_type_display }}</span>
+          {% if kp.harga_j %}
+            <span class="ms-2 text-muted" style="font-size:0.85em;">Harga-J: {{ kp.harga_j|floatformat:0|intcomma }}</span>
+          {% endif %}
+          <span class="ms-2 text-muted" style="font-size:0.85em;">{{ kp.get_kategori_display }}</span>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0.75rem 1rem;">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:0.5rem;font-size:0.9em;">
+          <span>Nilai Kontrak: <strong>{{ kp.nilai_kontrak|floatformat:0|intcomma }}</strong></span>
+          <span>STT: {{ kp.sub_transaction_type.nama }}</span>
+          <span>Akun: {{ kp.revenue_account }}</span>
+        </div>
+
+        {% if kp.recognition_type == 'over_time' %}
+          {% with jadwal=kp.jadwal %}
+          {% if jadwal %}
+          <div style="margin-top:0.75rem;">
+            <div style="margin-bottom:0.4rem;font-size:0.88em;">
+              Diakui: <strong>{{ jadwal.nilai_diakui|floatformat:0|intcomma }}</strong> /
+              {{ jadwal.nilai_total|floatformat:0|intcomma }}
+              &nbsp;<span class="badge bg-light text-dark" style="border:1px solid #ddd;">{{ jadwal.get_tipe_aliran_display }}</span>
+              &nbsp;<span class="badge bg-light text-dark" style="border:1px solid #ddd;">{{ jadwal.get_progress_method_display }}</span>
+            </div>
+            {% if jadwal.nilai_total %}
+            <div style="height:8px;background:#e9ecef;border-radius:4px;margin-bottom:0.75rem;overflow:hidden;">
+              <div style="height:100%;background:#28a745;width:{% widthratio jadwal.nilai_diakui jadwal.nilai_total 100 %}%;border-radius:4px;"></div>
+            </div>
+            {% endif %}
+            {% for entri in jadwal.entri.all %}
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid #eee;font-size:0.88em;">
+              <span>{{ entri.tanggal_target|date:"M Y" }} — {{ entri.nilai|floatformat:0|intcomma }}</span>
+              {% if entri.status == 'pending' and header.status == 'confirmed' %}
+              <div>
+                <button type="button" class="btn btn-sm btn-success"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modal-recognize-{{ entri.id }}"
+                        style="padding:0.2rem 0.5rem;font-size:0.8em;">
+                  Akui
+                </button>
+                {% include "pendapatan/_recognize_modal.html" with entri=entri header=header %}
+              </div>
+              {% else %}
+              <span class="badge {% if entri.status == 'recognized' %}bg-success{% elif entri.status == 'skipped' %}bg-secondary{% else %}bg-warning text-dark{% endif %}" style="font-size:0.78em;">
+                {{ entri.get_status_display }}
+              </span>
+              {% endif %}
+            </div>
+            {% empty %}
+            <p class="text-muted" style="font-size:0.85em;">Belum ada entri pengakuan.</p>
+            {% endfor %}
+
+            {% if jadwal.tipe_aliran == 'performance_first' %}
+              {% for aset in kp.aset_kontrak.all %}
+                {% if aset.status == 'active' %}
+                <form method="post" action="{% url 'pendapatan:konversi_aset_kontrak' aset.id %}" class="mt-2">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-warning btn-sm"
+                          onclick="return confirm('Konversi aset kontrak ke piutang?')"
+                          style="font-size:0.82em;">
+                    Konversi Aset Kontrak ({{ aset.nilai_tersisa|floatformat:0|intcomma }}) → Piutang
+                  </button>
+                </form>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+          </div>
+          {% else %}
+          <p class="text-muted" style="font-size:0.85em;margin-top:0.5rem;">Jadwal pengakuan belum dibuat (akan dibuat saat konfirmasi).</p>
+          {% endif %}
+          {% endwith %}
+        {% endif %}
+      </div>
+    </div>
+    {% empty %}
+    <p class="ni-text-muted">Tidak ada item.</p>
+    {% endfor %}
   </div>
 </div>
 {% endfor %}

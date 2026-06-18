@@ -1,12 +1,21 @@
+import datetime
 import json
 
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages as dj_messages
-from .models import PendapatanHeader, PendapatanEventLog, RecurringTemplate
-from .services import confirm_pendapatan, create_pendapatan_header, void_pendapatan, get_pendapatan_dashboard_kpi, generate_from_recurring
-from .forms import PendapatanHeaderForm, PendapatanItemForm, RecurringTemplateForm
+from django.views.decorators.http import require_POST
+from .models import (
+    PendapatanHeader, PendapatanEventLog, RecurringTemplate,
+    KewajibabPelaksanaan, JadwalPengakuan, EntriPengakuan, AsetKontrak,
+)
+from .services import (
+    confirm_pendapatan, create_pendapatan_header, void_pendapatan,
+    get_pendapatan_dashboard_kpi, generate_from_recurring,
+    recognize_entry, konversi_aset_kontrak_ke_piutang,
+)
+from .forms import PendapatanHeaderForm, PendapatanItemForm, KewajibabPelaksanaanForm, RecurringTemplateForm
 
 
 @login_required
@@ -59,7 +68,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = PendapatanHeaderForm(request.POST)
         item_count = max(int(request.POST.get('item_count', '1')), 1)
-        item_forms = [PendapatanItemForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
+        item_forms = [KewajibabPelaksanaanForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
         eb_selection = request.POST.get('eb_selection', '')
         resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
 
@@ -84,7 +93,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
                 form.add_error(None, str(exc))
     else:
         form = PendapatanHeaderForm()
-        item_forms = [PendapatanItemForm(prefix='item_0')]
+        item_forms = [KewajibabPelaksanaanForm(prefix='item_0')]
 
     return render(request, 'pendapatan/form.html', {
         'form': form,
@@ -111,7 +120,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         form = PendapatanHeaderForm(request.POST, instance=header)
         item_count = max(int(request.POST.get('item_count', '1')), 1)
-        item_forms = [PendapatanItemForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
+        item_forms = [KewajibabPelaksanaanForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
         eb_selection = request.POST.get('eb_selection', '')
         resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
 
@@ -137,19 +146,27 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                         )
                         eb_group = eb_group_new
 
-                    from .models import PendapatanItem
-                    PendapatanItem.objects.bulk_create([
-                        PendapatanItem(
+                    from .models import KewajibabPelaksanaan as _KP
+                    _KP.objects.bulk_create([
+                        _KP(
                             pendapatan_eb=eb_group,
                             deskripsi_item=item['deskripsi_item'],
                             kategori=item['kategori'],
                             sub_transaction_type=item['sub_transaction_type'],
-                            jumlah_bruto=item['jumlah_bruto'],
+                            nilai_kontrak=item.get('nilai_kontrak') or item.get('jumlah_bruto'),
                             revenue_account=item['revenue_account'],
                             payment_account=item.get('payment_account'),
                             tax=item.get('tax'),
                             tax_type=item.get('tax_type', ''),
                             tax_account=item.get('tax_account'),
+                            recognition_type=item.get('recognition_type', 'point_in_time'),
+                            ot_tipe_aliran=item.get('ot_tipe_aliran', ''),
+                            ot_progress_method=item.get('ot_progress_method', ''),
+                            ot_tanggal_mulai=item.get('ot_tanggal_mulai'),
+                            ot_tanggal_selesai=item.get('ot_tanggal_selesai'),
+                            ot_liabilitas_kontrak_acct=item.get('ot_liabilitas_kontrak_acct'),
+                            ot_aset_kontrak_acct=item.get('ot_aset_kontrak_acct'),
+                            ot_biaya_estimasi_total=item.get('ot_biaya_estimasi_total'),
                         )
                         for item in items_data
                     ])
@@ -161,16 +178,27 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
     else:
         form = PendapatanHeaderForm(instance=header)
         item_forms = [
-            PendapatanItemForm(prefix=f'item_{i}', initial={
+            KewajibabPelaksanaanForm(prefix=f'item_{i}', initial={
                 'deskripsi_item': item.deskripsi_item,
                 'kategori': item.kategori,
                 'sub_transaction_type': item.sub_transaction_type_id,
-                'jumlah_bruto': item.jumlah_bruto,
+                'nilai_kontrak': item.nilai_kontrak,
                 'revenue_account': item.revenue_account_id,
                 'payment_account': item.payment_account_id,
+                'tax': item.tax,
+                'tax_type': item.tax_type,
+                'tax_account': item.tax_account_id,
+                'recognition_type': item.recognition_type,
+                'ot_tipe_aliran': item.ot_tipe_aliran,
+                'ot_progress_method': item.ot_progress_method,
+                'ot_tanggal_mulai': item.ot_tanggal_mulai,
+                'ot_tanggal_selesai': item.ot_tanggal_selesai,
+                'ot_liabilitas_kontrak_acct': item.ot_liabilitas_kontrak_acct_id,
+                'ot_aset_kontrak_acct': item.ot_aset_kontrak_acct_id,
+                'ot_biaya_estimasi_total': item.ot_biaya_estimasi_total,
             })
             for i, item in enumerate(existing_items)
-        ] or [PendapatanItemForm(prefix='item_0')]
+        ] or [KewajibabPelaksanaanForm(prefix='item_0')]
 
     eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
 
@@ -216,6 +244,36 @@ def pendapatan_void(request: HttpRequest, pk: int) -> HttpResponse:
         except ValueError as exc:
             dj_messages.error(request, str(exc))
     return redirect('pendapatan:detail', pk=pk)
+
+
+# ── PSAK 72 Action Views ─────────────────────────────────────────────────────
+
+@login_required
+@require_POST
+def recognize_entry_view(request, entry_id):
+    entri = get_object_or_404(EntriPengakuan, pk=entry_id)
+    date_str = request.POST.get('journal_date')
+    journal_date = datetime.date.fromisoformat(date_str) if date_str else datetime.date.today()
+    try:
+        recognize_entry(entri.id, request.user, journal_date=journal_date)
+        dj_messages.success(request, f'Pendapatan {entri.nilai} berhasil diakui.')
+    except (ValueError, AssertionError) as e:
+        dj_messages.error(request, str(e))
+    header_id = entri.jadwal.kp.pendapatan_eb.pendapatan_header_id
+    return redirect('pendapatan:detail', pk=header_id)
+
+
+@login_required
+@require_POST
+def konversi_aset_kontrak_view(request, aset_id):
+    aset = get_object_or_404(AsetKontrak, pk=aset_id)
+    try:
+        konversi_aset_kontrak_ke_piutang(aset.id, request.user)
+        dj_messages.success(request, 'Aset kontrak berhasil dikonversi.')
+    except (ValueError, AssertionError) as e:
+        dj_messages.error(request, str(e))
+    header_id = aset.kp.pendapatan_eb.pendapatan_header_id
+    return redirect('pendapatan:detail', pk=header_id)
 
 
 # ── Recurring Template Views ──────────────────────────────────────────────────
