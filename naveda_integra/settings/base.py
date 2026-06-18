@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.purchase',
     'apps.utang',
+    'apps.pajak',
     'apps.aset_tetap',
     'apps.aset_lainnya',
     'apps.ekuitas',
