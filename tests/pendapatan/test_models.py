@@ -24,3 +24,21 @@ class KewajibabPelaksanaanModelTest(TestCase):
         from decimal import Decimal
         kp = KewajibabPelaksanaan()
         self.assertEqual(kp.harga_j, Decimal('0'))
+
+
+from apps.pendapatan.models import JadwalPengakuan
+
+
+class JadwalPengakuanModelTest(TestCase):
+    def test_nilai_belum_diakui_property(self):
+        from decimal import Decimal
+        jadwal = JadwalPengakuan()
+        jadwal.nilai_total = Decimal('1000')
+        jadwal.nilai_diakui = Decimal('300')
+        self.assertEqual(jadwal.nilai_belum_diakui, Decimal('700'))
+
+    def test_defaults(self):
+        from decimal import Decimal
+        jadwal = JadwalPengakuan()
+        self.assertEqual(jadwal.nilai_diakui, Decimal('0'))
+        self.assertEqual(jadwal.status, JadwalPengakuan.Status.ACTIVE)

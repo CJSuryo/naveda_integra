@@ -468,3 +468,67 @@ class DeferredRevenueEntry(models.Model):
 
     def __str__(self) -> str:
         return f'{self.schedule.pk} — {self.periode.strftime("%Y-%m")} — {self.status}'
+
+
+class JadwalPengakuan(models.Model):
+    class TipeAliran(models.TextChoices):
+        ADVANCE_PAYMENT_CASH = 'advance_payment_cash', 'Advance Payment (Cash)'
+        PERIODIC_BILLING = 'periodic_billing', 'Periodic Billing'
+        PERFORMANCE_FIRST = 'performance_first', 'Performance First'
+
+    class ProgressMethod(models.TextChoices):
+        STRAIGHT_LINE = 'straight_line', 'Garis Lurus'
+        PERCENTAGE_COMPLETION = 'percentage_completion', 'Persentase Selesai'
+        MILESTONE = 'milestone', 'Milestone'
+
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Aktif'
+        COMPLETED = 'completed', 'Selesai'
+        VOIDED = 'voided', 'Dibatalkan'
+
+    kp = models.OneToOneField(
+        KewajibabPelaksanaan, on_delete=models.CASCADE, related_name='jadwal',
+        verbose_name='Kewajiban Pelaksanaan',
+    )
+    tipe_aliran = models.CharField(
+        max_length=30, choices=TipeAliran.choices, verbose_name='Tipe Aliran',
+    )
+    progress_method = models.CharField(
+        max_length=30, choices=ProgressMethod.choices, verbose_name='Metode Progress',
+    )
+    tanggal_mulai = models.DateField(verbose_name='Tanggal Mulai')
+    tanggal_selesai = models.DateField(verbose_name='Tanggal Selesai')
+    liabilitas_kontrak_acct = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
+        verbose_name='Akun Liabilitas Kontrak',
+    )
+    aset_kontrak_acct = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='+',
+        verbose_name='Akun Aset Kontrak',
+    )
+    biaya_estimasi_total = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Biaya Estimasi Total',
+    )
+    nilai_total = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Nilai Total',
+    )
+    nilai_diakui = models.DecimalField(
+        max_digits=19, decimal_places=4, default=0, verbose_name='Nilai Diakui',
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, verbose_name='Status',
+    )
+
+    class Meta:
+        verbose_name = 'Jadwal Pengakuan'
+        verbose_name_plural = 'Jadwal Pengakuan'
+
+    @property
+    def nilai_belum_diakui(self):
+        return self.nilai_total - self.nilai_diakui
+
+    def __str__(self) -> str:
+        return f'Jadwal {self.kp_id} [{self.tipe_aliran}]'
