@@ -11,7 +11,10 @@ from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
 
-from .models import KewajibabPelaksanaan, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem
+from .models import (
+    AsetKontrak, EntriPengakuan, JadwalPengakuan,
+    KewajibabPelaksanaan, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem,
+)
 
 
 # ── PSAK 72 Step 4: Price Allocation ─────────────────────────────────────────
@@ -211,6 +214,15 @@ def create_pendapatan_header(
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
 def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
+    """
+    PSAK 72 confirm: process each KP through one of five recognition cases.
+
+    Case 1: point_in_time + cash      → journal (payment_account / revenue_account)
+    Case 2: point_in_time + credit    → journal + piutang
+    Case 3: over_time + advance_payment_cash → journal (payment_account / liabilitas) + jadwal
+    Case 4: over_time + periodic_billing     → jadwal only (no immediate journal)
+    Case 5: over_time + performance_first    → journal (aset_kontrak / revenue) + AsetKontrak + jadwal
+    """
     if header.status != 'draft':
         raise ValueError(
             f'Pendapatan {header.transaction_id} tidak dapat dikonfirmasi '
@@ -218,18 +230,161 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
         )
 
     with transaction.atomic():
-        _create_pendapatan_journals(header, user)
+        # Step 1: compute and persist price allocation for all KPs
+        alokasi = compute_alokasi_harga(header)
+        all_kps = list(
+            KewajibabPelaksanaan.objects.filter(pendapatan_eb__pendapatan_header=header)
+        )
+        for kp in all_kps:
+            if kp.id in alokasi:
+                kp.harga_j = alokasi[kp.id]
+                kp.save(update_fields=['harga_j'])
 
-        if header.payment_type == 'credit':
-            from apps.piutang.services import create_piutang_from_pendapatan
-            piutang = create_piutang_from_pendapatan(header, user)
-            _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
+        # Step 2: per-group per-KP processing
+        for eb_group in header.entitas_groups.prefetch_related(
+            'items__revenue_account', 'items__payment_account',
+            'items__ot_liabilitas_kontrak_acct', 'items__ot_aset_kontrak_acct',
+        ).all():
+            for kp in eb_group.items.all():
+                harga_j = kp.harga_j
+                pay_acct = kp.payment_account or eb_group.payment_account
 
-        # TODO(Task 9): PSAK 72 over-time schedule creation — full rewrite in confirm_pendapatan
+                if kp.recognition_type == KewajibabPelaksanaan.RecognitionType.POINT_IN_TIME:
+                    # Case 1 & 2: immediate recognition
+                    _create_kp_journal(
+                        header, eb_group, kp,
+                        debit_acct=pay_acct,
+                        credit_acct=kp.revenue_account,
+                        amount=harga_j,
+                        user=user,
+                    )
+                    if header.payment_type == 'credit':
+                        # Case 2: also create piutang
+                        from apps.piutang.services import create_piutang_from_pendapatan
+                        piutang = create_piutang_from_pendapatan(header, user)
+                        _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
+
+                elif kp.recognition_type == KewajibabPelaksanaan.RecognitionType.OVER_TIME:
+                    tipe = kp.ot_tipe_aliran
+
+                    if tipe == 'advance_payment_cash':
+                        # Case 3: cash received upfront → debit cash, credit liabilitas kontrak
+                        if pay_acct is None:
+                            raise ValueError(
+                                f'KP "{kp.deskripsi_item}" tidak memiliki akun pembayaran untuk '
+                                f'advance_payment_cash. Isi akun pembayaran sebelum mengkonfirmasi.'
+                            )
+                        _create_kp_journal(
+                            header, eb_group, kp,
+                            debit_acct=pay_acct,
+                            credit_acct=kp.ot_liabilitas_kontrak_acct,
+                            amount=harga_j,
+                            user=user,
+                        )
+                        _create_jadwal(kp, harga_j, user)
+                        _log_event(header, 'JADWAL_CREATED',
+                                   description=f'KP {kp.pk} — advance_payment_cash', actor=user)
+
+                    elif tipe == 'periodic_billing':
+                        # Case 4: no immediate journal; jadwal drives future billing
+                        _create_jadwal(kp, harga_j, user)
+                        _log_event(header, 'JADWAL_CREATED',
+                                   description=f'KP {kp.pk} — periodic_billing', actor=user)
+
+                    elif tipe == 'performance_first':
+                        # Case 5: service delivered before cash → debit aset kontrak, credit revenue
+                        _create_kp_journal(
+                            header, eb_group, kp,
+                            debit_acct=kp.ot_aset_kontrak_acct,
+                            credit_acct=kp.revenue_account,
+                            amount=harga_j,
+                            user=user,
+                        )
+                        # Record contract asset
+                        AsetKontrak.objects.create(
+                            kp=kp,
+                            tanggal=header.tanggal,
+                            nilai=harga_j,
+                            nilai_tersisa=harga_j,
+                        )
+                        _create_jadwal(kp, harga_j, user)
+                        _log_event(header, 'JADWAL_CREATED',
+                                   description=f'KP {kp.pk} — performance_first', actor=user)
+                        _log_event(header, 'JOURNAL_PSAK72',
+                                   description=f'KP {kp.pk} — aset kontrak created', actor=user)
 
         header.status = 'confirmed'
         header.save(update_fields=['status'])
         _log_event(header, 'CONFIRMED', actor=user)
+
+
+# ── PSAK 72 Confirm Helpers ───────────────────────────────────────────────────
+
+def _create_kp_journal(header, eb_group, kp, debit_acct, credit_acct, amount, user=None):
+    """Create a single two-line journal for one KP recognition event."""
+    if debit_acct is None:
+        raise ValueError(
+            f'KP "{kp.deskripsi_item}" tidak memiliki akun debit untuk pembuatan jurnal.'
+        )
+    if credit_acct is None:
+        raise ValueError(
+            f'KP "{kp.deskripsi_item}" tidak memiliki akun kredit untuk pembuatan jurnal.'
+        )
+    nomor = _next_journal_number('TRX-PND-J')
+    jh = JurnalHeader.objects.create(
+        tanggal=header.tanggal,
+        nomor_transaksi=nomor,
+        uraian_transaksi=(
+            f'Pendapatan {header.transaction_id} — {eb_group.entitas_bisnis.nama} — KP {kp.pk}'
+        ),
+        entitas_bisnis=eb_group.entitas_bisnis,
+        is_penyesuaian=False,
+    )
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=amount, kredit=Decimal('0')),
+        JurnalDetail(jurnal_header=jh, akun=credit_acct, debit=Decimal('0'), kredit=amount),
+    ])
+    _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
+    return jh
+
+
+def _create_jadwal(kp: KewajibabPelaksanaan, harga_j: Decimal, user=None) -> JadwalPengakuan:
+    """
+    Create a JadwalPengakuan + EntriPengakuan entries from the KP's ot_* staging fields.
+    Straight-line: generates one EntriPengakuan per calendar month.
+    """
+    jadwal = JadwalPengakuan.objects.create(
+        kp=kp,
+        tipe_aliran=kp.ot_tipe_aliran,
+        progress_method=kp.ot_progress_method,
+        tanggal_mulai=kp.ot_tanggal_mulai,
+        tanggal_selesai=kp.ot_tanggal_selesai,
+        liabilitas_kontrak_acct=kp.ot_liabilitas_kontrak_acct,
+        aset_kontrak_acct=kp.ot_aset_kontrak_acct,
+        biaya_estimasi_total=kp.ot_biaya_estimasi_total,
+        nilai_total=harga_j,
+        nilai_diakui=Decimal('0'),
+    )
+
+    if kp.ot_progress_method == JadwalPengakuan.ProgressMethod.STRAIGHT_LINE:
+        start = jadwal.tanggal_mulai.replace(day=1)
+        end = jadwal.tanggal_selesai
+        months = (end.year - start.year) * 12 + end.month - start.month + 1
+        months = max(months, 1)
+        monthly = (harga_j / months).quantize(Decimal('0.0001'))
+        remainder = harga_j - monthly * months
+        current = start
+        entri_list = []
+        for i in range(months):
+            entri_list.append(EntriPengakuan(
+                jadwal=jadwal,
+                tanggal_target=current,
+                nilai=monthly + (remainder if i == months - 1 else Decimal('0')),
+            ))
+            current = (current + relativedelta(months=1)).replace(day=1)
+        EntriPengakuan.objects.bulk_create(entri_list)
+
+    return jadwal
 
 
 # ── Void ──────────────────────────────────────────────────────────────────────
