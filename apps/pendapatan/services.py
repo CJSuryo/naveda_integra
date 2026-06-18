@@ -331,7 +331,7 @@ def get_pendapatan_dashboard_kpi() -> dict:
     total_bulan_ini = (
         PendapatanItem.objects
         .filter(pendapatan_eb__pendapatan_header__in=this_month_qs)
-        .aggregate(s=Sum('jumlah_bruto'))['s'] or Decimal('0')
+        .aggregate(s=Sum('nilai_kontrak'))['s'] or Decimal('0')
     )
     cash_bulan_ini = (
         PendapatanItem.objects
@@ -339,7 +339,7 @@ def get_pendapatan_dashboard_kpi() -> dict:
             pendapatan_eb__pendapatan_header__in=this_month_qs,
             pendapatan_eb__pendapatan_header__payment_type='cash',
         )
-        .aggregate(s=Sum('jumlah_bruto'))['s'] or Decimal('0')
+        .aggregate(s=Sum('nilai_kontrak'))['s'] or Decimal('0')
     )
     credit_bulan_ini = (
         PendapatanItem.objects
@@ -347,7 +347,7 @@ def get_pendapatan_dashboard_kpi() -> dict:
             pendapatan_eb__pendapatan_header__in=this_month_qs,
             pendapatan_eb__pendapatan_header__payment_type='credit',
         )
-        .aggregate(s=Sum('jumlah_bruto'))['s'] or Decimal('0')
+        .aggregate(s=Sum('nilai_kontrak'))['s'] or Decimal('0')
     )
 
     # Last month
@@ -355,7 +355,7 @@ def get_pendapatan_dashboard_kpi() -> dict:
     total_bulan_lalu = (
         PendapatanItem.objects
         .filter(pendapatan_eb__pendapatan_header__in=last_month_qs)
-        .aggregate(s=Sum('jumlah_bruto'))['s'] or Decimal('0')
+        .aggregate(s=Sum('nilai_kontrak'))['s'] or Decimal('0')
     )
 
     return {
