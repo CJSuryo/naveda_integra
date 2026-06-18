@@ -266,6 +266,11 @@ class PendapatanEventLog(models.Model):
         ('PIUTANG_CREATED', 'Piutang Dibuat'),
         ('DEFERRED_SCHEDULED', 'Deferred Dijadwalkan'),
         ('RECURRING_GENERATED', 'Dihasilkan dari Recurring'),
+        ('RECOGNIZE', 'Pengakuan Pendapatan'),
+        ('JOURNAL_PSAK72', 'Jurnal PSAK 72 Dibuat'),
+        ('PIUTANG_CREATED_KP', 'Piutang KP Dibuat'),
+        ('ASSET_CONVERTED', 'Aset Kontrak Dikonversi'),
+        ('JADWAL_CREATED', 'Jadwal Pengakuan Dibuat'),
     ]
 
     pendapatan_header = models.ForeignKey(
@@ -532,3 +537,76 @@ class JadwalPengakuan(models.Model):
 
     def __str__(self) -> str:
         return f'Jadwal {self.kp_id} [{self.tipe_aliran}]'
+
+
+class EntriPengakuan(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Belum Diakui'
+        RECOGNIZED = 'recognized', 'Sudah Diakui'
+        SKIPPED = 'skipped', 'Dilewati'
+
+    jadwal = models.ForeignKey(
+        JadwalPengakuan, on_delete=models.CASCADE, related_name='entri',
+        verbose_name='Jadwal Pengakuan',
+    )
+    tanggal_target = models.DateField(verbose_name='Tanggal Target')
+    nilai = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Nilai')
+    nilai_diakui = models.DecimalField(
+        max_digits=19, decimal_places=4, default=0, verbose_name='Nilai Diakui',
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING, verbose_name='Status',
+    )
+    jurnal_header = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='entri_pengakuan',
+        verbose_name='Jurnal',
+    )
+    catatan = models.TextField(blank=True, default='', verbose_name='Catatan')
+
+    class Meta:
+        ordering = ['tanggal_target']
+        verbose_name = 'Entri Pengakuan'
+        verbose_name_plural = 'Entri Pengakuan'
+
+    def __str__(self) -> str:
+        return f'Entri {self.tanggal_target} — {self.nilai}'
+
+
+class AsetKontrak(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = 'active', 'Aktif'
+        CONVERTED = 'converted', 'Dikonversi ke Piutang'
+        VOIDED = 'voided', 'Dibatalkan'
+
+    kp = models.ForeignKey(
+        KewajibabPelaksanaan, on_delete=models.CASCADE, related_name='aset_kontrak',
+        verbose_name='Kewajiban Pelaksanaan',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal')
+    nilai = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Nilai')
+    nilai_tersisa = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Nilai Tersisa',
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.ACTIVE, verbose_name='Status',
+    )
+    jurnal_header = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='aset_kontrak_set',
+        verbose_name='Jurnal Awal',
+    )
+    piutang = models.ForeignKey(
+        'piutang.PiutangHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='aset_kontrak_sumber',
+        verbose_name='Piutang',
+    )
+    catatan = models.TextField(blank=True, default='', verbose_name='Catatan')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Aset Kontrak'
+        verbose_name_plural = 'Aset Kontrak'
+
+    def __str__(self) -> str:
+        return f'AsetKontrak KP-{self.kp_id} [{self.nilai}]'

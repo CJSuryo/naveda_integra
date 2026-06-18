@@ -42,3 +42,20 @@ class JadwalPengakuanModelTest(TestCase):
         jadwal = JadwalPengakuan()
         self.assertEqual(jadwal.nilai_diakui, Decimal('0'))
         self.assertEqual(jadwal.status, JadwalPengakuan.Status.ACTIVE)
+
+
+from apps.pendapatan.models import EntriPengakuan, AsetKontrak
+
+
+class EntriPengakuanModelTest(TestCase):
+    def test_defaults(self):
+        from decimal import Decimal
+        entri = EntriPengakuan()
+        self.assertEqual(entri.nilai_diakui, Decimal('0'))
+        self.assertEqual(entri.status, EntriPengakuan.Status.PENDING)
+
+
+class AsetKontrakModelTest(TestCase):
+    def test_defaults(self):
+        aset = AsetKontrak()
+        self.assertEqual(aset.status, AsetKontrak.Status.ACTIVE)
