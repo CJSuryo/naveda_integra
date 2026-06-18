@@ -433,9 +433,210 @@ def void_pendapatan(header: PendapatanHeader, user=None) -> None:
         )
         linked_piutang.update(status='cancelled')
 
+        # Void all new PSAK 72 records
+        JadwalPengakuan.objects.filter(
+            kp__pendapatan_eb__pendapatan_header=header
+        ).update(status=JadwalPengakuan.Status.VOIDED)
+
+        EntriPengakuan.objects.filter(
+            jadwal__kp__pendapatan_eb__pendapatan_header=header,
+            status=EntriPengakuan.Status.PENDING,
+        ).update(status=EntriPengakuan.Status.SKIPPED)
+
+        AsetKontrak.objects.filter(
+            kp__pendapatan_eb__pendapatan_header=header,
+            status=AsetKontrak.Status.ACTIVE,
+        ).update(status=AsetKontrak.Status.VOIDED)
+
         header.status = 'voided'
         header.save(update_fields=['status'])
         _log_event(header, 'VOIDED', actor=user)
+
+
+# ── PSAK 72 Recognition: recognize_entry ─────────────────────────────────────
+
+def recognize_entry(entry_id: int, user, journal_date=None) -> None:
+    """
+    Recognize revenue for one EntriPengakuan.
+
+    Journal entries depend on jadwal.tipe_aliran:
+    - advance_payment_cash: Debit liabilitas_kontrak_acct, Credit kp.revenue_account
+    - periodic_billing: Debit payment_account, Credit kp.revenue_account
+    - performance_first: No journal (revenue booked at confirm). Mark recognized only.
+
+    After journaling:
+    - entri.status = 'recognized', entri.nilai_diakui = entri.nilai
+    - entri.jurnal_header = jurnal (or None for performance_first)
+    - jadwal.nilai_diakui += entri.nilai
+    - If jadwal.nilai_diakui >= jadwal.nilai_total: jadwal.status = 'completed'
+    - Log 'RECOGNIZE' event on the header
+    """
+    entri = EntriPengakuan.objects.select_related(
+        'jadwal__kp__pendapatan_eb__pendapatan_header',
+        'jadwal__kp__pendapatan_eb__payment_account',
+        'jadwal__kp__revenue_account',
+        'jadwal__kp__payment_account',
+        'jadwal__liabilitas_kontrak_acct',
+    ).get(pk=entry_id)
+
+    jadwal = entri.jadwal
+    kp = jadwal.kp
+    eb_group = kp.pendapatan_eb
+    header = eb_group.pendapatan_header
+    tipe_aliran = jadwal.tipe_aliran
+    amount = entri.nilai
+    jh = None
+
+    with transaction.atomic():
+        if tipe_aliran == 'advance_payment_cash':
+            # Debit liabilitas kontrak, Credit revenue
+            debit_acct = jadwal.liabilitas_kontrak_acct or kp.ot_liabilitas_kontrak_acct
+            credit_acct = kp.revenue_account
+            jh = _create_recognition_journal(
+                header=header,
+                eb_group=eb_group,
+                kp=kp,
+                debit_acct=debit_acct,
+                credit_acct=credit_acct,
+                amount=amount,
+                journal_date=journal_date,
+                user=user,
+            )
+
+        elif tipe_aliran == 'periodic_billing':
+            # Debit payment account (receivable), Credit revenue
+            pay_acct = kp.payment_account or eb_group.payment_account
+            credit_acct = kp.revenue_account
+            jh = _create_recognition_journal(
+                header=header,
+                eb_group=eb_group,
+                kp=kp,
+                debit_acct=pay_acct,
+                credit_acct=credit_acct,
+                amount=amount,
+                journal_date=journal_date,
+                user=user,
+            )
+
+        # performance_first: no new journal needed (revenue booked at confirm)
+
+        # Update entri
+        entri.status = EntriPengakuan.Status.RECOGNIZED
+        entri.nilai_diakui = amount
+        entri.jurnal_header = jh
+        entri.save(update_fields=['status', 'nilai_diakui', 'jurnal_header'])
+
+        # Update jadwal
+        jadwal.nilai_diakui = jadwal.nilai_diakui + amount
+        if jadwal.nilai_diakui >= jadwal.nilai_total:
+            jadwal.status = JadwalPengakuan.Status.COMPLETED
+        jadwal.save(update_fields=['nilai_diakui', 'status'])
+
+        _log_event(header, 'RECOGNIZE',
+                   description=f'Entri {entri.pk} — {tipe_aliran} — {amount}',
+                   actor=user)
+
+
+def _create_recognition_journal(header, eb_group, kp, debit_acct, credit_acct, amount, journal_date=None, user=None):
+    """Create a two-line recognition journal for EntriPengakuan."""
+    if debit_acct is None:
+        raise ValueError(
+            f'KP "{kp.deskripsi_item}" tidak memiliki akun debit untuk pengakuan pendapatan.'
+        )
+    if credit_acct is None:
+        raise ValueError(
+            f'KP "{kp.deskripsi_item}" tidak memiliki akun kredit untuk pengakuan pendapatan.'
+        )
+    from django.utils import timezone as tz
+    tanggal = journal_date or tz.now().date()
+    nomor = _next_journal_number('TRX-PND-RE')
+    jh = JurnalHeader.objects.create(
+        tanggal=tanggal,
+        nomor_transaksi=nomor,
+        uraian_transaksi=(
+            f'Pengakuan Pendapatan {header.transaction_id} — {eb_group.entitas_bisnis.nama} — KP {kp.pk}'
+        ),
+        entitas_bisnis=eb_group.entitas_bisnis,
+        is_penyesuaian=False,
+    )
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=amount, kredit=Decimal('0')),
+        JurnalDetail(jurnal_header=jh, akun=credit_acct, debit=Decimal('0'), kredit=amount),
+    ])
+    _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
+    return jh
+
+
+# ── PSAK 72: konversi_aset_kontrak_ke_piutang ─────────────────────────────────
+
+def konversi_aset_kontrak_ke_piutang(aset_id: int, user) -> None:
+    """
+    Convert an active AsetKontrak to piutang.
+
+    Steps:
+    1. Assert aset.status == 'active'
+    2. Create swap journal: Debit payment_account, Credit ot_aset_kontrak_acct
+    3. Update aset.status = 'converted', aset.nilai_tersisa = 0, aset.jurnal_header = jurnal
+    4. Log 'ASSET_CONVERTED' event on the header
+    """
+    aset = AsetKontrak.objects.select_related(
+        'kp__pendapatan_eb__pendapatan_header',
+        'kp__pendapatan_eb__payment_account',
+        'kp__pendapatan_eb__entitas_bisnis',
+        'kp__payment_account',
+        'kp__ot_aset_kontrak_acct',
+    ).get(pk=aset_id)
+
+    if aset.status != AsetKontrak.Status.ACTIVE:
+        raise ValueError(
+            f'AsetKontrak {aset.pk} tidak dapat dikonversi karena statusnya '
+            f'adalah "{aset.status}" (bukan "active").'
+        )
+
+    kp = aset.kp
+    eb_group = kp.pendapatan_eb
+    header = eb_group.pendapatan_header
+
+    pay_acct = kp.payment_account or eb_group.payment_account
+    aset_acct = kp.ot_aset_kontrak_acct
+
+    with transaction.atomic():
+        # Swap journal: Dr payment/piutang, Cr aset kontrak
+        if pay_acct is None:
+            raise ValueError(
+                f'KP "{kp.deskripsi_item}" tidak memiliki akun pembayaran untuk konversi aset kontrak.'
+            )
+        if aset_acct is None:
+            raise ValueError(
+                f'KP "{kp.deskripsi_item}" tidak memiliki akun aset kontrak untuk konversi.'
+            )
+
+        nomor = _next_journal_number('TRX-PND-AK')
+        from django.utils import timezone as tz
+        jh = JurnalHeader.objects.create(
+            tanggal=tz.now().date(),
+            nomor_transaksi=nomor,
+            uraian_transaksi=(
+                f'Konversi Aset Kontrak ke Piutang {header.transaction_id} — KP {kp.pk}'
+            ),
+            entitas_bisnis=eb_group.entitas_bisnis,
+            is_penyesuaian=False,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=jh, akun=pay_acct, debit=aset.nilai_tersisa, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=jh, akun=aset_acct, debit=Decimal('0'), kredit=aset.nilai_tersisa),
+        ])
+        _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
+
+        # Update aset
+        aset.status = AsetKontrak.Status.CONVERTED
+        aset.nilai_tersisa = Decimal('0')
+        aset.jurnal_header = jh
+        aset.save(update_fields=['status', 'nilai_tersisa', 'jurnal_header'])
+
+        _log_event(header, 'ASSET_CONVERTED',
+                   description=f'AsetKontrak {aset.pk} dikonversi ke piutang',
+                   actor=user)
 
 
 # ── Journal Creation ──────────────────────────────────────────────────────────

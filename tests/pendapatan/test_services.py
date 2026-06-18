@@ -129,3 +129,174 @@ class ConfirmPendapatanOverTimeTest(TestCase):
         )
         confirm_pendapatan(header, self.user)
         self.assertTrue(AsetKontrak.objects.filter(kp=kp).exists())
+
+
+# ── Task 10: recognize_entry ──────────────────────────────────────────────────
+
+class RecognizeEntryTest(TestCase):
+    def _make_jadwal_with_entry(self, tipe_aliran, akun_liabilitas=None, akun_kas=None):
+        """Helper: create a confirmed header with JadwalPengakuan + one EntriPengakuan."""
+        user = make_user('recognizer_' + tipe_aliran[:4])
+        akun_kas = akun_kas or make_akun('1001-RE-' + tipe_aliran[:4], 'Kas')
+        akun_pendapatan = make_akun('4001-RE-' + tipe_aliran[:4], 'Pendapatan')
+        akun_liabilitas = akun_liabilitas or make_akun('2101-RE-' + tipe_aliran[:4], 'Liabilitas')
+        header = make_header(user)
+        peb = make_pendapatan_eb(header, payment_account=akun_kas)
+        kp = make_kp(
+            peb, '600',
+            recognition_type='over_time',
+            revenue_account=akun_pendapatan,
+            ot_tipe_aliran=tipe_aliran,
+            ot_progress_method='straight_line',
+            ot_tanggal_mulai=datetime.date(2026, 1, 1),
+            ot_tanggal_selesai=datetime.date(2026, 2, 28),
+            ot_liabilitas_kontrak_acct=akun_liabilitas,
+        )
+        jadwal = JadwalPengakuan.objects.create(
+            kp=kp,
+            tipe_aliran=tipe_aliran,
+            progress_method='straight_line',
+            tanggal_mulai=datetime.date(2026, 1, 1),
+            tanggal_selesai=datetime.date(2026, 2, 28),
+            liabilitas_kontrak_acct=akun_liabilitas,
+            nilai_total=Decimal('600'),
+            nilai_diakui=Decimal('0'),
+        )
+        entri = EntriPengakuan.objects.create(
+            jadwal=jadwal,
+            tanggal_target=datetime.date(2026, 1, 31),
+            nilai=Decimal('300'),
+        )
+        return entri, jadwal, header, user
+
+    def test_advance_payment_marks_recognized(self):
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('advance_payment_cash')
+        recognize_entry(entri.id, user)
+        entri.refresh_from_db()
+        self.assertEqual(entri.status, 'recognized')
+        self.assertEqual(entri.nilai_diakui, Decimal('300'))
+
+    def test_advance_payment_creates_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('advance_payment_cash')
+        recognize_entry(entri.id, user)
+        entri.refresh_from_db()
+        self.assertIsNotNone(entri.jurnal_header)
+
+    def test_recognize_updates_jadwal_nilai_diakui(self):
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('advance_payment_cash')
+        recognize_entry(entri.id, user)
+        jadwal.refresh_from_db()
+        self.assertEqual(jadwal.nilai_diakui, Decimal('300'))
+
+    def test_recognize_all_entries_completes_jadwal(self):
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('advance_payment_cash')
+        # Set nilai_diakui close to total so this entry completes it
+        jadwal.nilai_total = Decimal('300')
+        jadwal.save()
+        recognize_entry(entri.id, user)
+        jadwal.refresh_from_db()
+        self.assertEqual(jadwal.status, 'completed')
+
+    def test_periodic_billing_marks_recognized(self):
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('periodic_billing')
+        recognize_entry(entri.id, user)
+        entri.refresh_from_db()
+        self.assertEqual(entri.status, 'recognized')
+
+    def test_performance_first_marks_recognized_no_journal(self):
+        from apps.pendapatan.services import recognize_entry
+        entri, jadwal, header, user = self._make_jadwal_with_entry('performance_first')
+        recognize_entry(entri.id, user)
+        entri.refresh_from_db()
+        self.assertEqual(entri.status, 'recognized')
+        self.assertIsNone(entri.jurnal_header)
+
+
+# ── Task 11: konversi_aset_kontrak_ke_piutang ─────────────────────────────────
+
+class KonversiAsetKontrakTest(TestCase):
+    def setUp(self):
+        self.user = make_user('konverter')
+        self.akun_kas = make_akun('1001-KA', 'Kas Konversi')
+        self.akun_pendapatan = make_akun('4001-KA', 'Pendapatan Konversi')
+        self.akun_aset_kontrak = make_akun('1201-KA', 'Aset Kontrak')
+        header = make_header(self.user)
+        peb = make_pendapatan_eb(header, payment_account=self.akun_kas)
+        kp = make_kp(
+            peb, '2000',
+            recognition_type='over_time',
+            revenue_account=self.akun_pendapatan,
+            ot_tipe_aliran='performance_first',
+            ot_aset_kontrak_acct=self.akun_aset_kontrak,
+        )
+        self.aset = AsetKontrak.objects.create(
+            kp=kp,
+            tanggal=datetime.date(2026, 1, 1),
+            nilai=Decimal('2000'),
+            nilai_tersisa=Decimal('2000'),
+        )
+
+    def test_konversi_marks_converted(self):
+        from apps.pendapatan.services import konversi_aset_kontrak_ke_piutang
+        konversi_aset_kontrak_ke_piutang(self.aset.id, self.user)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.status, 'converted')
+        self.assertEqual(self.aset.nilai_tersisa, Decimal('0'))
+
+    def test_konversi_creates_swap_journal(self):
+        from apps.jurnal.models import JurnalDetail
+        from apps.pendapatan.services import konversi_aset_kontrak_ke_piutang
+        konversi_aset_kontrak_ke_piutang(self.aset.id, self.user)
+        self.aset.refresh_from_db()
+        self.assertIsNotNone(self.aset.jurnal_header)
+        details = JurnalDetail.objects.filter(jurnal_header=self.aset.jurnal_header)
+        self.assertEqual(details.count(), 2)
+
+
+# ── Task 12: void_pendapatan cleanup ─────────────────────────────────────────
+
+class VoidPendapatanTest(TestCase):
+    def test_void_voids_jadwal_and_aset(self):
+        from apps.pendapatan.services import void_pendapatan
+        user = make_user('voider')
+        akun_kas = make_akun('1001-VD', 'Kas Void')
+        akun_pnd = make_akun('4001-VD', 'Pnd Void')
+        akun_liabilitas = make_akun('2101-VD', 'Liabilitas Void')
+        header = make_header(user)
+        peb = make_pendapatan_eb(header, payment_account=akun_kas)
+        kp = make_kp(
+            peb, '1000',
+            recognition_type='over_time',
+            revenue_account=akun_pnd,
+            ot_tipe_aliran='advance_payment_cash',
+            ot_progress_method='straight_line',
+            ot_tanggal_mulai=datetime.date(2026, 1, 1),
+            ot_tanggal_selesai=datetime.date(2026, 3, 31),
+            ot_liabilitas_kontrak_acct=akun_liabilitas,
+        )
+        jadwal = JadwalPengakuan.objects.create(
+            kp=kp,
+            tipe_aliran='advance_payment_cash',
+            progress_method='straight_line',
+            tanggal_mulai=datetime.date(2026, 1, 1),
+            tanggal_selesai=datetime.date(2026, 3, 31),
+            liabilitas_kontrak_acct=akun_liabilitas,
+            nilai_total=Decimal('1000'),
+            nilai_diakui=Decimal('0'),
+            status='active',
+        )
+        header.status = 'confirmed'
+        header.save()
+
+        void_pendapatan(header, user)
+
+        jadwal.refresh_from_db()
+        header.refresh_from_db()
+        self.assertEqual(jadwal.status, JadwalPengakuan.Status.VOIDED)
+        self.assertEqual(header.status, 'voided')
