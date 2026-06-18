@@ -55,3 +55,31 @@ class TarifPajakModelTest(TestCase):
         self.assertEqual(pt.status, 'draft')
         self.assertFalse(pt.is_overridden)
         self.assertIsNone(pt.jurnal_header)
+
+
+class SeedDataTest(TestCase):
+    """These tests run after data migration — relies on test runner applying all migrations."""
+    fixtures = []  # no fixtures; seed comes from data migration
+
+    def test_tarif_ppn_umum_exists(self):
+        from apps.pajak.models import TarifPajak
+        from decimal import Decimal
+        t = TarifPajak.objects.get(jenis_pajak='ppn_umum', berlaku_sampai__isnull=True)
+        self.assertEqual(t.tarif_persen, Decimal('12.0000'))
+        self.assertAlmostEqual(float(t.faktor_dpp), 11/12, places=4)
+
+    def test_tarif_pph_23_jasa_exists(self):
+        from apps.pajak.models import TarifPajak
+        t = TarifPajak.objects.get(jenis_pajak='pph_23_jasa', berlaku_sampai__isnull=True)
+        self.assertEqual(t.tarif_persen, Decimal('2.0000'))
+        self.assertEqual(t.faktor_dpp, Decimal('1.000000'))
+
+    def test_bracket_ppn_op_five_layers(self):
+        from apps.pajak.models import BracketPPhOP
+        self.assertEqual(BracketPPhOP.objects.count(), 5)
+
+    def test_bracket_top_layer_null_atas(self):
+        from apps.pajak.models import BracketPPhOP
+        top = BracketPPhOP.objects.order_by('-batas_bawah').first()
+        self.assertIsNone(top.batas_atas)
+        self.assertEqual(top.tarif_persen, Decimal('35.00'))
