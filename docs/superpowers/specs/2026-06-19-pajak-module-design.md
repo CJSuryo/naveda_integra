@@ -1,7 +1,7 @@
 # Desain Modul Pajak — naveda_integra
 
 **Tanggal:** 2026-06-19
-**Revisi:** 2 — 2026-06-19 (koreksi post_jurnal_pajak, tambah akun_lawan + sifat_pajak, sentralisasi total)
+**Revisi:** 3 — 2026-06-19 (validasi MasaPajak locked, faktor_dpp dinamis, kebijakan rounding)
 **Status:** Disetujui — siap implementasi
 
 ---
@@ -98,6 +98,11 @@ Master data tarif. Mendukung perubahan regulasi dengan `berlaku_mulai/sampai`.
 jenis_pajak    CharField(max_length=40, choices=JENIS_PAJAK_CHOICES)
 nama           CharField(max_length=100)
 tarif_persen   DecimalField(max_digits=7, decimal_places=4)
+faktor_dpp     DecimalField(max_digits=7, decimal_places=6, default=Decimal('1.000000'))
+               # Pengali DPP sebelum tarif diterapkan.
+               # ppn_umum (DPP Nilai Lain PMK 131/2024): 11/12 ≈ 0.916667
+               # Semua jenis lain: 1.000000
+               # Jika regulasi berubah, cukup update record ini — tanpa deploy.
 berlaku_mulai  DateField
 berlaku_sampai DateField(null=True, blank=True)  # null = masih berlaku
 keterangan     TextField(blank=True)
@@ -191,35 +196,37 @@ class Meta:
 
 ## 5. Services
 
-### 5.1 `get_tarif(jenis_pajak: str, tanggal: date) → Decimal`
-Ambil `tarif_persen` aktif dari `TarifPajak`. Raise `TarifPajakTidakDitemukan` jika tidak ada.
+### 5.1 `get_tarif_record(jenis_pajak: str, tanggal: date) → TarifPajak`
+Ambil record `TarifPajak` aktif (bukan hanya `tarif_persen`) agar `faktor_dpp` ikut tersedia.
+Raise `TarifPajakTidakDitemukan` jika tidak ada.
 
 ### 5.2 `compute_pajak(jenis_pajak, dpp, tanggal) → dict`
 Engine kalkulasi sentral. Returns `{dpp_efektif, tarif_persen, jumlah_pajak}`.
+**Tidak ada nilai yang di-hardcode.** Semua tarif dan faktor diambil dari DB.
 
-```
-ppn_umum:
-  dpp_efektif = Decimal('11') / Decimal('12') * dpp
-  jumlah = dpp_efektif * Decimal('0.12')         # = 11% efektif dari DPP asli
+```python
+# Pola umum (berlaku untuk semua jenis kecuali pph_21_bukan_pegawai):
+tarif_record  = get_tarif_record(jenis_pajak, tanggal)
+tarif_persen  = tarif_record.tarif_persen          # e.g. Decimal('12.0000')
+faktor_dpp    = tarif_record.faktor_dpp            # e.g. Decimal('0.916667') untuk ppn_umum
+dpp_efektif   = dpp * faktor_dpp                   # DPP setelah nilai lain
+jumlah_pajak  = dpp_efektif * tarif_persen / 100
 
-ppn_mewah:
-  dpp_efektif = dpp
-  jumlah = dpp * Decimal('0.12')
-
+# Kasus khusus:
 ppn_ekspor:
-  jumlah = Decimal('0')
-
-ppn_bm / pph_23_* / pph_4_2_*:
-  tarif = get_tarif(jenis_pajak, tanggal)
-  jumlah = dpp * tarif / 100
+  jumlah_pajak = Decimal('0')                      # tarif 0%, tetap buat PajakTransaksi
 
 pph_21_bukan_pegawai:
-  pkp = dpp * Decimal('0.50')                    # 50% × bruto
-  jumlah = hitung_progresif(pkp, tanggal)
+  pkp = dpp * Decimal('0.50')                      # 50% × bruto (PMK 168/2023)
+  jumlah_pajak = hitung_progresif(pkp, tanggal)    # progresif Pasal 17
 
 pph_umkm:
-  jumlah = dpp * Decimal('0.005')                # 0.5%
+  jumlah_pajak = dpp * tarif_persen / 100          # faktor_dpp = 1.0 (tarif langsung atas bruto)
 ```
+
+**Data seed `TarifPajak` wajib mencantumkan `faktor_dpp`:**
+- `ppn_umum`: `tarif_persen=12`, `faktor_dpp=0.916667` (= 11/12, PMK 131/2024 Pasal 3)
+- Semua jenis lain: `faktor_dpp=1.000000`
 
 ### 5.3 `hitung_progresif(pkp, tanggal) → Decimal`
 Iterasi `BracketPPhOP` yang berlaku pada `tanggal`, potong PKP per layer, sum hasilnya.
@@ -227,19 +234,55 @@ Iterasi `BracketPPhOP` yang berlaku pada `tanggal`, potong PKP per layer, sum ha
 ### 5.4 `sync_pajak(source_type, source_obj, tanggal, akun_pajak, akun_lawan, sifat_pajak) → PajakTransaksi`
 Entry point generik. Dipanggil modul lain saat konfirmasi.
 
-- Baca `jenis_pajak`, `dpp` dari `source_obj`
-- Jika `source_obj` sudah punya nilai pajak manual (`kp.tax > 0`) → gunakan sebagai `jumlah_pajak`, set `is_overridden=True`
-- Jika tidak → panggil `compute_pajak`
-- `get_or_create` `MasaPajak` untuk bulan transaksi
-- Buat dan return `PajakTransaksi` status `draft`
+```python
+masa_pajak = tanggal.replace(day=1)
 
-Akun pajak dan akun lawan dikirim eksplisit oleh caller (modul asal yang tahu konteks akun transaksinya).
+# Validasi 1: cek apakah masa pajak terkunci
+masa, _ = MasaPajak.objects.get_or_create(tahun=masa_pajak.year, bulan=masa_pajak.month)
+if masa.status == 'locked':
+    raise MasaPajakTerkunciError(
+        f'Masa pajak {masa_pajak:%Y-%m} sudah terkunci. '
+        'Buka kunci terlebih dahulu sebelum memposting transaksi baru.'
+    )
+
+# Kalkulasi
+if source_obj.tax and source_obj.tax > 0:
+    jumlah_pajak = source_obj.tax     # nilai manual dari modul asal
+    is_overridden = True
+else:
+    hasil = compute_pajak(jenis_pajak, dpp, tanggal)
+    jumlah_pajak = hasil['jumlah_pajak']
+    is_overridden = False
+
+# Buat PajakTransaksi (draft)
+return PajakTransaksi.objects.create(
+    source_type=source_type,
+    source_id=source_obj.pk,
+    masa_pajak=masa_pajak,
+    jenis_pajak=jenis_pajak,
+    dpp=dpp,
+    tarif_persen=hasil.get('tarif_persen', Decimal('0')),
+    jumlah_pajak=jumlah_pajak,
+    sifat_pajak=sifat_pajak,
+    status='draft',
+    is_overridden=is_overridden,
+    akun_pajak=akun_pajak,
+    akun_lawan=akun_lawan,
+    entitas_bisnis=getattr(source_obj, 'entitas_bisnis', None),
+)
+```
+
+`MasaPajakTerkunciError` didefinisikan di `pajak/exceptions.py`.
+Akun pajak dan akun lawan dikirim eksplisit oleh caller.
 
 ### 5.5 `confirm_pajak(pajak_trx) → JurnalHeader`
 - Validasi status `draft`
+- Validasi `pajak_trx.masa_pajak` belum locked (cek `MasaPajak.status`) — raise `MasaPajakTerkunciError` jika locked
 - Set status → `final`
 - Panggil `post_jurnal_pajak(pajak_trx)`
 - Return `JurnalHeader`
+
+**Catatan atomisitas:** `confirm_pajak` dipanggil dari dalam `with transaction.atomic()` yang sudah ada di modul asal (e.g., `confirm_pendapatan` di baris 240 `pendapatan/services.py`). Jika `post_jurnal_pajak` gagal, seluruh transaksi termasuk jurnal utama akan di-rollback otomatis. Tidak perlu wrap tambahan.
 
 ### 5.6 `batal_pajak(pajak_trx)`
 - Set status → `dibatalkan`
@@ -267,8 +310,18 @@ else:  # 'prepaid'
 
 Hasilnya:
 ```
-Dr. akun_debit   jumlah_pajak
+Dr. akun_debit   jumlah_pajak  (dibulatkan ke 2 desimal, ROUND_HALF_UP)
   Cr. akun_kredit  jumlah_pajak
+```
+
+**Kebijakan rounding:**
+- `PajakTransaksi.jumlah_pajak` menyimpan presisi penuh (4 desimal) untuk audit trail komputasi
+- `post_jurnal_pajak` membulatkan ke 2 desimal (Rupiah) dengan `ROUND_HALF_UP` sebelum membuat `JurnalDetail`
+- Laporan eksternal (e-Faktur, SPT): pembulatan ke 0 desimal dilakukan di layer reporting, bukan di sini
+
+```python
+from decimal import ROUND_HALF_UP
+jumlah_rounded = pajak_trx.jumlah_pajak.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 ```
 
 #### Tabel mapping per konteks
@@ -443,5 +496,8 @@ Lima layer sesuai Pasal 17 UU PPh jo. UU HPP.
 | Jurnal pajak terpisah dari jurnal utama | Cross-reference via `PajakTransaksi.jurnal_header`; memudahkan rekonsiliasi masa pajak |
 | Explicit service call, bukan signal | Mudah di-trace, di-test, konsisten dengan pola existing |
 | `source_type + source_id` bukan `GenericFK` | Konsisten dengan codebase, tidak perlu `contenttypes` framework |
-| `TarifPajak` di DB bukan hardcode | Perubahan regulasi tidak butuh deploy ulang |
+| `TarifPajak.faktor_dpp` di DB, bukan hardcode | Eliminasi 11/12 hardcoded; perubahan PMK (formula nilai lain) cukup update DB |
+| Validasi MasaPajak locked di sync_pajak + confirm_pajak | Cegah posting backdated ke masa yang sudah dilaporkan |
+| Rounding 2 desimal di post_jurnal_pajak | Jurnal IDR tidak boleh punya fraksi di bawah sen; presisi 4 desimal hanya untuk komputasi internal |
+| Atomisitas via existing transaction.atomic() | Modul asal sudah wrap confirm_* dalam atomic block; pajak module tidak perlu wrap ulang |
 | PPh 21 pegawai tetap out of scope | Modul HR/penggajian belum ada; akan diintegrasikan di phase HR |
