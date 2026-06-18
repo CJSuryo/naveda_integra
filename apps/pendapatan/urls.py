@@ -12,9 +12,6 @@ urlpatterns = [
     path('<int:pk>/confirm/', views.pendapatan_confirm, name='confirm'),
     path('<int:pk>/void/', views.pendapatan_void, name='void'),
     path('api/stt-defaults/', views.stt_defaults, name='stt_defaults'),
-    path('deferred/', views.deferred_list, name='deferred_list'),
-    path('deferred/entry/<int:entry_pk>/recognize/', views.deferred_recognize, name='deferred_recognize'),
-    path('deferred/<int:pk>/', views.deferred_detail, name='deferred_detail'),
     # Recurring Templates
     path('recurring/', views.recurring_list, name='recurring_list'),
     path('recurring/create/', views.recurring_create, name='recurring_create'),

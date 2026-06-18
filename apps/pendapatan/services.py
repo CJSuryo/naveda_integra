@@ -95,7 +95,6 @@ def generate_from_recurring(template, user=None) -> PendapatanHeader:
             jumlah_bruto=template.jumlah,
             revenue_account=template.revenue_account,
             payment_account=template.payment_account,
-            is_deferred=False,
         )
 
         new_next = compute_next_date(template.tanggal_berikutnya, template.frekuensi)
@@ -161,12 +160,6 @@ def create_pendapatan_header(
                 tax_account=item.get('tax_account'),
                 tax_payment=item.get('tax_payment', ''),
                 tax_payment_account=item.get('tax_payment_account'),
-                is_deferred=item.get('is_deferred', False),
-                deferred_account=item.get('deferred_account'),
-                recognition_account=item.get('recognition_account'),
-                deferred_tanggal_mulai=item.get('deferred_tanggal_mulai'),
-                deferred_tanggal_selesai=item.get('deferred_tanggal_selesai'),
-                deferred_metode=item.get('deferred_metode', 'straight_line'),
             )
             for item in items
         ])
@@ -193,15 +186,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
             piutang = create_piutang_from_pendapatan(header, user)
             _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
 
-        # Create deferred schedules for deferred items
-        from .deferred_services import create_deferred_schedule
-        deferred_count = 0
-        for eb_group in header.entitas_groups.prefetch_related('items').all():
-            for item in eb_group.items.filter(is_deferred=True):
-                create_deferred_schedule(item)
-                deferred_count += 1
-        if deferred_count:
-            _log_event(header, 'DEFERRED_SCHEDULED', description=f'{deferred_count} jadwal dibuat', actor=user)
+        # TODO(Task 9): PSAK 72 over-time schedule creation — full rewrite in confirm_pendapatan
 
         header.status = 'confirmed'
         header.save(update_fields=['status'])
@@ -280,11 +265,7 @@ def _create_pendapatan_journals(header: PendapatanHeader, user=None) -> None:
                     f'Item "{item.deskripsi_item}" tidak memiliki akun pembayaran. '
                     f'Isi akun pembayaran pada item atau grup entitas bisnis sebelum mengkonfirmasi.'
                 )
-            cr_acct = (
-                item.deferred_account
-                if item.is_deferred and item.deferred_account
-                else item.revenue_account
-            )
+            cr_acct = item.revenue_account
             entries.append(JurnalDetail(
                 jurnal_header=jh,
                 akun=pay_acct,

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     PendapatanHeader, PendapatanEntitasBisnis, PendapatanItem, PendapatanEventLog,
-    RecurringTemplate, DeferredRevenueSchedule, DeferredRevenueEntry,
+    RecurringTemplate,
 )
 
 
@@ -34,19 +34,3 @@ class RecurringTemplateAdmin(admin.ModelAdmin):
     list_filter = ['frekuensi', 'is_active', 'auto_confirm', 'payment_type']
     search_fields = ['nama', 'entitas_bisnis__nama']
     readonly_fields = ['tanggal_berikutnya', 'created_at', 'updated_at', 'created_by']
-
-
-@admin.register(DeferredRevenueSchedule)
-class DeferredRevenueScheduleAdmin(admin.ModelAdmin):
-    list_display = ['id', 'pendapatan_item', 'jumlah_total', 'metode']
-    list_filter = ['metode']
-    search_fields = ['pendapatan_item__id']
-    readonly_fields = ['created_at']
-
-
-@admin.register(DeferredRevenueEntry)
-class DeferredRevenueEntryAdmin(admin.ModelAdmin):
-    list_display = ['id', 'schedule', 'periode', 'jumlah', 'status']
-    list_filter = ['status', 'periode']
-    search_fields = ['schedule__id']
-    readonly_fields = []

@@ -52,53 +52,10 @@ class PendapatanItemForm(forms.Form):
         widget=forms.Select(attrs={'class': 'ni-input'}),
         empty_label='— Pilih Akun Kas/Bank —',
     )
-    is_deferred = forms.BooleanField(
-        required=False,
-        widget=forms.CheckboxInput(attrs={'class': 'ni-checkbox deferred-toggle'}),
-        label='Pendapatan Diterima di Muka',
-    )
-    deferred_account = forms.ModelChoiceField(
-        queryset=Akun.objects.none(),
-        required=False,
-        widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
-        empty_label='— Akun Deferred (Liability) —',
-    )
-    recognition_account = forms.ModelChoiceField(
-        queryset=Akun.objects.none(),
-        required=False,
-        widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
-        empty_label='— Akun Pengakuan (Revenue) —',
-    )
-    deferred_tanggal_mulai = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'ni-input deferred-field', 'type': 'date'}),
-    )
-    deferred_tanggal_selesai = forms.DateField(
-        required=False,
-        widget=forms.DateInput(attrs={'class': 'ni-input deferred-field', 'type': 'date'}),
-    )
-    deferred_metode = forms.ChoiceField(
-        choices=[('straight_line', 'Garis Lurus'), ('custom', 'Custom')],
-        required=False,
-        widget=forms.Select(attrs={'class': 'ni-input deferred-field'}),
-    )
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['revenue_account'].queryset = akun_sorted_queryset()
         self.fields['payment_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
-        self.fields['deferred_account'].queryset = akun_sorted_queryset()
-        self.fields['recognition_account'].queryset = akun_sorted_queryset()
-
-    def clean(self):
-        cleaned = super().clean()
-        if cleaned.get('is_deferred'):
-            required_fields = ['deferred_account', 'recognition_account',
-                               'deferred_tanggal_mulai', 'deferred_tanggal_selesai']
-            for f in required_fields:
-                if not cleaned.get(f):
-                    self.add_error(f, 'Field ini wajib diisi untuk item deferred.')
-        return cleaned
 
 
 class RecurringTemplateForm(forms.ModelForm):
