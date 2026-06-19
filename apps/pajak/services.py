@@ -200,3 +200,51 @@ def confirm_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
     pajak_trx.status = 'final'
     pajak_trx.save(update_fields=['jurnal_header', 'status'])
     return jh
+
+
+def batal_pajak(pajak_trx: PajakTransaksi) -> None:
+    """Cancel pajak_trx. If a journal exists, post a reversal (swap debit/kredit)."""
+    if pajak_trx.jurnal_header_id:
+        original_jh = pajak_trx.jurnal_header
+        nomor = _next_pajak_journal_number()
+        rev_jh = JurnalHeader.objects.create(
+            tanggal=original_jh.tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Reversal Pajak — {original_jh.nomor_transaksi}',
+            entitas_bisnis=original_jh.entitas_bisnis,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=rev_jh,
+                akun=d.akun,
+                debit=d.kredit,
+                kredit=d.debit,
+            )
+            for d in original_jh.details.all()
+        ])
+    pajak_trx.status = 'dibatalkan'
+    pajak_trx.save(update_fields=['status'])
+
+
+def override_pajak(pajak_trx: PajakTransaksi, jumlah_baru: Decimal, modified_by=None) -> PajakTransaksi:
+    """
+    Manual override: reverse existing journal, set new amount, post new journal.
+    Works on both draft and final records.
+    """
+    from django.utils import timezone
+    batal_pajak(pajak_trx)
+    pajak_trx.jumlah_pajak = jumlah_baru
+    pajak_trx.is_overridden = True
+    pajak_trx.modified_by = modified_by
+    pajak_trx.modified_at = timezone.now()
+    pajak_trx.status = 'draft'
+    pajak_trx.jurnal_header = None
+    pajak_trx.save(update_fields=[
+        'jumlah_pajak', 'is_overridden', 'modified_by', 'modified_at', 'status', 'jurnal_header'
+    ])
+    jh = post_jurnal_pajak(pajak_trx)
+    pajak_trx.jurnal_header = jh
+    pajak_trx.status = 'final'
+    pajak_trx.save(update_fields=['jurnal_header', 'status'])
+    return pajak_trx

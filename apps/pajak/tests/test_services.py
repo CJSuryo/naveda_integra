@@ -361,3 +361,81 @@ class PostJurnalPajakTest(TestCase):
         pt = self._make_pt('potong_pungut')
         with self.assertRaises(MasaPajakTerkunciError):
             confirm_pajak(pt)
+
+
+class BatalPajakTest(TestCase):
+    def _make_confirmed_pt(self):
+        from apps.pajak.services import confirm_pajak
+        from apps.pajak.models import PajakTransaksi, MasaPajak
+        from apps.master_data.models import Akun
+        MasaPajak.objects.create(tahun=2026, bulan=6, status='open')
+        akun_pajak = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.1')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Piutang', kode_akun='1.2.1')
+        pt = PajakTransaksi.objects.create(
+            source_type='pendapatan_kp', source_id=1,
+            masa_pajak=date(2026, 6, 1), jenis_pajak='ppn_umum',
+            dpp=Decimal('10000000'), tarif_persen=Decimal('12.0000'),
+            jumlah_pajak=Decimal('1100000'),
+            sifat_pajak='potong_pungut', status='draft',
+            akun_pajak=akun_pajak, akun_lawan=akun_lawan,
+        )
+        confirm_pajak(pt)
+        pt.refresh_from_db()
+        return pt
+
+    def test_batal_pajak_sets_dibatalkan(self):
+        from apps.pajak.services import batal_pajak
+        pt = self._make_confirmed_pt()
+        batal_pajak(pt)
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'dibatalkan')
+
+    def test_batal_pajak_creates_reversal_journal(self):
+        from apps.pajak.services import batal_pajak
+        from apps.jurnal.models import JurnalHeader, JurnalDetail
+        pt = self._make_confirmed_pt()
+        original_jh = pt.jurnal_header
+        original_debit = JurnalDetail.objects.filter(jurnal_header=original_jh, debit__gt=0).first()
+        batal_pajak(pt)
+        reversal_jh = JurnalHeader.objects.filter(
+            nomor_transaksi__startswith='TRX-PAJ'
+        ).exclude(pk=original_jh.pk).first()
+        self.assertIsNotNone(reversal_jh)
+        reversal_kredit = JurnalDetail.objects.filter(
+            jurnal_header=reversal_jh, kredit__gt=0, akun=original_debit.akun
+        ).first()
+        self.assertIsNotNone(reversal_kredit)
+        self.assertEqual(reversal_kredit.kredit, original_debit.debit)
+
+
+class OverridePajakTest(TestCase):
+    def _make_confirmed_pt(self):
+        from apps.pajak.services import confirm_pajak
+        from apps.pajak.models import PajakTransaksi, MasaPajak
+        from apps.master_data.models import Akun
+        MasaPajak.objects.create(tahun=2026, bulan=6, status='open')
+        akun_pajak = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.1')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Piutang', kode_akun='1.2.1')
+        pt = PajakTransaksi.objects.create(
+            source_type='pendapatan_kp', source_id=1,
+            masa_pajak=date(2026, 6, 1), jenis_pajak='ppn_umum',
+            dpp=Decimal('10000000'), tarif_persen=Decimal('12.0000'),
+            jumlah_pajak=Decimal('1100000'),
+            sifat_pajak='potong_pungut', status='draft',
+            akun_pajak=akun_pajak, akun_lawan=akun_lawan,
+        )
+        confirm_pajak(pt)
+        pt.refresh_from_db()
+        return pt
+
+    def test_override_updates_amount_and_posts_new_journal(self):
+        from apps.pajak.services import override_pajak
+        from apps.jurnal.models import JurnalHeader
+        pt = self._make_confirmed_pt()
+        original_jh_pk = pt.jurnal_header.pk
+        pt2 = override_pajak(pt, Decimal('900000'), modified_by=None)
+        pt2.refresh_from_db()
+        self.assertEqual(pt2.jumlah_pajak, Decimal('900000'))
+        self.assertTrue(pt2.is_overridden)
+        self.assertEqual(pt2.status, 'final')
+        self.assertNotEqual(pt2.jurnal_header.pk, original_jh_pk)
