@@ -2,6 +2,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 
+from .exceptions import MasaPajakTerkunciError, PajakStatusError
 from .forms import OverridePajakForm, TarifPajakForm
 from .models import MasaPajak, PajakTransaksi, TarifPajak
 from .services import override_pajak
@@ -9,7 +10,7 @@ from .services import override_pajak
 
 @login_required
 def transaksi_list(request):
-    qs = PajakTransaksi.objects.order_by('-created_at')
+    qs = PajakTransaksi.objects.select_related('akun_pajak', 'akun_lawan', 'entitas_bisnis').order_by('-created_at')
     status = request.GET.get('status', '')
     if status:
         qs = qs.filter(status=status)
@@ -22,13 +23,16 @@ def transaksi_list(request):
 @login_required
 def transaksi_edit(request, pk):
     pajak_trx = get_object_or_404(PajakTransaksi, pk=pk)
-    if pajak_trx.status != 'final':
-        return HttpResponseForbidden('Hanya transaksi berstatus "final" yang dapat diubah.')
+    if pajak_trx.status not in ('draft', 'final'):
+        return HttpResponseForbidden('Hanya transaksi berstatus "draft" atau "final" yang dapat diubah.')
     if request.method == 'POST':
         form = OverridePajakForm(request.POST)
         if form.is_valid():
-            override_pajak(pajak_trx, form.cleaned_data['jumlah_baru'], modified_by=request.user)
-            return redirect('pajak:transaksi_list')
+            try:
+                override_pajak(pajak_trx, form.cleaned_data['jumlah_baru'], modified_by=request.user)
+                return redirect('pajak:transaksi_list')
+            except (PajakStatusError, MasaPajakTerkunciError) as e:
+                form.add_error(None, str(e))
     else:
         form = OverridePajakForm(initial={'jumlah_baru': pajak_trx.jumlah_pajak})
     return render(request, 'pajak/transaksi_edit.html', {
@@ -48,7 +52,9 @@ def masa_list(request):
 @login_required
 def masa_detail(request, pk):
     masa = get_object_or_404(MasaPajak, pk=pk)
-    transaksi = PajakTransaksi.objects.filter(
+    transaksi = PajakTransaksi.objects.select_related(
+        'akun_pajak', 'akun_lawan', 'entitas_bisnis',
+    ).filter(
         masa_pajak__year=masa.tahun,
         masa_pajak__month=masa.bulan,
     ).order_by('-created_at')

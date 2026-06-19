@@ -29,3 +29,22 @@ class PajakViewsSmokeTest(TestCase):
         url = reverse('pajak:tarif_tambah')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
+
+
+class AnonymousAccessTest(TestCase):
+    def test_transaksi_list_requires_login(self):
+        response = self.client.get(reverse('pajak:transaksi_list'))
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/login', response['Location'])
+
+    def test_masa_list_requires_login(self):
+        response = self.client.get(reverse('pajak:masa_list'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_tarif_list_requires_login(self):
+        response = self.client.get(reverse('pajak:tarif_list'))
+        self.assertEqual(response.status_code, 302)
+
+    def test_tarif_tambah_requires_login(self):
+        response = self.client.get(reverse('pajak:tarif_tambah'))
+        self.assertEqual(response.status_code, 302)
