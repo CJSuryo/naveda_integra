@@ -1,11 +1,12 @@
 from __future__ import annotations
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db.models import Q
 
 from .exceptions import TarifPajakTidakDitemukan, MasaPajakTerkunciError, PajakStatusError
 from .models import TarifPajak, BracketPPhOP, MasaPajak, PajakTransaksi
+from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 
 def get_tarif_record(jenis_pajak: str, tanggal: date) -> TarifPajak:
@@ -127,3 +128,75 @@ def sync_pajak(
         akun_lawan=akun_lawan,
         entitas_bisnis=getattr(source_obj, 'entitas_bisnis', None),
     )
+
+
+def _next_pajak_journal_number() -> str:
+    """Generate next sequential TRX-PAJ-XXXXXXXX number."""
+    prefix = 'TRX-PAJ'
+    last = (
+        JurnalHeader.objects
+        .filter(nomor_transaksi__startswith=prefix)
+        .order_by('-nomor_transaksi')
+        .values_list('nomor_transaksi', flat=True)
+        .first()
+    )
+    if last:
+        try:
+            seq = int(last.split('-')[-1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f'{prefix}-{seq:08d}'
+
+
+def post_jurnal_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
+    """Create JurnalHeader + 2 JurnalDetail. Rounds jumlah_pajak to 2dp ROUND_HALF_UP."""
+    jumlah = pajak_trx.jumlah_pajak.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    if pajak_trx.sifat_pajak == 'potong_pungut':
+        akun_debit  = pajak_trx.akun_lawan
+        akun_kredit = pajak_trx.akun_pajak
+    else:  # prepaid
+        akun_debit  = pajak_trx.akun_pajak
+        akun_kredit = pajak_trx.akun_lawan
+
+    nomor = _next_pajak_journal_number()
+    jh = JurnalHeader.objects.create(
+        tanggal=pajak_trx.masa_pajak,
+        nomor_transaksi=nomor,
+        uraian_transaksi=(
+            f'Jurnal Pajak — {pajak_trx.get_jenis_pajak_display()} '
+            f'— {pajak_trx.source_type}:{pajak_trx.source_id}'
+        ),
+        entitas_bisnis=pajak_trx.entitas_bisnis,
+        is_penyesuaian=False,
+    )
+    JurnalDetail.objects.bulk_create([
+        JurnalDetail(jurnal_header=jh, akun=akun_debit,  debit=jumlah,      kredit=Decimal('0')),
+        JurnalDetail(jurnal_header=jh, akun=akun_kredit, debit=Decimal('0'), kredit=jumlah),
+    ])
+    return jh
+
+
+def confirm_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
+    """Validate draft status + unlocked period, set status=final, post journal."""
+    if pajak_trx.status != 'draft':
+        raise PajakStatusError(
+            f'PajakTransaksi {pajak_trx.pk} berstatus "{pajak_trx.status}", bukan "draft".'
+        )
+    masa_date = pajak_trx.masa_pajak
+    try:
+        masa = MasaPajak.objects.get(tahun=masa_date.year, bulan=masa_date.month)
+        if masa.status == 'locked':
+            raise MasaPajakTerkunciError(
+                f'Masa pajak {masa_date:%Y-%m} sudah terkunci.'
+            )
+    except MasaPajak.DoesNotExist:
+        pass  # period not created yet means open
+
+    jh = post_jurnal_pajak(pajak_trx)
+    pajak_trx.jurnal_header = jh
+    pajak_trx.status = 'final'
+    pajak_trx.save(update_fields=['jurnal_header', 'status'])
+    return jh

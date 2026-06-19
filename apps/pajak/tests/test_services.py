@@ -287,3 +287,77 @@ class SyncPajakTest(TestCase):
         )
         self.assertTrue(pt.is_overridden)
         self.assertEqual(pt.jumlah_pajak, Decimal('500000'))
+
+
+class PostJurnalPajakTest(TestCase):
+    def _make_pt(self, sifat_pajak, jumlah=Decimal('1100000')):
+        from apps.pajak.models import PajakTransaksi
+        from apps.master_data.models import Akun
+        akun_pajak = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.1')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Piutang Usaha', kode_akun='1.2.1')
+        return PajakTransaksi.objects.create(
+            source_type='pendapatan_kp', source_id=1,
+            masa_pajak=date(2026, 6, 1),
+            jenis_pajak='ppn_umum',
+            dpp=Decimal('10000000'), tarif_persen=Decimal('12.0000'),
+            jumlah_pajak=jumlah,
+            sifat_pajak=sifat_pajak,
+            status='draft',
+            akun_pajak=akun_pajak, akun_lawan=akun_lawan,
+        )
+
+    def test_post_jurnal_potong_pungut_direction(self):
+        from apps.pajak.services import post_jurnal_pajak
+        from apps.jurnal.models import JurnalDetail
+        pt = self._make_pt('potong_pungut')
+        jh = post_jurnal_pajak(pt)
+        details = list(JurnalDetail.objects.filter(jurnal_header=jh))
+        self.assertEqual(len(details), 2)
+        debit_detail  = next(d for d in details if d.debit  > 0)
+        kredit_detail = next(d for d in details if d.kredit > 0)
+        self.assertEqual(debit_detail.akun,  pt.akun_lawan)
+        self.assertEqual(kredit_detail.akun, pt.akun_pajak)
+
+    def test_post_jurnal_prepaid_direction(self):
+        from apps.pajak.services import post_jurnal_pajak
+        from apps.jurnal.models import JurnalDetail
+        pt = self._make_pt('prepaid')
+        jh = post_jurnal_pajak(pt)
+        details = list(JurnalDetail.objects.filter(jurnal_header=jh))
+        debit_detail  = next(d for d in details if d.debit  > 0)
+        kredit_detail = next(d for d in details if d.kredit > 0)
+        self.assertEqual(debit_detail.akun,  pt.akun_pajak)
+        self.assertEqual(kredit_detail.akun, pt.akun_lawan)
+
+    def test_post_jurnal_rounding_two_decimal_places(self):
+        from apps.pajak.services import post_jurnal_pajak
+        from apps.jurnal.models import JurnalDetail
+        pt = self._make_pt('potong_pungut', jumlah=Decimal('1100000.5678'))
+        jh = post_jurnal_pajak(pt)
+        debit = JurnalDetail.objects.filter(jurnal_header=jh, debit__gt=0).first()
+        self.assertEqual(debit.debit, Decimal('1100000.57'))
+
+    def test_post_jurnal_nomor_starts_with_trx_paj(self):
+        from apps.pajak.services import post_jurnal_pajak
+        pt = self._make_pt('potong_pungut')
+        jh = post_jurnal_pajak(pt)
+        self.assertTrue(jh.nomor_transaksi.startswith('TRX-PAJ'))
+
+    def test_confirm_pajak_sets_final_and_links_jurnal(self):
+        from apps.pajak.services import confirm_pajak
+        from apps.pajak.models import MasaPajak
+        MasaPajak.objects.create(tahun=2026, bulan=6, status='open')
+        pt = self._make_pt('potong_pungut')
+        jh = confirm_pajak(pt)
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'final')
+        self.assertEqual(pt.jurnal_header, jh)
+
+    def test_confirm_pajak_locked_masa_raises(self):
+        from apps.pajak.services import confirm_pajak
+        from apps.pajak.models import MasaPajak
+        from apps.pajak.exceptions import MasaPajakTerkunciError
+        MasaPajak.objects.create(tahun=2026, bulan=6, status='locked')
+        pt = self._make_pt('potong_pungut')
+        with self.assertRaises(MasaPajakTerkunciError):
+            confirm_pajak(pt)
