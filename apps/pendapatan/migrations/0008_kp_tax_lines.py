@@ -45,7 +45,7 @@ class Migration(migrations.Migration):
                     choices=[('ppn_keluaran', 'PPN Keluaran'), ('pph_23', 'PPh 23'), ('pph_21', 'PPh 21'), ('pph_4_2', 'PPh 4(2)')],
                     max_length=30, verbose_name='Tipe Pajak'
                 )),
-                ('tax', models.DecimalField(blank=True, decimal_places=4, max_digits=19, null=True, verbose_name='Pajak (Override Manual)')),
+                ('tax', models.DecimalField(blank=True, decimal_places=4, help_text='Jika diisi, nilai ini menggantikan perhitungan tarif otomatis.', max_digits=19, null=True, verbose_name='Pajak (Override Manual)')),
                 ('kp', models.ForeignKey(
                     on_delete=django.db.models.deletion.CASCADE,
                     related_name='tax_lines',
