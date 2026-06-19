@@ -288,6 +288,32 @@ class SyncPajakTest(TestCase):
         self.assertTrue(pt.is_overridden)
         self.assertEqual(pt.jumlah_pajak, Decimal('500000'))
 
+    def test_sync_pajak_override_amount_takes_priority(self):
+        """override_amount param bypasses compute_pajak and source_obj.tax."""
+        from apps.pajak.services import sync_pajak
+
+        self._make_tarif()
+        akun_pajak, akun_lawan = self._make_accounts()
+
+        class FakeKP:
+            pk = 99999
+            tax = Decimal('99')        # would be used if override_amount not present
+            entitas_bisnis = None
+
+        result = sync_pajak(
+            source_type='test_override',
+            source_obj=FakeKP(),
+            dpp=Decimal('500000'),
+            tanggal=date(2026, 6, 1),
+            jenis_pajak='ppn_umum',
+            akun_pajak=akun_pajak,
+            akun_lawan=akun_lawan,
+            sifat_pajak='potong_pungut',
+            override_amount=Decimal('50000'),
+        )
+        self.assertEqual(result.jumlah_pajak, Decimal('50000'))
+        self.assertTrue(result.is_overridden)
+
 
 class PostJurnalPajakTest(TestCase):
     def _make_pt(self, sifat_pajak, jumlah=Decimal('1100000')):

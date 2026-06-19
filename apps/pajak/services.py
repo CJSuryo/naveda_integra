@@ -83,12 +83,15 @@ def sync_pajak(
     akun_pajak,
     akun_lawan,
     sifat_pajak: str,
+    override_amount: Decimal | None = None,
 ) -> PajakTransaksi:
     """
     Create a draft PajakTransaksi for source_obj.
 
-    If source_obj.tax is set and > 0, use that value and mark is_overridden=True.
-    Otherwise, compute from TarifPajak via compute_pajak.
+    Priority for jumlah_pajak:
+      1. override_amount (if provided and > 0) → is_overridden=True
+      2. source_obj.tax (if attribute exists and > 0) → is_overridden=True
+      3. compute_pajak from TarifPajak → is_overridden=False
     Raises MasaPajakTerkunciError if the target period is locked.
     """
     masa_date = tanggal.replace(day=1)
@@ -102,9 +105,12 @@ def sync_pajak(
             'Buka kunci terlebih dahulu sebelum memposting transaksi baru.'
         )
 
-    manual_tax = getattr(source_obj, 'tax', None)
-    if manual_tax and manual_tax > 0:
-        jumlah_pajak = manual_tax
+    effective_override = (
+        override_amount if (override_amount is not None and override_amount > 0)
+        else getattr(source_obj, 'tax', None)
+    )
+    if effective_override and effective_override > 0:
+        jumlah_pajak = effective_override
         tarif_persen = Decimal('0')
         is_overridden = True
     else:
