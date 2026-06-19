@@ -1,1 +1,41 @@
-{% block content %}Form Tarif Pajak{% endblock %}
+{% extends 'base.html' %}
+{% block title %}{% if instance %}Edit Tarif Pajak{% else %}Tambah Tarif Pajak{% endif %}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{% if instance %}Edit Tarif Pajak{% else %}Tambah Tarif Pajak{% endif %}</h1>
+    <p class="ni-page-header__subtitle">{% if instance %}Ubah konfigurasi tarif yang sudah ada{% else %}Tambahkan tarif pajak baru{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pajak:tarif_list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">{% if instance %}Edit Tarif Pajak{% else %}Tambah Tarif Pajak{% endif %}</h2>
+  </div>
+  <div class="ni-card__body">
+    {% if form.non_field_errors %}
+    <div class="ni-alert ni-alert--danger ni-mb-4">{{ form.non_field_errors }}</div>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-grid ni-form-grid--2">
+        {% for field in form %}
+        <div class="ni-form-group {% if field.name == 'keterangan' %}ni-form-group--full{% endif %}">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+          {% if field.help_text %}<span class="ni-help-text">{{ field.help_text }}</span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="ni-btn-row">
+        <button type="submit" class="ni-btn ni-btn--primary">{% if instance %}Simpan Perubahan{% else %}Tambah Tarif{% endif %}</button>
+        <a href="{% url 'pajak:tarif_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

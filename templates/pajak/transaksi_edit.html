@@ -1,1 +1,63 @@
-{% block content %}Edit Transaksi Pajak{% endblock %}
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Edit Transaksi Pajak{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Edit Transaksi Pajak</h1>
+    <p class="ni-page-header__subtitle">Override jumlah pajak untuk transaksi ini</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pajak:transaksi_list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Detail Transaksi (Read-Only)</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Sumber</dt>
+        <dd>{{ pajak_trx.get_source_type_display }} — {{ pajak_trx.source_id }}</dd>
+        <dt>Jenis Pajak</dt>
+        <dd>{{ pajak_trx.get_jenis_pajak_display }}</dd>
+        <dt>DPP</dt>
+        <dd>Rp {{ pajak_trx.dpp|floatformat:0|intcomma }}</dd>
+        <dt>Tarif</dt>
+        <dd>{{ pajak_trx.tarif_persen }}%</dd>
+        <dt>Jumlah Pajak Saat Ini</dt>
+        <dd><strong>Rp {{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}</strong></dd>
+        <dt>Status</dt>
+        <dd><span class="ni-badge ni-badge--{{ pajak_trx.status }}">{{ pajak_trx.get_status_display }}</span></dd>
+        {% if pajak_trx.is_overridden %}
+        <dt>Override</dt>
+        <dd><span class="ni-badge ni-badge--warning">Sudah Diubah</span></dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Override Jumlah Pajak</h2></div>
+    <div class="ni-card__body">
+      {% if form.non_field_errors %}
+      <div class="ni-alert ni-alert--danger ni-mb-4">{{ form.non_field_errors }}</div>
+      {% endif %}
+      <form method="post">
+        {% csrf_token %}
+        <div class="ni-form-grid ni-form-grid--1">
+          <div class="ni-form-group">
+            <label class="ni-form-label" for="{{ form.jumlah_baru.id_for_label }}">{{ form.jumlah_baru.label }}</label>
+            {{ form.jumlah_baru }}
+            {% if form.jumlah_baru.errors %}<div class="ni-form-error">{{ form.jumlah_baru.errors }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary">Simpan Override</button>
+          <a href="{% url 'pajak:transaksi_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

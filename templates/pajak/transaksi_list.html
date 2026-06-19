@@ -1,1 +1,91 @@
-{% block content %}Transaksi Pajak{% endblock %}
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Daftar Transaksi Pajak{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Daftar Transaksi Pajak</h1>
+    <p class="ni-page-header__subtitle">Seluruh transaksi pajak yang tercatat</p>
+  </div>
+</div>
+
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <div class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Status</label>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+            <a href="{% url 'pajak:transaksi_list' %}"
+               class="ni-btn ni-btn--sm {% if not status_filter %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
+              Semua
+            </a>
+            <a href="?status=draft"
+               class="ni-btn ni-btn--sm {% if status_filter == 'draft' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
+              Draft
+            </a>
+            <a href="?status=final"
+               class="ni-btn ni-btn--sm {% if status_filter == 'final' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
+              Final
+            </a>
+            <a href="?status=disetor"
+               class="ni-btn ni-btn--sm {% if status_filter == 'disetor' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
+              Disetor
+            </a>
+            <a href="?status=dibatalkan"
+               class="ni-btn ni-btn--sm {% if status_filter == 'dibatalkan' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
+              Dibatalkan
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Sumber</th>
+          <th>Jenis Pajak</th>
+          <th class="ni-text-right">DPP</th>
+          <th class="ni-text-right">Tarif</th>
+          <th class="ni-text-right">Jumlah Pajak</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pajak_trx in transaksi_list %}
+        <tr>
+          <td>{{ pajak_trx.created_at|date:"d M Y" }}</td>
+          <td>
+            <span class="ni-text-muted" style="font-size:.85em;">{{ pajak_trx.get_source_type_display }}</span><br>
+            <span>{{ pajak_trx.source_id }}</span>
+          </td>
+          <td>{{ pajak_trx.get_jenis_pajak_display }}</td>
+          <td class="ni-text-right">{{ pajak_trx.dpp|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ pajak_trx.tarif_persen }}%</td>
+          <td class="ni-text-right">{{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}</td>
+          <td>
+            <span class="ni-badge ni-badge--{{ pajak_trx.status }}">{{ pajak_trx.get_status_display }}</span>
+          </td>
+          <td>
+            {% if pajak_trx.status == 'draft' or pajak_trx.status == 'final' %}
+            <a href="{% url 'pajak:transaksi_edit' pajak_trx.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Edit</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="8" class="ni-text-center ni-text-muted">Belum ada data transaksi pajak.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

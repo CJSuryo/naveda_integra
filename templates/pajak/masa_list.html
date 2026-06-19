@@ -1,1 +1,47 @@
-{% block content %}Masa Pajak{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Daftar Masa Pajak{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Daftar Masa Pajak</h1>
+    <p class="ni-page-header__subtitle">Periode pelaporan dan penyetoran pajak</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tahun</th>
+          <th>Bulan</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for masa in masa_list %}
+        <tr>
+          <td>{{ masa.tahun }}</td>
+          <td>{{ masa.bulan|stringformat:"02d" }}</td>
+          <td>
+            {% if masa.status == 'locked' %}
+            <span class="ni-badge ni-badge--danger">Locked</span>
+            {% else %}
+            <span class="ni-badge ni-badge--success">Open</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'pajak:masa_detail' masa.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="4" class="ni-text-center ni-text-muted">Belum ada data masa pajak.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

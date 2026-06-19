@@ -1,1 +1,50 @@
-{% block content %}Tarif Pajak{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Daftar Tarif Pajak{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Daftar Tarif Pajak</h1>
+    <p class="ni-page-header__subtitle">Konfigurasi tarif pajak yang berlaku</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pajak:tarif_tambah' %}" class="ni-btn ni-btn--primary">+ Tambah Tarif</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Jenis Pajak</th>
+          <th>Nama</th>
+          <th class="ni-text-right">Tarif %</th>
+          <th class="ni-text-right">Faktor DPP</th>
+          <th>Berlaku Mulai</th>
+          <th>Berlaku Sampai</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tarif in tarif_list %}
+        <tr>
+          <td>{{ tarif.get_jenis_pajak_display }}</td>
+          <td>{{ tarif.nama }}</td>
+          <td class="ni-text-right">{{ tarif.tarif_persen }}%</td>
+          <td class="ni-text-right">{{ tarif.faktor_dpp }}</td>
+          <td>{{ tarif.berlaku_mulai }}</td>
+          <td>{{ tarif.berlaku_sampai|default:'—' }}</td>
+          <td>
+            <a href="{% url 'pajak:tarif_edit' tarif.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Edit</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="ni-text-center ni-text-muted">Belum ada data tarif pajak.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
