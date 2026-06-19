@@ -251,7 +251,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
         # Step 2: per-group per-KP processing
         has_credit_pit = False
         for eb_group in header.entitas_groups.prefetch_related(
-            'items__revenue_account', 'items__payment_account',
+            'items__revenue_account', 'items__payment_account', 'items__tax_account',
             'items__ot_liabilitas_kontrak_acct', 'items__ot_aset_kontrak_acct',
         ).all():
             for kp in eb_group.items.all():
@@ -259,7 +259,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                 pay_acct = kp.payment_account or eb_group.payment_account
 
                 if kp.recognition_type == KewajibabPelaksanaan.RecognitionType.POINT_IN_TIME:
-                    # Case 1 & 2: immediate recognition
+                    # Case 1 & 2: immediate recognition — books DPP only
                     _create_kp_journal(
                         header, eb_group, kp,
                         debit_acct=pay_acct,
@@ -274,7 +274,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                     tipe = kp.ot_tipe_aliran
 
                     if tipe == 'advance_payment_cash':
-                        # Case 3: cash received upfront → debit cash, credit liabilitas kontrak
+                        # Case 3: cash received upfront → debit cash, credit liabilitas kontrak (DPP only)
                         if pay_acct is None:
                             raise ValueError(
                                 f'KP "{kp.deskripsi_item}" tidak memiliki akun pembayaran untuk '
@@ -292,13 +292,13 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                                    description=f'KP {kp.pk} — advance_payment_cash', actor=user)
 
                     elif tipe == 'periodic_billing':
-                        # Case 4: no immediate journal; jadwal drives future billing
+                        # Case 4: no immediate journal; jadwal drives future billing + per-period tax
                         _create_jadwal(kp, harga_j, user)
                         _log_event(header, 'JADWAL_CREATED',
                                    description=f'KP {kp.pk} — periodic_billing', actor=user)
 
                     elif tipe == 'performance_first':
-                        # Case 5: service delivered before cash → debit aset kontrak, credit revenue
+                        # Case 5: service delivered before cash → aset kontrak / revenue (DPP only)
                         _create_kp_journal(
                             header, eb_group, kp,
                             debit_acct=kp.ot_aset_kontrak_acct,
@@ -333,7 +333,10 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
 # ── PSAK 72 Confirm Helpers ───────────────────────────────────────────────────
 
 def _create_kp_journal(header, eb_group, kp, debit_acct, credit_acct, amount, user=None):
-    """Create a single two-line journal for one KP recognition event."""
+    """
+    Create main journal for one KP recognition event. Books DPP only.
+    Tax is handled separately by apps.pajak.services.
+    """
     if debit_acct is None:
         raise ValueError(
             f'KP "{kp.deskripsi_item}" tidak memiliki akun debit untuk pembuatan jurnal.'
@@ -342,6 +345,7 @@ def _create_kp_journal(header, eb_group, kp, debit_acct, credit_acct, amount, us
         raise ValueError(
             f'KP "{kp.deskripsi_item}" tidak memiliki akun kredit untuk pembuatan jurnal.'
         )
+
     nomor = _next_journal_number('TRX-PND-J')
     jh = JurnalHeader.objects.create(
         tanggal=header.tanggal,
@@ -353,7 +357,7 @@ def _create_kp_journal(header, eb_group, kp, debit_acct, credit_acct, amount, us
         is_penyesuaian=False,
     )
     JurnalDetail.objects.bulk_create([
-        JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=amount, kredit=Decimal('0')),
+        JurnalDetail(jurnal_header=jh, akun=debit_acct,  debit=amount,       kredit=Decimal('0')),
         JurnalDetail(jurnal_header=jh, akun=credit_acct, debit=Decimal('0'), kredit=amount),
     ])
     _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
@@ -488,6 +492,7 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
         'jadwal__kp__pendapatan_eb__payment_account',
         'jadwal__kp__revenue_account',
         'jadwal__kp__payment_account',
+        'jadwal__kp__tax_account',
         'jadwal__liabilitas_kontrak_acct',
     ).get(pk=entry_id)
 
@@ -501,33 +506,23 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
 
     with transaction.atomic():
         if tipe_aliran == 'advance_payment_cash':
-            # Debit liabilitas kontrak, Credit revenue
+            # Debit liabilitas kontrak, Credit revenue (tax already settled at confirm)
             debit_acct = jadwal.liabilitas_kontrak_acct or kp.ot_liabilitas_kontrak_acct
-            credit_acct = kp.revenue_account
             jh = _create_recognition_journal(
-                header=header,
-                eb_group=eb_group,
-                kp=kp,
-                debit_acct=debit_acct,
-                credit_acct=credit_acct,
-                amount=amount,
-                journal_date=journal_date,
-                user=user,
+                header=header, eb_group=eb_group, kp=kp,
+                debit_acct=debit_acct, credit_acct=kp.revenue_account,
+                amount=amount, journal_date=journal_date, user=user,
             )
 
         elif tipe_aliran == 'periodic_billing':
-            # Debit payment account (receivable), Credit revenue
+            # Debit payment account, Credit revenue + prorate tax per period
             pay_acct = kp.payment_account or eb_group.payment_account
-            credit_acct = kp.revenue_account
+            prorated_tax = _prorate_tax(kp, amount, jadwal.nilai_total)
             jh = _create_recognition_journal(
-                header=header,
-                eb_group=eb_group,
-                kp=kp,
-                debit_acct=pay_acct,
-                credit_acct=credit_acct,
-                amount=amount,
-                journal_date=journal_date,
-                user=user,
+                header=header, eb_group=eb_group, kp=kp,
+                debit_acct=pay_acct, credit_acct=kp.revenue_account,
+                amount=amount, journal_date=journal_date, user=user,
+                tax_amount=prorated_tax,
             )
 
         # performance_first: no new journal needed (revenue booked at confirm)
@@ -549,8 +544,24 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
                    actor=user)
 
 
-def _create_recognition_journal(header, eb_group, kp, debit_acct, credit_acct, amount, journal_date=None, user=None):
-    """Create a two-line recognition journal for EntriPengakuan."""
+def _prorate_tax(kp, amount: Decimal, nilai_total: Decimal) -> Decimal:
+    """Return prorated tax for a partial recognition of kp over nilai_total."""
+    if not (kp.tax and kp.tax > 0 and kp.tax_account_id and nilai_total > 0):
+        return Decimal('0')
+    return (kp.tax * amount / nilai_total).quantize(Decimal('0.0001'))
+
+
+def _create_recognition_journal(
+    header, eb_group, kp, debit_acct, credit_acct, amount,
+    journal_date=None, user=None, tax_amount=Decimal('0'),
+):
+    """
+    Create recognition journal for EntriPengakuan.
+    When tax_amount > 0:
+      Dr debit_acct  (amount + tax_amount)
+      Cr credit_acct (amount)
+      Cr kp.tax_account (tax_amount)
+    """
     if debit_acct is None:
         raise ValueError(
             f'KP "{kp.deskripsi_item}" tidak memiliki akun debit untuk pengakuan pendapatan.'
@@ -562,6 +573,7 @@ def _create_recognition_journal(header, eb_group, kp, debit_acct, credit_acct, a
     from django.utils import timezone as tz
     tanggal = journal_date or tz.now().date()
     nomor = _next_journal_number('TRX-PND-RE')
+    debit_total = amount + tax_amount
     jh = JurnalHeader.objects.create(
         tanggal=tanggal,
         nomor_transaksi=nomor,
@@ -571,12 +583,104 @@ def _create_recognition_journal(header, eb_group, kp, debit_acct, credit_acct, a
         entitas_bisnis=eb_group.entitas_bisnis,
         is_penyesuaian=False,
     )
-    JurnalDetail.objects.bulk_create([
-        JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=amount, kredit=Decimal('0')),
+    details = [
+        JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=debit_total, kredit=Decimal('0')),
         JurnalDetail(jurnal_header=jh, akun=credit_acct, debit=Decimal('0'), kredit=amount),
-    ])
+    ]
+    if tax_amount > 0 and kp.tax_account_id:
+        details.append(
+            JurnalDetail(jurnal_header=jh, akun=kp.tax_account, debit=Decimal('0'), kredit=tax_amount)
+        )
+    JurnalDetail.objects.bulk_create(details)
     _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
     return jh
+
+
+def recognize_percentage_completion(jadwal_id: int, progress_pct: Decimal, user, journal_date=None) -> EntriPengakuan:
+    """
+    Recognize revenue for a percentage_completion jadwal.
+
+    progress_pct is the NEW CUMULATIVE completion percentage (0 < pct <= 100).
+    Incremental amount = (pct/100 * nilai_total) - nilai_diakui.
+    Creates an EntriPengakuan and appropriate journal, then updates the jadwal.
+    """
+    jadwal = JadwalPengakuan.objects.select_related(
+        'kp__pendapatan_eb__pendapatan_header',
+        'kp__pendapatan_eb__entitas_bisnis',
+        'kp__pendapatan_eb__payment_account',
+        'kp__revenue_account',
+        'kp__payment_account',
+        'kp__tax_account',
+        'liabilitas_kontrak_acct',
+    ).get(pk=jadwal_id)
+
+    if jadwal.progress_method != JadwalPengakuan.ProgressMethod.PERCENTAGE_COMPLETION:
+        raise ValueError('Jadwal ini bukan metode Persentase Selesai.')
+    if jadwal.status != JadwalPengakuan.Status.ACTIVE:
+        raise ValueError(f'Jadwal sudah {jadwal.get_status_display()}, tidak dapat diakui lagi.')
+
+    kp = jadwal.kp
+    eb_group = kp.pendapatan_eb
+    header = eb_group.pendapatan_header
+
+    progress_pct = Decimal(str(progress_pct))
+    if not (Decimal('0') < progress_pct <= Decimal('100')):
+        raise ValueError('Progress harus antara 0 (eksklusif) dan 100 persen.')
+
+    cumulative = (progress_pct / Decimal('100') * jadwal.nilai_total).quantize(Decimal('0.0001'))
+    amount = cumulative - jadwal.nilai_diakui
+    if amount <= Decimal('0'):
+        raise ValueError(
+            f'Progress {progress_pct}% tidak menghasilkan nilai pengakuan tambahan. '
+            f'Sudah diakui: {jadwal.nilai_diakui} dari {jadwal.nilai_total}.'
+        )
+    amount = min(amount, jadwal.nilai_belum_diakui)
+
+    from django.utils import timezone as tz
+    tanggal = journal_date or tz.now().date()
+
+    with transaction.atomic():
+        jh = None
+        tipe = jadwal.tipe_aliran
+
+        if tipe == 'advance_payment_cash':
+            # Tax already settled at confirm → no tax here
+            debit_acct = jadwal.liabilitas_kontrak_acct or kp.ot_liabilitas_kontrak_acct
+            jh = _create_recognition_journal(
+                header, eb_group, kp, debit_acct, kp.revenue_account,
+                amount, tanggal, user,
+            )
+        elif tipe == 'periodic_billing':
+            # Prorate tax per partial recognition
+            pay_acct = kp.payment_account or eb_group.payment_account
+            prorated_tax = _prorate_tax(kp, amount, jadwal.nilai_total)
+            jh = _create_recognition_journal(
+                header, eb_group, kp, pay_acct, kp.revenue_account,
+                amount, tanggal, user, tax_amount=prorated_tax,
+            )
+        # performance_first: revenue already booked at confirm; no journal at recognition
+
+        entri = EntriPengakuan.objects.create(
+            jadwal=jadwal,
+            tanggal_target=tanggal,
+            nilai=amount,
+            nilai_diakui=amount,
+            status=EntriPengakuan.Status.RECOGNIZED,
+            jurnal_header=jh,
+        )
+
+        jadwal.nilai_diakui += amount
+        if jadwal.nilai_diakui >= jadwal.nilai_total:
+            jadwal.status = JadwalPengakuan.Status.COMPLETED
+        jadwal.save(update_fields=['nilai_diakui', 'status'])
+
+        _log_event(
+            header, 'RECOGNIZE',
+            description=f'Persentase Selesai {progress_pct}% — Rp {amount} — Jadwal {jadwal.pk}',
+            actor=user,
+        )
+
+        return entri
 
 
 # ── PSAK 72: konversi_aset_kontrak_ke_piutang ─────────────────────────────────
