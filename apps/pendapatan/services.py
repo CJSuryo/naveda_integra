@@ -10,11 +10,20 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
+from apps.pajak.services import sync_pajak, confirm_pajak as confirm_pajak_trx
 
 from .models import (
     AsetKontrak, EntriPengakuan, JadwalPengakuan,
     KewajibabPelaksanaan, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem,
 )
+
+
+TAX_TYPE_MAP = {
+    'ppn_keluaran': 'ppn_umum',
+    'pph_23': 'pph_23_jasa',
+    'pph_21': 'pph_21_bukan_pegawai',
+    'pph_4_2': 'pph_4_2_sewa',
+}
 
 
 # ── PSAK 72 Step 4: Price Allocation ─────────────────────────────────────────
@@ -221,6 +230,36 @@ def create_pendapatan_header(
 
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
+def _maybe_sync_confirm_pajak(kp, header, jenis_pajak_kp, amount, user=None):
+    """
+    Create and immediately confirm a PajakTransaksi for a KP that has a tax type.
+    Skips silently if kp has no tax type or no tax account.
+    Called inside the transaction.atomic() of confirm_pendapatan.
+    """
+    if not jenis_pajak_kp:
+        return
+    jenis_pajak = TAX_TYPE_MAP.get(jenis_pajak_kp)
+    if not jenis_pajak:
+        return
+
+    akun_pajak = kp.tax_account       # FK to Akun — the tax/liability account
+    akun_lawan = kp.tax_payment_account  # FK to Akun — the offset (cash/AP) account
+    if not akun_pajak or not akun_lawan:
+        return
+
+    pajak_trx = sync_pajak(
+        source_type='pendapatan_kp',
+        source_obj=kp,
+        dpp=amount,
+        tanggal=header.tanggal,
+        jenis_pajak=jenis_pajak,
+        akun_pajak=akun_pajak,
+        akun_lawan=akun_lawan,
+        sifat_pajak='potong_pungut',
+    )
+    confirm_pajak_trx(pajak_trx)
+
+
 def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
     """
     PSAK 72 confirm: process each KP through one of five recognition cases.
@@ -267,6 +306,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                         amount=harga_j,
                         user=user,
                     )
+                    _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
                     if header.payment_type == 'credit':
                         has_credit_pit = True
 
@@ -287,6 +327,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             amount=harga_j,
                             user=user,
                         )
+                        _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
                         _create_jadwal(kp, harga_j, user)
                         _log_event(header, 'JADWAL_CREATED',
                                    description=f'KP {kp.pk} — advance_payment_cash', actor=user)
@@ -306,6 +347,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             amount=harga_j,
                             user=user,
                         )
+                        _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
                         # Record contract asset
                         AsetKontrak.objects.create(
                             kp=kp,
