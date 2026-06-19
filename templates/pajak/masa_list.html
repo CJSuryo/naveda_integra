@@ -26,9 +26,9 @@
           <td>{{ masa.bulan|stringformat:"02d" }}</td>
           <td>
             {% if masa.status == 'locked' %}
-            <span class="ni-badge ni-badge--danger">Locked</span>
+            <span class="ni-badge ni-badge--danger">{{ masa.get_status_display }}</span>
             {% else %}
-            <span class="ni-badge ni-badge--success">Open</span>
+            <span class="ni-badge ni-badge--success">{{ masa.get_status_display }}</span>
             {% endif %}
           </td>
           <td>

@@ -23,9 +23,9 @@
       <dt>Status</dt>
       <dd>
         {% if masa.status == 'locked' %}
-        <span class="ni-badge ni-badge--danger">Locked</span>
+        <span class="ni-badge ni-badge--danger">{{ masa.get_status_display }}</span>
         {% else %}
-        <span class="ni-badge ni-badge--success">Open</span>
+        <span class="ni-badge ni-badge--success">{{ masa.get_status_display }}</span>
         {% endif %}
       </dd>
     </dl>
@@ -57,9 +57,9 @@
             <span>{{ pajak_trx.source_id }}</span>
           </td>
           <td>{{ pajak_trx.get_jenis_pajak_display }}</td>
-          <td class="ni-text-right">{{ pajak_trx.dpp|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">Rp {{ pajak_trx.dpp|floatformat:0|intcomma }}</td>
           <td class="ni-text-right">{{ pajak_trx.tarif_persen }}%</td>
-          <td class="ni-text-right">{{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">Rp {{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}</td>
           <td>
             <span class="ni-badge ni-badge--{{ pajak_trx.status }}">{{ pajak_trx.get_status_display }}</span>
           </td>
