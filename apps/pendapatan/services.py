@@ -15,7 +15,7 @@ from apps.pajak.services import sync_pajak, confirm_pajak as confirm_pajak_trx, 
 
 from .models import (
     AsetKontrak, EntriPengakuan, JadwalPengakuan,
-    KewajibabPelaksanaan, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem,
+    KewajibabPelaksanaan, KPTaxLine, PendapatanEntitasBisnis, PendapatanEventLog, PendapatanHeader, PendapatanItem,
 )
 
 
@@ -205,8 +205,8 @@ def create_pendapatan_header(
             payment_account=payment_account,
         )
 
-        PendapatanItem.objects.bulk_create([
-            PendapatanItem(
+        for item in items:
+            kp = PendapatanItem.objects.create(
                 pendapatan_eb=eb_group,
                 deskripsi_item=item['deskripsi_item'],
                 kategori=item['kategori'],
@@ -214,11 +214,6 @@ def create_pendapatan_header(
                 nilai_kontrak=item.get('nilai_kontrak') or item.get('jumlah_bruto'),
                 revenue_account=item['revenue_account'],
                 payment_account=item.get('payment_account'),
-                tax=item.get('tax'),
-                tax_type=item.get('tax_type', ''),
-                tax_account=item.get('tax_account'),
-                tax_payment=item.get('tax_payment', ''),
-                tax_payment_account=item.get('tax_payment_account'),
                 recognition_type=item.get('recognition_type', 'point_in_time'),
                 ot_tipe_aliran=item.get('ot_tipe_aliran', ''),
                 ot_progress_method=item.get('ot_progress_method', ''),
@@ -228,8 +223,14 @@ def create_pendapatan_header(
                 ot_aset_kontrak_acct=item.get('ot_aset_kontrak_acct'),
                 ot_biaya_estimasi_total=item.get('ot_biaya_estimasi_total'),
             )
-            for item in items
-        ])
+            for tl in item.get('tax_lines', []):
+                KPTaxLine.objects.create(
+                    kp=kp,
+                    tax_type=tl['tax_type'],
+                    tax=tl.get('tax'),
+                    tax_account=tl['tax_account'],
+                    tax_payment_account=tl['tax_payment_account'],
+                )
 
         _log_event(header, 'CREATED', actor=user)
 
@@ -238,34 +239,22 @@ def create_pendapatan_header(
 
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
-def _maybe_sync_confirm_pajak(kp, header, jenis_pajak_kp, amount, user=None):
-    """
-    Create and immediately confirm a PajakTransaksi for a KP that has a tax type.
-    Skips silently if kp has no tax type or no tax account.
-    Called inside the transaction.atomic() of confirm_pendapatan.
-    """
-    if not jenis_pajak_kp:
-        return
-    jenis_pajak = TAX_TYPE_MAP.get(jenis_pajak_kp)
+def _sync_confirm_tax_line(kp, header, tax_line, amount, user=None):
+    """Create and immediately confirm a PajakTransaksi for one KPTaxLine."""
+    jenis_pajak = TAX_TYPE_MAP.get(tax_line.tax_type)
     if not jenis_pajak:
         return
-
-    akun_pajak = kp.tax_account       # FK to Akun — the tax/liability account
-    akun_lawan = kp.tax_payment_account  # FK to Akun — the offset (cash/AP) account
-    if not akun_pajak or not akun_lawan:
-        return
-
-    sifat_pajak = SIFAT_PAJAK_MAP.get(jenis_pajak_kp, 'potong_pungut')
-
+    sifat_pajak = SIFAT_PAJAK_MAP.get(tax_line.tax_type, 'potong_pungut')
     pajak_trx = sync_pajak(
         source_type='pendapatan_kp',
         source_obj=kp,
         dpp=amount,
         tanggal=header.tanggal,
         jenis_pajak=jenis_pajak,
-        akun_pajak=akun_pajak,
-        akun_lawan=akun_lawan,
+        akun_pajak=tax_line.tax_account,
+        akun_lawan=tax_line.tax_payment_account,
         sifat_pajak=sifat_pajak,
+        override_amount=tax_line.tax,
     )
     confirm_pajak_trx(pajak_trx)
 
@@ -313,7 +302,8 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
         # Step 2: per-group per-KP processing
         has_credit_pit = False
         for eb_group in header.entitas_groups.prefetch_related(
-            'items__revenue_account', 'items__payment_account', 'items__tax_account',
+            'items__revenue_account', 'items__payment_account',
+            'items__tax_lines__tax_account', 'items__tax_lines__tax_payment_account',
             'items__ot_liabilitas_kontrak_acct', 'items__ot_aset_kontrak_acct',
         ).all():
             for kp in eb_group.items.all():
@@ -329,7 +319,8 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                         amount=harga_j,
                         user=user,
                     )
-                    _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
+                    for tax_line in kp.tax_lines.all():
+                        _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
                     if header.payment_type == 'credit':
                         has_credit_pit = True
 
@@ -350,7 +341,8 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             amount=harga_j,
                             user=user,
                         )
-                        _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
+                        for tax_line in kp.tax_lines.all():
+                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
                         _create_jadwal(kp, harga_j, user)
                         _log_event(header, 'JADWAL_CREATED',
                                    description=f'KP {kp.pk} — advance_payment_cash', actor=user)
@@ -370,7 +362,8 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             amount=harga_j,
                             user=user,
                         )
-                        _maybe_sync_confirm_pajak(kp, header, kp.tax_type, harga_j, user=user)
+                        for tax_line in kp.tax_lines.all():
+                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
                         # Record contract asset
                         AsetKontrak.objects.create(
                             kp=kp,
@@ -561,9 +554,8 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
         'jadwal__kp__pendapatan_eb__payment_account',
         'jadwal__kp__revenue_account',
         'jadwal__kp__payment_account',
-        'jadwal__kp__tax_account',
         'jadwal__liabilitas_kontrak_acct',
-    ).get(pk=entry_id)
+    ).prefetch_related('jadwal__kp__tax_lines__tax_account').get(pk=entry_id)
 
     jadwal = entri.jadwal
     kp = jadwal.kp
@@ -586,12 +578,12 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
         elif tipe_aliran == 'periodic_billing':
             # Debit payment account, Credit revenue + prorate tax per period
             pay_acct = kp.payment_account or eb_group.payment_account
-            prorated_tax = _prorate_tax(kp, amount, jadwal.nilai_total)
+            tax_lines_data = _prorate_tax_lines(kp, amount, jadwal.nilai_total)
             jh = _create_recognition_journal(
                 header=header, eb_group=eb_group, kp=kp,
                 debit_acct=pay_acct, credit_acct=kp.revenue_account,
                 amount=amount, journal_date=journal_date, user=user,
-                tax_amount=prorated_tax,
+                tax_lines_data=tax_lines_data,
             )
 
         # performance_first: no new journal needed (revenue booked at confirm)
@@ -613,23 +605,25 @@ def recognize_entry(entry_id: int, user, journal_date=None) -> None:
                    actor=user)
 
 
-def _prorate_tax(kp, amount: Decimal, nilai_total: Decimal) -> Decimal:
-    """Return prorated tax for a partial recognition of kp over nilai_total."""
-    if not (kp.tax and kp.tax > 0 and kp.tax_account_id and nilai_total > 0):
-        return Decimal('0')
-    return (kp.tax * amount / nilai_total).quantize(Decimal('0.0001'))
+def _prorate_tax_lines(kp, amount: Decimal, nilai_total: Decimal) -> list:
+    """Return [{'akun': Akun, 'amount': Decimal}, ...] for KPTaxLines with manual override amounts, prorated."""
+    if nilai_total <= 0:
+        return []
+    result = []
+    for tl in kp.tax_lines.select_related('tax_account').all():
+        if tl.tax and tl.tax > 0:
+            prorated = (tl.tax * amount / nilai_total).quantize(Decimal('0.0001'))
+            result.append({'akun': tl.tax_account, 'amount': prorated})
+    return result
 
 
 def _create_recognition_journal(
     header, eb_group, kp, debit_acct, credit_acct, amount,
-    journal_date=None, user=None, tax_amount=Decimal('0'),
+    journal_date=None, user=None, tax_lines_data=None,
 ):
     """
     Create recognition journal for EntriPengakuan.
-    When tax_amount > 0:
-      Dr debit_acct  (amount + tax_amount)
-      Cr credit_acct (amount)
-      Cr kp.tax_account (tax_amount)
+    tax_lines_data: list of {'akun': Akun, 'amount': Decimal}.
     """
     if debit_acct is None:
         raise ValueError(
@@ -641,8 +635,10 @@ def _create_recognition_journal(
         )
     from django.utils import timezone as tz
     tanggal = journal_date or tz.now().date()
+    tax_lines_data = tax_lines_data or []
+    total_tax = sum(tl['amount'] for tl in tax_lines_data)
+    debit_total = amount + total_tax
     nomor = _next_journal_number('TRX-PND-RE')
-    debit_total = amount + tax_amount
     jh = JurnalHeader.objects.create(
         tanggal=tanggal,
         nomor_transaksi=nomor,
@@ -656,9 +652,9 @@ def _create_recognition_journal(
         JurnalDetail(jurnal_header=jh, akun=debit_acct, debit=debit_total, kredit=Decimal('0')),
         JurnalDetail(jurnal_header=jh, akun=credit_acct, debit=Decimal('0'), kredit=amount),
     ]
-    if tax_amount > 0 and kp.tax_account_id:
+    for tl in tax_lines_data:
         details.append(
-            JurnalDetail(jurnal_header=jh, akun=kp.tax_account, debit=Decimal('0'), kredit=tax_amount)
+            JurnalDetail(jurnal_header=jh, akun=tl['akun'], debit=Decimal('0'), kredit=tl['amount'])
         )
     JurnalDetail.objects.bulk_create(details)
     _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
@@ -679,9 +675,8 @@ def recognize_percentage_completion(jadwal_id: int, progress_pct: Decimal, user,
         'kp__pendapatan_eb__payment_account',
         'kp__revenue_account',
         'kp__payment_account',
-        'kp__tax_account',
         'liabilitas_kontrak_acct',
-    ).get(pk=jadwal_id)
+    ).prefetch_related('kp__tax_lines__tax_account').get(pk=jadwal_id)
 
     if jadwal.progress_method != JadwalPengakuan.ProgressMethod.PERCENTAGE_COMPLETION:
         raise ValueError('Jadwal ini bukan metode Persentase Selesai.')
@@ -722,10 +717,10 @@ def recognize_percentage_completion(jadwal_id: int, progress_pct: Decimal, user,
         elif tipe == 'periodic_billing':
             # Prorate tax per partial recognition
             pay_acct = kp.payment_account or eb_group.payment_account
-            prorated_tax = _prorate_tax(kp, amount, jadwal.nilai_total)
+            tax_lines_data = _prorate_tax_lines(kp, amount, jadwal.nilai_total)
             jh = _create_recognition_journal(
                 header, eb_group, kp, pay_acct, kp.revenue_account,
-                amount, tanggal, user, tax_amount=prorated_tax,
+                amount, tanggal, user, tax_lines_data=tax_lines_data,
             )
         # performance_first: revenue already booked at confirm; no journal at recognition
 
@@ -898,13 +893,12 @@ def _create_pendapatan_journals(header: PendapatanHeader, user=None) -> None:
             ))
 
             # Tax lines
-            if item.tax and item.tax > 0 and item.tax_account:
-                entries.append(JurnalDetail(
-                    jurnal_header=jh,
-                    akun=item.tax_account,
-                    debit=Decimal('0'),
-                    kredit=item.tax,
-                ))
+            for tl in item.tax_lines.select_related('tax_account').all():
+                if tl.tax and tl.tax > 0:
+                    entries.append(JurnalDetail(
+                        jurnal_header=jh, akun=tl.tax_account,
+                        debit=Decimal('0'), kredit=tl.tax,
+                    ))
 
         JurnalDetail.objects.bulk_create(entries)
         _log_event(header, 'JOURNAL_CREATED', description=jh.nomor_transaksi, actor=user)
