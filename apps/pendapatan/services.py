@@ -30,7 +30,7 @@ SIFAT_PAJAK_MAP = {
     'ppn_keluaran': 'potong_pungut',  # seller collects PPN → liability (Dr Kas, Cr Utang PPN)
     'pph_23': 'prepaid',              # buyer withholds → prepaid tax asset (Dr PPh DDM, Cr Kas)
     'pph_21': 'prepaid',              # buyer withholds → prepaid tax asset (Dr PPh DDM, Cr Kas)
-    'pph_4_2': 'prepaid',            # buyer withholds final tax → expense (Dr Beban, Cr Kas)
+    'pph_4_2': 'prepaid',             # buyer withholds final tax → Dr akun_pajak, Cr akun_lawan
 }
 
 

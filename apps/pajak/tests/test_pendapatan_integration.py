@@ -133,7 +133,6 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
 
     def test_pph23_sifat_pajak_is_prepaid(self):
         """A PPh 23 KP must produce a PajakTransaksi with sifat_pajak='prepaid'."""
-        from apps.master_data.models import Akun
         coa_pph23 = Akun.objects.create(
             kategori_id='aset', nama='PPh 23 Dibayar Dimuka', kode_akun='1.3.1',
         )
@@ -151,7 +150,6 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
         For PPh 23 (prepaid), the journal must debit the tax account (akun_pajak)
         and credit the offset account (akun_lawan / Kas).
         """
-        from apps.master_data.models import Akun
         coa_pph23 = Akun.objects.create(
             kategori_id='aset', nama='PPh 23 Dibayar Dimuka', kode_akun='1.3.1',
         )

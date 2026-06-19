@@ -1,239 +1,772 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block title %}{% if mode == 'create' %}Tambah Pendapatan{% else %}Edit Pendapatan{% endif %}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/transaction-forms.css' %}">
+{% endblock %}
+
 {% block content %}
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">{% if mode == 'create' %}Tambah Pendapatan{% else %}Edit Pendapatan{% endif %}</h1>
-    <p class="ni-page-header__subtitle">Catat pendapatan dengan detail item</p>
+    <p class="ni-page-header__subtitle">Catat transaksi pendapatan sesuai PSAK 72 — identifikasi kewajiban, tentukan harga, pilih pengakuan</p>
   </div>
 </div>
 
 {% if form.non_field_errors %}
-<div class="ni-alert ni-alert--danger ni-mb-4">
-  {{ form.non_field_errors }}
-</div>
+<div class="ni-alert ni-alert--danger ni-mb-4">{{ form.non_field_errors }}</div>
 {% endif %}
+
+{# ── PSAK 72 Mini-Guide ─────────────────────────────────────────────────── #}
+<details class="ni-psak-guide">
+  <summary class="ni-psak-guide__summary">
+    <i data-lucide="book-open" style="width:15px;height:15px;flex-shrink:0;"></i>
+    <span>Panduan PSAK 72 — Pengakuan Pendapatan (klik untuk buka)</span>
+    <i data-lucide="chevron-down" class="ni-psak-guide__arrow" style="width:15px;height:15px;"></i>
+  </summary>
+  <div class="ni-psak-guide__body">
+    <p class="ni-psak-guide__intro">
+      PSAK 72 adalah standar yang mengatur <strong>kapan dan berapa pendapatan boleh dicatat</strong>.
+      Ada 5 langkah wajib — formulir ini memandu Anda melalui langkah 2 hingga 5.
+    </p>
+    <div class="ni-psak-steps">
+      <div class="ni-psak-step ni-psak-step--done">
+        <span class="ni-psak-step__num">1</span>
+        <div>
+          <strong>Identifikasi Kontrak</strong>
+          <p>Pastikan ada perjanjian sah antara Anda dan pelanggan. Sudah dilakukan sebelum formulir ini dibuka.</p>
+        </div>
+      </div>
+      <div class="ni-psak-step ni-psak-step--current">
+        <span class="ni-psak-step__num">2</span>
+        <div>
+          <strong>Identifikasi Kewajiban</strong>
+          <p>Pisahkan setiap barang/jasa yang dijanjikan. Satu kontrak bisa punya banyak kewajiban. Contoh: "Instalasi + Pelatihan" = 2 item terpisah.</p>
+        </div>
+      </div>
+      <div class="ni-psak-step ni-psak-step--current">
+        <span class="ni-psak-step__num">3</span>
+        <div>
+          <strong>Tentukan Harga Transaksi</strong>
+          <p>Berapa total yang dijanjikan dibayarkan? Masukkan di <em>Nilai Kontrak</em> tiap item.</p>
+        </div>
+      </div>
+      <div class="ni-psak-step ni-psak-step--auto">
+        <span class="ni-psak-step__num">4</span>
+        <div>
+          <strong>Alokasi Harga — Otomatis</strong>
+          <p>Sistem membagi harga secara proporsional ke tiap item berdasarkan nilai kontrak yang Anda masukkan.</p>
+        </div>
+      </div>
+      <div class="ni-psak-step ni-psak-step--current">
+        <span class="ni-psak-step__num">5</span>
+        <div>
+          <strong>Akui Pendapatan</strong>
+          <p>Pilih kapan pendapatan boleh dicatat: sekaligus saat penyerahan (<em>Point in Time</em>) atau bertahap selama layanan (<em>Over Time</em>).</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</details>
 
 <form method="post" id="pendapatan-form">
   {% csrf_token %}
   <input type="hidden" name="item_count" id="item_count" value="{{ item_forms|length }}">
 
+  {# ── Informasi Pendapatan ─────────────────────────────────────────────── #}
   <div class="ni-card ni-animate-fade-in">
     <div class="ni-card__header"><h2 class="ni-card__title">Informasi Pendapatan</h2></div>
     <div class="ni-card__body">
       <div class="ni-form-grid ni-form-grid--2">
+
         <div class="ni-form-group">
           <label class="ni-form-label">Entitas Bisnis</label>
           <select id="id_eb_selection" name="eb_selection" class="ni-input">
             <option value="">— Pilih Entitas Bisnis (opsional) —</option>
           </select>
+          <span class="ni-help-text">Pelanggan atau mitra bisnis yang membuat kontrak ini</span>
         </div>
-        {% for field in form %}
-        <div class="ni-form-group {% if field.name == 'deskripsi' %}ni-form-group--full{% endif %}">
-          <label class="ni-form-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.tanggal.id_for_label }}">{{ form.tanggal.label }}</label>
+          {{ form.tanggal }}
+          {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
+          <span class="ni-help-text">Tanggal kontrak disepakati atau tanggal penyerahan dilakukan</span>
         </div>
-        {% endfor %}
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.payment_type.id_for_label }}">{{ form.payment_type.label }}</label>
+          {{ form.payment_type }}
+          {% if form.payment_type.errors %}<div class="ni-form-error">{{ form.payment_type.errors }}</div>{% endif %}
+          <span class="ni-payment-hint hint-cash">
+            <strong>Tunai:</strong> kas/bank langsung bertambah saat konfirmasi.
+          </span>
+          <span class="ni-payment-hint hint-credit" style="display:none;">
+            <strong>Kredit:</strong> sistem otomatis membuat <em>piutang</em> untuk semua item yang diakui Point in Time.
+          </span>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.standar_akuntansi.id_for_label }}">{{ form.standar_akuntansi.label }}</label>
+          {{ form.standar_akuntansi }}
+          {% if form.standar_akuntansi.errors %}<div class="ni-form-error">{{ form.standar_akuntansi.errors }}</div>{% endif %}
+          <span class="ni-help-text">PSAK 71/72 untuk entitas SAK umum (kebanyakan PT dan CV)</span>
+        </div>
+
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label" for="{{ form.deskripsi.id_for_label }}">{{ form.deskripsi.label }}</label>
+          {{ form.deskripsi }}
+          {% if form.deskripsi.errors %}<div class="ni-form-error">{{ form.deskripsi.errors }}</div>{% endif %}
+          <span class="ni-help-text">Deskripsi singkat untuk identifikasi di laporan dan jurnal</span>
+        </div>
+
       </div>
     </div>
   </div>
 
+  {# ── Item Pendapatan (Kewajiban Pelaksanaan) ──────────────────────────── #}
   <div class="ni-card ni-animate-fade-in">
     <div class="ni-card__header">
-      <h2 class="ni-card__title">Item Pendapatan (Kewajiban Pelaksanaan)</h2>
+      <div>
+        <h2 class="ni-card__title">Item Pendapatan <span style="font-size:0.7rem;font-weight:500;color:var(--ni-text-muted);">(Kewajiban Pelaksanaan — Langkah 2–5 PSAK 72)</span></h2>
+        <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:4px 0 0;">Satu baris = satu hal yang dijanjikan kepada pelanggan</p>
+      </div>
       <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" id="add-item-btn">+ Tambah Item</button>
     </div>
+
     <div id="item-rows-container">
       {% for item_form in item_forms %}
       <div class="ni-item-row kp-formrow ni-card ni-mb-3" data-index="{{ forloop.counter0 }}">
         <div class="ni-card__body">
+
+          {# KP row header #}
+          <div class="ni-kp-row-header">
+            <span class="ni-kp-row-label kp-row-label">Kewajiban Pelaksanaan {{ forloop.counter }}</span>
+            {% if not forloop.first %}
+            <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>
+            {% endif %}
+          </div>
+
           <div class="ni-form-grid ni-form-grid--2">
+
             <div class="ni-form-group ni-form-group--full">
-              <label class="ni-form-label">Deskripsi Item</label>
+              <label class="ni-form-label">Nama Barang / Jasa</label>
               {{ item_form.deskripsi_item }}
               {% if item_form.deskripsi_item.errors %}<div class="ni-form-error">{{ item_form.deskripsi_item.errors }}</div>{% endif %}
+              <span class="ni-help-text">Nama satu kewajiban yang dijanjikan dalam kontrak ini — spesifik dan dapat dibedakan dari item lain</span>
             </div>
+
             <div class="ni-form-group">
               <label class="ni-form-label">Kategori</label>
               {{ item_form.kategori }}
               {% if item_form.kategori.errors %}<div class="ni-form-error">{{ item_form.kategori.errors }}</div>{% endif %}
+              <span class="ni-help-text">Jenis pendapatan untuk pengelompokan di laporan keuangan</span>
             </div>
+
             <div class="ni-form-group">
               <label class="ni-form-label">Sub-Tipe Transaksi</label>
               {{ item_form.sub_transaction_type }}
               {% if item_form.sub_transaction_type.errors %}<div class="ni-form-error">{{ item_form.sub_transaction_type.errors }}</div>{% endif %}
+              <span class="ni-help-text">Kode transaksi internal — menentukan akun pendapatan default secara otomatis saat dipilih</span>
             </div>
+
             <div class="ni-form-group">
-              <label class="ni-form-label">Nilai Kontrak</label>
+              <label class="ni-form-label">Nilai Kontrak (SSP)</label>
               {{ item_form.nilai_kontrak }}
               {% if item_form.nilai_kontrak.errors %}<div class="ni-form-error">{{ item_form.nilai_kontrak.errors }}</div>{% endif %}
+              <span class="ni-help-text">
+                Harga jika item ini dijual terpisah — disebut <em>Standalone Selling Price</em>.
+                Sistem pakai nilai ini untuk mengalokasikan harga kontrak secara proporsional ke semua item.
+              </span>
             </div>
+
             <div class="ni-form-group">
               <label class="ni-form-label">Akun Pendapatan</label>
               {{ item_form.revenue_account }}
               {% if item_form.revenue_account.errors %}<div class="ni-form-error">{{ item_form.revenue_account.errors }}</div>{% endif %}
+              <span class="ni-help-text">Akun buku besar tempat pendapatan ini masuk saat diakui — biasanya akun Pendapatan di kelompok 4xx</span>
             </div>
+
             <div class="ni-form-group">
-              <label class="ni-form-label">Akun Kas/Bank</label>
+              <label class="ni-form-label">Akun Kas / Bank (atau Piutang)</label>
               {{ item_form.payment_account }}
               {% if item_form.payment_account.errors %}<div class="ni-form-error">{{ item_form.payment_account.errors }}</div>{% endif %}
+              <span class="ni-help-text">Akun debit saat konfirmasi — pilih akun kas/bank untuk tunai, akun piutang untuk kredit</span>
             </div>
-            <div class="ni-form-group">
-              <label class="ni-form-label">Pajak (Nominal)</label>
-              {{ item_form.tax }}
-              {% if item_form.tax.errors %}<div class="ni-form-error">{{ item_form.tax.errors }}</div>{% endif %}
-            </div>
-            <div class="ni-form-group">
-              <label class="ni-form-label">Tipe Pajak</label>
+
+            <div class="ni-form-group ni-form-group--full">
+              <label class="ni-form-label">
+                Tipe Pajak
+                <button type="button" class="tax-guide-toggle" style="margin-left:8px;font-size:0.72rem;font-weight:500;color:var(--ni-primary,#2563eb);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline dotted;">Panduan →</button>
+              </label>
               {{ item_form.tax_type }}
               {% if item_form.tax_type.errors %}<div class="ni-form-error">{{ item_form.tax_type.errors }}</div>{% endif %}
+
+              {# Panduan kontekstual — tampil sesuai pilihan #}
+              <div class="tax-guide-panel" style="display:none;margin-top:10px;border:1px solid var(--ni-border,#e5e7eb);border-radius:8px;overflow:hidden;font-size:0.8rem;">
+                {# Default: tabel ringkas semua tipe #}
+                <div class="tgp-default" style="padding:12px 14px;">
+                  <p style="margin:0 0 8px;padding:6px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;font-size:0.75rem;color:#92400e;">
+                    <strong>Sudut pandang:</strong> Anda mencatat <strong>penjualan klien</strong>. Pajak di bawah dilihat dari sisi <strong>klien sebagai penjual</strong> — bukan dari sisi kantor Anda. "Klien" = entitas yang bukunya dicatat; "pembeli" = pelanggan klien.
+                  </p>
+                  <p style="font-weight:600;margin:0 0 8px;color:var(--ni-text,#111);">Kapan pakai tipe pajak apa?</p>
+                  <table style="width:100%;border-collapse:collapse;line-height:1.5;">
+                    <thead>
+                      <tr style="background:var(--ni-bg-subtle,#f9fafb);font-size:0.75rem;color:var(--ni-text-muted,#6b7280);">
+                        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--ni-border,#e5e7eb);">Tipe</th>
+                        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--ni-border,#e5e7eb);">Pakai jika (sisi klien sebagai penjual)…</th>
+                        <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--ni-border,#e5e7eb);">Tarif</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr><td style="padding:5px 8px;font-weight:600;">PPN Keluaran</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);"><strong>Klien</strong> ber-status PKP & menjual barang/jasa kena pajak → klien <strong>memungut</strong> PPN (jadi utang pajak klien)</td><td style="padding:5px 8px;text-align:right;">11 % efektif</td></tr>
+                      <tr style="background:var(--ni-bg-subtle,#f9fafb);"><td style="padding:5px 8px;font-weight:600;">PPh 23</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien menjual <strong>jasa</strong> & <strong>pembelinya badan/instansi pemotong</strong> (PT, CV, KAP, pemerintah, KKP) → pembeli <strong>memotong</strong> dari uang klien (jadi kredit pajak klien)</td><td style="padding:5px 8px;text-align:right;">2 % DPP</td></tr>
+                      <tr><td style="padding:5px 8px;font-weight:600;">PPh 21</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien adalah <strong>orang pribadi</strong> (tenaga ahli, bukan badan) & pembelinya pemotong → pembeli <strong>memotong</strong> (jadi kredit pajak klien)</td><td style="padding:5px 8px;text-align:right;">50 % × progresif</td></tr>
+                      <tr style="background:var(--ni-bg-subtle,#f9fafb);"><td style="padding:5px 8px;font-weight:600;">PPh 4(2)</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien menerima penghasilan <strong>sewa</strong> tanah/bangunan → penyewa memotong pajak <strong>final</strong> (jadi beban final klien)</td><td style="padding:5px 8px;text-align:right;">10 % final</td></tr>
+                    </tbody>
+                  </table>
+                  <div style="margin:10px 0 0;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;font-size:0.74rem;color:#166534;line-height:1.55;">
+                    <strong>Untuk klien UMKM:</strong>
+                    <ul style="margin:4px 0 0;padding-left:18px;">
+                      <li>Klien <strong>non-PKP</strong> (omzet ≤ Rp 4,8 M/th): tidak memungut PPN → <strong>kosongkan</strong> PPN Keluaran.</li>
+                      <li>Klien pakai <strong>PPh Final UMKM 0,5%</strong>: itu pajak penghasilan klien yang dihitung dari <strong>total omzet per masa</strong>, bukan per transaksi penjualan → <strong>jangan</strong> isi di sini, catat terpisah saat tutup masa.</li>
+                    </ul>
+                  </div>
+                  <p style="margin:8px 0 0;color:var(--ni-text-muted,#6b7280);font-size:0.73rem;">Biarkan kosong jika transaksi tidak kena pajak atau pajak ditangani terpisah.</p>
+                </div>
+
+                {# Kontekstual per-tipe #}
+                <div class="tgp-detail" style="display:none;padding:12px 14px;">
+                  <div data-tax="ppn_keluaran" style="display:none;">
+                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPN Keluaran — 11% efektif (PMK 131/2024)</p>
+                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien Anda adalah PKP dan menjual barang/jasa kena pajak. Klien <strong>memungut</strong> PPN dari pembeli — jadi ini <strong>utang pajak klien</strong> ke negara.</p>
+                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> DPP Efektif = DPP × 11/12 → PPN = 12% × DPP Efektif (= 11% × DPP)</p>
+                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh penjualan klien:</strong> klien dagang menjual barang, klien jasa servis, klien kontraktor.</p>
+                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas/Piutang naik sebesar harga + PPN. <strong>Akun Pajak</strong> → Utang PPN Keluaran (kewajiban, 2xx). <strong>Akun Lawan</strong> → Kas/Bank/Piutang (uang ekstra yang diterima klien).</p>
+                  </div>
+                  <div data-tax="pph_23" style="display:none;">
+                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 23 — 2% atas jasa</p>
+                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien (badan) menjual jasa, dan <strong>pembelinya</strong> adalah pemotong (PT/CV/KAP/instansi/KKP). Pembeli <strong>memotong</strong> 2% dari pembayaran ke klien — jadi ini <strong>kredit pajak / pajak dibayar dimuka klien</strong> (aset).</p>
+                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PPh 23 = 2% × DPP (nilai bruto jasa)</p>
+                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien menyediakan jasa teknik, manajemen, konsultan, pemeliharaan ke perusahaan lain.</p>
+                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas yang diterima klien berkurang 2%. <strong>Akun Pajak</strong> → PPh 23 Dibayar Dimuka (aset, 1xx). <strong>Akun Lawan</strong> → Kas/Bank/Piutang (uang yang tidak jadi diterima karena dipotong).</p>
+                  </div>
+                  <div data-tax="pph_21" style="display:none;">
+                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 21 — Tenaga Ahli (Progresif Pasal 17)</p>
+                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien adalah <strong>orang pribadi</strong> (tenaga ahli — bukan badan), dan pembelinya badan pemotong. Pembeli <strong>memotong</strong> PPh 21 — jadi <strong>kredit pajak klien</strong> (aset).</p>
+                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PKP = 50% × DPP → PPh 21 progresif (5%–35%) atas PKP</p>
+                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien dokter, pengacara, arsitek, konsultan perorangan menerima honor dari perusahaan.</p>
+                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas klien berkurang sebesar pajak. <strong>Akun Pajak</strong> → PPh 21 Dibayar Dimuka (aset, 1xx). <strong>Akun Lawan</strong> → Kas/Bank.</p>
+                  </div>
+                  <div data-tax="pph_4_2" style="display:none;">
+                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 4 Ayat 2 — 10% Final (Sewa)</p>
+                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien menerima penghasilan <strong>sewa</strong> tanah/bangunan; penyewa memotong pajak <strong>final</strong> 10%. Karena final, ini <strong>bukan kredit pajak</strong> — melainkan <strong>beban pajak final klien</strong>.</p>
+                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PPh 4(2) = 10% × DPP (nilai sewa bruto)</p>
+                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien menyewakan gudang, kantor, ruko, atau lahan.</p>
+                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas klien berkurang sebesar pajak final. <strong>Akun Pajak</strong> → Beban PPh Final (beban). <strong>Akun Lawan</strong> → Kas/Bank.</p>
+                  </div>
+                </div>
+
+                <div class="tgp-footer" style="border-top:1px solid var(--ni-border,#e5e7eb);padding:7px 14px;background:var(--ni-bg-subtle,#f9fafb);display:flex;justify-content:flex-end;">
+                  <button type="button" class="tax-guide-close" style="font-size:0.75rem;color:var(--ni-text-muted,#6b7280);background:none;border:none;cursor:pointer;">Tutup panduan ✕</button>
+                </div>
+              </div>
             </div>
+
             <div class="ni-form-group">
               <label class="ni-form-label">Akun Pajak</label>
               {{ item_form.tax_account }}
               {% if item_form.tax_account.errors %}<div class="ni-form-error">{{ item_form.tax_account.errors }}</div>{% endif %}
+              <span class="ni-help-text">Akun pajak di buku klien. <strong>PPN Keluaran</strong> → Utang PPN (kewajiban). <strong>PPh 23/21</strong> → Pajak Dibayar Dimuka (aset). <strong>PPh 4(2)</strong> → Beban Pajak Final. Lihat Panduan.</span>
             </div>
+
             <div class="ni-form-group">
-              <label class="ni-form-label">Tipe Pengakuan (PSAK 72)</label>
-              {{ item_form.recognition_type }}
-              {% if item_form.recognition_type.errors %}<div class="ni-form-error">{{ item_form.recognition_type.errors }}</div>{% endif %}
+              <label class="ni-form-label">Akun Lawan Pajak (Kas/Bank)</label>
+              {{ item_form.tax_payment_account }}
+              {% if item_form.tax_payment_account.errors %}<div class="ni-form-error">{{ item_form.tax_payment_account.errors }}</div>{% endif %}
+              <span class="ni-help-text">Akun kas/bank/piutang yang terdampak pajak. Wajib diisi agar pajak tercatat otomatis saat konfirmasi.</span>
             </div>
+
+            <div class="ni-form-group">
+              <label class="ni-form-label">
+                Pajak (Nominal)
+                <span class="tax-auto-badge" style="display:none;margin-left:6px;font-size:0.75rem;background:var(--ni-primary,#2563eb);color:#fff;padding:1px 7px;border-radius:999px;font-weight:500;">Auto</span>
+                <span class="tax-loading-badge" style="display:none;margin-left:6px;font-size:0.75rem;color:var(--ni-text-muted);">Menghitung…</span>
+              </label>
+              {{ item_form.tax }}
+              {% if item_form.tax.errors %}<div class="ni-form-error">{{ item_form.tax.errors }}</div>{% endif %}
+              <span class="ni-help-text tax-hint">Akan dihitung otomatis saat tipe pajak dan nilai kontrak diisi. Bisa diubah manual.</span>
+            </div>
+
+          </div>{# end form-grid #}
+
+          {# ── Langkah 5 PSAK 72: Kapan Pendapatan Diakui? ────────────── #}
+          <div class="ni-form-group" style="margin-top:8px;">
+            <label class="ni-form-label" style="font-size:0.875rem;font-weight:600;margin-bottom:4px;">
+              Langkah 5 PSAK 72 — Kapan Pendapatan Diakui?
+            </label>
+            <span class="ni-help-text" style="margin-bottom:12px;">
+              Pilih satu. Menentukan jurnal yang dibuat saat Anda mengkonfirmasi transaksi ini.
+            </span>
+            <div class="ni-option-cards recognition-cards-cont"></div>
+            <div style="display:none;">{{ item_form.recognition_type }}</div>
+            {% if item_form.recognition_type.errors %}<div class="ni-form-error">{{ item_form.recognition_type.errors }}</div>{% endif %}
           </div>
 
-          {# Over-time configuration fields — shown/hidden by JS #}
-          <div class="ot-fields" style="display:none;border-top:1px dashed #ccc;margin-top:1rem;padding-top:1rem;">
-            <h4 style="font-size:0.95rem;margin-bottom:0.75rem;">Konfigurasi Over Time</h4>
+          {# ── Over-Time Configuration ──────────────────────────────────── #}
+          <div class="ot-fields" style="display:none;border-top:1px solid var(--ni-border);margin-top:16px;padding-top:16px;">
+            <p class="ni-ot-section-head">Konfigurasi Pengakuan Bertahap (Over Time)</p>
+            <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:0 0 16px;line-height:1.5;">
+              Karena pendapatan diakui bertahap, sistem perlu tahu <em>bagaimana pola aliran kasnya</em> dan <em>berapa lama masa layanannya</em>.
+            </p>
+
+            <div class="ni-form-group" style="margin-bottom:16px;">
+              <label class="ni-form-label" style="font-weight:600;">Pola Aliran Kas</label>
+              <span class="ni-help-text" style="margin-bottom:12px;">Bagaimana uang berpindah antara Anda dan pelanggan selama masa layanan?</span>
+              <div class="ni-option-cards ot-aliran-cards-cont"></div>
+              <div style="display:none;">{{ item_form.ot_tipe_aliran }}</div>
+              {% if item_form.ot_tipe_aliran.errors %}<div class="ni-form-error">{{ item_form.ot_tipe_aliran.errors }}</div>{% endif %}
+            </div>
+
             <div class="ni-form-grid ni-form-grid--2">
               <div class="ni-form-group">
-                <label class="ni-form-label">Tipe Aliran</label>
-                {{ item_form.ot_tipe_aliran }}
-                {% if item_form.ot_tipe_aliran.errors %}<div class="ni-form-error">{{ item_form.ot_tipe_aliran.errors }}</div>{% endif %}
-              </div>
-              <div class="ni-form-group">
-                <label class="ni-form-label">Metode Progress</label>
+                <label class="ni-form-label">Metode Pengukuran Progress</label>
                 {{ item_form.ot_progress_method }}
                 {% if item_form.ot_progress_method.errors %}<div class="ni-form-error">{{ item_form.ot_progress_method.errors }}</div>{% endif %}
+                <span class="ni-help-text">
+                  <strong>Garis Lurus:</strong> dibagi rata per bulan — cocok untuk sewa dan langganan.<br>
+                  <strong>Persentase Penyelesaian:</strong> berdasarkan laporan kemajuan — cocok untuk proyek.
+                </span>
               </div>
+
               <div class="ni-form-group">
-                <label class="ni-form-label">Tanggal Mulai OT</label>
+                <label class="ni-form-label">Biaya Estimasi Total (Opsional)</label>
+                {{ item_form.ot_biaya_estimasi_total }}
+                {% if item_form.ot_biaya_estimasi_total.errors %}<div class="ni-form-error">{{ item_form.ot_biaya_estimasi_total.errors }}</div>{% endif %}
+                <span class="ni-help-text">Hanya untuk metode Persentase Penyelesaian: estimasi total biaya proyek untuk menghitung progress</span>
+              </div>
+
+              <div class="ni-form-group">
+                <label class="ni-form-label">Tanggal Mulai Layanan</label>
                 {{ item_form.ot_tanggal_mulai }}
                 {% if item_form.ot_tanggal_mulai.errors %}<div class="ni-form-error">{{ item_form.ot_tanggal_mulai.errors }}</div>{% endif %}
+                <span class="ni-help-text">Awal periode saat layanan mulai diberikan kepada pelanggan</span>
               </div>
+
               <div class="ni-form-group">
-                <label class="ni-form-label">Tanggal Selesai OT</label>
+                <label class="ni-form-label">Tanggal Selesai Layanan</label>
                 {{ item_form.ot_tanggal_selesai }}
                 {% if item_form.ot_tanggal_selesai.errors %}<div class="ni-form-error">{{ item_form.ot_tanggal_selesai.errors }}</div>{% endif %}
+                <span class="ni-help-text">Akhir periode layanan — sistem membuat jadwal pengakuan dari mulai sampai selesai</span>
               </div>
-              <div class="ni-form-group">
+
+              <div class="ni-form-group ot-liabilitas-group" style="display:none;">
                 <label class="ni-form-label">Akun Liabilitas Kontrak</label>
                 {{ item_form.ot_liabilitas_kontrak_acct }}
                 {% if item_form.ot_liabilitas_kontrak_acct.errors %}<div class="ni-form-error">{{ item_form.ot_liabilitas_kontrak_acct.errors }}</div>{% endif %}
+                <span class="ni-help-text">
+                  Akun sementara untuk <em>kewajiban kepada pelanggan</em> setelah uang muka diterima.
+                  Berkurang saat pendapatan diakui bertahap. Contoh: "Pendapatan Diterima di Muka".
+                </span>
               </div>
-              <div class="ni-form-group">
+
+              <div class="ni-form-group ot-aset-group" style="display:none;">
                 <label class="ni-form-label">Akun Aset Kontrak</label>
                 {{ item_form.ot_aset_kontrak_acct }}
                 {% if item_form.ot_aset_kontrak_acct.errors %}<div class="ni-form-error">{{ item_form.ot_aset_kontrak_acct.errors }}</div>{% endif %}
+                <span class="ni-help-text">
+                  Akun untuk <em>hak tagih setelah layanan diberikan</em> sebelum faktur diterbitkan.
+                  Dikonversi ke piutang saat Anda menagih. Contoh: "Aset Kontrak — Jasa Konsultasi".
+                </span>
               </div>
-              <div class="ni-form-group">
-                <label class="ni-form-label">Biaya Estimasi Total</label>
-                {{ item_form.ot_biaya_estimasi_total }}
-                {% if item_form.ot_biaya_estimasi_total.errors %}<div class="ni-form-error">{{ item_form.ot_biaya_estimasi_total.errors }}</div>{% endif %}
-              </div>
+            </div>
+          </div>{# end ot-fields #}
+
+          {# ── Preview: Apa yang terjadi saat dikonfirmasi ──────────────── #}
+          <div class="ni-confirm-preview">
+            <i data-lucide="info" class="ni-confirm-preview__icon" style="width:15px;height:15px;margin-top:1px;"></i>
+            <div class="ni-confirm-preview__text">
+              <strong>Apa yang terjadi saat dikonfirmasi?</strong>
+              <p class="confirm-preview-body">Pilih tipe pengakuan di atas untuk melihat jurnal yang dibuat.</p>
             </div>
           </div>
 
-          {% if not forloop.first %}
-          <div class="ni-btn-row">
-            <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>
-          </div>
-          {% endif %}
-        </div>
-      </div>
+        </div>{# end ni-card__body #}
+      </div>{# end ni-item-row #}
       {% endfor %}
     </div>
   </div>
 
   <div class="ni-btn-row">
-    <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+    <button type="submit" class="ni-btn ni-btn--primary">Simpan Pendapatan</button>
     <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
   </div>
 </form>
 
 <script>
 (function () {
-  var container = document.getElementById('item-rows-container');
-  var addBtn = document.getElementById('add-item-btn');
-  var itemCountInput = document.getElementById('item_count');
+  // ── Option card data ───────────────────────────────────────────────────
+  var REC_OPTS = [
+    {
+      value: 'point_in_time',
+      icon: 'zap',
+      label: 'Pada Satu Titik Waktu',
+      sub: '(Point in Time)',
+      desc: 'Pendapatan diakui sekaligus saat barang diserahkan atau jasa selesai.',
+      ex: 'Contoh: penjualan barang, jasa konsultasi sekali selesai, serah terima proyek.',
+    },
+    {
+      value: 'over_time',
+      icon: 'calendar-range',
+      label: 'Sepanjang Waktu',
+      sub: '(Over Time)',
+      desc: 'Pendapatan diakui secara bertahap selama masa layanan berlangsung.',
+      ex: 'Contoh: sewa, langganan bulanan, proyek konstruksi multi-bulan.',
+    },
+  ];
 
-  function getItemCount() {
-    return container.querySelectorAll('.ni-item-row').length;
+  var ALIRAN_OPTS = [
+    {
+      value: 'advance_payment_cash',
+      icon: 'wallet',
+      label: 'Bayar di Muka',
+      sub: null,
+      desc: 'Pelanggan membayar lebih dulu. Kewajiban kontrak dicatat, lalu pendapatan diakui bertahap.',
+      ex: 'Akun dibutuhkan: Liabilitas Kontrak.',
+    },
+    {
+      value: 'periodic_billing',
+      icon: 'repeat',
+      label: 'Tagihan Berkala',
+      sub: null,
+      desc: 'Anda menagih pelanggan per periode (bulan, kuartal). Tidak ada jurnal saat konfirmasi awal.',
+      ex: 'Tidak perlu akun tambahan.',
+    },
+    {
+      value: 'performance_first',
+      icon: 'building-2',
+      label: 'Layanan Dulu, Tagih Kemudian',
+      sub: null,
+      desc: 'Anda memberikan layanan lebih dulu baru menagih. Aset kontrak dicatat sampai faktur diterbitkan.',
+      ex: 'Akun dibutuhkan: Aset Kontrak.',
+    },
+  ];
+
+  // ── Journal preview text per scenario ─────────────────────────────────
+  var PREVIEWS = {
+    'pit_cash': {
+      lines: ['Dr. Kas/Bank &nbsp;&nbsp;&nbsp;&nbsp;XXX', 'Cr. Pendapatan &nbsp;XXX'],
+      note: 'Pendapatan langsung diakui. Saldo kas/bank bertambah.',
+    },
+    'pit_credit': {
+      lines: ['Dr. Piutang &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;XXX', 'Cr. Pendapatan &nbsp;XXX'],
+      note: 'Pendapatan diakui, piutang dibuat otomatis. Saldo piutang bertambah.',
+    },
+    'ot_advance': {
+      lines: ['Dr. Kas/Bank &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;XXX', 'Cr. Liabilitas Kontrak &nbsp;XXX'],
+      note: 'Kas diterima, kewajiban kontrak dicatat. Pendapatan diakui bertahap lewat jadwal.',
+    },
+    'ot_periodic': {
+      lines: ['(Tidak ada jurnal saat konfirmasi)'],
+      note: 'Jadwal tagihan berkala dibuat. Jurnal dibuat tiap kali tagihan diproses.',
+    },
+    'ot_perf': {
+      lines: ['Dr. Aset Kontrak &nbsp;XXX', 'Cr. Pendapatan &nbsp;&nbsp;XXX'],
+      note: 'Pendapatan diakui, aset kontrak dicatat. Dikonversi ke piutang saat faktur diterbitkan.',
+    },
+  };
+
+  function getPaymentType() {
+    var el = document.getElementById('{{ form.payment_type.id_for_label }}');
+    return el ? el.value : 'cash';
   }
 
-  function toggleOverTimeFields(formRow) {
-    var recTypeSelect = formRow.querySelector('[id$="-recognition_type"]');
-    var otFields = formRow.querySelector('.ot-fields');
-    if (!recTypeSelect || !otFields) return;
-
-    function update() {
-      var isOT = recTypeSelect.value === 'over_time';
-      otFields.style.display = isOT ? '' : 'none';
-    }
-    recTypeSelect.addEventListener('change', update);
-    update();
-  }
-
-  function updateSSPHints() {
-    var inputs = document.querySelectorAll('[id$="-nilai_kontrak"]');
-    var total = 0;
-    inputs.forEach(function(inp) { total += parseFloat(inp.value || 0); });
-    inputs.forEach(function(inp) {
-      var pct = total > 0 ? (parseFloat(inp.value || 0) / total * 100).toFixed(1) : '0.0';
-      var hint = inp.parentElement.querySelector('.ssp-pct');
-      if (!hint) {
-        hint = document.createElement('small');
-        hint.className = 'form-text text-muted ssp-pct';
-        inp.parentElement.appendChild(hint);
-      }
-      hint.textContent = 'SSP ' + pct + '% dari total kontrak';
+  // ── Build option cards ────────────────────────────────────────────────
+  function buildCards(container, opts, hiddenSel, onSelect) {
+    container.innerHTML = '';
+    opts.forEach(function (opt) {
+      var active = hiddenSel.value === opt.value;
+      var card = document.createElement('div');
+      card.className = 'ni-option-card' + (active ? ' ni-option-card--active' : '');
+      card.dataset.value = opt.value;
+      card.innerHTML =
+        '<div class="ni-option-card__icon">' +
+          '<i data-lucide="' + opt.icon + '" style="width:17px;height:17px;"></i>' +
+        '</div>' +
+        '<div class="ni-option-card__body">' +
+          '<strong>' + opt.label + '</strong>' +
+          (opt.sub ? '<em>' + opt.sub + '</em>' : '') +
+          '<p>' + opt.desc + '</p>' +
+          (opt.ex ? '<p class="ni-option-ex">' + opt.ex + '</p>' : '') +
+        '</div>';
+      card.addEventListener('click', function () {
+        hiddenSel.value = opt.value;
+        container.querySelectorAll('.ni-option-card').forEach(function (c) {
+          c.classList.toggle('ni-option-card--active', c === card);
+        });
+        hiddenSel.dispatchEvent(new Event('change'));
+        if (onSelect) onSelect(opt.value);
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+      });
+      container.appendChild(card);
     });
+    if (typeof lucide !== 'undefined') lucide.createIcons();
   }
 
-  function attachRowEvents(row) {
-    toggleOverTimeFields(row);
+  // ── Update journal preview for one row ───────────────────────────────
+  function updatePreview(row) {
+    var recSel    = row.querySelector('[id$="-recognition_type"]');
+    var aliranSel = row.querySelector('[id$="-ot_tipe_aliran"]');
+    var previewEl = row.querySelector('.confirm-preview-body');
+    if (!recSel || !previewEl) return;
 
-    var sttSelect = row.querySelector('select[name$="-sub_transaction_type"]');
-    var revenueSelect = row.querySelector('select[name$="-revenue_account"]');
-    if (sttSelect && revenueSelect) {
-      sttSelect.addEventListener('change', function () {
-        var sttId = sttSelect.value;
-        if (!sttId) return;
-        fetch('/pendapatan/api/stt-defaults/?stt_id=' + sttId)
+    var rec    = recSel.value;
+    var aliran = aliranSel ? aliranSel.value : '';
+    var pay    = getPaymentType();
+
+    var key;
+    if      (rec === 'point_in_time')                              key = pay === 'credit' ? 'pit_credit' : 'pit_cash';
+    else if (rec === 'over_time' && aliran === 'advance_payment_cash') key = 'ot_advance';
+    else if (rec === 'over_time' && aliran === 'periodic_billing')     key = 'ot_periodic';
+    else if (rec === 'over_time' && aliran === 'performance_first')    key = 'ot_perf';
+
+    if (!key || !PREVIEWS[key]) {
+      previewEl.innerHTML = 'Pilih tipe aliran di atas untuk melihat jurnal yang akan dibuat.';
+      return;
+    }
+    var p = PREVIEWS[key];
+    previewEl.innerHTML = p.lines.map(function (l) {
+      return '<span class="jl">' + l + '</span>';
+    }).join('<br>') + '<p style="margin-top:6px;font-size:0.75rem;">' + p.note + '</p>';
+  }
+
+  // ── OT sub-field visibility (liabilitas / aset acct) ─────────────────
+  function updateOtSubFields(row) {
+    var aliranSel = row.querySelector('[id$="-ot_tipe_aliran"]');
+    if (!aliranSel) return;
+    var v = aliranSel.value;
+    var liab = row.querySelector('.ot-liabilitas-group');
+    var aset = row.querySelector('.ot-aset-group');
+    if (liab) liab.style.display = (v === 'advance_payment_cash') ? '' : 'none';
+    if (aset) aset.style.display = (v === 'performance_first')    ? '' : 'none';
+  }
+
+  // ── Attach events to a KP row ─────────────────────────────────────────
+  function attachRowEvents(row) {
+    var recSel    = row.querySelector('[id$="-recognition_type"]');
+    var aliranSel = row.querySelector('[id$="-ot_tipe_aliran"]');
+    var otFields  = row.querySelector('.ot-fields');
+    var recCont   = row.querySelector('.recognition-cards-cont');
+    var aliranCont = row.querySelector('.ot-aliran-cards-cont');
+
+    if (recSel && recCont) {
+      buildCards(recCont, REC_OPTS, recSel, function () {
+        var isOT = recSel.value === 'over_time';
+        if (otFields) otFields.style.display = isOT ? '' : 'none';
+        updatePreview(row);
+      });
+      recSel.addEventListener('change', function () {
+        var isOT = recSel.value === 'over_time';
+        if (otFields) otFields.style.display = isOT ? '' : 'none';
+        updatePreview(row);
+      });
+      if (otFields) otFields.style.display = (recSel.value === 'over_time') ? '' : 'none';
+    }
+
+    if (aliranSel && aliranCont) {
+      buildCards(aliranCont, ALIRAN_OPTS, aliranSel, function () {
+        updateOtSubFields(row);
+        updatePreview(row);
+      });
+      aliranSel.addEventListener('change', function () {
+        updateOtSubFields(row);
+        updatePreview(row);
+      });
+      updateOtSubFields(row);
+    }
+
+    // STT → revenue account auto-fill
+    var sttSel = row.querySelector('select[name$="-sub_transaction_type"]');
+    var revSel = row.querySelector('select[name$="-revenue_account"]');
+    if (sttSel && revSel) {
+      sttSel.addEventListener('change', function () {
+        if (!sttSel.value) return;
+        fetch('/pendapatan/api/stt-defaults/?stt_id=' + sttSel.value)
           .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data.revenue_account_id) {
-              revenueSelect.value = data.revenue_account_id;
-            }
-          })
+          .then(function (d) { if (d.revenue_account_id) revSel.value = d.revenue_account_id; })
           .catch(function () {});
       });
     }
 
-    var nilaiInput = row.querySelector('[id$="-nilai_kontrak"]');
-    if (nilaiInput) {
-      nilaiInput.addEventListener('input', updateSSPHints);
+    // Nilai kontrak → SSP allocation badge
+    var nilaiInp = row.querySelector('[id$="-nilai_kontrak"]');
+    if (nilaiInp) nilaiInp.addEventListener('input', updateSSPBadges);
+
+    // ── Tax guide panel ─────────────────────────────────────────────────
+    var taxGuidePanel  = row.querySelector('.tax-guide-panel');
+    var taxGuideToggle = row.querySelector('.tax-guide-toggle');
+    var taxGuideClose  = row.querySelector('.tax-guide-close');
+    var tgpDefault     = taxGuidePanel ? taxGuidePanel.querySelector('.tgp-default') : null;
+    var tgpDetail      = taxGuidePanel ? taxGuidePanel.querySelector('.tgp-detail') : null;
+
+    function showTaxGuide(taxTypeValue) {
+      if (!taxGuidePanel) return;
+      taxGuidePanel.style.display = '';
+      if (taxTypeValue && tgpDetail) {
+        tgpDefault && (tgpDefault.style.display = 'none');
+        tgpDetail.style.display = '';
+        tgpDetail.querySelectorAll('[data-tax]').forEach(function (el) {
+          el.style.display = el.dataset.tax === taxTypeValue ? '' : 'none';
+        });
+      } else {
+        tgpDefault && (tgpDefault.style.display = '');
+        tgpDetail && (tgpDetail.style.display = 'none');
+      }
     }
 
+    if (taxGuideToggle) {
+      taxGuideToggle.addEventListener('click', function () {
+        var taxTypeSel2 = row.querySelector('select[name$="-tax_type"]');
+        var cur = taxTypeSel2 ? taxTypeSel2.value : '';
+        if (taxGuidePanel && taxGuidePanel.style.display !== 'none') {
+          taxGuidePanel.style.display = 'none';
+        } else {
+          showTaxGuide(cur);
+        }
+      });
+    }
+    if (taxGuideClose) {
+      taxGuideClose.addEventListener('click', function () {
+        if (taxGuidePanel) taxGuidePanel.style.display = 'none';
+      });
+    }
+
+    // ── Tax auto-calculate ──────────────────────────────────────────────
+    var taxTypeSel  = row.querySelector('select[name$="-tax_type"]');
+    var taxAmtInp   = row.querySelector('[name$="-tax"]:not([name$="-tax_type"]):not([name$="-tax_account"]):not([name$="-tax_payment_account"])');
+    var taxBadge    = taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-auto-badge') : null;
+    var taxLoadBadge= taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-loading-badge') : null;
+    var taxHint     = taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-hint') : null;
+    var taxTimer    = null;
+    var taxUserEdited = false;
+
+    function doComputeTax() {
+      if (!taxTypeSel || !taxTypeSel.value) return;
+      if (!nilaiInp || !nilaiInp.value) return;
+      var tanggalInp = document.getElementById('{{ form.tanggal.id_for_label }}');
+      var tanggal = tanggalInp ? tanggalInp.value : '';
+      var url = '/pajak/hitung/?tax_type=' + encodeURIComponent(taxTypeSel.value)
+              + '&dpp=' + encodeURIComponent(nilaiInp.value)
+              + (tanggal ? '&tanggal=' + encodeURIComponent(tanggal) : '');
+      if (taxLoadBadge) taxLoadBadge.style.display = 'inline';
+      if (taxBadge) taxBadge.style.display = 'none';
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (taxLoadBadge) taxLoadBadge.style.display = 'none';
+          if (d.error) {
+            if (taxHint) taxHint.textContent = 'Tidak dapat menghitung: ' + d.error;
+            return;
+          }
+          if (taxAmtInp && !taxUserEdited) {
+            taxAmtInp.value = d.jumlah_pajak;
+            if (taxBadge) taxBadge.style.display = 'inline';
+            if (taxHint) taxHint.textContent = 'Dihitung otomatis: ' + d.tarif_persen + '% × DPP efektif Rp ' + parseFloat(d.dpp_efektif).toLocaleString('id-ID');
+          }
+        })
+        .catch(function () {
+          if (taxLoadBadge) taxLoadBadge.style.display = 'none';
+        });
+    }
+
+    if (taxTypeSel) {
+      taxTypeSel.addEventListener('change', function () {
+        taxUserEdited = false;
+        // Update guide panel if open
+        if (taxGuidePanel && taxGuidePanel.style.display !== 'none') {
+          showTaxGuide(taxTypeSel.value);
+        }
+        if (!taxTypeSel.value && taxAmtInp) {
+          taxAmtInp.value = '';
+          if (taxBadge) taxBadge.style.display = 'none';
+          if (taxHint) taxHint.textContent = 'Akan dihitung otomatis saat tipe pajak dan nilai kontrak diisi. Bisa diubah manual.';
+          return;
+        }
+        clearTimeout(taxTimer);
+        taxTimer = setTimeout(doComputeTax, 300);
+      });
+    }
+    if (nilaiInp) {
+      nilaiInp.addEventListener('input', function () {
+        if (!taxTypeSel || !taxTypeSel.value) return;
+        taxUserEdited = false;
+        clearTimeout(taxTimer);
+        taxTimer = setTimeout(doComputeTax, 500);
+      });
+    }
+    if (taxAmtInp) {
+      taxAmtInp.addEventListener('input', function () {
+        taxUserEdited = true;
+        if (taxBadge) taxBadge.style.display = 'none';
+        if (taxHint) taxHint.textContent = 'Nilai diubah manual.';
+      });
+    }
+    // Run immediately if both values already filled (edit mode)
+    if (taxTypeSel && taxTypeSel.value && nilaiInp && nilaiInp.value && taxAmtInp && taxAmtInp.value) {
+      if (taxBadge) taxBadge.style.display = 'inline';
+      if (taxHint) taxHint.textContent = 'Nilai tersimpan sebelumnya.';
+    }
+
+    // Remove button
     var removeBtn = row.querySelector('.remove-item-btn');
     if (removeBtn) {
       removeBtn.addEventListener('click', function () {
         row.remove();
         reindexRows();
-        updateSSPHints();
+        updateSSPBadges();
       });
     }
+
+    updatePreview(row);
   }
+
+  // ── SSP allocation badges ─────────────────────────────────────────────
+  function updateSSPBadges() {
+    var inputs = document.querySelectorAll('[id$="-nilai_kontrak"]');
+    var total  = 0;
+    inputs.forEach(function (inp) { total += parseFloat(inp.value || 0); });
+    inputs.forEach(function (inp) {
+      var pct  = total > 0 ? (parseFloat(inp.value || 0) / total * 100).toFixed(1) : '0.0';
+      var grp  = inp.closest('.ni-form-group');
+      if (!grp) return;
+      var badge = grp.querySelector('.ni-ssp-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ni-ssp-badge';
+        grp.appendChild(badge);
+      }
+      badge.textContent = 'Alokasi SSP: ' + pct + '%';
+    });
+  }
+
+  // ── Payment type hint ─────────────────────────────────────────────────
+  var payTypeSel = document.getElementById('{{ form.payment_type.id_for_label }}');
+  if (payTypeSel) {
+    function refreshPaymentHints() {
+      var isCash = payTypeSel.value === 'cash';
+      document.querySelectorAll('.hint-cash').forEach(function (el) { el.style.display = isCash ? '' : 'none'; });
+      document.querySelectorAll('.hint-credit').forEach(function (el) { el.style.display = isCash ? 'none' : ''; });
+      document.querySelectorAll('.ni-item-row').forEach(function (row) { updatePreview(row); });
+    }
+    payTypeSel.addEventListener('change', refreshPaymentHints);
+    refreshPaymentHints();
+  }
+
+  // ── Row management ────────────────────────────────────────────────────
+  var container     = document.getElementById('item-rows-container');
+  var addBtn        = document.getElementById('add-item-btn');
+  var itemCountInp  = document.getElementById('item_count');
 
   function reindexRows() {
     var rows = container.querySelectorAll('.ni-item-row');
@@ -241,27 +774,30 @@
       row.setAttribute('data-index', i);
       row.querySelectorAll('input, select, textarea').forEach(function (el) {
         if (el.name) el.name = el.name.replace(/item_\d+/, 'item_' + i);
-        if (el.id) el.id = el.id.replace(/item_\d+/, 'item_' + i);
+        if (el.id)   el.id   = el.id.replace(/item_\d+/, 'item_' + i);
       });
       row.querySelectorAll('label[for]').forEach(function (lbl) {
         lbl.setAttribute('for', lbl.getAttribute('for').replace(/item_\d+/, 'item_' + i));
       });
+      var lbl = row.querySelector('.kp-row-label');
+      if (lbl) lbl.textContent = 'Kewajiban Pelaksanaan ' + (i + 1);
     });
-    itemCountInput.value = rows.length;
+    itemCountInp.value = rows.length;
   }
 
+  // Init all existing rows
   container.querySelectorAll('.ni-item-row').forEach(attachRowEvents);
-  updateSSPHints();
+  updateSSPBadges();
 
   addBtn.addEventListener('click', function () {
     var firstRow = container.querySelector('.ni-item-row');
     if (!firstRow) return;
     var newRow = firstRow.cloneNode(true);
-    var newIdx = getItemCount();
+    var newIdx = container.querySelectorAll('.ni-item-row').length;
     newRow.setAttribute('data-index', newIdx);
     newRow.querySelectorAll('input, select, textarea').forEach(function (el) {
       if (el.name) el.name = el.name.replace(/item_\d+/, 'item_' + newIdx);
-      if (el.id) el.id = el.id.replace(/item_\d+/, 'item_' + newIdx);
+      if (el.id)   el.id   = el.id.replace(/item_\d+/, 'item_' + newIdx);
       if (el.type !== 'checkbox' && el.tagName !== 'SELECT') el.value = '';
       if (el.type === 'checkbox') el.checked = false;
       if (el.tagName === 'SELECT') el.selectedIndex = 0;
@@ -269,23 +805,37 @@
     newRow.querySelectorAll('label[for]').forEach(function (lbl) {
       lbl.setAttribute('for', lbl.getAttribute('for').replace(/item_\d+/, 'item_' + newIdx));
     });
-    var removeBtn = newRow.querySelector('.remove-item-btn');
-    if (!removeBtn) {
-      var btnDiv = document.createElement('div');
-      btnDiv.className = 'ni-btn-row';
-      btnDiv.innerHTML = '<button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-btn">Hapus Item Ini</button>';
-      newRow.querySelector('.ni-card__body').appendChild(btnDiv);
+    // Update KP label
+    var lblEl = newRow.querySelector('.kp-row-label');
+    if (lblEl) lblEl.textContent = 'Kewajiban Pelaksanaan ' + (newIdx + 1);
+    // Ensure remove button exists
+    if (!newRow.querySelector('.remove-item-btn')) {
+      var hdr = newRow.querySelector('.ni-kp-row-header');
+      if (hdr) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ni-btn ni-btn--xs ni-btn--danger remove-item-btn';
+        btn.textContent = 'Hapus Item Ini';
+        hdr.appendChild(btn);
+      }
     }
+    // Clear rendered option cards (will be rebuilt by attachRowEvents)
+    newRow.querySelectorAll('.recognition-cards-cont, .ot-aliran-cards-cont').forEach(function (c) {
+      c.innerHTML = '';
+    });
+    // Reset SSP badge
+    newRow.querySelectorAll('.ni-ssp-badge').forEach(function (b) { b.remove(); });
     container.appendChild(newRow);
-    itemCountInput.value = getItemCount();
+    itemCountInp.value = container.querySelectorAll('.ni-item-row').length;
     attachRowEvents(newRow);
-    updateSSPHints();
+    updateSSPBadges();
+    newRow.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
-  // EB TomSelect
-  var ebOptions = {{ eb_options_json|default:"[]"|safe }};
+  // ── EB TomSelect ──────────────────────────────────────────────────────
+  var ebOptions  = {{ eb_options_json|default:"[]"|safe }};
   var ebSelected = "{{ eb_selected|default:'' }}";
-  var ebSelect = document.getElementById('id_eb_selection');
+  var ebSelect   = document.getElementById('id_eb_selection');
   if (ebSelect && ebOptions.length) {
     ebOptions.forEach(function (opt) {
       var o = document.createElement('option');
