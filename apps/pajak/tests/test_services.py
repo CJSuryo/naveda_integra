@@ -195,3 +195,95 @@ class ComputePajakPPhTest(TestCase):
         # Total ≈ 16_500_000
         result = compute_pajak('pph_21_bukan_pegawai', Decimal('300000000'), date(2026, 1, 1))
         self.assertAlmostEqual(float(result['jumlah_pajak']), 16_500_000.0, places=0)
+
+
+class SyncPajakTest(TestCase):
+    def _make_accounts(self):
+        from apps.master_data.models import Akun
+        akun_pajak = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.1')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Piutang Usaha', kode_akun='1.2.1')
+        return akun_pajak, akun_lawan
+
+    def _make_tarif(self):
+        from apps.pajak.models import TarifPajak
+        TarifPajak.objects.create(
+            jenis_pajak='ppn_umum', nama='PPN Umum',
+            tarif_persen=Decimal('12.0000'), faktor_dpp=Decimal('0.916667'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+
+    def test_sync_pajak_creates_draft_record(self):
+        from apps.pajak.services import sync_pajak
+        from apps.pajak.models import PajakTransaksi, MasaPajak
+        self._make_tarif()
+        akun_pajak, akun_lawan = self._make_accounts()
+
+        class FakeKP:
+            pk = 42
+            tax = None
+            entitas_bisnis = None
+
+        pt = sync_pajak(
+            source_type='pendapatan_kp',
+            source_obj=FakeKP(),
+            dpp=Decimal('10000000'),
+            tanggal=date(2026, 6, 15),
+            jenis_pajak='ppn_umum',
+            akun_pajak=akun_pajak,
+            akun_lawan=akun_lawan,
+            sifat_pajak='potong_pungut',
+        )
+        self.assertEqual(pt.status, 'draft')
+        self.assertEqual(pt.source_type, 'pendapatan_kp')
+        self.assertEqual(pt.source_id, 42)
+        self.assertEqual(pt.masa_pajak, date(2026, 6, 1))
+        self.assertFalse(pt.is_overridden)
+        self.assertTrue(MasaPajak.objects.filter(tahun=2026, bulan=6).exists())
+
+    def test_sync_pajak_locked_masa_raises(self):
+        from apps.pajak.services import sync_pajak
+        from apps.pajak.models import MasaPajak
+        from apps.pajak.exceptions import MasaPajakTerkunciError
+        self._make_tarif()
+        akun_pajak, akun_lawan = self._make_accounts()
+        MasaPajak.objects.create(tahun=2026, bulan=6, status='locked')
+
+        class FakeKP:
+            pk = 1
+            tax = None
+            entitas_bisnis = None
+
+        with self.assertRaises(MasaPajakTerkunciError):
+            sync_pajak(
+                source_type='pendapatan_kp',
+                source_obj=FakeKP(),
+                dpp=Decimal('10000000'),
+                tanggal=date(2026, 6, 1),
+                jenis_pajak='ppn_umum',
+                akun_pajak=akun_pajak,
+                akun_lawan=akun_lawan,
+                sifat_pajak='potong_pungut',
+            )
+
+    def test_sync_pajak_manual_tax_sets_overridden(self):
+        from apps.pajak.services import sync_pajak
+        self._make_tarif()
+        akun_pajak, akun_lawan = self._make_accounts()
+
+        class FakeKP:
+            pk = 7
+            tax = Decimal('500000')
+            entitas_bisnis = None
+
+        pt = sync_pajak(
+            source_type='pendapatan_kp',
+            source_obj=FakeKP(),
+            dpp=Decimal('5000000'),
+            tanggal=date(2026, 6, 1),
+            jenis_pajak='ppn_umum',
+            akun_pajak=akun_pajak,
+            akun_lawan=akun_lawan,
+            sifat_pajak='potong_pungut',
+        )
+        self.assertTrue(pt.is_overridden)
+        self.assertEqual(pt.jumlah_pajak, Decimal('500000'))

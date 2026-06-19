@@ -71,3 +71,59 @@ def compute_pajak(jenis_pajak: str, dpp: Decimal, tanggal: date) -> dict:
         'tarif_persen': tarif_record.tarif_persen,
         'jumlah_pajak': jumlah,
     }
+
+
+def sync_pajak(
+    source_type: str,
+    source_obj,
+    dpp: Decimal,
+    tanggal: date,
+    jenis_pajak: str,
+    akun_pajak,
+    akun_lawan,
+    sifat_pajak: str,
+) -> PajakTransaksi:
+    """
+    Create a draft PajakTransaksi for source_obj.
+
+    If source_obj.tax is set and > 0, use that value and mark is_overridden=True.
+    Otherwise, compute from TarifPajak via compute_pajak.
+    Raises MasaPajakTerkunciError if the target period is locked.
+    """
+    masa_date = tanggal.replace(day=1)
+    masa, _ = MasaPajak.objects.get_or_create(
+        tahun=masa_date.year, bulan=masa_date.month,
+        defaults={'status': 'open'},
+    )
+    if masa.status == 'locked':
+        raise MasaPajakTerkunciError(
+            f'Masa pajak {masa_date:%Y-%m} sudah terkunci. '
+            'Buka kunci terlebih dahulu sebelum memposting transaksi baru.'
+        )
+
+    manual_tax = getattr(source_obj, 'tax', None)
+    if manual_tax and manual_tax > 0:
+        jumlah_pajak = manual_tax
+        tarif_persen = Decimal('0')
+        is_overridden = True
+    else:
+        hasil = compute_pajak(jenis_pajak, dpp, tanggal)
+        jumlah_pajak = hasil['jumlah_pajak']
+        tarif_persen = hasil['tarif_persen']
+        is_overridden = False
+
+    return PajakTransaksi.objects.create(
+        source_type=source_type,
+        source_id=source_obj.pk,
+        masa_pajak=masa_date,
+        jenis_pajak=jenis_pajak,
+        dpp=dpp,
+        tarif_persen=tarif_persen,
+        jumlah_pajak=jumlah_pajak,
+        sifat_pajak=sifat_pajak,
+        status='draft',
+        is_overridden=is_overridden,
+        akun_pajak=akun_pajak,
+        akun_lawan=akun_lawan,
+        entitas_bisnis=getattr(source_obj, 'entitas_bisnis', None),
+    )
