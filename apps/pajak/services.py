@@ -204,27 +204,30 @@ def confirm_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
 
 def batal_pajak(pajak_trx: PajakTransaksi) -> None:
     """Cancel pajak_trx. If a journal exists, post a reversal (swap debit/kredit)."""
-    if pajak_trx.jurnal_header_id:
-        original_jh = pajak_trx.jurnal_header
-        nomor = _next_pajak_journal_number()
-        rev_jh = JurnalHeader.objects.create(
-            tanggal=original_jh.tanggal,
-            nomor_transaksi=nomor,
-            uraian_transaksi=f'Reversal Pajak — {original_jh.nomor_transaksi}',
-            entitas_bisnis=original_jh.entitas_bisnis,
-            is_penyesuaian=True,
-        )
-        JurnalDetail.objects.bulk_create([
-            JurnalDetail(
-                jurnal_header=rev_jh,
-                akun=d.akun,
-                debit=d.kredit,
-                kredit=d.debit,
+    from django.db import transaction
+    with transaction.atomic():
+        if pajak_trx.jurnal_header_id:
+            original_jh = pajak_trx.jurnal_header
+            nomor = _next_pajak_journal_number()
+            rev_jh = JurnalHeader.objects.create(
+                tanggal=original_jh.tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Reversal Pajak — {original_jh.nomor_transaksi}',
+                entitas_bisnis=original_jh.entitas_bisnis,
+                is_penyesuaian=True,
             )
-            for d in original_jh.details.all()
-        ])
-    pajak_trx.status = 'dibatalkan'
-    pajak_trx.save(update_fields=['status'])
+            JurnalDetail.objects.bulk_create([
+                JurnalDetail(
+                    jurnal_header=rev_jh,
+                    akun=d.akun,
+                    debit=d.kredit,
+                    kredit=d.debit,
+                )
+                for d in original_jh.details.all()
+            ])
+        pajak_trx.jurnal_header = None
+        pajak_trx.status = 'dibatalkan'
+        pajak_trx.save(update_fields=['jurnal_header', 'status'])
 
 
 def override_pajak(pajak_trx: PajakTransaksi, jumlah_baru: Decimal, modified_by=None) -> PajakTransaksi:
