@@ -10,7 +10,8 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from apps.jurnal.models import JurnalDetail, JurnalHeader
-from apps.pajak.services import sync_pajak, confirm_pajak as confirm_pajak_trx
+from apps.pajak.models import PajakTransaksi
+from apps.pajak.services import sync_pajak, confirm_pajak as confirm_pajak_trx, batal_pajak as batal_pajak_trx
 
 from .models import (
     AsetKontrak, EntriPengakuan, JadwalPengakuan,
@@ -260,6 +261,19 @@ def _maybe_sync_confirm_pajak(kp, header, jenis_pajak_kp, amount, user=None):
     confirm_pajak_trx(pajak_trx)
 
 
+def _cancel_kp_pajak(kp):
+    """
+    Cancel all non-cancelled PajakTransaksi linked to a KP.
+    Each batal_pajak call is independently atomic (internal to apps.pajak).
+    """
+    qs = PajakTransaksi.objects.filter(
+        source_type='pendapatan_kp',
+        source_id=kp.pk,
+    ).exclude(status='dibatalkan')
+    for pajak_trx in qs:
+        batal_pajak_trx(pajak_trx)
+
+
 def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
     """
     PSAK 72 confirm: process each KP through one of five recognition cases.
@@ -482,6 +496,10 @@ def void_pendapatan(header: PendapatanHeader, user=None) -> None:
                 )
                 for d in jh.details.all()
             ])
+
+        # Cancel linked PajakTransaksi for every KP under this header
+        for kp in KewajibabPelaksanaan.objects.filter(pendapatan_eb__pendapatan_header=header):
+            _cancel_kp_pajak(kp)
 
         # Cancel linked piutang
         from apps.piutang.models import PiutangHeader
