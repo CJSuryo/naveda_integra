@@ -83,3 +83,115 @@ class SeedDataTest(TestCase):
         top = BracketPPhOP.objects.order_by('-batas_bawah').first()
         self.assertIsNone(top.batas_atas)
         self.assertEqual(top.tarif_persen, Decimal('35.00'))
+
+
+class GetTarifRecordTest(TestCase):
+    def setUp(self):
+        from apps.pajak.models import TarifPajak
+        TarifPajak.objects.create(
+            jenis_pajak='pph_23_jasa',
+            nama='PPh 23 Jasa',
+            tarif_persen=Decimal('2.0000'),
+            faktor_dpp=Decimal('1.000000'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+        TarifPajak.objects.create(
+            jenis_pajak='pph_23_jasa',
+            nama='PPh 23 Jasa (lama)',
+            tarif_persen=Decimal('2.0000'),
+            faktor_dpp=Decimal('1.000000'),
+            berlaku_mulai=date(2020, 1, 1),
+            berlaku_sampai=date(2024, 12, 31),
+        )
+
+    def test_get_tarif_returns_active_record(self):
+        from apps.pajak.services import get_tarif_record
+        t = get_tarif_record('pph_23_jasa', date(2026, 1, 1))
+        self.assertEqual(t.berlaku_mulai, date(2025, 1, 1))
+
+    def test_get_tarif_raises_if_not_found(self):
+        from apps.pajak.services import get_tarif_record
+        from apps.pajak.exceptions import TarifPajakTidakDitemukan
+        with self.assertRaises(TarifPajakTidakDitemukan):
+            get_tarif_record('ppn_bm', date(2019, 1, 1))
+
+    def test_get_tarif_historical_date(self):
+        from apps.pajak.services import get_tarif_record
+        t = get_tarif_record('pph_23_jasa', date(2023, 6, 1))
+        self.assertEqual(t.berlaku_mulai, date(2020, 1, 1))
+
+
+class ComputePajakPPNTest(TestCase):
+    def setUp(self):
+        from apps.pajak.models import TarifPajak
+        TarifPajak.objects.create(
+            jenis_pajak='ppn_umum',
+            nama='PPN Umum',
+            tarif_persen=Decimal('12.0000'),
+            faktor_dpp=Decimal('0.916667'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+        TarifPajak.objects.create(
+            jenis_pajak='ppn_ekspor',
+            nama='PPN Ekspor',
+            tarif_persen=Decimal('0.0000'),
+            faktor_dpp=Decimal('1.000000'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+
+    def test_ppn_umum_effective_11_percent(self):
+        from apps.pajak.services import compute_pajak
+        result = compute_pajak('ppn_umum', Decimal('10000000'), date(2026, 1, 1))
+        self.assertIn('jumlah_pajak', result)
+        self.assertIn('dpp_efektif', result)
+        self.assertIn('tarif_persen', result)
+        self.assertAlmostEqual(float(result['jumlah_pajak']), 10_000_000 * 11 / 12 * 0.12, places=0)
+
+    def test_ppn_ekspor_zero(self):
+        from apps.pajak.services import compute_pajak
+        result = compute_pajak('ppn_ekspor', Decimal('5000000'), date(2026, 1, 1))
+        self.assertEqual(result['jumlah_pajak'], Decimal('0'))
+
+
+class ComputePajakPPhTest(TestCase):
+    def setUp(self):
+        from apps.pajak.models import TarifPajak, BracketPPhOP
+        TarifPajak.objects.create(
+            jenis_pajak='pph_23_jasa', nama='PPh 23 Jasa',
+            tarif_persen=Decimal('2.0000'), faktor_dpp=Decimal('1.000000'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+        TarifPajak.objects.create(
+            jenis_pajak='pph_21_bukan_pegawai', nama='PPh 21 Bukan Pegawai',
+            tarif_persen=Decimal('0.0000'), faktor_dpp=Decimal('1.000000'),
+            berlaku_mulai=date(2025, 1, 1),
+        )
+        # Use berlaku_mulai later than the seed migration (2022-01-01) so that
+        # hitung_progresif picks only these brackets, not the seeded ones.
+        BracketPPhOP.objects.bulk_create([
+            BracketPPhOP(batas_bawah=Decimal('0'),          batas_atas=Decimal('60000000'),   tarif_persen=Decimal('5.00'),  berlaku_mulai=date(2026, 1, 1)),
+            BracketPPhOP(batas_bawah=Decimal('60000001'),   batas_atas=Decimal('250000000'),  tarif_persen=Decimal('15.00'), berlaku_mulai=date(2026, 1, 1)),
+            BracketPPhOP(batas_bawah=Decimal('250000001'),  batas_atas=Decimal('500000000'),  tarif_persen=Decimal('25.00'), berlaku_mulai=date(2026, 1, 1)),
+            BracketPPhOP(batas_bawah=Decimal('500000001'),  batas_atas=Decimal('5000000000'), tarif_persen=Decimal('30.00'), berlaku_mulai=date(2026, 1, 1)),
+            BracketPPhOP(batas_bawah=Decimal('5000000001'), batas_atas=None,                  tarif_persen=Decimal('35.00'), berlaku_mulai=date(2026, 1, 1)),
+        ])
+
+    def test_pph_23_jasa_flat_rate(self):
+        from apps.pajak.services import compute_pajak
+        result = compute_pajak('pph_23_jasa', Decimal('5000000'), date(2026, 1, 1))
+        self.assertAlmostEqual(float(result['jumlah_pajak']), 100000.0, places=2)
+
+    def test_pph_21_bukan_pegawai_single_bracket(self):
+        from apps.pajak.services import compute_pajak
+        # bruto=10_000_000 → PKP=5_000_000 → entirely in 5% bracket → tax=250_000
+        result = compute_pajak('pph_21_bukan_pegawai', Decimal('10000000'), date(2026, 1, 1))
+        self.assertAlmostEqual(float(result['jumlah_pajak']), 250000.0, places=2)
+
+    def test_pph_21_bukan_pegawai_two_brackets(self):
+        from apps.pajak.services import compute_pajak
+        # bruto=300_000_000 → PKP=150_000_000
+        # Layer 1 (0..60_000_000): ~60_000_001 × 5% ≈ 3_000_000
+        # Layer 2 (60_000_001..): ~89_999_999 × 15% ≈ 13_499_999.85
+        # Total ≈ 16_500_000
+        result = compute_pajak('pph_21_bukan_pegawai', Decimal('300000000'), date(2026, 1, 1))
+        self.assertAlmostEqual(float(result['jumlah_pajak']), 16_500_000.0, places=0)
