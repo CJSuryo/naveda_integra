@@ -24,12 +24,6 @@ TAX_TYPE_CHOICES = [
     ('pph_4_2', 'PPh 4(2)'),
 ]
 
-TAX_PAYMENT_CHOICES = [
-    ('belum_transfer', 'Belum Transfer'),
-    ('sudah_transfer', 'Sudah Transfer'),
-]
-
-
 class StandarAkuntansi(models.TextChoices):
     PSAK_71_72 = 'PSAK_71_72', 'PSAK 71/72'
     SAK_ETAP = 'SAK_ETAP', 'SAK ETAP'
@@ -178,17 +172,6 @@ class KewajibabPelaksanaan(models.Model):
         'master_data.Akun', on_delete=models.PROTECT,
         null=True, blank=True, related_name='pendapatan_item_payment', verbose_name='Akun Pembayaran',
     )
-    tax = models.DecimalField(max_digits=19, decimal_places=4, null=True, blank=True, verbose_name='Pajak (Nominal)')
-    tax_type = models.CharField(max_length=30, choices=TAX_TYPE_CHOICES, blank=True, default='', verbose_name='Tipe Pajak')
-    tax_account = models.ForeignKey(
-        'master_data.Akun', on_delete=models.PROTECT,
-        null=True, blank=True, related_name='pendapatan_item_tax', verbose_name='Akun Pajak',
-    )
-    tax_payment = models.CharField(max_length=20, choices=TAX_PAYMENT_CHOICES, blank=True, default='', verbose_name='Status Transfer Pajak')
-    tax_payment_account = models.ForeignKey(
-        'master_data.Akun', on_delete=models.PROTECT,
-        null=True, blank=True, related_name='pendapatan_item_tax_payment', verbose_name='Akun Utang Pajak',
-    )
     # PSAK 72 fields
     harga_j = models.DecimalField(
         max_digits=19, decimal_places=4, default=0,
@@ -239,6 +222,35 @@ class KewajibabPelaksanaan(models.Model):
 
     def __str__(self) -> str:
         return f'{self.pendapatan_eb.pendapatan_header.transaction_id} — {self.deskripsi_item[:40]}'
+
+
+class KPTaxLine(models.Model):
+    kp = models.ForeignKey(
+        KewajibabPelaksanaan, on_delete=models.CASCADE, related_name='tax_lines',
+        verbose_name='Kewajiban Pelaksanaan',
+    )
+    tax_type = models.CharField(max_length=30, choices=TAX_TYPE_CHOICES, verbose_name='Tipe Pajak')
+    tax = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Pajak (Override Manual)',
+        help_text='Jika diisi, nilai ini menggantikan perhitungan tarif otomatis.',
+    )
+    tax_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='kp_tax_lines_pajak', verbose_name='Akun Pajak',
+    )
+    tax_payment_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='kp_tax_lines_lawan', verbose_name='Akun Lawan Pajak',
+    )
+
+    class Meta:
+        verbose_name = 'KP Tax Line'
+        verbose_name_plural = 'KP Tax Lines'
+        ordering = ['id']
+
+    def __str__(self) -> str:
+        return f'KP-{self.kp_id} — {self.tax_type}'
 
 
 # Backward-compat alias — remove after all references updated in Task 9
