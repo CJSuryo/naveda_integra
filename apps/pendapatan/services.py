@@ -26,6 +26,13 @@ TAX_TYPE_MAP = {
     'pph_4_2': 'pph_4_2_sewa',
 }
 
+SIFAT_PAJAK_MAP = {
+    'ppn_keluaran': 'potong_pungut',  # seller collects PPN → liability (Dr Kas, Cr Utang PPN)
+    'pph_23': 'prepaid',              # buyer withholds → prepaid tax asset (Dr PPh DDM, Cr Kas)
+    'pph_21': 'prepaid',              # buyer withholds → prepaid tax asset (Dr PPh DDM, Cr Kas)
+    'pph_4_2': 'prepaid',            # buyer withholds final tax → expense (Dr Beban, Cr Kas)
+}
+
 
 # ── PSAK 72 Step 4: Price Allocation ─────────────────────────────────────────
 
@@ -248,6 +255,8 @@ def _maybe_sync_confirm_pajak(kp, header, jenis_pajak_kp, amount, user=None):
     if not akun_pajak or not akun_lawan:
         return
 
+    sifat_pajak = SIFAT_PAJAK_MAP.get(jenis_pajak_kp, 'potong_pungut')
+
     pajak_trx = sync_pajak(
         source_type='pendapatan_kp',
         source_obj=kp,
@@ -256,7 +265,7 @@ def _maybe_sync_confirm_pajak(kp, header, jenis_pajak_kp, amount, user=None):
         jenis_pajak=jenis_pajak,
         akun_pajak=akun_pajak,
         akun_lawan=akun_lawan,
-        sifat_pajak='potong_pungut',
+        sifat_pajak=sifat_pajak,
     )
     confirm_pajak_trx(pajak_trx)
 

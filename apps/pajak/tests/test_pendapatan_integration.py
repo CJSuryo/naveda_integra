@@ -104,6 +104,76 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
             f'Expected TRX-PAJ prefix, got: {pajak_trx.jurnal_header.nomor_transaksi}',
         )
 
+    def _make_header_with_pph23(self, coa_pph23):
+        """
+        Create a PendapatanHeader (cash) with a KP that has PPh 23 configured.
+        Manual tax amount → skips TarifPajak lookup. tax_account is the PPh
+        prepaid asset, tax_payment_account is Kas (the offset).
+        """
+        header = create_pendapatan_header(
+            tanggal=date(2026, 6, 1),
+            deskripsi='Jasa konsultasi dengan PPh 23',
+            payment_type='cash',
+            entitas_bisnis=self.f['eb'],
+            payment_account=self.f['coa_kas'],
+            items=[{
+                'deskripsi_item': 'Konsultasi PPh23',
+                'kategori': 'jasa',
+                'sub_transaction_type': self.f['stt'],
+                'jumlah_bruto': Decimal('1000000'),
+                'revenue_account': self.f['coa_revenue'],
+                'payment_account': self.f['coa_kas'],
+                'tax_type': 'pph_23',
+                'tax': Decimal('2000'),            # manual override → skips TarifPajak lookup
+                'tax_account': coa_pph23,
+                'tax_payment_account': self.f['coa_kas'],
+            }],
+        )
+        return header
+
+    def test_pph23_sifat_pajak_is_prepaid(self):
+        """A PPh 23 KP must produce a PajakTransaksi with sifat_pajak='prepaid'."""
+        from apps.master_data.models import Akun
+        coa_pph23 = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dibayar Dimuka', kode_akun='1.3.1',
+        )
+        header = self._make_header_with_pph23(coa_pph23)
+        confirm_pendapatan(header, user=None)
+
+        kp = header.entitas_groups.first().items.first()
+        pajak_trx = PajakTransaksi.objects.get(
+            source_type='pendapatan_kp', source_id=kp.pk,
+        )
+        self.assertEqual(pajak_trx.sifat_pajak, 'prepaid')
+
+    def test_pph23_journal_direction_dr_pajak_cr_lawan(self):
+        """
+        For PPh 23 (prepaid), the journal must debit the tax account (akun_pajak)
+        and credit the offset account (akun_lawan / Kas).
+        """
+        from apps.master_data.models import Akun
+        coa_pph23 = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dibayar Dimuka', kode_akun='1.3.1',
+        )
+        header = self._make_header_with_pph23(coa_pph23)
+        confirm_pendapatan(header, user=None)
+
+        kp = header.entitas_groups.first().items.first()
+        pajak_trx = PajakTransaksi.objects.get(
+            source_type='pendapatan_kp', source_id=kp.pk,
+        )
+        self.assertIsNotNone(pajak_trx.jurnal_header)
+
+        details = list(pajak_trx.jurnal_header.details.all())
+        debit_detail = next(d for d in details if d.debit > 0)
+        kredit_detail = next(d for d in details if d.kredit > 0)
+
+        # prepaid: Dr akun_pajak (PPh DDM), Cr akun_lawan (Kas)
+        self.assertEqual(debit_detail.akun_id, coa_pph23.pk)
+        self.assertEqual(kredit_detail.akun_id, self.f['coa_kas'].pk)
+        self.assertEqual(debit_detail.debit, Decimal('2000'))
+        self.assertEqual(kredit_detail.kredit, Decimal('2000'))
+
     def test_no_pajak_transaksi_when_no_tax_type(self):
         """KPs without a tax_type must not create any PajakTransaksi."""
         header = create_pendapatan_header(
