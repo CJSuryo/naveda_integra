@@ -26,6 +26,7 @@ urlpatterns = [
     path('pos/', include('apps.pos_reports.urls')),
     path('piutang/', include('apps.piutang.urls', namespace='piutang')),
     path('pendapatan/', include('apps.pendapatan.urls', namespace='pendapatan')),
+    path('pajak/', include('apps.pajak.urls', namespace='pajak')),
     path('dashboard/', include('apps.dashboard.urls', namespace='dashboard')),
     path('', include('apps.accounts.urls_home')),
 ]
