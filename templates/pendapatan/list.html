@@ -60,7 +60,10 @@
           <td>{{ p.deskripsi|default:'-'|truncatechars:60 }}</td>
           <td>{{ p.get_payment_type_display }}</td>
           <td><span class="ni-badge ni-badge--{{ p.status }}">{{ p.get_status_display }}</span></td>
-          <td><a href="{% url 'pendapatan:detail' p.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a></td>
+          <td style="white-space:nowrap;">
+            <a href="{% url 'pendapatan:detail' p.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a>
+            <a href="{% url 'pendapatan:invoice' p.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary" target="_blank" title="Cetak Invoice" style="margin-left:4px;">&#128424;</a>
+          </td>
         </tr>
         {% empty %}
         <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada data pendapatan.</td></tr>

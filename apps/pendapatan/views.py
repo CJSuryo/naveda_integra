@@ -444,6 +444,54 @@ def pendapatan_hapus(request: HttpRequest, pk: int) -> HttpResponse:
     })
 
 
+@login_required
+def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
+    from decimal import Decimal
+    from apps.entitas_bisnis.models import EntitasBisnis
+    header = get_object_or_404(
+        PendapatanHeader.objects
+        .select_related('created_by')
+        .prefetch_related(
+            'entitas_groups__entitas_bisnis',
+            'entitas_groups__entitas_bisnis_lv2',
+            'entitas_groups__entitas_bisnis_lv3',
+            'entitas_groups__payment_account',
+            'entitas_groups__items__sub_transaction_type',
+            'entitas_groups__items__tax_lines',
+        ),
+        pk=pk,
+    )
+    company = EntitasBisnis.objects.filter(is_company_profile=True).first()
+
+    eb_groups_data = []
+    grand_total = Decimal('0')
+    for eg in header.entitas_groups.all():
+        subtotal = Decimal('0')
+        tax_total = Decimal('0')
+        items_data = []
+        for kp in eg.items.all():
+            kp_tax = sum((tl.tax or Decimal('0')) for tl in kp.tax_lines.all())
+            subtotal += kp.nilai_kontrak or Decimal('0')
+            tax_total += kp_tax
+            items_data.append({'kp': kp, 'kp_tax': kp_tax})
+        group_total = subtotal + tax_total
+        grand_total += group_total
+        eb_groups_data.append({
+            'group': eg,
+            'items_data': items_data,
+            'subtotal': subtotal,
+            'tax_total': tax_total,
+            'group_total': group_total,
+        })
+
+    return render(request, 'pendapatan/invoice.html', {
+        'header': header,
+        'company': company,
+        'eb_groups_data': eb_groups_data,
+        'grand_total': grand_total,
+    })
+
+
 # ── PSAK 72 Action Views ─────────────────────────────────────────────────────
 
 @login_required

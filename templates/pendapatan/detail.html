@@ -235,6 +235,7 @@
     </p>
   </div>
   <div class="ni-page-header__actions">
+    <a href="{% url 'pendapatan:invoice' header.pk %}" class="ni-btn ni-btn--secondary" target="_blank">&#128424; Invoice</a>
     {% if header.status == 'draft' %}
     <a href="{% url 'pendapatan:edit' header.pk %}" class="ni-btn ni-btn--secondary">Edit</a>
     <form method="post" action="{% url 'pendapatan:confirm' header.pk %}" class="ni-form-inline">
