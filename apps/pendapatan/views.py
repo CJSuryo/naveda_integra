@@ -278,6 +278,8 @@ def pendapatan_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'entitas_groups__payment_account',
             'entitas_groups__items__revenue_account',
             'entitas_groups__items__sub_transaction_type',
+            'entitas_groups__items__tax_lines__tax_account',
+            'entitas_groups__items__tax_lines__tax_payment_account',
             'entitas_groups__items__jadwal__entri__jurnal_header',
             'entitas_groups__items__aset_kontrak',
             'event_logs__actor',

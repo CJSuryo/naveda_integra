@@ -1,11 +1,238 @@
 {% extends 'base.html' %}
-{% load humanize %}
+{% load humanize static %}
+
 {% block title %}{{ header.transaction_id }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/transaction-forms.css' %}">
+<style>
+/* ── Summary strip ────────────────────────────────────────────────── */
+.ni-pnd-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1px;
+  background: var(--ni-border);
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius-lg);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.ni-pnd-summary__cell {
+  background: var(--ni-bg-card);
+  padding: 14px 18px;
+}
+.ni-pnd-summary__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ni-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 5px;
+}
+.ni-pnd-summary__value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ni-text);
+  line-height: 1.2;
+}
+.ni-pnd-summary__sub {
+  font-size: 0.75rem;
+  color: var(--ni-text-muted);
+  margin-top: 2px;
+}
+
+/* ── Detail grid ─────────────────────────────────────────────────── */
+.ni-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) 1fr;
+  gap: 0;
+  font-size: 0.875rem;
+}
+.ni-detail-grid dt {
+  padding: 8px 0;
+  color: var(--ni-text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--ni-border);
+}
+.ni-detail-grid dd {
+  padding: 8px 0 8px 16px;
+  margin: 0;
+  color: var(--ni-text);
+  border-bottom: 1px solid var(--ni-border);
+}
+.ni-detail-grid dt:last-of-type,
+.ni-detail-grid dd:last-of-type { border-bottom: none; }
+
+/* ── KP item block ───────────────────────────────────────────────── */
+.ni-kp-block {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.ni-kp-block:last-child { margin-bottom: 0; }
+.ni-kp-block__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--ni-bg);
+  flex-wrap: wrap;
+}
+.ni-kp-block__title { font-size: 0.9rem; font-weight: 600; color: var(--ni-text); }
+.ni-kp-block__meta  { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ni-kp-block__body  { padding: 14px 16px; }
+
+.ni-kp-meta-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 0.8125rem;
+  margin-bottom: 10px;
+  color: var(--ni-text-muted);
+}
+.ni-kp-meta-row strong { color: var(--ni-text); }
+
+/* ── Progress bar ────────────────────────────────────────────────── */
+.ni-progress-bar {
+  height: 7px;
+  background: var(--ni-border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin: 8px 0 12px;
+}
+.ni-progress-bar__fill {
+  height: 100%;
+  background: var(--ni-success);
+  border-radius: 99px;
+  transition: width 600ms ease;
+}
+
+/* ── Entri pengakuan rows ────────────────────────────────────────── */
+.ni-entri-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--ni-border);
+  font-size: 0.8125rem;
+  gap: 8px;
+}
+.ni-entri-row:last-child { border-bottom: none; }
+
+/* ── Journal entry accordion ─────────────────────────────────────── */
+.ni-jrn-entry {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.ni-jrn-entry:last-child { margin-bottom: 0; }
+.ni-jrn-entry summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: var(--ni-bg);
+  font-size: 0.8125rem;
+  user-select: none;
+}
+.ni-jrn-entry summary::-webkit-details-marker { display: none; }
+.ni-jrn-entry[open] summary { background: color-mix(in srgb, var(--ni-primary) 4%, var(--ni-bg)); }
+.ni-jrn-entry__nomor { font-weight: 600; color: var(--ni-primary); min-width: 140px; font-size: 0.8rem; }
+.ni-jrn-entry__date  { color: var(--ni-text-muted); white-space: nowrap; }
+.ni-jrn-entry__uraian { flex: 1; color: var(--ni-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ni-jrn-entry__caret { margin-left: auto; color: var(--ni-text-muted); transition: transform 200ms ease; flex-shrink: 0; }
+.ni-jrn-entry[open] .ni-jrn-entry__caret { transform: rotate(180deg); }
+.ni-jrn-entry__body { padding: 0 14px 12px; }
+.ni-jrn-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 8px; }
+.ni-jrn-table th { padding: 5px 8px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ni-text-muted); border-bottom: 1px solid var(--ni-border); }
+.ni-jrn-table td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); color: var(--ni-text); }
+.ni-jrn-table tr:last-child td { border-bottom: none; }
+.ni-jrn-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ni-jrn-table .dr  { color: var(--ni-primary); }
+.ni-jrn-table .cr  { color: var(--ni-text-muted); }
+.ni-jrn-table tfoot td { font-weight: 600; border-top: 1px solid var(--ni-border); border-bottom: none; }
+
+/* ── Piutang table ───────────────────────────────────────────────── */
+.ni-piutang-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.ni-piutang-table th { padding: 7px 10px; text-align: left; font-size: 0.73rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ni-text-muted); border-bottom: 2px solid var(--ni-border); }
+.ni-piutang-table td { padding: 9px 10px; border-bottom: 1px solid var(--ni-border); vertical-align: middle; }
+.ni-piutang-table tr:last-child td { border-bottom: none; }
+.ni-piutang-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Event log timeline ──────────────────────────────────────────── */
+.ni-timeline { list-style: none; padding: 0; margin: 0; position: relative; }
+.ni-timeline::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--ni-border);
+}
+.ni-timeline__item {
+  display: flex;
+  gap: 14px;
+  padding: 0 0 16px 0;
+  position: relative;
+}
+.ni-timeline__item:last-child { padding-bottom: 0; }
+.ni-timeline__dot {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ni-bg);
+  border: 2px solid var(--ni-border);
+  color: var(--ni-text-muted);
+  position: relative;
+  z-index: 1;
+}
+.ni-timeline__dot--success { background: color-mix(in srgb, var(--ni-success) 12%, var(--ni-bg)); border-color: var(--ni-success); color: var(--ni-success); }
+.ni-timeline__dot--danger  { background: color-mix(in srgb, var(--ni-danger)  12%, var(--ni-bg)); border-color: var(--ni-danger);  color: var(--ni-danger); }
+.ni-timeline__dot--primary { background: color-mix(in srgb, var(--ni-primary) 12%, var(--ni-bg)); border-color: var(--ni-primary); color: var(--ni-primary); }
+.ni-timeline__dot--info    { background: color-mix(in srgb, var(--ni-info, #0ea5e9) 12%, var(--ni-bg)); border-color: var(--ni-info, #0ea5e9); color: var(--ni-info, #0ea5e9); }
+.ni-timeline__content { flex: 1; padding-top: 4px; }
+.ni-timeline__event { font-size: 0.875rem; font-weight: 600; color: var(--ni-text); }
+.ni-timeline__desc  { font-size: 0.8rem; color: var(--ni-text-muted); margin-top: 2px; font-family: ui-monospace, "Cascadia Code", monospace; }
+.ni-timeline__meta  { font-size: 0.75rem; color: var(--ni-text-muted); margin-top: 3px; }
+
+/* ── Extra-small button (inline use) ─────────────────────────────── */
+.ni-btn--xs {
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  border-radius: var(--ni-radius-sm);
+  gap: 4px;
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .ni-pnd-summary { grid-template-columns: 1fr 1fr; }
+  .ni-jrn-entry__uraian { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ni-jrn-entry__caret, .ni-progress-bar__fill { transition: none; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">{{ header.transaction_id }}</h1>
-    <p class="ni-page-header__subtitle">{{ header.get_payment_type_display }} — {{ header.get_status_display }}</p>
+    <p class="ni-page-header__subtitle">
+      {{ header.get_payment_type_display }}
+      &nbsp;·&nbsp; {{ header.get_standar_akuntansi_display }}
+      {% if header.source_type != 'manual' %}&nbsp;·&nbsp; {{ header.get_source_type_display }}{% endif %}
+    </p>
   </div>
   <div class="ni-page-header__actions">
     {% if header.status == 'draft' %}
@@ -18,110 +245,291 @@
     {% if header.status == 'confirmed' and not header.is_locked %}
     <form method="post" action="{% url 'pendapatan:void' header.pk %}" class="ni-form-inline">
       {% csrf_token %}
-      <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Batalkan transaksi ini?')">Batalkan</button>
+      <button type="submit" class="ni-btn ni-btn--danger" onclick="return confirm('Batalkan transaksi ini? Jurnal pembalik akan dibuat.')">Batalkan</button>
     </form>
+    {% endif %}
+    {% if not header.is_locked %}
+    <a href="{% url 'pendapatan:hapus' header.pk %}" class="ni-btn ni-btn--outline-danger">
+      <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+      Hapus
+    </a>
     {% endif %}
     <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
   </div>
 </div>
 
+{# ── Summary strip ────────────────────────────────────────────────────────── #}
+<div class="ni-pnd-summary ni-animate-fade-in">
+  <div class="ni-pnd-summary__cell">
+    <div class="ni-pnd-summary__label">Total Nilai Kontrak</div>
+    <div class="ni-pnd-summary__value">Rp {{ total_nilai|floatformat:0|intcomma }}</div>
+  </div>
+  <div class="ni-pnd-summary__cell">
+    <div class="ni-pnd-summary__label">Status</div>
+    <div class="ni-pnd-summary__value">
+      <span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span>
+    </div>
+  </div>
+  <div class="ni-pnd-summary__cell">
+    <div class="ni-pnd-summary__label">Pelanggan</div>
+    <div class="ni-pnd-summary__value" style="font-size:0.875rem;">
+      {% with eg=header.entitas_groups.first %}
+        {% if eg and eg.entitas_bisnis %}{{ eg.entitas_bisnis.nama }}{% else %}&mdash;{% endif %}
+      {% endwith %}
+    </div>
+  </div>
+  <div class="ni-pnd-summary__cell">
+    <div class="ni-pnd-summary__label">Jurnal Dibuat</div>
+    <div class="ni-pnd-summary__value">{{ journals|length }}</div>
+    <div class="ni-pnd-summary__sub">entri jurnal</div>
+  </div>
+  {% if piutang_list %}
+  <div class="ni-pnd-summary__cell">
+    <div class="ni-pnd-summary__label">Piutang</div>
+    <div class="ni-pnd-summary__value">{{ piutang_list|length }}</div>
+    <div class="ni-pnd-summary__sub">record piutang</div>
+  </div>
+  {% endif %}
+</div>
+
+{# ── Informasi Transaksi ──────────────────────────────────────────────────── #}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Informasi Transaksi</h2></div>
   <div class="ni-card__body">
     <dl class="ni-detail-grid">
-      <dt>ID Transaksi</dt><dd>{{ header.transaction_id }}</dd>
-      <dt>Tanggal</dt><dd>{{ header.tanggal }}</dd>
-      <dt>Tipe Pembayaran</dt><dd>{{ header.get_payment_type_display }}</dd>
-      <dt>Status</dt><dd><span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span></dd>
-      <dt>Sumber</dt><dd>{{ header.get_source_type_display }}</dd>
-      <dt>Standar Akuntansi</dt><dd>{{ header.get_standar_akuntansi_display }}</dd>
-      <dt>Deskripsi</dt><dd>{{ header.deskripsi|default:'-' }}</dd>
-      <dt>Dibuat</dt><dd>{{ header.created_at }}</dd>
+      <dt>ID Transaksi</dt>
+      <dd><code style="font-size:0.875rem;">{{ header.transaction_id }}</code></dd>
+
+      <dt>Tanggal</dt>
+      <dd>{{ header.tanggal|date:"d F Y" }}</dd>
+
+      <dt>Tipe Pembayaran</dt>
+      <dd>{{ header.get_payment_type_display }}</dd>
+
+      <dt>Status</dt>
+      <dd>
+        <span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span>
+        {% if header.is_locked %}&nbsp;<span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">Terkunci</span>{% endif %}
+      </dd>
+
+      <dt>Standar Akuntansi</dt>
+      <dd>{{ header.get_standar_akuntansi_display }}</dd>
+
+      <dt>Sumber</dt>
+      <dd>
+        {{ header.get_source_type_display }}
+        {% if header.source_recurring %}
+          &nbsp;—&nbsp;<a href="{% url 'pendapatan:recurring_detail' header.source_recurring.pk %}">{{ header.source_recurring.nama }}</a>
+        {% endif %}
+      </dd>
+
+      <dt>Deskripsi</dt>
+      <dd>{{ header.deskripsi|default:'—' }}</dd>
+
+      <dt>Dibuat Oleh</dt>
+      <dd>{{ header.created_by|default:'—' }}</dd>
+
+      <dt>Dibuat Pada</dt>
+      <dd>{{ header.created_at|date:"d M Y, H:i" }}</dd>
+
+      <dt>Diperbarui</dt>
+      <dd>{{ header.updated_at|date:"d M Y, H:i" }}</dd>
     </dl>
   </div>
 </div>
 
+{# ── Kewajiban Pelaksanaan ─────────────────────────────────────────────────── #}
 {% for eb_group in header.entitas_groups.all %}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header">
-    <h2 class="ni-card__title">{{ eb_group.entitas_bisnis.nama }}</h2>
-    {% if eb_group.payment_account %}<span class="ni-text-muted">Akun: {{ eb_group.payment_account }}</span>{% endif %}
+    <div>
+      <h2 class="ni-card__title">{{ eb_group.entitas_bisnis.nama }}</h2>
+      {% if eb_group.payment_account %}
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:3px 0 0;">
+        Akun Pembayaran: {{ eb_group.payment_account.kode_akun }} — {{ eb_group.payment_account.nama }}
+      </p>
+      {% endif %}
+    </div>
+    <span style="font-size:0.78rem;color:var(--ni-text-muted);">{{ eb_group.items.count }} Kewajiban Pelaksanaan</span>
   </div>
   <div class="ni-card__body">
     {% for kp in eb_group.items.all %}
-    <div class="card mb-3 border">
-      <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fa;padding:0.75rem 1rem;">
-        <strong>{{ kp.deskripsi_item }}</strong>
-        <div>
-          <span class="badge bg-secondary">{{ kp.get_recognition_type_display }}</span>
-          {% if kp.harga_j %}
-            <span class="ms-2 text-muted" style="font-size:0.85em;">Harga-J: {{ kp.harga_j|floatformat:0|intcomma }}</span>
+    <div class="ni-kp-block">
+      <div class="ni-kp-block__head">
+        <span class="ni-kp-block__title">{{ kp.deskripsi_item }}</span>
+        <div class="ni-kp-block__meta">
+          <span class="ni-badge ni-badge--{% if kp.recognition_type == 'over_time' %}primary{% else %}secondary{% endif %}">
+            {{ kp.get_recognition_type_display }}
+          </span>
+          <span class="ni-badge ni-badge--secondary">{{ kp.get_kategori_display }}</span>
+          {% if kp.harga_j and kp.harga_j != kp.nilai_kontrak %}
+          <span style="font-size:0.75rem;color:var(--ni-text-muted);">Harga-J: Rp {{ kp.harga_j|floatformat:0|intcomma }}</span>
           {% endif %}
-          <span class="ms-2 text-muted" style="font-size:0.85em;">{{ kp.get_kategori_display }}</span>
         </div>
       </div>
-      <div class="card-body" style="padding:0.75rem 1rem;">
-        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:0.5rem;font-size:0.9em;">
-          <span>Nilai Kontrak: <strong>{{ kp.nilai_kontrak|floatformat:0|intcomma }}</strong></span>
-          <span>STT: {{ kp.sub_transaction_type.nama }}</span>
-          <span>Akun: {{ kp.revenue_account }}</span>
+      <div class="ni-kp-block__body">
+        <div class="ni-kp-meta-row">
+          <span>Nilai Kontrak: <strong>Rp {{ kp.nilai_kontrak|floatformat:0|intcomma }}</strong></span>
+          <span>STT: <strong>{{ kp.sub_transaction_type.nama }}</strong></span>
+          <span>Akun Pendapatan: <strong>{{ kp.revenue_account.kode_akun }} — {{ kp.revenue_account.nama }}</strong></span>
+          {% if kp.tax %}
+          <span>Pajak: <strong>{{ kp.get_tax_type_display }} Rp {{ kp.tax|floatformat:0|intcomma }}</strong></span>
+          {% endif %}
         </div>
+
+        {# ── Draft Tax Lines (intent, shown before confirmation) ─────── #}
+        {% if header.status == 'draft' %}
+          {% with kp.tax_lines.all as tlines %}
+          {% if tlines %}
+          <div style="margin-top:10px;padding:8px 12px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:0.8rem;">
+            <p style="margin:0 0 6px;font-weight:600;color:#0369a1;">
+              <i data-lucide="receipt" style="width:13px;height:13px;vertical-align:-2px;"></i>
+              Baris Pajak ({{ tlines|length }} jenis — akan diproses saat konfirmasi)
+            </p>
+            {% for tl in tlines %}
+            <div style="display:flex;gap:12px;padding:4px 0;border-bottom:1px solid #e0f2fe;{% if forloop.last %}border-bottom:none;{% endif %}">
+              <span style="font-weight:500;">{{ tl.get_tax_type_display }}</span>
+              {% if tl.tax %}
+              <span>Override: Rp {{ tl.tax|floatformat:0 }}</span>
+              {% else %}
+              <span style="color:var(--ni-text-muted);">Auto (tarif berlaku)</span>
+              {% endif %}
+              <span style="color:var(--ni-text-muted);">→ {{ tl.tax_account.kode_akun }} / {{ tl.tax_payment_account.kode_akun }}</span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% endwith %}
+        {% endif %}
+
+        {# ── Pajak Terkait ─────────────────────────────────────────────── #}
+        {% if kp.pajak_list %}
+        <div style="background:color-mix(in srgb,var(--ni-warning,#f59e0b) 6%,var(--ni-bg));border:1px solid color-mix(in srgb,var(--ni-warning,#f59e0b) 25%,var(--ni-border));border-radius:var(--ni-radius-sm);padding:10px 14px;margin-top:8px;">
+          <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-warning,#f59e0b);margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+            <i data-lucide="receipt" style="width:12px;height:12px;"></i>
+            Transaksi Pajak
+          </div>
+          {% for pt in kp.pajak_list %}
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:6px 0;{% if not forloop.last %}border-bottom:1px solid color-mix(in srgb,var(--ni-warning,#f59e0b) 20%,var(--ni-border));{% endif %}font-size:0.8rem;">
+            <span style="font-weight:600;color:var(--ni-text);">{{ pt.get_jenis_pajak_display }}</span>
+            <span style="color:var(--ni-text-muted);">DPP: <strong style="color:var(--ni-text);">Rp {{ pt.dpp|floatformat:0|intcomma }}</strong></span>
+            <span style="color:var(--ni-text-muted);">Tarif: <strong style="color:var(--ni-text);">{{ pt.tarif_persen }}%</strong></span>
+            <span style="color:var(--ni-text-muted);">Pajak: <strong style="color:var(--ni-text);">Rp {{ pt.jumlah_pajak|floatformat:0|intcomma }}</strong></span>
+            {% if pt.is_overridden %}
+            <span style="font-size:0.7rem;background:color-mix(in srgb,var(--ni-warning,#f59e0b) 15%,var(--ni-bg-card));color:var(--ni-warning,#f59e0b);padding:1px 6px;border-radius:99px;border:1px solid color-mix(in srgb,var(--ni-warning,#f59e0b) 30%,transparent);">Manual</span>
+            {% endif %}
+            <span class="ni-badge ni-badge--{% if pt.status == 'final' or pt.status == 'disetor' %}success{% elif pt.status == 'dibatalkan' %}danger{% else %}secondary{% endif %}" style="margin-left:auto;">{{ pt.get_status_display }}</span>
+            {% if pt.jurnal_header %}
+            <a href="{% url 'pajak:transaksi_list' %}" style="font-size:0.72rem;color:var(--ni-primary);">{{ pt.jurnal_header.nomor_transaksi }}</a>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
 
         {% if kp.recognition_type == 'over_time' %}
           {% with jadwal=kp.jadwal %}
           {% if jadwal %}
-          <div style="margin-top:0.75rem;">
-            <div style="margin-bottom:0.4rem;font-size:0.88em;">
-              Diakui: <strong>{{ jadwal.nilai_diakui|floatformat:0|intcomma }}</strong> /
-              {{ jadwal.nilai_total|floatformat:0|intcomma }}
-              &nbsp;<span class="badge bg-light text-dark" style="border:1px solid #ddd;">{{ jadwal.get_tipe_aliran_display }}</span>
-              &nbsp;<span class="badge bg-light text-dark" style="border:1px solid #ddd;">{{ jadwal.get_progress_method_display }}</span>
+          <div style="background:var(--ni-bg);border-radius:var(--ni-radius-sm);padding:12px 14px;margin-top:4px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px;">
+              <span style="font-size:0.8rem;font-weight:600;color:var(--ni-text);">
+                Jadwal Pengakuan — {{ jadwal.get_tipe_aliran_display }}
+                &nbsp;<span style="font-size:0.72rem;font-weight:400;color:var(--ni-text-muted);">{{ jadwal.get_progress_method_display }}</span>
+              </span>
+              <span style="font-size:0.8rem;color:var(--ni-text-muted);">
+                Diakui: <strong style="color:var(--ni-text);">Rp {{ jadwal.nilai_diakui|floatformat:0|intcomma }}</strong>
+                / Rp {{ jadwal.nilai_total|floatformat:0|intcomma }}
+              </span>
             </div>
             {% if jadwal.nilai_total %}
-            <div style="height:8px;background:#e9ecef;border-radius:4px;margin-bottom:0.75rem;overflow:hidden;">
-              <div style="height:100%;background:#28a745;width:{% widthratio jadwal.nilai_diakui jadwal.nilai_total 100 %}%;border-radius:4px;"></div>
+            <div class="ni-progress-bar">
+              <div class="ni-progress-bar__fill" style="width:{% widthratio jadwal.nilai_diakui jadwal.nilai_total 100 %}%;"></div>
             </div>
             {% endif %}
+            <div style="font-size:0.78rem;color:var(--ni-text-muted);margin-bottom:8px;">
+              {{ jadwal.tanggal_mulai|date:"d M Y" }} — {{ jadwal.tanggal_selesai|date:"d M Y" }}
+              &nbsp;·&nbsp; Sisa: Rp {{ jadwal.nilai_belum_diakui|floatformat:0|intcomma }}
+            </div>
+
             {% for entri in jadwal.entri.all %}
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.4rem 0;border-bottom:1px solid #eee;font-size:0.88em;">
-              <span>{{ entri.tanggal_target|date:"M Y" }} — {{ entri.nilai|floatformat:0|intcomma }}</span>
-              {% if entri.status == 'pending' and header.status == 'confirmed' %}
-              <div>
-                <button type="button" class="btn btn-sm btn-success"
+            <div class="ni-entri-row">
+              <span>
+                {{ entri.tanggal_target|date:"M Y" }}
+                &nbsp;<span style="font-size:0.75rem;color:var(--ni-text-muted);">Rp {{ entri.nilai|floatformat:0|intcomma }}</span>
+              </span>
+              <div style="display:flex;align-items:center;gap:8px;">
+                {% if entri.status == 'recognized' and entri.jurnal_header %}
+                <a href="#" style="font-size:0.72rem;color:var(--ni-primary);">{{ entri.jurnal_header.nomor_transaksi }}</a>
+                {% endif %}
+                {% if entri.status == 'pending' and header.status == 'confirmed' %}
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--primary"
                         data-bs-toggle="modal"
-                        data-bs-target="#modal-recognize-{{ entri.id }}"
-                        style="padding:0.2rem 0.5rem;font-size:0.8em;">
+                        data-bs-target="#modal-recognize-{{ entri.id }}">
                   Akui
                 </button>
                 {% include "pendapatan/_recognize_modal.html" with entri=entri header=header %}
+                {% else %}
+                <span class="ni-badge ni-badge--{% if entri.status == 'recognized' %}success{% elif entri.status == 'skipped' %}secondary{% else %}warning{% endif %}" style="font-size:0.72rem;">
+                  {{ entri.get_status_display }}
+                </span>
+                {% endif %}
               </div>
-              {% else %}
-              <span class="badge {% if entri.status == 'recognized' %}bg-success{% elif entri.status == 'skipped' %}bg-secondary{% else %}bg-warning text-dark{% endif %}" style="font-size:0.78em;">
-                {{ entri.get_status_display }}
-              </span>
-              {% endif %}
             </div>
             {% empty %}
-            <p class="text-muted" style="font-size:0.85em;">Belum ada entri pengakuan.</p>
+            {% if jadwal.progress_method != 'percentage_completion' %}
+            <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:0;">Belum ada entri pengakuan.</p>
+            {% endif %}
             {% endfor %}
+
+            {% if jadwal.progress_method == 'percentage_completion' and jadwal.status == 'active' and header.status == 'confirmed' %}
+            <div style="padding:10px 0 4px;">
+              {% if jadwal.nilai_diakui > 0 %}
+              <p style="font-size:0.78rem;color:var(--ni-text-muted);margin:0 0 8px;">
+                <i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:middle;color:var(--ni-success);"></i>
+                Sudah diakui: Rp {{ jadwal.nilai_diakui|floatformat:0|intcomma }}
+                ({% widthratio jadwal.nilai_diakui jadwal.nilai_total 100 %}%)
+              </p>
+              {% endif %}
+              <button type="button" class="ni-btn ni-btn--sm ni-btn--primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modal-recognize-pct-{{ jadwal.pk }}">
+                <i data-lucide="percent" style="width:13px;height:13px;"></i>
+                Catat Progress Persentase Selesai
+              </button>
+            </div>
+            {% include "pendapatan/_recognize_pct_modal.html" with jadwal=jadwal header=header %}
+            {% elif jadwal.progress_method == 'percentage_completion' and jadwal.status == 'completed' %}
+            <p style="font-size:0.78rem;color:var(--ni-success);margin:4px 0 0;">
+              <i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:middle;"></i>
+              Selesai — 100% diakui (Rp {{ jadwal.nilai_diakui|floatformat:0|intcomma }})
+            </p>
+            {% endif %}
 
             {% if jadwal.tipe_aliran == 'performance_first' %}
               {% for aset in kp.aset_kontrak.all %}
                 {% if aset.status == 'active' %}
-                <form method="post" action="{% url 'pendapatan:konversi_aset_kontrak' aset.id %}" class="mt-2">
+                <form method="post" action="{% url 'pendapatan:konversi_aset_kontrak' aset.id %}" style="margin-top:10px;">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-warning btn-sm"
-                          onclick="return confirm('Konversi aset kontrak ke piutang?')"
-                          style="font-size:0.82em;">
-                    Konversi Aset Kontrak ({{ aset.nilai_tersisa|floatformat:0|intcomma }}) → Piutang
+                  <button type="submit" class="ni-btn ni-btn--sm ni-btn--warning"
+                          onclick="return confirm('Konversi aset kontrak ke piutang?')">
+                    <i data-lucide="refresh-cw" style="width:13px;height:13px;"></i>
+                    Konversi Aset Kontrak (Rp {{ aset.nilai_tersisa|floatformat:0|intcomma }}) → Piutang
                   </button>
                 </form>
+                {% elif aset.status == 'converted' %}
+                <p style="font-size:0.78rem;color:var(--ni-success);margin-top:8px;">
+                  <i data-lucide="check-circle" style="width:12px;height:12px;vertical-align:middle;"></i>
+                  Aset kontrak Rp {{ aset.nilai|floatformat:0|intcomma }} telah dikonversi ke piutang
+                  {% if aset.piutang %}&nbsp;({{ aset.piutang.nomor_piutang }}){% endif %}
+                </p>
                 {% endif %}
               {% endfor %}
             {% endif %}
           </div>
           {% else %}
-          <p class="text-muted" style="font-size:0.85em;margin-top:0.5rem;">Jadwal pengakuan belum dibuat (akan dibuat saat konfirmasi).</p>
+          <p style="font-size:0.8rem;color:var(--ni-text-muted);margin-top:6px;">
+            Jadwal pengakuan belum dibuat — akan dibuat saat konfirmasi.
+          </p>
           {% endif %}
           {% endwith %}
         {% endif %}
@@ -134,20 +542,245 @@
 </div>
 {% endfor %}
 
+{# ── Riwayat Jurnal ────────────────────────────────────────────────────────── #}
 <div class="ni-card ni-animate-fade-in">
-  <div class="ni-card__header"><h2 class="ni-card__title">Event Log</h2></div>
+  <div class="ni-card__header">
+    <div>
+      <h2 class="ni-card__title">Riwayat Jurnal</h2>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:3px 0 0;">Semua entri jurnal yang dibuat untuk transaksi ini</p>
+    </div>
+    <span style="font-size:0.875rem;font-weight:600;color:var(--ni-text-muted);">{{ journals|length }} jurnal</span>
+  </div>
+  <div class="ni-card__body">
+    {% if journals %}
+    {% for jh in journals %}
+    <details class="ni-jrn-entry" {% if forloop.first %}open{% endif %}>
+      <summary>
+        <i data-lucide="book-open" style="width:14px;height:14px;color:var(--ni-primary);flex-shrink:0;"></i>
+        <span class="ni-jrn-entry__nomor">{{ jh.nomor_transaksi }}</span>
+        <span class="ni-jrn-entry__date">{{ jh.tanggal|date:"d M Y" }}</span>
+        <span class="ni-jrn-entry__uraian">{{ jh.uraian_transaksi }}</span>
+        <i data-lucide="chevron-down" class="ni-jrn-entry__caret" style="width:14px;height:14px;"></i>
+      </summary>
+      <div class="ni-jrn-entry__body">
+        <p style="font-size:0.78rem;color:var(--ni-text-muted);margin:4px 0 8px;">{{ jh.uraian_transaksi }}</p>
+        <table class="ni-jrn-table">
+          <thead>
+            <tr>
+              <th>Kode Akun</th>
+              <th>Nama Akun</th>
+              <th class="num">Debit (Rp)</th>
+              <th class="num">Kredit (Rp)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in jh.details.all %}
+            <tr>
+              <td style="font-family:ui-monospace,monospace;font-size:0.78rem;">{{ d.akun.kode_akun }}</td>
+              <td>{{ d.akun.nama }}</td>
+              <td class="num dr">{% if d.debit %}{{ d.debit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+              <td class="num cr">{% if d.kredit %}{{ d.kredit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:32px 0;color:var(--ni-text-muted);">
+      <i data-lucide="book" style="width:32px;height:32px;opacity:0.3;margin-bottom:8px;"></i>
+      <p style="font-size:0.875rem;margin:0;">Belum ada jurnal — jurnal dibuat otomatis saat konfirmasi.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Piutang Terkait ───────────────────────────────────────────────────────── #}
+{% if piutang_list %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <div>
+      <h2 class="ni-card__title">Piutang Terkait</h2>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:3px 0 0;">Piutang yang dibuat dari transaksi pendapatan ini</p>
+    </div>
+  </div>
+  <div class="ni-card__body" style="overflow-x:auto;">
+    <table class="ni-piutang-table">
+      <thead>
+        <tr>
+          <th>Nomor Piutang</th>
+          <th>Debitur</th>
+          <th>Tanggal</th>
+          <th>Jatuh Tempo</th>
+          <th class="num">Jumlah Pokok</th>
+          <th class="num">Terbayar</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in piutang_list %}
+        <tr>
+          <td>
+            <a href="{% url 'piutang:detail' p.pk %}" style="font-weight:600;color:var(--ni-primary);font-size:0.875rem;">
+              {{ p.nomor_piutang }}
+            </a>
+          </td>
+          <td style="font-size:0.875rem;">{{ p.debitur|default:p.entitas_bisnis }}</td>
+          <td style="font-size:0.8rem;color:var(--ni-text-muted);">{{ p.tanggal|date:"d M Y" }}</td>
+          <td style="font-size:0.8rem;color:var(--ni-text-muted);">{{ p.jatuh_tempo|date:"d M Y"|default:"—" }}</td>
+          <td class="num">Rp {{ p.jumlah_pokok|floatformat:0|intcomma }}</td>
+          <td class="num" style="color:var(--ni-success);">Rp {{ p.jumlah_terbayar|floatformat:0|intcomma }}</td>
+          <td>
+            <span class="ni-badge ni-badge--{{ p.status }}">{{ p.get_status_display }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{# ── Audit Log ────────────────────────────────────────────────────────────── #}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Audit Log</h2>
+  </div>
   <div class="ni-card__body">
     <ul class="ni-timeline">
       {% for log in header.event_logs.all %}
       <li class="ni-timeline__item">
-        <span class="ni-timeline__event">{{ log.event_type }}</span>
-        {% if log.description %}<span class="ni-timeline__desc">— {{ log.description }}</span>{% endif %}
-        <span class="ni-timeline__meta">{{ log.timestamp }} {% if log.actor %}({{ log.actor }}){% endif %}</span>
+        {# dot color + icon by event type #}
+        {% if log.event_type == 'CONFIRMED' %}
+        <div class="ni-timeline__dot ni-timeline__dot--success">
+          <i data-lucide="check-circle" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'VOIDED' %}
+        <div class="ni-timeline__dot ni-timeline__dot--danger">
+          <i data-lucide="x-circle" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'JOURNAL_CREATED' or log.event_type == 'JOURNAL_PSAK72' %}
+        <div class="ni-timeline__dot ni-timeline__dot--primary">
+          <i data-lucide="book-open" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'PIUTANG_CREATED' or log.event_type == 'PIUTANG_CREATED_KP' %}
+        <div class="ni-timeline__dot ni-timeline__dot--info">
+          <i data-lucide="credit-card" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'RECOGNIZE' %}
+        <div class="ni-timeline__dot ni-timeline__dot--success">
+          <i data-lucide="trending-up" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'ASSET_CONVERTED' %}
+        <div class="ni-timeline__dot ni-timeline__dot--info">
+          <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i>
+        </div>
+        {% elif log.event_type == 'JADWAL_CREATED' %}
+        <div class="ni-timeline__dot ni-timeline__dot--primary">
+          <i data-lucide="calendar-range" style="width:14px;height:14px;"></i>
+        </div>
+        {% else %}
+        <div class="ni-timeline__dot">
+          <i data-lucide="circle" style="width:14px;height:14px;"></i>
+        </div>
+        {% endif %}
+
+        <div class="ni-timeline__content">
+          <div class="ni-timeline__event">{{ log.get_event_type_display }}</div>
+          {% if log.description %}
+          <div class="ni-timeline__desc">{{ log.description }}</div>
+          {% endif %}
+          <div class="ni-timeline__meta">
+            {{ log.timestamp|date:"d M Y, H:i:s" }}
+            {% if log.actor %}&nbsp;·&nbsp; {{ log.actor }}{% endif %}
+          </div>
+        </div>
       </li>
       {% empty %}
-      <li class="ni-text-muted">Belum ada event.</li>
+      <li style="color:var(--ni-text-muted);font-size:0.875rem;">Belum ada aktivitas tercatat.</li>
       {% endfor %}
     </ul>
   </div>
 </div>
-{% endblock %}
+
+{% endblock %}{# content #}
+
+{% block extra_js %}
+<script>
+const FMT = new Intl.NumberFormat('id-ID');
+
+function updatePctDisplay(jadwalId, nilaiTotal, pct) {
+  const total = parseFloat(nilaiTotal) || 0;
+  const num = document.getElementById('pct-num-' + jadwalId);
+  if (num) num.value = pct;
+  _refreshPctPreview(jadwalId, total, parseFloat(pct) || 0);
+}
+
+function syncPctSlider(jadwalId, nilaiTotal, pct) {
+  const total = parseFloat(nilaiTotal) || 0;
+  const slider = document.getElementById('pct-slider-' + jadwalId);
+  if (slider) slider.value = pct;
+  _refreshPctPreview(jadwalId, total, parseFloat(pct) || 0);
+}
+
+function _refreshPctPreview(jadwalId, nilaiTotal, pct) {
+  const preview = document.getElementById('pct-preview-' + jadwalId);
+  const amountEl = document.getElementById('pct-amount-' + jadwalId);
+  if (!preview || !amountEl) return;
+  const amount = (pct / 100) * nilaiTotal;
+  if (pct > 0) {
+    preview.style.display = '';
+    amountEl.textContent = 'Rp ' + FMT.format(Math.max(0, Math.round(amount)));
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function switchPctMode(jadwalId, mode) {
+  const pctDiv  = document.getElementById('mode-pct-'  + jadwalId);
+  const costDiv = document.getElementById('mode-cost-' + jadwalId);
+  const tabPct  = document.getElementById('tab-pct-label-'  + jadwalId);
+  const tabCost = document.getElementById('tab-cost-label-' + jadwalId);
+  if (!pctDiv || !costDiv) return;
+  const isPct = mode === 'pct';
+  pctDiv.style.display  = isPct ? '' : 'none';
+  costDiv.style.display = isPct ? 'none' : '';
+  if (tabPct)  { tabPct.style.background  = isPct ? 'var(--ni-primary)' : 'var(--ni-bg-card)'; tabPct.style.color  = isPct ? '#fff' : 'var(--ni-text-muted)'; }
+  if (tabCost) { tabCost.style.background = isPct ? 'var(--ni-bg-card)' : 'var(--ni-primary)'; tabCost.style.color = isPct ? 'var(--ni-text-muted)' : '#fff'; }
+  if (!isPct) {
+    const costInput = document.getElementById('cost-actual-' + jadwalId);
+    const slider    = document.getElementById('pct-slider-'  + jadwalId);
+    const nilaiTotal = slider ? slider.dataset.nilaiTotal || 0 : 0;
+    if (costInput) computeFromCost(jadwalId, costInput.max, nilaiTotal, costInput.value);
+  }
+}
+
+function computeFromCost(jadwalId, biayaEstimasi, nilaiTotal, biayaAktual) {
+  const estimasi = parseFloat(biayaEstimasi) || 0;
+  const aktual   = parseFloat(biayaAktual)  || 0;
+  const total    = parseFloat(nilaiTotal)   || 0;
+  const pct      = estimasi > 0 ? Math.min(100, (aktual / estimasi) * 100) : 0;
+  const slider   = document.getElementById('pct-slider-' + jadwalId);
+  const numInput = document.getElementById('pct-num-'    + jadwalId);
+  if (slider)   slider.value   = pct.toFixed(2);
+  if (numInput) numInput.value = pct.toFixed(2);
+  const display  = document.getElementById('cost-pct-display-' + jadwalId);
+  const val      = document.getElementById('cost-pct-val-'     + jadwalId);
+  if (display && val) {
+    display.style.display = aktual > 0 ? '' : 'none';
+    val.textContent = pct.toFixed(1);
+  }
+  _refreshPctPreview(jadwalId, total, pct);
+}
+
+function validatePctForm(form) {
+  const slider = form.querySelector('input[type="range"][name="progress_pct"]');
+  if (!slider || parseFloat(slider.value) <= 0) {
+    alert('Masukkan persentase penyelesaian lebih dari 0%.');
+    return false;
+  }
+  return true;
+}
+</script>
+{% endblock %}{# extra_js #}
