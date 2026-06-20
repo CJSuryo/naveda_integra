@@ -54,25 +54,6 @@ class KewajibabPelaksanaanForm(forms.Form):
         widget=forms.Select(attrs={'class': 'ni-input'}),
         empty_label='— Pilih Akun Kas/Bank —',
     )
-    # Tax fields
-    tax = forms.DecimalField(
-        max_digits=19, decimal_places=4, required=False,
-        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
-        label='Pajak (Nominal)',
-    )
-    tax_type = forms.ChoiceField(
-        choices=[('', '— Pilih Tipe Pajak —')] + list(TAX_TYPE_CHOICES),
-        required=False,
-        widget=forms.Select(attrs={'class': 'ni-input'}),
-        label='Tipe Pajak',
-    )
-    tax_account = forms.ModelChoiceField(
-        queryset=Akun.objects.none(),
-        required=False,
-        widget=forms.Select(attrs={'class': 'ni-input'}),
-        empty_label='— Pilih Akun Pajak —',
-        label='Akun Pajak',
-    )
     # PSAK 72 recognition fields
     recognition_type = forms.ChoiceField(
         choices=KewajibabPelaksanaan.RecognitionType.choices,
@@ -128,7 +109,6 @@ class KewajibabPelaksanaanForm(forms.Form):
         qs_all = akun_sorted_queryset()
         self.fields['revenue_account'].queryset = qs_all
         self.fields['payment_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
-        self.fields['tax_account'].queryset = qs_all
         self.fields['ot_liabilitas_kontrak_acct'].queryset = qs_all
         self.fields['ot_aset_kontrak_acct'].queryset = qs_all
 
@@ -157,6 +137,38 @@ class KewajibabPelaksanaanForm(forms.Form):
                     )
 
         return cleaned_data
+
+
+class KPTaxLineForm(forms.Form):
+    """Validates a single tax line for a KP."""
+    tax_type = forms.ChoiceField(
+        choices=TAX_TYPE_CHOICES,
+        widget=forms.Select(attrs={'class': 'ni-input kp-tax-type-sel'}),
+        label='Tipe Pajak',
+    )
+    tax = forms.DecimalField(
+        max_digits=19, decimal_places=4, required=False,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
+        label='Pajak (Nominal Override)',
+    )
+    tax_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        empty_label='— Pilih Akun Pajak —',
+        label='Akun Pajak',
+    )
+    tax_payment_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        empty_label='— Pilih Akun Lawan —',
+        label='Akun Lawan Pajak',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs_all = akun_sorted_queryset()
+        self.fields['tax_account'].queryset = qs_all
+        self.fields['tax_payment_account'].queryset = qs_all
 
 
 # Backward-compat alias
