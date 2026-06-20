@@ -55,10 +55,12 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                 'jumlah_bruto': Decimal('1000000'),
                 'revenue_account': self.f['coa_revenue'],
                 'payment_account': self.f['coa_kas'],
-                'tax_type': 'ppn_keluaran',
-                'tax': Decimal('110000'),          # manual override → skips TarifPajak lookup
-                'tax_account': self.f['coa_ppn'],
-                'tax_payment_account': self.f['coa_kas'],
+                'tax_lines': [{
+                    'tax_type': 'ppn_keluaran',
+                    'tax': Decimal('110000'),          # manual override → skips TarifPajak lookup
+                    'tax_account': self.f['coa_ppn'],
+                    'tax_payment_account': self.f['coa_kas'],
+                }],
             }],
         )
         return header
@@ -123,10 +125,12 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                 'jumlah_bruto': Decimal('1000000'),
                 'revenue_account': self.f['coa_revenue'],
                 'payment_account': self.f['coa_kas'],
-                'tax_type': 'pph_23',
-                'tax': Decimal('2000'),            # manual override → skips TarifPajak lookup
-                'tax_account': coa_pph23,
-                'tax_payment_account': self.f['coa_kas'],
+                'tax_lines': [{
+                    'tax_type': 'pph_23',
+                    'tax': Decimal('2000'),            # manual override → skips TarifPajak lookup
+                    'tax_account': coa_pph23,
+                    'tax_payment_account': self.f['coa_kas'],
+                }],
             }],
         )
         return header
@@ -192,6 +196,95 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
         confirm_pendapatan(header, user=None)
         self.assertEqual(PajakTransaksi.objects.count(), 0)
 
+    def test_ppn_and_pph23_on_same_kp_creates_two_pajak_transaksi(self):
+        """A KP with both PPN Keluaran and PPh 23 creates two PajakTransaksi records."""
+        coa_pph23 = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dibayar Dimuka Test', kode_akun='1.3.2',
+        )
+        header = create_pendapatan_header(
+            tanggal=date(2026, 6, 1),
+            deskripsi='Jasa dengan PPN + PPh 23',
+            payment_type='cash',
+            entitas_bisnis=self.f['eb'],
+            payment_account=self.f['coa_kas'],
+            items=[{
+                'deskripsi_item': 'Jasa Dual Tax',
+                'kategori': 'jasa',
+                'sub_transaction_type': self.f['stt'],
+                'jumlah_bruto': Decimal('1000000'),
+                'revenue_account': self.f['coa_revenue'],
+                'payment_account': self.f['coa_kas'],
+                'tax_lines': [
+                    {
+                        'tax_type': 'ppn_keluaran',
+                        'tax': Decimal('110000'),
+                        'tax_account': self.f['coa_ppn'],
+                        'tax_payment_account': self.f['coa_kas'],
+                    },
+                    {
+                        'tax_type': 'pph_23',
+                        'tax': Decimal('20000'),
+                        'tax_account': coa_pph23,
+                        'tax_payment_account': self.f['coa_kas'],
+                    },
+                ],
+            }],
+        )
+        confirm_pendapatan(header, user=None)
+
+        kp = header.entitas_groups.first().items.first()
+        pajak_qs = PajakTransaksi.objects.filter(
+            source_type='pendapatan_kp', source_id=kp.pk,
+        )
+        self.assertEqual(pajak_qs.count(), 2)
+        jenis_list = sorted(pajak_qs.values_list('jenis_pajak', flat=True))
+        self.assertIn('ppn_umum', jenis_list)
+        self.assertIn('pph_23_jasa', jenis_list)
+
+        ppn = pajak_qs.get(jenis_pajak='ppn_umum')
+        self.assertEqual(ppn.jumlah_pajak, Decimal('110000'))
+        self.assertEqual(ppn.status, 'final')
+
+        pph = pajak_qs.get(jenis_pajak='pph_23_jasa')
+        self.assertEqual(pph.jumlah_pajak, Decimal('20000'))
+        self.assertEqual(pph.sifat_pajak, 'prepaid')
+        self.assertEqual(pph.status, 'final')
+
+    def test_void_cancels_all_tax_lines(self):
+        """void_pendapatan cancels all PajakTransaksi for a dual-tax KP."""
+        coa_pph23 = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dimuka Void Test', kode_akun='1.3.3',
+        )
+        header = create_pendapatan_header(
+            tanggal=date(2026, 6, 1),
+            deskripsi='Dual tax void test',
+            payment_type='cash',
+            entitas_bisnis=self.f['eb'],
+            payment_account=self.f['coa_kas'],
+            items=[{
+                'deskripsi_item': 'Jasa Dual Void',
+                'kategori': 'jasa',
+                'sub_transaction_type': self.f['stt'],
+                'jumlah_bruto': Decimal('500000'),
+                'revenue_account': self.f['coa_revenue'],
+                'payment_account': self.f['coa_kas'],
+                'tax_lines': [
+                    {'tax_type': 'ppn_keluaran', 'tax': Decimal('55000'),
+                     'tax_account': self.f['coa_ppn'], 'tax_payment_account': self.f['coa_kas']},
+                    {'tax_type': 'pph_23', 'tax': Decimal('10000'),
+                     'tax_account': coa_pph23, 'tax_payment_account': self.f['coa_kas']},
+                ],
+            }],
+        )
+        confirm_pendapatan(header, user=None)
+        void_pendapatan(header, user=None)
+
+        kp = header.entitas_groups.first().items.first()
+        cancelled = PajakTransaksi.objects.filter(
+            source_type='pendapatan_kp', source_id=kp.pk, status='dibatalkan',
+        )
+        self.assertEqual(cancelled.count(), 2)
+
 
 class VoidPendapatanTaxIntegrationTest(TestCase):
     """
@@ -217,10 +310,12 @@ class VoidPendapatanTaxIntegrationTest(TestCase):
                 'jumlah_bruto': Decimal('1000000'),
                 'revenue_account': self.f['coa_revenue'],
                 'payment_account': self.f['coa_kas'],
-                'tax_type': 'ppn_keluaran',
-                'tax': Decimal('110000'),
-                'tax_account': self.f['coa_ppn'],
-                'tax_payment_account': self.f['coa_kas'],
+                'tax_lines': [{
+                    'tax_type': 'ppn_keluaran',
+                    'tax': Decimal('110000'),
+                    'tax_account': self.f['coa_ppn'],
+                    'tax_payment_account': self.f['coa_kas'],
+                }],
             }],
         )
         confirm_pendapatan(header, user=None)
