@@ -1499,3 +1499,51 @@ class ReklasifikasiPSAK71Test(TestCase):
         )
         self.assertLess(rkl.jumlah, Decimal('24000000'))
         self.assertGreater(rkl.jumlah, Decimal('0'))
+
+
+# ── Task 2: build_piutang canonical factory ───────────────────────────────────
+
+class BuildPiutangServiceTest(TestCase):
+    def _akun(self, kode, nama, kategori_id='aset'):
+        from apps.master_data.models import Akun
+        return Akun.objects.create(kode_akun=kode, nama=nama, kategori_id=kategori_id)
+
+    def test_build_piutang_creates_full_header_and_details(self):
+        from decimal import Decimal
+        from datetime import date
+        from apps.piutang.services import build_piutang
+        from apps.piutang.models import PiutangHeader
+
+        akun_piutang = self._akun('1.1.4', 'Piutang Usaha')
+        akun_pend = self._akun('4.1.1', 'Pendapatan Jasa', kategori_id='pendapatan')
+        payload = {
+            'tanggal': date(2026, 1, 10),
+            'debitur': 'PT Maju',
+            'deskripsi': 'Piutang uji',
+            'coa_piutang_account': akun_piutang,
+            'jatuh_tempo': date(2026, 3, 10),
+            'jenis_bunga': 'flat',
+            'suku_bunga': Decimal('12'),
+            'kategori_pengukuran': 'amortised_cost',
+        }
+        details = [{'deskripsi': 'Baris 1', 'jumlah': Decimal('1000'), 'revenue_account': akun_pend}]
+        piutang = build_piutang(payload, source='manual', source_obj=None, details=details, user=None)
+
+        self.assertIsInstance(piutang, PiutangHeader)
+        self.assertEqual(piutang.jumlah_pokok, Decimal('1000'))
+        self.assertEqual(piutang.debitur, 'PT Maju')
+        self.assertEqual(piutang.jenis_bunga, 'flat')
+        self.assertEqual(piutang.suku_bunga, Decimal('12'))
+        self.assertEqual(piutang.details.count(), 1)
+        self.assertEqual(piutang.status, 'draft')  # manual default
+
+    def test_build_piutang_pendapatan_source_status_open(self):
+        from decimal import Decimal
+        from datetime import date
+        from apps.piutang.services import build_piutang
+        akun_piutang = self._akun('1.1.5', 'Piutang B')
+        payload = {'tanggal': date(2026, 1, 10), 'coa_piutang_account': akun_piutang}
+        details = [{'deskripsi': 'x', 'jumlah': Decimal('500'), 'revenue_account': None}]
+        piutang = build_piutang(payload, source='pendapatan', source_obj=None, details=details, user=None)
+        self.assertEqual(piutang.status, 'open')
+        self.assertEqual(piutang.source_type, 'from_pendapatan')
