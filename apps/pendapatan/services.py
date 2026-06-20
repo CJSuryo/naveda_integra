@@ -238,6 +238,45 @@ def create_pendapatan_header(
     return header
 
 
+# ── Piutang Payload Adapter ───────────────────────────────────────────────────
+
+def pendapatan_to_piutang_payload(header):
+    """Convert a credit PendapatanHeader (+ its PendapatanPiutangProfil + KP items)
+    into (payload, details) for apps.piutang.services.build_piutang().
+
+    This is THE single mapping point. If a new auto-prefilled piutang field is added,
+    extend PIUTANG_PROFIL_FIELDS and (if not a direct copy) this function only.
+    """
+    from .models import PendapatanPiutangProfil, PIUTANG_PROFIL_FIELDS
+
+    try:
+        profil = header.piutang_profil
+    except PendapatanPiutangProfil.DoesNotExist:
+        raise ValueError(
+            f'Pendapatan {header.transaction_id} bertipe kredit tetapi belum memiliki '
+            f'profil piutang. Atur Detail Piutang sebelum konfirmasi.'
+        )
+
+    eb_group = header.entitas_groups.select_related('entitas_bisnis').first()
+    payload = {
+        'tanggal': header.tanggal,
+        'deskripsi': f'Piutang dari Pendapatan {header.transaction_id}',
+        'entitas_bisnis': eb_group.entitas_bisnis if eb_group else None,
+    }
+    for f in PIUTANG_PROFIL_FIELDS:
+        payload[f] = getattr(profil, f)
+
+    details = []
+    for eg in header.entitas_groups.prefetch_related('items__revenue_account').all():
+        for kp in eg.items.all():
+            details.append({
+                'deskripsi': kp.deskripsi_item[:255],
+                'jumlah': kp.nilai_kontrak,
+                'revenue_account': kp.revenue_account,
+            })
+    return payload, details
+
+
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
 def _sync_confirm_tax_line(kp, header, tax_line, amount, entitas_bisnis=None, user=None):
