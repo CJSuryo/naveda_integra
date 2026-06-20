@@ -558,6 +558,7 @@
       <summary>
         <i data-lucide="book-open" style="width:14px;height:14px;color:var(--ni-primary);flex-shrink:0;"></i>
         <span class="ni-jrn-entry__nomor">{{ jh.nomor_transaksi }}</span>
+        {% if jh.source_label == 'pajak' %}<span style="font-size:0.7rem;padding:1px 7px;background:#fef3c7;color:#92400e;border-radius:999px;font-weight:600;white-space:nowrap;">Pajak</span>{% endif %}
         <span class="ni-jrn-entry__date">{{ jh.tanggal|date:"d M Y" }}</span>
         <span class="ni-jrn-entry__uraian">{{ jh.uraian_transaksi }}</span>
         <i data-lucide="chevron-down" class="ni-jrn-entry__caret" style="width:14px;height:14px;"></i>

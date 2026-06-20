@@ -320,6 +320,26 @@ def pendapatan_detail(request: HttpRequest, pk: int) -> HttpResponse:
     for eg in header.entitas_groups.all():
         for kp in eg.items.all():
             kp.pajak_list = pajak_per_kp.get(kp.pk, [])
+
+    # Merge pajak journals into the main journal history
+    pajak_jurnal_ids = [
+        pt.jurnal_header_id
+        for pts in pajak_per_kp.values()
+        for pt in pts
+        if pt.jurnal_header_id
+    ]
+    for jh in journals:
+        jh.source_label = 'pendapatan'
+    if pajak_jurnal_ids:
+        pajak_journals = list(
+            JurnalHeader.objects
+            .filter(pk__in=pajak_jurnal_ids)
+            .prefetch_related('details__akun')
+        )
+        for jh in pajak_journals:
+            jh.source_label = 'pajak'
+        journals = sorted(journals + pajak_journals, key=lambda j: (j.tanggal, j.id))
+
     return render(request, 'pendapatan/detail.html', {
         'header': header,
         'journals': journals,
