@@ -597,6 +597,7 @@
               '<span class="tax-loading-badge" style="display:none;font-size:0.72rem;color:var(--ni-text-muted);">Menghitung…</span>' +
             '</label>' +
             '<input type="number" name="' + prefix + '_tax" class="ni-input kp-tax-amt" step="0.01" value="' + (initial.tax || '') + '">' +
+            '<input type="hidden" name="' + prefix + '_is_manual" class="kp-tax-manual" value="' + (initial.is_manual ? '1' : '0') + '">' +
             '<span class="ni-help-text kp-tax-hint">Dihitung otomatis. Bisa diubah manual.</span>' +
           '</div>' +
         '</div>' +
@@ -636,11 +637,13 @@
   function attachTaxLineEvents(line, row) {
     var typeSelect  = line.querySelector('.kp-tax-type-sel');
     var amtInput    = line.querySelector('.kp-tax-amt');
+    var manualInp   = line.querySelector('.kp-tax-manual');
     var autoBadge   = line.querySelector('.tax-auto-badge');
     var loadBadge   = line.querySelector('.tax-loading-badge');
     var hintEl      = line.querySelector('.kp-tax-hint');
     var nilaiInp    = row ? row.querySelector('[id$="-nilai_kontrak"]') : null;
-    var userEdited  = false;
+    // Mulai sebagai "manual" hanya jika record sebelumnya memang override manual.
+    var userEdited  = !!(manualInp && manualInp.value === '1');
     var timer       = null;
     var guidePanel  = line.querySelector('.kp-tax-guide-panel');
     var guideToggle = line.querySelector('.kp-tax-guide-toggle');
@@ -696,6 +699,7 @@
           if (d.error) { if (hintEl) hintEl.textContent = 'Tidak dapat menghitung: ' + d.error; return; }
           if (amtInput && !userEdited) {
             amtInput.value = d.jumlah_pajak;
+            if (manualInp) manualInp.value = '0';
             if (autoBadge) autoBadge.style.display = 'inline';
             if (hintEl) hintEl.textContent = d.tarif_persen + '% × DPP efektif Rp ' + parseFloat(d.dpp_efektif).toLocaleString('id-ID');
           }
@@ -706,6 +710,7 @@
     if (typeSelect) {
       typeSelect.addEventListener('change', function () {
         userEdited = false;
+        if (manualInp) manualInp.value = '0';
         clearTimeout(timer);
         if (guidePanel && guidePanel.style.display !== 'none') {
           showGuide(typeSelect.value);
@@ -718,6 +723,7 @@
       nilaiInp.addEventListener('input', function () {
         if (!typeSelect || !typeSelect.value) return;
         userEdited = false;
+        if (manualInp) manualInp.value = '0';
         clearTimeout(timer);
         timer = setTimeout(doCompute, 500);
       });
@@ -725,6 +731,7 @@
     if (amtInput) {
       amtInput.addEventListener('input', function () {
         userEdited = true;
+        if (manualInp) manualInp.value = '1';
         if (autoBadge) autoBadge.style.display = 'none';
         if (hintEl) hintEl.textContent = 'Nilai diubah manual.';
       });
@@ -734,8 +741,8 @@
       removeBtn.addEventListener('click', function () { removeTaxLine(removeBtn); });
     }
     if (typeSelect && typeSelect.value && nilaiInp && nilaiInp.value && amtInput && amtInput.value) {
-      if (autoBadge) autoBadge.style.display = 'inline';
-      if (hintEl) hintEl.textContent = 'Nilai tersimpan sebelumnya.';
+      if (autoBadge) autoBadge.style.display = userEdited ? 'none' : 'inline';
+      if (hintEl) hintEl.textContent = userEdited ? 'Nilai diubah manual.' : 'Nilai tersimpan sebelumnya.';
     }
   }
 

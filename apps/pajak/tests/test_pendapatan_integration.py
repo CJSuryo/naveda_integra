@@ -58,6 +58,7 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                 'tax_lines': [{
                     'tax_type': 'ppn_keluaran',
                     'tax': Decimal('110000'),          # manual override → skips TarifPajak lookup
+                    'is_manual': True,
                     'tax_account': self.f['coa_ppn'],
                     'tax_payment_account': self.f['coa_kas'],
                 }],
@@ -128,6 +129,7 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                 'tax_lines': [{
                     'tax_type': 'pph_23',
                     'tax': Decimal('2000'),            # manual override → skips TarifPajak lookup
+                    'is_manual': True,
                     'tax_account': coa_pph23,
                     'tax_payment_account': self.f['coa_kas'],
                 }],
@@ -218,12 +220,14 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                     {
                         'tax_type': 'ppn_keluaran',
                         'tax': Decimal('110000'),
+                        'is_manual': True,
                         'tax_account': self.f['coa_ppn'],
                         'tax_payment_account': self.f['coa_kas'],
                     },
                     {
                         'tax_type': 'pph_23',
                         'tax': Decimal('20000'),
+                        'is_manual': True,
                         'tax_account': coa_pph23,
                         'tax_payment_account': self.f['coa_kas'],
                     },
@@ -269,9 +273,9 @@ class ConfirmPendapatanTaxIntegrationTest(TestCase):
                 'revenue_account': self.f['coa_revenue'],
                 'payment_account': self.f['coa_kas'],
                 'tax_lines': [
-                    {'tax_type': 'ppn_keluaran', 'tax': Decimal('55000'),
+                    {'tax_type': 'ppn_keluaran', 'tax': Decimal('55000'), 'is_manual': True,
                      'tax_account': self.f['coa_ppn'], 'tax_payment_account': self.f['coa_kas']},
-                    {'tax_type': 'pph_23', 'tax': Decimal('10000'),
+                    {'tax_type': 'pph_23', 'tax': Decimal('10000'), 'is_manual': True,
                      'tax_account': coa_pph23, 'tax_payment_account': self.f['coa_kas']},
                 ],
             }],
@@ -313,6 +317,7 @@ class VoidPendapatanTaxIntegrationTest(TestCase):
                 'tax_lines': [{
                     'tax_type': 'ppn_keluaran',
                     'tax': Decimal('110000'),
+                    'is_manual': True,
                     'tax_account': self.f['coa_ppn'],
                     'tax_payment_account': self.f['coa_kas'],
                 }],

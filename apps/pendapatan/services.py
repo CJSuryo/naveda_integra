@@ -228,6 +228,7 @@ def create_pendapatan_header(
                     kp=kp,
                     tax_type=tl['tax_type'],
                     tax=tl.get('tax'),
+                    is_manual=tl.get('is_manual', False),
                     tax_account=tl['tax_account'],
                     tax_payment_account=tl['tax_payment_account'],
                 )
@@ -245,6 +246,10 @@ def _sync_confirm_tax_line(kp, header, tax_line, amount, entitas_bisnis=None, us
     if not jenis_pajak:
         return
     sifat_pajak = SIFAT_PAJAK_MAP.get(tax_line.tax_type, 'potong_pungut')
+    # Hanya perlakukan sebagai override bila user benar-benar mengisi manual.
+    # Bila auto (is_manual=False), biarkan sync_pajak menghitung ulang dari tarif
+    # sehingga PajakTransaksi tidak terlabel override.
+    override_amount = tax_line.tax if tax_line.is_manual else None
     pajak_trx = sync_pajak(
         source_type='pendapatan_kp',
         source_obj=kp,
@@ -254,7 +259,7 @@ def _sync_confirm_tax_line(kp, header, tax_line, amount, entitas_bisnis=None, us
         akun_pajak=tax_line.tax_account,
         akun_lawan=tax_line.tax_payment_account,
         sifat_pajak=sifat_pajak,
-        override_amount=tax_line.tax,
+        override_amount=override_amount,
         entitas_bisnis_override=entitas_bisnis,
     )
     confirm_pajak_trx(pajak_trx)

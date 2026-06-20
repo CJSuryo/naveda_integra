@@ -9,6 +9,16 @@ from .models import TarifPajak, BracketPPhOP, MasaPajak, PajakTransaksi
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 
+def tarif_efektif(jumlah_pajak: Decimal, dpp: Decimal) -> Decimal:
+    """
+    Effective rate against full DPP, for display on overridden records.
+    Returns jumlah_pajak / dpp x 100 (4dp), or 0 if dpp is missing/zero.
+    """
+    if not dpp or dpp <= 0:
+        return Decimal('0')
+    return (jumlah_pajak / dpp * Decimal('100')).quantize(Decimal('0.0001'))
+
+
 def get_tarif_record(jenis_pajak: str, tanggal: date) -> TarifPajak:
     """Return the active TarifPajak record for jenis_pajak on tanggal."""
     qs = (
@@ -112,7 +122,7 @@ def sync_pajak(
     )
     if effective_override and effective_override > 0:
         jumlah_pajak = effective_override
-        tarif_persen = Decimal('0')
+        tarif_persen = tarif_efektif(jumlah_pajak, dpp)
         is_overridden = True
     else:
         hasil = compute_pajak(jenis_pajak, dpp, tanggal)
@@ -245,13 +255,14 @@ def override_pajak(pajak_trx: PajakTransaksi, jumlah_baru: Decimal, modified_by=
     from django.utils import timezone
     batal_pajak(pajak_trx)
     pajak_trx.jumlah_pajak = jumlah_baru
+    pajak_trx.tarif_persen = tarif_efektif(jumlah_baru, pajak_trx.dpp)
     pajak_trx.is_overridden = True
     pajak_trx.modified_by = modified_by
     pajak_trx.modified_at = timezone.now()
     pajak_trx.status = 'draft'
     pajak_trx.jurnal_header = None
     pajak_trx.save(update_fields=[
-        'jumlah_pajak', 'is_overridden', 'modified_by', 'modified_at', 'status', 'jurnal_header'
+        'jumlah_pajak', 'tarif_persen', 'is_overridden', 'modified_by', 'modified_at', 'status', 'jurnal_header'
     ])
     jh = post_jurnal_pajak(pajak_trx)
     pajak_trx.jurnal_header = jh

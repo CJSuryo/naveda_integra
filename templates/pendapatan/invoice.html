@@ -345,9 +345,10 @@
           <td></td>
           <td colspan="2" style="padding-left:16px;">
             &#8627; {{ tl.get_tax_type_display }}
-            {% if tl.tax %}&mdash; Override: Rp {{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash; Auto (tarif berlaku){% endif %}
+            {% if tl.is_dipotong %}&mdash; dipotong klien{% endif %}
+            {% if tl.is_manual %}&mdash; Override: Rp {{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash; Auto (tarif berlaku){% endif %}
           </td>
-          <td class="r">{% if tl.tax %}{{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+          <td class="r">{% if tl.tax %}{% if tl.is_dipotong %}(-){% endif %} {{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
         </tr>
         {% endfor %}
         {% endwith %}
@@ -365,10 +366,16 @@
         <span>Sub-total</span>
         <span class="inv-totals__val">Rp {{ gdata.subtotal|floatformat:0|intcomma }}</span>
       </div>
-      {% if gdata.tax_total %}
+      {% if gdata.pungut_total %}
       <div class="inv-totals__row">
-        <span>Pajak</span>
-        <span class="inv-totals__val">Rp {{ gdata.tax_total|floatformat:0|intcomma }}</span>
+        <span>PPN</span>
+        <span class="inv-totals__val">Rp {{ gdata.pungut_total|floatformat:0|intcomma }}</span>
+      </div>
+      {% endif %}
+      {% if gdata.potong_total %}
+      <div class="inv-totals__row">
+        <span>Dipotong (PPh)</span>
+        <span class="inv-totals__val">(Rp {{ gdata.potong_total|floatformat:0|intcomma }})</span>
       </div>
       {% endif %}
       <div class="inv-totals__row grand">

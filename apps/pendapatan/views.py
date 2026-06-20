@@ -109,9 +109,11 @@ def _parse_tax_lines_from_post(post, item_idx: int) -> list:
             tax = Decimal(tax_raw) if tax_raw else None
         except InvalidOperation:
             tax = None
+        is_manual = post.get(f'item_{item_idx}_tax_{j}_is_manual', '').strip() == '1'
         tax_lines.append({
             'tax_type': tax_type,
             'tax': tax,
+            'is_manual': is_manual,
             'tax_account': tax_account,
             'tax_payment_account': tax_payment_account,
         })
@@ -239,6 +241,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                                 kp=kp,
                                 tax_type=tl['tax_type'],
                                 tax=tl.get('tax'),
+                                is_manual=tl.get('is_manual', False),
                                 tax_account=tl['tax_account'],
                                 tax_payment_account=tl['tax_payment_account'],
                             )
@@ -274,6 +277,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 {
                     'tax_type': tl.tax_type,
                     'tax': str(tl.tax) if tl.tax else '',
+                    'is_manual': tl.is_manual,
                     'tax_account_id': tl.tax_account_id,
                     'tax_payment_account_id': tl.tax_payment_account_id,
                 }
@@ -475,6 +479,7 @@ def pendapatan_hapus(request: HttpRequest, pk: int) -> HttpResponse:
 def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
     from decimal import Decimal
     from apps.entitas_bisnis.models import EntitasBisnis
+    from .services import SIFAT_PAJAK_MAP
     header = get_object_or_404(
         PendapatanHeader.objects
         .select_related('created_by')
@@ -494,20 +499,33 @@ def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
     grand_total = Decimal('0')
     for eg in header.entitas_groups.all():
         subtotal = Decimal('0')
-        tax_total = Decimal('0')
+        pungut_total = Decimal('0')   # PPN keluaran — ditambahkan ke tagihan klien
+        potong_total = Decimal('0')   # PPh dipotong klien — pengurang yang dibayar klien
         items_data = []
         for kp in eg.items.all():
-            kp_tax = sum((tl.tax or Decimal('0')) for tl in kp.tax_lines.all())
+            kp_pungut = Decimal('0')
+            kp_potong = Decimal('0')
+            for tl in kp.tax_lines.all():
+                amt = tl.tax or Decimal('0')
+                # Pajak ber-sifat 'prepaid' (PPh 23/21/4(2)) dipotong oleh klien dan
+                # disetor atas nama penjual → mengurangi kas yang dibayar klien.
+                tl.is_dipotong = SIFAT_PAJAK_MAP.get(tl.tax_type) == 'prepaid'
+                if tl.is_dipotong:
+                    kp_potong += amt
+                else:
+                    kp_pungut += amt
             subtotal += kp.nilai_kontrak or Decimal('0')
-            tax_total += kp_tax
-            items_data.append({'kp': kp, 'kp_tax': kp_tax})
-        group_total = subtotal + tax_total
+            pungut_total += kp_pungut
+            potong_total += kp_potong
+            items_data.append({'kp': kp, 'kp_pungut': kp_pungut, 'kp_potong': kp_potong})
+        group_total = subtotal + pungut_total - potong_total
         grand_total += group_total
         eb_groups_data.append({
             'group': eg,
             'items_data': items_data,
             'subtotal': subtotal,
-            'tax_total': tax_total,
+            'pungut_total': pungut_total,
+            'potong_total': potong_total,
             'group_total': group_total,
         })
 
