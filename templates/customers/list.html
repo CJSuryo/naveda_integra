@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block title %}Daftar Customers{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Customers</h1>
+    <p class="ni-page-header__subtitle">Data seluruh customer</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'customers:create' %}" class="ni-btn ni-btn--primary">+ Tambah Customer</a>
+  </div>
+</div>
+
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form id="customerFilterForm" method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        {% include 'components/eb_filter_modal.html' with filter_form_id="customerFilterForm" %}
+        <div class="ni-form-group ni-form-group--grow">
+          <label class="ni-form-label">Cari</label>
+          <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="Nama, email, telepon...">
+        </div>
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+        <a href="{% url 'customers:list' %}" class="ni-btn ni-btn--secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nama</th>
+          <th>Entitas Bisnis</th>
+          <th>Email</th>
+          <th>Telepon</th>
+          <th>Gender</th>
+          <th>Umur</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for customer in page_obj %}
+        <tr>
+          <td><strong>{{ customer.nama }}</strong></td>
+          <td>
+            {{ customer.entitas_bisnis.nama }}
+            {% if customer.entitas_bisnis_lv2 %}
+              <span class="ni-text-muted"> / {{ customer.entitas_bisnis_lv2.nama }}</span>
+            {% endif %}
+            {% if customer.entitas_bisnis_lv3 %}
+              <span class="ni-text-muted"> / {{ customer.entitas_bisnis_lv3.nama }}</span>
+            {% endif %}
+          </td>
+          <td>{{ customer.email|default:'—' }}</td>
+          <td>{{ customer.telepon|default:'—' }}</td>
+          <td>{{ customer.get_gender_display|default:'—' }}</td>
+          <td>{% if customer.umur %}{{ customer.umur }} thn{% else %}—{% endif %}</td>
+          <td>
+            <a href="{% url 'customers:update' customer.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Edit</a>
+            <a href="{% url 'customers:delete' customer.pk %}" class="ni-btn ni-btn--xs ni-btn--danger">Hapus</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="ni-text-center ni-text-muted">Belum ada data customer.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="ni-card__footer">
+    <div class="ni-paginator">
+      {% if page_obj.has_previous %}
+        <a href="?page={{ page_obj.previous_page_number }}{% if search %}&q={{ search }}{% endif %}{% for v in eb_filter_list %}&entitas_bisnis={{ v }}{% endfor %}" class="ni-paginator__btn">&laquo;</a>
+      {% endif %}
+      <span class="ni-paginator__info">Halaman {{ page_obj.number }} dari {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+        <a href="?page={{ page_obj.next_page_number }}{% if search %}&q={{ search }}{% endif %}{% for v in eb_filter_list %}&entitas_bisnis={{ v }}{% endfor %}" class="ni-paginator__btn">&raquo;</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
