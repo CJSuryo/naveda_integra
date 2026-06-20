@@ -55,8 +55,11 @@
           <td>{{ pajak_trx.created_at|date:"d M Y" }}</td>
           <td>{{ pajak_trx.entitas_bisnis.nama|default:'—' }}</td>
           <td>
-            <span class="ni-text-muted" style="font-size:.85em;">{{ pajak_trx.get_source_type_display }}</span><br>
-            <span>{{ pajak_trx.source_id }}</span>
+            {% if pajak_trx.source_url %}
+              <a href="{{ pajak_trx.source_url }}" class="ni-link">{{ pajak_trx.source_label }}</a>
+            {% else %}
+              {{ pajak_trx.source_label }}
+            {% endif %}
           </td>
           <td>{{ pajak_trx.get_jenis_pajak_display }}</td>
           <td class="ni-text-right">Rp {{ pajak_trx.dpp|floatformat:0|intcomma }}</td>
