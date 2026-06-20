@@ -134,12 +134,14 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
         form = PendapatanHeaderForm()
         item_forms = [KewajibabPelaksanaanForm(prefix='item_0')]
 
+    from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
     return render(request, 'pendapatan/form.html', {
         'form': form,
         'item_forms': item_forms,
         'mode': 'create',
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'tax_lines_initial_json': '{}',
+        'tax_type_choices': _TAX_TYPE_CHOICES,
     })
 
 
@@ -257,6 +259,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
     eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
 
+    from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
     return render(request, 'pendapatan/form.html', {
         'form': form,
         'item_forms': item_forms,
@@ -265,6 +268,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'eb_selected': eb_selected,
         'tax_lines_initial_json': json.dumps(tax_lines_initial),
+        'tax_type_choices': _TAX_TYPE_CHOICES,
     })
 
 

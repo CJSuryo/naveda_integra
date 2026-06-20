@@ -313,6 +313,14 @@
   </div>
 </form>
 
+{# Hidden prototype — JS reads these options for buildTaxTypeSelect() #}
+<select id="kp-tax-type-prototype" style="display:none;" aria-hidden="true">
+  <option value="">— Pilih Tipe Pajak —</option>
+  {% for val, label in tax_type_choices %}
+  <option value="{{ val }}">{{ label }}</option>
+  {% endfor %}
+</select>
+
 <script>
 (function () {
   // ── Option card data ───────────────────────────────────────────────────
@@ -474,19 +482,15 @@
       }).join('');
   }
 
-  var TAX_TYPE_OPTIONS = [
-    ['ppn_keluaran', 'PPN Keluaran (11%)'],
-    ['pph_23',       'PPh Pasal 23 (2%)'],
-    ['pph_21',       'PPh Pasal 21 (Tenaga Ahli)'],
-    ['pph_4_2',      'PPh Pasal 4(2) — Sewa 10%'],
-  ];
-
   function buildTaxTypeSelect(name, selectedValue) {
-    var opts = '<option value="">— Pilih Tipe Pajak —</option>';
-    TAX_TYPE_OPTIONS.forEach(function (p) {
-      var sel = p[0] === selectedValue ? ' selected' : '';
-      opts += '<option value="' + p[0] + '"' + sel + '>' + p[1] + '</option>';
-    });
+    var proto = document.getElementById('kp-tax-type-prototype');
+    var opts = proto ? proto.innerHTML : '<option value="">— Pilih Tipe Pajak —</option>';
+    if (selectedValue) {
+      opts = opts.replace(
+        'value="' + selectedValue + '"',
+        'value="' + selectedValue + '" selected'
+      );
+    }
     return '<select name="' + name + '" class="ni-input kp-tax-type-sel">' + opts + '</select>';
   }
 
