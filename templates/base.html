@@ -98,6 +98,15 @@
         </div>
       </div>
 
+      <span class="ni-nav-label">Customers</span>
+
+      <div class="ni-nav-item">
+        <a href="{% url 'customers:list' %}" class="ni-nav-link {% if 'customers' in request.path %}ni-nav-link--active{% endif %}">
+          <i data-lucide="users-2" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Customers</span>
+        </a>
+      </div>
+
       <span class="ni-nav-label">Master Data</span>
 
       <div class="ni-nav-item {% if 'master-data' in request.path %}ni-nav-item--open{% endif %}">
