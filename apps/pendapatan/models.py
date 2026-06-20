@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -544,3 +546,67 @@ class AsetKontrak(models.Model):
 
     def __str__(self) -> str:
         return f'AsetKontrak KP-{self.kp_id} [{self.nilai}]'
+
+
+# ── Staging profil piutang untuk transaksi kredit ────────────────────────────
+
+# Field yang di-mirror dari PiutangHeader ke modal pendapatan. Tambah di sini
+# bila form piutang menambah field credit-terms baru yang ingin di-stage.
+PIUTANG_PROFIL_FIELDS = [
+    'debitur', 'coa_piutang_account', 'jatuh_tempo',
+    'jenis_jangka_waktu', 'jenis_bunga', 'suku_bunga', 'periode_angsuran',
+    'pv_discount_rate', 'interest_income_account', 'coa_piutang_lancar_account',
+    'standar_akuntansi', 'kategori_pengukuran', 'business_model', 'sppi_test_passed',
+    'biaya_transaksi', 'biaya_transaksi_account',
+    'agunan_jenis', 'agunan_nilai', 'is_approval_required',
+]
+
+
+class PendapatanPiutangProfil(models.Model):
+    """Staging untuk field piutang yang diisi di modal pendapatan (transaksi kredit).
+
+    Disimpan saat create/edit pendapatan; dikonsumsi saat confirm untuk membangun
+    PiutangHeader lengkap lewat apps.piutang.services.build_piutang().
+    """
+    pendapatan_header = models.OneToOneField(
+        PendapatanHeader, on_delete=models.CASCADE,
+        related_name='piutang_profil', verbose_name='Pendapatan Header',
+    )
+    debitur = models.CharField(max_length=255, blank=True, default='', verbose_name='Debitur')
+    coa_piutang_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='pendapatan_profil_piutang', verbose_name='Akun Piutang',
+    )
+    jatuh_tempo = models.DateField(null=True, blank=True, verbose_name='Jatuh Tempo')
+    jenis_jangka_waktu = models.CharField(max_length=20, default='short_term', verbose_name='Jenis Jangka Waktu')
+    jenis_bunga = models.CharField(max_length=20, default='tanpa_bunga', verbose_name='Jenis Bunga')
+    suku_bunga = models.DecimalField(max_digits=8, decimal_places=4, default=0, verbose_name='Suku Bunga')
+    periode_angsuran = models.CharField(max_length=20, default='bulanan', verbose_name='Periode Angsuran')
+    pv_discount_rate = models.DecimalField(max_digits=8, decimal_places=4, null=True, blank=True, verbose_name='Market Rate PV')
+    interest_income_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pendapatan_profil_interest', verbose_name='Akun Pendapatan Bunga Efektif',
+    )
+    coa_piutang_lancar_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pendapatan_profil_lancar', verbose_name='Akun Piutang Bagian Lancar',
+    )
+    standar_akuntansi = models.CharField(max_length=10, blank=True, default='', verbose_name='Standar Akuntansi')
+    kategori_pengukuran = models.CharField(max_length=20, default='amortised_cost', verbose_name='Kategori Pengukuran')
+    business_model = models.CharField(max_length=30, blank=True, default='', verbose_name='Business Model')
+    sppi_test_passed = models.BooleanField(null=True, blank=True, verbose_name='SPPI Test Lulus')
+    biaya_transaksi = models.DecimalField(max_digits=19, decimal_places=4, default=Decimal('0'), verbose_name='Biaya Transaksi')
+    biaya_transaksi_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='pendapatan_profil_biaya', verbose_name='Akun Biaya Transaksi',
+    )
+    agunan_jenis = models.CharField(max_length=255, blank=True, default='', verbose_name='Jenis Agunan')
+    agunan_nilai = models.DecimalField(max_digits=19, decimal_places=4, null=True, blank=True, verbose_name='Nilai Agunan')
+    is_approval_required = models.BooleanField(default=False, verbose_name='Perlu Approval')
+
+    class Meta:
+        verbose_name = 'Profil Piutang Pendapatan'
+        verbose_name_plural = 'Profil Piutang Pendapatan'
+
+    def __str__(self) -> str:
+        return f'Profil Piutang {self.pendapatan_header.transaction_id}'
