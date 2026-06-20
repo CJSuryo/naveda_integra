@@ -313,6 +313,8 @@ class SyncPajakTest(TestCase):
         )
         self.assertEqual(result.jumlah_pajak, Decimal('50000'))
         self.assertTrue(result.is_overridden)
+        # Override menyimpan tarif efektif (50.000 / 500.000 = 10%), bukan 0.
+        self.assertEqual(result.tarif_persen, Decimal('10.0000'))
 
 
 class PostJurnalPajakTest(TestCase):

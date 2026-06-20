@@ -232,8 +232,13 @@ class KPTaxLine(models.Model):
     tax_type = models.CharField(max_length=30, choices=TAX_TYPE_CHOICES, verbose_name='Tipe Pajak')
     tax = models.DecimalField(
         max_digits=19, decimal_places=4, null=True, blank=True,
-        verbose_name='Pajak (Override Manual)',
-        help_text='Jika diisi, nilai ini menggantikan perhitungan tarif otomatis.',
+        verbose_name='Pajak (Nominal)',
+        help_text='Nominal pajak. Hasil hitung otomatis atau override manual (lihat is_manual).',
+    )
+    is_manual = models.BooleanField(
+        default=False, verbose_name='Override Manual',
+        help_text='True jika nominal pajak diisi/diubah manual oleh user. '
+                  'False berarti nominal dihitung ulang dari tarif saat konfirmasi.',
     )
     tax_account = models.ForeignKey(
         'master_data.Akun', on_delete=models.PROTECT,

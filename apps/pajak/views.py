@@ -57,6 +57,7 @@ def hitung_pajak(request):
 @login_required
 def transaksi_list(request):
     from apps.purchase.views import _get_eb_tree, _resolve_eb_selection
+    from django.urls import reverse
 
     status = request.GET.get('status', '')
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
@@ -76,8 +77,29 @@ def transaksi_list(request):
         if lv1_ids:
             qs = qs.filter(entitas_bisnis_id__in=lv1_ids)
 
+    trx_list = list(qs)
+
+    # Resolve source transaction label and URL for display
+    kp_ids = [pt.source_id for pt in trx_list if pt.source_type == 'pendapatan_kp']
+    kp_to_header = {}
+    if kp_ids:
+        from apps.pendapatan.models import KewajibabPelaksanaan
+        for kp in KewajibabPelaksanaan.objects.filter(pk__in=kp_ids).select_related(
+            'pendapatan_eb__pendapatan_header'
+        ):
+            kp_to_header[kp.pk] = kp.pendapatan_eb.pendapatan_header
+
+    for pt in trx_list:
+        if pt.source_type == 'pendapatan_kp' and pt.source_id in kp_to_header:
+            h = kp_to_header[pt.source_id]
+            pt.source_label = h.transaction_id
+            pt.source_url = reverse('pendapatan:detail', args=[h.pk])
+        else:
+            pt.source_label = f'{pt.get_source_type_display()} #{pt.source_id}'
+            pt.source_url = None
+
     return render(request, 'pajak/transaksi_list.html', {
-        'transaksi_list': qs,
+        'transaksi_list': trx_list,
         'status_filter': status,
         'eb_tree': _get_eb_tree(),
         'eb_filter_list': eb_filter_list,

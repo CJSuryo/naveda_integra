@@ -215,3 +215,83 @@ class GenerateFromRecurringTests(TestCase):
                 event_type='RECURRING_GENERATED',
             ).exists()
         )
+
+
+class TaxLineManualFlagTests(TestCase):
+    """Baris pajak auto (is_manual=False) tidak boleh terlabel override."""
+
+    def setUp(self):
+        from datetime import date as _date
+        from apps.pajak.models import TarifPajak, PajakTransaksi
+        from .models import KPTaxLine
+        self._PajakTransaksi = PajakTransaksi
+        self.f = make_fixtures()
+        self.coa_pph23 = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dibayar di Muka', kode_akun='1.1.20')
+        TarifPajak.objects.create(
+            jenis_pajak='pph_23_jasa', nama='PPh 23 Jasa', tarif_persen=Decimal('2.0000'),
+            faktor_dpp=Decimal('1.000000'), berlaku_mulai=_date(2026, 1, 1))
+        self.KPTaxLine = KPTaxLine
+
+    def _make_header_with_taxline(self, is_manual, tax_value):
+        header = make_header(self.f, payment_type='cash')
+        kp = header.entitas_groups.first().items.first()
+        kp.nilai_kontrak = Decimal('3500000')
+        kp.save(update_fields=['nilai_kontrak'])
+        self.KPTaxLine.objects.create(
+            kp=kp, tax_type='pph_23', tax=tax_value, is_manual=is_manual,
+            tax_account=self.coa_pph23, tax_payment_account=self.f['coa_kas'])
+        return header
+
+    def test_auto_line_not_overridden_and_recomputed(self):
+        # Auto: nilai tersimpan keliru (999), harus dihitung ulang jadi 2% x 3.5jt = 70.000.
+        header = self._make_header_with_taxline(is_manual=False, tax_value=Decimal('999'))
+        confirm_pendapatan(header)
+        pt = self._PajakTransaksi.objects.get(jenis_pajak='pph_23_jasa')
+        self.assertFalse(pt.is_overridden)
+        self.assertEqual(pt.jumlah_pajak, Decimal('70000'))
+
+    def test_manual_line_is_overridden_and_kept(self):
+        header = self._make_header_with_taxline(is_manual=True, tax_value=Decimal('65000'))
+        confirm_pendapatan(header)
+        pt = self._PajakTransaksi.objects.get(jenis_pajak='pph_23_jasa')
+        self.assertTrue(pt.is_overridden)
+        self.assertEqual(pt.jumlah_pajak, Decimal('65000'))
+
+
+class InvoiceTotalTaxSifatTests(TestCase):
+    """Invoice harus menambah PPN (dipungut) dan mengurangi PPh (dipotong klien)."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from .models import KPTaxLine
+        self.f = make_fixtures()
+        self.coa_utang_ppn = Akun.objects.create(
+            kategori_id='kewajiban', nama='Utang PPN Keluaran', kode_akun='2.1.6')
+        self.coa_pph23_ddm = Akun.objects.create(
+            kategori_id='aset', nama='PPh 23 Dibayar di Muka', kode_akun='1.1.20')
+        self.header = make_header(self.f, payment_type='cash')
+        kp = self.header.entitas_groups.first().items.first()
+        kp.nilai_kontrak = Decimal('3500000')
+        kp.save(update_fields=['nilai_kontrak'])
+        # PPN keluaran dipungut (+385.000), PPh 23 dipotong klien (-70.000)
+        KPTaxLine.objects.create(
+            kp=kp, tax_type='ppn_keluaran', tax=Decimal('385000'),
+            tax_account=self.coa_utang_ppn, tax_payment_account=self.f['coa_kas'])
+        KPTaxLine.objects.create(
+            kp=kp, tax_type='pph_23', tax=Decimal('70000'),
+            tax_account=self.coa_pph23_ddm, tax_payment_account=self.f['coa_kas'])
+        User = get_user_model()
+        self.user = User.objects.create_user(
+            email='akuntan@nif.test', password='x')
+
+    def test_invoice_total_subtracts_withholding(self):
+        self.client.force_login(self.user)
+        resp = self.client.get(f'/pendapatan/{self.header.pk}/invoice/')
+        self.assertEqual(resp.status_code, 200)
+        gdata = resp.context['eb_groups_data'][0]
+        self.assertEqual(gdata['subtotal'], Decimal('3500000'))
+        self.assertEqual(gdata['pungut_total'], Decimal('385000'))
+        self.assertEqual(gdata['potong_total'], Decimal('70000'))
+        # 3.500.000 + 385.000 (PPN) - 70.000 (PPh 23) = 3.815.000, BUKAN 3.955.000
+        self.assertEqual(gdata['group_total'], Decimal('3815000'))
