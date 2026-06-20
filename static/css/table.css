@@ -180,6 +180,21 @@
   color: #3730a3;
 }
 
+/* Transaction status badges */
+.ni-badge--draft {
+  background: var(--ni-bg);
+  color: var(--ni-text-muted);
+  border: 1px solid var(--ni-border);
+}
+.ni-badge--confirmed {
+  background: var(--ni-primary-light);
+  color: var(--ni-primary-dark);
+}
+.ni-badge--void {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
 /* Badge dot indicator */
 .ni-badge__dot {
   width: 6px;

@@ -42,4 +42,9 @@ urlpatterns = [
     path('<int:pk>/submit-approval/', views.piutang_submit_approval, name='submit_approval'),
     path('<int:pk>/approve/', views.piutang_approve, name='approve'),
     path('<int:pk>/reject/', views.piutang_reject, name='reject'),
+    path('<int:pk>/ecl-stage/', views.piutang_ecl_stage_update, name='ecl_stage_update'),
+    path('<int:pk>/ecl-general/', views.piutang_ecl_general, name='ecl_general'),
+    path('<int:pk>/modifikasi/', views.piutang_modifikasi, name='modifikasi'),
+    path('<int:pk>/pemulihan/', views.piutang_pemulihan, name='pemulihan'),
+    path('<int:pk>/factoring/', views.piutang_factoring, name='factoring'),
 ]

@@ -23,6 +23,13 @@
         <div class="ni-d-flex ni-items-center ni-gap-2 ni-flex-wrap">
           <span class="ni-eb-row__name">{{ lv1.nama }}</span>
           {% if lv1.tipe_entitas %}<span class="ni-badge ni-badge--secondary">{{ lv1.tipe_entitas }}</span>{% endif %}
+          {% if lv1.standar_akuntansi == 'sak_ep' %}
+            <span class="ni-badge ni-badge--warning" title="SAK Entitas Privat">SAK EP</span>
+          {% elif lv1.standar_akuntansi == 'sak_emkm' %}
+            <span class="ni-badge ni-badge--secondary" title="SAK Entitas Mikro, Kecil, Menengah">SAK EMKM</span>
+          {% else %}
+            <span class="ni-badge ni-badge--primary" title="Full IFRS / PSAK 71">SAK</span>
+          {% endif %}
           {% if lv1.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}
           <span class="ni-badge ni-badge--secondary">{{ lv1.children_lv2.count }} cabang</span>
           {% if lv1.pos_config and lv1.pos_config.is_pos_active %}<span class="ni-badge ni-badge--primary">POS Aktif</span>{% endif %}
@@ -36,6 +43,20 @@
         <a href="{% url 'entitas_bisnis:setup_wizard' lv1.pk %}" class="ni-btn ni-btn--primary">
           <i data-lucide="layout-dashboard"></i> Detail
         </a>
+        <button type="button" class="ni-btn ni-btn--warning"
+          onclick="niEB.openEditLv1(
+            {{ lv1.pk }},
+            '{{ lv1.nama|escapejs }}',
+            {{ lv1.tipe_entitas_id }},
+            '{{ lv1.relasi }}',
+            '{{ lv1.standar_akuntansi }}',
+            '{{ lv1.email|default:''|escapejs }}',
+            '{{ lv1.telepon|default:''|escapejs }}',
+            '{{ lv1.tanggal_bergabung|date:'Y-m-d'|default:'' }}',
+            {{ lv1.status_aktif|lower }}
+          )">
+          <i data-lucide="pencil"></i> Edit
+        </button>
         <a href="{% url 'pos_catalog:catalog_list' lv1.pk %}" class="ni-btn ni-btn--secondary">
           <i data-lucide="tag"></i> Catalog
         </a>
@@ -339,7 +360,7 @@
       this._activeLv2Pk = null;
       this.open('modalAddLv1');
     },
-    openEditLv1: function (pk, nama, tipeId, relasi, email, telepon, tglBergabung, statusAktif) {
+    openEditLv1: function (pk, nama, tipeId, relasi, standarAkuntansi, email, telepon, tglBergabung, statusAktif) {
       var form = document.getElementById('formEditLv1');
       form.action = buildUrl1(_urlLv1Update, pk);
       this.clearErr('errEditLv1');
@@ -352,6 +373,7 @@
       set('nama', nama);
       set('tipe_entitas', tipeId);
       set('relasi', relasi);
+      set('standar_akuntansi', standarAkuntansi);
       set('email', email);
       set('telepon', telepon);
       set('tanggal_bergabung', tglBergabung);

@@ -7,6 +7,30 @@ from django.db import models
 from django.utils import timezone
 
 
+STANDAR_AKUNTANSI_CHOICES = [
+    ('psak', 'PSAK (PSAK 71 / Full IFRS)'),
+    ('sak_ep', 'SAK EP (Entitas Privat)'),
+    ('sak_emkm', 'SAK EMKM (Entitas Mikro, Kecil, Menengah)'),
+]
+
+KATEGORI_PENGUKURAN_CHOICES = [
+    ('amortised_cost', 'Biaya Perolehan Diamortisasi (Amortised Cost)'),
+    ('fvoci', 'Nilai Wajar Melalui OCI (FVOCI)'),
+    ('fvpl', 'Nilai Wajar Melalui Laba Rugi (FVPL)'),
+]
+
+ECL_STAGE_CHOICES = [
+    (1, 'Stage 1 — Performing (ECL 12 Bulan)'),
+    (2, 'Stage 2 — SICR (ECL Seumur Hidup)'),
+    (3, 'Stage 3 — Credit-Impaired (ECL Seumur Hidup, Bunga atas Neto)'),
+]
+
+BUSINESS_MODEL_CHOICES = [
+    ('hold_to_collect', 'Hold to Collect'),
+    ('hold_to_collect_and_sell', 'Hold to Collect & Sell'),
+    ('other', 'Other / Trading'),
+]
+
 JENIS_JANGKA_WAKTU_CHOICES = [
     ('short_term', 'Jangka Pendek'),
     ('long_term', 'Jangka Panjang'),
@@ -172,6 +196,64 @@ class PiutangHeader(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    # ── Mode Standar Akuntansi ────────────────────────────────────────────────
+    standar_akuntansi = models.CharField(
+        max_length=10, choices=STANDAR_AKUNTANSI_CHOICES, blank=True, default='',
+        verbose_name='Standar Akuntansi (Override)',
+        help_text='Kosongkan untuk mengikuti standar entitas bisnis. Isi untuk override.',
+    )
+
+    # ── Klasifikasi Instrumen (PSAK 71) ──────────────────────────────────────
+    kategori_pengukuran = models.CharField(
+        max_length=20, choices=KATEGORI_PENGUKURAN_CHOICES, default='amortised_cost',
+        verbose_name='Kategori Pengukuran',
+    )
+    business_model = models.CharField(
+        max_length=30, choices=BUSINESS_MODEL_CHOICES, blank=True, default='',
+        verbose_name='Business Model Test',
+        help_text='Hasil Business Model Test (PSAK 71 / IFRS 9).',
+    )
+    sppi_test_passed = models.BooleanField(
+        null=True, blank=True,
+        verbose_name='SPPI Test Lulus',
+        help_text='Solely Payments of Principal and Interest test.',
+    )
+
+    # ── Biaya Transaksi (PSAK 71 / SAK EP) ───────────────────────────────────
+    biaya_transaksi = models.DecimalField(
+        max_digits=19, decimal_places=4, default=Decimal('0'),
+        verbose_name='Biaya Transaksi Dikapitalisasi',
+        help_text='Biaya transaksi yang dikapitalisasi ke nilai tercatat awal (menaikkan EIR efektif).',
+    )
+    biaya_transaksi_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='piutang_biaya_transaksi',
+        verbose_name='Akun Offset Biaya Transaksi',
+        help_text='Akun kredit offset biaya transaksi yang dikapitalisasi (biasanya Kas/Bank).',
+    )
+
+    # ── ECL Staging — General Approach (PSAK 71) ─────────────────────────────
+    stage_ecl = models.PositiveSmallIntegerField(
+        null=True, blank=True, choices=ECL_STAGE_CHOICES,
+        verbose_name='Stage ECL',
+        help_text='PSAK General Approach: Stage 1/2/3. Kosong = Simplified Approach.',
+    )
+    stage_ecl_tanggal = models.DateField(
+        null=True, blank=True,
+        verbose_name='Tanggal Perubahan Stage ECL',
+    )
+
+    # ── Agunan / Kolateral ────────────────────────────────────────────────────
+    agunan_jenis = models.CharField(
+        max_length=255, blank=True, default='',
+        verbose_name='Jenis Agunan / Kolateral',
+    )
+    agunan_nilai = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Nilai Agunan (Estimasi)',
+    )
 
     class Meta:
         verbose_name = 'Piutang Header'
@@ -460,12 +542,20 @@ class PiutangAuditLog(models.Model):
     ACTION_CHOICES = [
         ('CREATED', 'Dibuat'),
         ('EDITED', 'Diedit'),
+        ('POSTED', 'Diposting'),
+        ('SUBMITTED', 'Disubmit Approval'),
+        ('APPROVED', 'Disetujui'),
+        ('REJECTED', 'Ditolak'),
         ('PAYMENT', 'Penerimaan'),
         ('REVERSE_PAYMENT', 'Batalkan Penerimaan'),
         ('WRITE_OFF', 'Dihapusbukukan'),
         ('REKLASIFIKASI', 'Reklasifikasi'),
         ('CANCELLED', 'Dibatalkan'),
         ('PENYISIHAN', 'Penyisihan Piutang'),
+        ('ECL_STAGING', 'Perubahan Stage ECL'),
+        ('MODIFIKASI', 'Modifikasi Syarat'),
+        ('RECOVERY', 'Pemulihan Write-Off'),
+        ('FACTORING', 'Transfer/Factoring'),
     ]
 
     piutang_header = models.ForeignKey(
@@ -577,3 +667,181 @@ class PiutangPenyisihan(models.Model):
 
     def __str__(self) -> str:
         return f'Penyisihan {self.jenis} — {self.tanggal} — {self.jumlah}'
+
+
+class PiutangECLStagingLog(models.Model):
+    """Log perubahan stage ECL — General Approach PSAK 71."""
+
+    piutang_header = models.ForeignKey(
+        PiutangHeader, on_delete=models.CASCADE,
+        related_name='ecl_staging_logs', verbose_name='Piutang Header',
+    )
+    stage_dari = models.PositiveSmallIntegerField(
+        null=True, blank=True, choices=ECL_STAGE_CHOICES, verbose_name='Stage Sebelumnya',
+    )
+    stage_ke = models.PositiveSmallIntegerField(
+        choices=ECL_STAGE_CHOICES, verbose_name='Stage Baru',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal')
+    days_past_due = models.PositiveIntegerField(default=0, verbose_name='Hari Keterlambatan')
+    alasan = models.TextField(blank=True, default='', verbose_name='Alasan')
+    is_auto = models.BooleanField(default=True, verbose_name='Otomatis')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='ecl_staging_logs', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Log Staging ECL'
+        verbose_name_plural = 'Log Staging ECL'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return (
+            f'{self.piutang_header.nomor_piutang}: '
+            f'Stage {self.stage_dari} → {self.stage_ke} ({self.tanggal})'
+        )
+
+
+class PiutangModifikasi(models.Model):
+    """Modifikasi syarat piutang — PSAK 71 / SAK EP modification accounting."""
+
+    piutang_header = models.ForeignKey(
+        PiutangHeader, on_delete=models.CASCADE,
+        related_name='modifikasi_entries', verbose_name='Piutang Header',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal Modifikasi')
+    carrying_amount_lama = models.DecimalField(
+        max_digits=19, decimal_places=4,
+        verbose_name='Carrying Amount Sebelum Modifikasi',
+    )
+    pv_syarat_baru = models.DecimalField(
+        max_digits=19, decimal_places=4,
+        verbose_name='PV Arus Kas Syarat Baru (diskonto EIR lama)',
+    )
+    modification_gain_loss = models.DecimalField(
+        max_digits=19, decimal_places=4,
+        verbose_name='Gain / (Loss) Modifikasi',
+        help_text='PV baru − Carrying amount lama. Positif = gain, negatif = loss.',
+    )
+    eir_baru = models.DecimalField(
+        max_digits=8, decimal_places=4, null=True, blank=True,
+        verbose_name='EIR Baru (% per tahun)',
+    )
+    deskripsi_perubahan = models.TextField(
+        blank=True, default='', verbose_name='Deskripsi Perubahan Syarat',
+    )
+    gain_loss_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='piutang_modifikasi_gl', verbose_name='Akun Gain/Loss Modifikasi',
+    )
+    jurnal = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_modifikasi', verbose_name='Jurnal',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_modifikasi_created', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Modifikasi Piutang'
+        verbose_name_plural = 'Modifikasi Piutang'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return f'Modifikasi {self.piutang_header.nomor_piutang} — {self.tanggal}'
+
+
+class PiutangPemulihanWriteOff(models.Model):
+    """Pemulihan piutang yang sebelumnya sudah dihapusbukukan (PSAK / SAK EP / SAK EMKM)."""
+
+    piutang_header = models.ForeignKey(
+        PiutangHeader, on_delete=models.CASCADE,
+        related_name='pemulihan_entries', verbose_name='Piutang Header',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal Pemulihan')
+    jumlah_dipulihkan = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Jumlah Dipulihkan',
+    )
+    kas_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='piutang_pemulihan_kas', verbose_name='Akun Kas/Bank Penerimaan',
+    )
+    recovery_income_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='piutang_pemulihan_income', verbose_name='Akun Pendapatan Pemulihan',
+    )
+    catatan = models.TextField(blank=True, default='', verbose_name='Catatan')
+    jurnal = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_pemulihan', verbose_name='Jurnal',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_pemulihan_created', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Pemulihan Write-Off Piutang'
+        verbose_name_plural = 'Pemulihan Write-Off Piutang'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return f'Pemulihan {self.piutang_header.nomor_piutang} — {self.tanggal}'
+
+
+class PiutangFactoring(models.Model):
+    """Transfer / Anjak Piutang — analisis derecognition PSAK 71 / SAK EP."""
+
+    ANALISIS_CHOICES = [
+        ('derecognized', 'Diderecognize Penuh (Semua Risiko & Manfaat Ditransfer)'),
+        ('continuing', 'Continuing Involvement (Sebagian Risiko Ditahan)'),
+        ('not_derecognized', 'Tidak Diderecognize (Risiko Ditahan Sepenuhnya)'),
+    ]
+
+    piutang_header = models.ForeignKey(
+        PiutangHeader, on_delete=models.CASCADE,
+        related_name='factoring_entries', verbose_name='Piutang Header',
+    )
+    tanggal = models.DateField(verbose_name='Tanggal Transfer')
+    nilai_transfer = models.DecimalField(
+        max_digits=19, decimal_places=4, verbose_name='Nilai Transfer ke Pihak Lain',
+    )
+    hasil_analisis = models.CharField(
+        max_length=20, choices=ANALISIS_CHOICES, verbose_name='Hasil Analisis Risiko & Manfaat',
+    )
+    continuing_involvement_amount = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Jumlah Continuing Involvement',
+    )
+    gain_loss_derecognition = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Gain / (Loss) Derecognition',
+    )
+    pihak_penerima = models.CharField(
+        max_length=255, blank=True, default='', verbose_name='Pihak Penerima',
+    )
+    analisis_detail = models.TextField(
+        blank=True, default='', verbose_name='Detail Analisis Risiko & Manfaat',
+    )
+    jurnal = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_factoring', verbose_name='Jurnal',
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='piutang_factoring_created', verbose_name='Dibuat Oleh',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Factoring / Transfer Piutang'
+        verbose_name_plural = 'Factoring / Transfer Piutang'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return f'Factoring {self.piutang_header.nomor_piutang} — {self.tanggal}'

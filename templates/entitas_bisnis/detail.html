@@ -20,6 +20,21 @@
     <dl class="ni-detail-grid">
       <dt>Tipe Entitas</dt><dd>{{ object.tipe_entitas }}</dd>
       <dt>Relasi Bisnis</dt><dd>{{ object.get_relasi_display }}</dd>
+      <dt>Standar Akuntansi</dt>
+      <dd>
+        {% if object.standar_akuntansi == 'psak' %}
+          <span class="ni-badge ni-badge--primary">SAK</span>
+          <span class="ni-text-muted" style="font-size:0.8em;margin-left:4px;">Full IFRS / PSAK 71</span>
+        {% elif object.standar_akuntansi == 'sak_ep' %}
+          <span class="ni-badge ni-badge--warning">SAK EP</span>
+          <span class="ni-text-muted" style="font-size:0.8em;margin-left:4px;">Entitas Privat</span>
+        {% elif object.standar_akuntansi == 'sak_emkm' %}
+          <span class="ni-badge ni-badge--secondary">SAK EMKM</span>
+          <span class="ni-text-muted" style="font-size:0.8em;margin-left:4px;">Entitas Mikro, Kecil, Menengah</span>
+        {% else %}
+          <span class="ni-badge ni-badge--primary">SAK</span>
+        {% endif %}
+      </dd>
       <dt>Email</dt><dd>{{ object.email|default:'-' }}</dd>
       <dt>Telepon</dt><dd>{{ object.telepon|default:'-' }}</dd>
       <dt>Alamat</dt><dd>{{ object.alamat_lengkap|default:'-' }}</dd>

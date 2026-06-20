@@ -84,6 +84,7 @@ def sync_pajak(
     akun_lawan,
     sifat_pajak: str,
     override_amount: Decimal | None = None,
+    entitas_bisnis_override=None,
 ) -> PajakTransaksi:
     """
     Create a draft PajakTransaksi for source_obj.
@@ -132,7 +133,7 @@ def sync_pajak(
         is_overridden=is_overridden,
         akun_pajak=akun_pajak,
         akun_lawan=akun_lawan,
-        entitas_bisnis=getattr(source_obj, 'entitas_bisnis', None),
+        entitas_bisnis=entitas_bisnis_override if entitas_bisnis_override is not None else getattr(source_obj, 'entitas_bisnis', None),
     )
 
 

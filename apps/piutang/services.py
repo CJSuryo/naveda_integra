@@ -13,6 +13,7 @@ from apps.jurnal.models import JurnalDetail, JurnalHeader
 from .models import (
     PiutangAuditLog, PiutangAttachment, PiutangDetail, PiutangHeader,
     PiutangPenerimaan, PiutangReklasifikasi, PiutangWriteOff,
+    PiutangECLStagingLog, PiutangModifikasi, PiutangPemulihanWriteOff, PiutangFactoring,
 )
 
 
@@ -115,6 +116,38 @@ def compute_angsuran_schedule(piutang) -> list:
     return rows
 
 
+def compute_effective_dpd(piutang, schedule: list | None = None) -> int:
+    """
+    Returns the effective Days Past Due for PSAK 71 ECL staging purposes.
+
+    For long-term installment loans the final jatuh_tempo is the balloon/last
+    payment date — not the first missed installment.  PSAK 71 / IFRS 9 measures
+    DPD from the earliest contractual payment that has not been settled.
+
+    Pass an already-computed schedule (from compute_angsuran_schedule) to avoid
+    recomputing it; if omitted the schedule is computed here.
+    """
+    if piutang.status in ('paid', 'cancelled', 'written_off'):
+        return 0
+
+    # Short-term or no due date: fall back to the simple jatuh_tempo-based DPD
+    if piutang.jenis_jangka_waktu != 'long_term' or not piutang.jatuh_tempo:
+        return piutang.days_overdue
+
+    today = date.today()
+    sched = schedule if schedule is not None else compute_angsuran_schedule(piutang)
+    if not sched:
+        return piutang.days_overdue
+
+    overdue_dates = [
+        r['tanggal'] for r in sched
+        if r['tanggal'] < today and r['sisa_bayar'] > 0
+    ]
+    if not overdue_dates:
+        return 0
+    return (today - min(overdue_dates)).days
+
+
 # ── Audit Helper ──────────────────────────────────────────────────────────────
 
 def _log(piutang: PiutangHeader, action: str, user=None, before=None, after=None, notes=''):
@@ -176,6 +209,14 @@ def create_manual_piutang(
     interest_income_account=None,
     coa_piutang_lancar_account=None,
     deferred_income_lancar_account=None,
+    standar_akuntansi: str = '',
+    kategori_pengukuran: str = 'amortised_cost',
+    business_model: str = '',
+    sppi_test_passed=None,
+    biaya_transaksi=None,
+    biaya_transaksi_account=None,
+    agunan_jenis: str = '',
+    agunan_nilai=None,
     user=None,
 ) -> PiutangHeader:
     if not details:
@@ -204,6 +245,14 @@ def create_manual_piutang(
             interest_income_account=interest_income_account,
             coa_piutang_lancar_account=coa_piutang_lancar_account,
             deferred_income_lancar_account=deferred_income_lancar_account,
+            standar_akuntansi=standar_akuntansi or '',
+            kategori_pengukuran=kategori_pengukuran or 'amortised_cost',
+            business_model=business_model or '',
+            sppi_test_passed=sppi_test_passed,
+            biaya_transaksi=biaya_transaksi or Decimal('0'),
+            biaya_transaksi_account=biaya_transaksi_account,
+            agunan_jenis=agunan_jenis or '',
+            agunan_nilai=agunan_nilai,
             created_by=user,
         )
         PiutangDetail.objects.bulk_create([
@@ -457,19 +506,23 @@ def _create_payment_journal(piutang: PiutangHeader, penerimaan: PiutangPenerimaa
     jumlah = penerimaan.jumlah_diterima
 
     # ── PSAK 71: Pre-payment EIR accrual ────────────────────────────────────────
-    # Recognise gross effective interest from last amortisation to payment date.
+    # Recognise effective interest from last amortisation to payment date.
+    # Stage 3 (PSAK): interest on net carrying. Otherwise: gross carrying.
     # Dr. Piutang / Cr. Pendapatan Bunga Efektif (increases carrying amount).
     if (piutang.is_pv_adjusted
             and piutang.interest_income_account_id
             and piutang.pv_discount_rate):
         from_date = _pv_last_amortization_date(piutang)
-        bunga_efektif = _pv_effective_interest_days(piutang, from_date, tanggal)
+        bunga_gross = _pv_effective_interest_days(piutang, from_date, tanggal)
+        if piutang.stage_ecl == 3 and get_standar_akuntansi(piutang) == 'psak':
+            gross_ca = _pv_carrying_value(piutang)
+            net_ca = _get_ecl_net_carrying(piutang)
+            ratio = (net_ca / gross_ca) if gross_ca > Decimal('0') else Decimal('1')
+            bunga_efektif = (bunga_gross * ratio).quantize(Decimal('0.0001'))
+        else:
+            bunga_efektif = bunga_gross
         if abs(bunga_efektif) >= Decimal('0.005'):
-            ar_account_eir = (
-                piutang.coa_piutang_lancar_account
-                if piutang.coa_piutang_lancar_account_id
-                else piutang.coa_piutang_account
-            )
+            ar_account_eir = piutang.coa_piutang_account
             amort_nomor = _next_piutang_journal_number('TRX-PIU-PV')
             amort_header = JurnalHeader.objects.create(
                 tanggal=tanggal,
@@ -630,6 +683,25 @@ def compute_bagian_lancar(piutang: PiutangHeader) -> Decimal:
         return Decimal('0')
     today = timezone.now().date()
     cutoff = today.replace(year=today.year + 1)
+
+    # SAK EMKM: no amortised cost — use nominal carrying (sisa_piutang) only
+    if get_standar_akuntansi(piutang) == 'sak_emkm':
+        if piutang.jenis_jangka_waktu != 'long_term':
+            return piutang.sisa_piutang if piutang.jatuh_tempo <= cutoff else Decimal('0')
+        schedule = compute_angsuran_schedule(piutang)
+        if not schedule:
+            return piutang.sisa_piutang if piutang.jatuh_tempo <= cutoff else Decimal('0')
+        return sum(
+            (row['sisa_bayar'] for row in schedule if row['status'] != 'lunas' and row['tanggal'] <= cutoff),
+            Decimal('0'),
+        )
+
+    # PV-adjusted: carrying amount of current portion via EIR discounting (consistent with reklasifikasi)
+    if piutang.is_pv_adjusted and piutang.pv_discount_rate:
+        if piutang.jenis_jangka_waktu != 'long_term' and piutang.jatuh_tempo > cutoff:
+            return Decimal('0')
+        return _compute_rkl_detail(piutang, today)
+
     if piutang.jenis_jangka_waktu != 'long_term':
         return piutang.sisa_piutang if piutang.jatuh_tempo <= cutoff else Decimal('0')
     schedule = compute_angsuran_schedule(piutang)
@@ -679,30 +751,37 @@ def _compute_rkl_detail(piutang: PiutangHeader, as_of_date) -> Decimal:
     if nominal_current <= 0:
         return Decimal('0')
 
-    if not piutang.is_pv_adjusted or not piutang.nilai_wajar_awal:
+    if not piutang.is_pv_adjusted or not piutang.nilai_wajar_awal or not piutang.pv_discount_rate:
         return nominal_current
 
-    if schedule:
-        amort = compute_amortization_schedule_pv(piutang)
-        if amort:
-            amort_by_date = {r['tanggal']: r['bunga_efektif'] for r in amort}
-            net_amort_current = sum(
-                amort_by_date.get(row['tanggal'], Decimal('0'))
-                for row in current_rows
-            ).quantize(Decimal('0.0001'))
-        else:
-            net_amort_current = Decimal('0')
-    else:
-        i_daily = (1 + float(piutang.pv_discount_rate) / 100) ** (1 / 365) - 1
-        pv_current = Decimal('0')
-        if piutang.jatuh_tempo:
-            days = (piutang.jatuh_tempo - as_of_date).days
-            if days > 0:
-                pv_current = piutang.sisa_piutang / Decimal(str((1 + i_daily) ** days))
-        net_amort_current = (nominal_current - pv_current).quantize(Decimal('0.0001'))
+    # PSAK 71 amortised cost: current portion = Opening Carrying − Closing Carrying,
+    # where Closing = carrying after all contractual payments due within 12 months.
+    # This equals the carrying reduction expected in the next 12 months under the amort
+    # schedule — NOT the PV of those cash flows discounted to today (those differ because
+    # the "closing" amount is expressed in future-date terms, not discounted back to now).
+    amort = compute_amortization_schedule_pv(piutang)
+    if amort:
+        opening_carrying = Decimal(str(piutang.nilai_wajar_awal))
+        closing_carrying = None
+        for row in amort:
+            if row['tanggal'] <= as_of_date:
+                opening_carrying = row['carrying_value']
+            elif row['tanggal'] <= cutoff:
+                closing_carrying = row['carrying_value']
+        if closing_carrying is None:
+            return Decimal('0')
+        return max(Decimal('0'), (opening_carrying - closing_carrying).quantize(Decimal('0.0001')))
 
-    carrying_current = (nominal_current - net_amort_current).quantize(Decimal('0.0001'))
-    return max(Decimal('0'), carrying_current)
+    # Bullet / no schedule: PV of face at maturity
+    i_daily = (1 + float(piutang.pv_discount_rate) / 100) ** (1 / 365) - 1
+    if piutang.jatuh_tempo:
+        days = (piutang.jatuh_tempo - as_of_date).days
+        if days > 0:
+            return max(
+                Decimal('0'),
+                (piutang.sisa_piutang / Decimal(str((1 + i_daily) ** days))).quantize(Decimal('0.0001')),
+            )
+    return nominal_current
 
 
 def create_reklasifikasi_bagian_lancar(
@@ -833,7 +912,7 @@ def reverse_piutang_payment(penerimaan: PiutangPenerimaan, user=None) -> JurnalH
                 for d in orig.details.all()
             ])
 
-        # ── SAK ETAP: clean up associated amortisation journals ─────────────
+        # ── PSAK 71: clean up pre-payment EIR journal when payment is reversed ─
         if piutang.is_pv_adjusted:
             nom = piutang.nomor_piutang
 
@@ -904,10 +983,10 @@ def _classify_bucket(tanggal, today) -> str:
 
 def _long_term_bagian_lancar_aging(piutang, as_of_date: date) -> list:
     """
-    SAK ETAP: for long-term receivables, returns a list of (amount, due_date) tuples,
+    For long-term receivables, returns a list of (amount, due_date) tuples,
     one per unpaid installment due within 12 months of as_of_date. Each installment is
     bucketed by its OWN due date so overdue and current entries land in separate buckets.
-    The non-current portion (>12 months) is excluded — assessed via PV impairment.
+    The non-current portion (>12 months) is excluded.
     """
     cutoff = as_of_date.replace(year=as_of_date.year + 1)
     schedule = compute_angsuran_schedule(piutang)
@@ -935,7 +1014,7 @@ def get_piutang_aging() -> dict:
     )
     for piutang in qs:
         if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
-            # SAK ETAP: each installment within 12 months enters aging in its OWN bucket
+            # long-term: each installment within 12 months enters aging in its OWN bucket
             for amount, due_date in _long_term_bagian_lancar_aging(piutang, today):
                 key = _classify_bucket(due_date, today)
                 buckets[key].append({
@@ -970,7 +1049,7 @@ def get_aging_schedule_report(as_of_date=None) -> dict:
     )
     for piutang in qs:
         if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
-            # SAK ETAP: each installment within 12 months gets its own row, bucketed by its due date
+            # long-term: each installment within 12 months gets its own row, bucketed by its due date
             for amount, due_date in _long_term_bagian_lancar_aging(piutang, today):
                 bucket_key = _classify_bucket(due_date, today)
                 long_term_rows.append({
@@ -1079,7 +1158,7 @@ def compute_penyisihan_for_piutang(piutang) -> dict:
     bucket_amounts = {k: Decimal('0') for k in _AGING_BUCKET_KEYS}
 
     if piutang.jenis_jangka_waktu == 'long_term' and piutang.jatuh_tempo:
-        # SAK ETAP: only bagian lancar (≤12 months) enters aging; each installment in its own bucket.
+        # long-term: only bagian lancar (≤12 months) enters aging; each installment in its own bucket.
         for amount, due_date in _long_term_bagian_lancar_aging(piutang, today):
             key = _classify_bucket(due_date, today)
             bucket_amounts[key] += amount
@@ -1484,10 +1563,14 @@ def get_piutang_disclosure_report(as_of_date=None) -> dict:
         .filter(status__in=('open', 'partial', 'overdue'))
         .select_related('entitas_bisnis')
     )
-    total_outstanding = sum(p.sisa_piutang for p in outstanding_list)
 
-    short_term_total = sum(p.sisa_piutang for p in outstanding_list if p.jenis_jangka_waktu == 'short_term')
-    long_term_total = sum(p.sisa_piutang for p in outstanding_list if p.jenis_jangka_waktu == 'long_term')
+    def _carrying(p: PiutangHeader) -> Decimal:
+        return _pv_carrying_value(p) if p.is_pv_adjusted else p.sisa_piutang
+
+    total_outstanding = sum(_carrying(p) for p in outstanding_list)
+
+    short_term_total = sum(_carrying(p) for p in outstanding_list if p.jenis_jangka_waktu == 'short_term')
+    long_term_total = sum(_carrying(p) for p in outstanding_list if p.jenis_jangka_waktu == 'long_term')
 
     penyisihan_opening = (
         PiutangPenyisihan.objects.filter(tanggal__lt=year_start)
@@ -1522,10 +1605,10 @@ def get_piutang_disclosure_report(as_of_date=None) -> dict:
         impaired = [p for p in outstanding_list if p.is_specifically_impaired]
     except AttributeError:
         impaired = []
-    impaired_total = sum(p.sisa_piutang for p in impaired)
+    impaired_total = sum(_carrying(p) for p in impaired)
 
     concentration = sorted(
-        [{'debitur': p.entitas_display, 'outstanding': p.sisa_piutang} for p in outstanding_list],
+        [{'debitur': p.entitas_display, 'outstanding': _carrying(p)} for p in outstanding_list],
         key=lambda x: x['outstanding'], reverse=True,
     )[:10]
     for item in concentration:
@@ -1648,7 +1731,7 @@ def compute_present_value(piutang: PiutangHeader, market_rate: Decimal) -> Decim
         total = sum(Decimal(str(row['angsuran'])) for row in schedule)
         return total
     periode_months = _PERIODE_MONTHS_MAP.get(getattr(piutang, 'periode_angsuran', 'bulanan'), 1)
-    # Compound rate per period: (1 + annual_rate)^(months/12) - 1  (SAK ETAP effective interest)
+    # Compound rate per period: (1 + annual_rate)^(months/12) - 1  (PSAK 71 effective interest)
     r_per_period = (1 + float(market_rate) / 100) ** (periode_months / 12) - 1
     pv = Decimal('0')
     for row in schedule:
@@ -1718,6 +1801,29 @@ def _create_piutang_ar_journal(piutang: PiutangHeader) -> JurnalHeader:
             )
             for detail in details
         ])
+
+    # ── PSAK 71 / SAK EP: biaya transaksi dikapitalisasi ke nilai tercatat ───
+    # Dr. Piutang (biaya_transaksi) / Cr. Akun Offset Biaya Transaksi (Kas/Bank)
+    standar = get_standar_akuntansi(piutang)
+    if (standar in ('psak', 'sak_ep')
+            and piutang.biaya_transaksi
+            and piutang.biaya_transaksi > Decimal('0')
+            and piutang.biaya_transaksi_account_id):
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(
+                jurnal_header=header,
+                akun=piutang.coa_piutang_account,
+                debit=piutang.biaya_transaksi,
+                kredit=Decimal('0'),
+            ),
+            JurnalDetail(
+                jurnal_header=header,
+                akun=piutang.biaya_transaksi_account,
+                debit=Decimal('0'),
+                kredit=piutang.biaya_transaksi,
+            ),
+        ])
+
     return header
 
 
@@ -1729,10 +1835,12 @@ def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
                 f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
             )
         update_fields = ['status', 'is_locked']
-        if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-            piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-            piutang.is_pv_adjusted = True
-            update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
+        if get_standar_akuntansi(piutang) != 'sak_emkm':
+            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
+                piutang.is_pv_adjusted = True
+                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1757,10 +1865,12 @@ def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
         if piutang.status != 'pending_approval':
             raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
         update_fields = ['status', 'is_locked', 'approved_by', 'approved_at']
-        if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-            piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-            piutang.is_pv_adjusted = True
-            update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
+        if get_standar_akuntansi(piutang) != 'sak_emkm':
+            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
+                piutang.is_pv_adjusted = True
+                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1817,23 +1927,29 @@ def compute_amortization_schedule_pv(piutang: PiutangHeader) -> list:
 
 def create_pv_adjustment_journal(
     piutang: PiutangHeader,
-    interest_income_account,
-    tanggal,
+    interest_income_account=None,
+    tanggal=None,
     catatan='',
     user=None,
     periode_no: int | None = None,
 ) -> JurnalHeader:
     """PSAK 71: Dr. Piutang (gross EIR) / Cr. Pendapatan Bunga Efektif."""
+    income_account = interest_income_account or piutang.interest_income_account
+    if not income_account:
+        raise ValueError('Akun Pendapatan Bunga Efektif diperlukan untuk amortisasi.')
     if not piutang.is_pv_adjusted or not piutang.nilai_wajar_awal or not piutang.pv_discount_rate:
         raise ValueError('Piutang belum disesuaikan nilai wajar (PV).')
+    if tanggal is None:
+        tanggal = timezone.now().date()
     amort = compute_amortization_schedule_pv(piutang)
     if not amort:
         raise ValueError('Jadwal amortisasi PV tidak tersedia.')
 
     if periode_no is None:
-        prefix_pattern = f'Amortisasi PV Piutang {piutang.nomor_piutang}'
+        # Count only periodic journals ('— Periode N') to avoid matching
+        # pre-payment EIR journals ('— {from_date} s.d. {to_date}').
         recorded = JurnalHeader.objects.filter(
-            uraian_transaksi__startswith=prefix_pattern,
+            uraian_transaksi__startswith=f'Amortisasi PV Piutang {piutang.nomor_piutang} — Periode',
         ).count()
         periode_no = recorded + 1
 
@@ -1841,21 +1957,30 @@ def create_pv_adjustment_journal(
         raise ValueError(f'Periode {periode_no} tidak valid (total {len(amort)} periode).')
 
     row = amort[periode_no - 1]
-    bunga = row['bunga_efektif_gross']
+    bunga_gross = row['bunga_efektif_gross']
+    if bunga_gross <= Decimal('0.005'):
+        raise ValueError('Bunga efektif nol, tidak perlu jurnal.')
+
+    # PSAK 71 Stage 3: interest income on net carrying (gross − ECL allowance)
+    if piutang.stage_ecl == 3 and get_standar_akuntansi(piutang) == 'psak':
+        gross_ca = _pv_carrying_value(piutang)
+        net_ca = _get_ecl_net_carrying(piutang)
+        ratio = (net_ca / gross_ca) if gross_ca > Decimal('0') else Decimal('1')
+        bunga = (bunga_gross * ratio).quantize(Decimal('0.0001'))
+    else:
+        bunga = bunga_gross
+
     if bunga <= Decimal('0.005'):
         raise ValueError('Bunga efektif nol, tidak perlu jurnal.')
 
-    ar_account = (
-        piutang.coa_piutang_lancar_account
-        if piutang.coa_piutang_lancar_account_id
-        else piutang.coa_piutang_account
-    )
+    ar_account = piutang.coa_piutang_account
     with transaction.atomic():
         nomor = _next_piutang_journal_number('TRX-PIU-PV')
+        stage_label = f' [Stage {piutang.stage_ecl}]' if piutang.stage_ecl == 3 else ''
         header = JurnalHeader.objects.create(
             tanggal=tanggal,
             nomor_transaksi=nomor,
-            uraian_transaksi=f'Amortisasi PV Piutang {piutang.nomor_piutang} — Periode {periode_no}',
+            uraian_transaksi=f'Amortisasi PV Piutang {piutang.nomor_piutang} — Periode {periode_no}{stage_label}',
             entitas_bisnis=piutang.entitas_bisnis,
             is_penyesuaian=True,
         )
@@ -1868,7 +1993,7 @@ def create_pv_adjustment_journal(
             ),
             JurnalDetail(
                 jurnal_header=header,
-                akun=interest_income_account,
+                akun=income_account,
                 debit=Decimal('0'),
                 kredit=bunga,
             ),
@@ -1889,7 +2014,8 @@ def create_pv_accrual_journal(
 ) -> JurnalHeader:
     """
     PSAK 71: period-end accrual journal.
-    Dr. Piutang (gross EIR for days elapsed) / Cr. Pendapatan Bunga Efektif.
+    Dr. Piutang / Cr. Pendapatan Bunga Efektif.
+    Stage 3 (PSAK): interest accrued on net carrying (gross − ECL allowance).
     Must be paired with a reversal at start of next period.
     """
     if not piutang.is_pv_adjusted or not piutang.pv_discount_rate:
@@ -1899,7 +2025,19 @@ def create_pv_accrual_journal(
         raise ValueError('Akun Pendapatan Bunga Efektif diperlukan.')
 
     from_date = _pv_last_amortization_date(piutang)
-    bunga = _pv_effective_interest_days(piutang, from_date, tanggal)
+    bunga_gross = _pv_effective_interest_days(piutang, from_date, tanggal)
+    if bunga_gross <= Decimal('0'):
+        raise ValueError('Tidak ada selisih bunga efektif yang dapat diakrualkan untuk periode ini.')
+
+    # PSAK 71 Stage 3: accrue on net carrying
+    if piutang.stage_ecl == 3 and get_standar_akuntansi(piutang) == 'psak':
+        gross_ca = _pv_carrying_value(piutang)
+        net_ca = _get_ecl_net_carrying(piutang)
+        ratio = (net_ca / gross_ca) if gross_ca > Decimal('0') else Decimal('1')
+        bunga = (bunga_gross * ratio).quantize(Decimal('0.0001'))
+    else:
+        bunga = bunga_gross
+
     if bunga <= Decimal('0'):
         raise ValueError('Tidak ada selisih bunga efektif yang dapat diakrualkan untuk periode ini.')
 
@@ -1915,11 +2053,7 @@ def create_pv_accrual_journal(
             'Masih ada jurnal akrual yang belum dibalik. Balik akrual sebelumnya terlebih dahulu.'
         )
 
-    ar_account = (
-        piutang.coa_piutang_lancar_account
-        if piutang.coa_piutang_lancar_account_id
-        else piutang.coa_piutang_account
-    )
+    ar_account = piutang.coa_piutang_account
     with transaction.atomic():
         nomor = _next_piutang_journal_number('TRX-PIU-PV')
         header = JurnalHeader.objects.create(
@@ -1999,3 +2133,615 @@ def create_pv_accrual_reversal(
         _log(piutang, 'EDITED', user=user,
              after={'pv_balik_akrual': last_accrual.nomor_transaksi, 'tanggal': str(tanggal)})
     return reversal
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  MODE STANDAR AKUNTANSI
+# ════════════════════════════════════════════════════════════════════════════════
+
+def get_standar_akuntansi(piutang: PiutangHeader) -> str:
+    """
+    Resolves effective standar akuntansi for a piutang:
+      1. piutang.standar_akuntansi (override)
+      2. piutang.entitas_bisnis.standar_akuntansi
+      3. Default 'psak'
+    Returns one of: 'psak', 'sak_ep', 'sak_emkm'.
+    """
+    if piutang.standar_akuntansi:
+        return piutang.standar_akuntansi
+    eb = piutang.entitas_bisnis
+    if eb is not None:
+        sa = getattr(eb, 'standar_akuntansi', None)
+        if sa:
+            return sa
+    return 'psak'
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  ECL STAGING — GENERAL APPROACH (PSAK 71)
+# ════════════════════════════════════════════════════════════════════════════════
+
+_STAGE_TRIGGER_SICR = 30    # hari lewat jatuh tempo → Stage 2 (SICR)
+_STAGE_TRIGGER_IMPAIRED = 90  # hari lewat jatuh tempo → Stage 3
+
+
+def assess_ecl_stage(piutang: PiutangHeader, as_of_date=None) -> int:
+    """
+    Auto-assess recommended ECL stage based on days past due.
+    Returns 1, 2, or 3.
+    Only meaningful for PSAK General Approach.
+
+    Uses compute_effective_dpd so that installment loans measure DPD from the
+    earliest missed installment, not the final balloon/maturity date.
+    """
+    if piutang.status in ('paid', 'cancelled', 'written_off'):
+        return 1
+    days = compute_effective_dpd(piutang)
+    if days >= _STAGE_TRIGGER_IMPAIRED:
+        return 3
+    if days >= _STAGE_TRIGGER_SICR:
+        return 2
+    return 1
+
+
+def update_ecl_stage(
+    piutang: PiutangHeader,
+    new_stage: int,
+    alasan: str = '',
+    is_auto: bool = True,
+    user=None,
+) -> PiutangECLStagingLog | None:
+    """
+    Update ECL stage on a piutang and write a staging log entry.
+    Returns None if stage is already equal to new_stage.
+    """
+    if new_stage not in (1, 2, 3):
+        raise ValueError('Stage ECL harus 1, 2, atau 3.')
+    today = timezone.now().date()
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        if piutang.stage_ecl == new_stage:
+            return None
+        dpd = compute_effective_dpd(piutang)
+        log = PiutangECLStagingLog.objects.create(
+            piutang_header=piutang,
+            stage_dari=piutang.stage_ecl,
+            stage_ke=new_stage,
+            tanggal=today,
+            days_past_due=dpd,
+            alasan=alasan or f'Otomatis: {dpd} hari lewat jatuh tempo angsuran',
+            is_auto=is_auto,
+            created_by=user,
+        )
+        piutang.stage_ecl = new_stage
+        piutang.stage_ecl_tanggal = today
+        piutang.save(update_fields=['stage_ecl', 'stage_ecl_tanggal'])
+        _log(piutang, 'ECL_STAGING', user=user, after={
+            'stage_dari': log.stage_dari, 'stage_ke': new_stage, 'alasan': log.alasan,
+        })
+    return log
+
+
+def batch_assess_ecl_stages(
+    entitas_bisnis=None,
+    as_of_date=None,
+    dry_run: bool = False,
+    user=None,
+) -> list:
+    """
+    Bulk auto-assess ECL stages for all active PSAK piutang.
+    Returns list of dicts describing changes made (or that would be made if dry_run=True).
+    """
+    today = as_of_date or timezone.now().date()
+    qs = PiutangHeader.objects.filter(status__in=('open', 'partial', 'overdue'))
+    if entitas_bisnis is not None:
+        qs = qs.filter(entitas_bisnis=entitas_bisnis)
+
+    results = []
+    for piutang in qs.select_related('entitas_bisnis').prefetch_related('penerimaan'):
+        if get_standar_akuntansi(piutang) != 'psak':
+            continue
+        dpd = compute_effective_dpd(piutang)
+        recommended = assess_ecl_stage(piutang, today)
+        if piutang.stage_ecl != recommended:
+            results.append({
+                'piutang': piutang,
+                'stage_dari': piutang.stage_ecl,
+                'stage_ke': recommended,
+                'days_past_due': dpd,
+            })
+            if not dry_run:
+                update_ecl_stage(
+                    piutang, recommended,
+                    alasan=f'Batch assess: {dpd} hari lewat jatuh tempo angsuran',
+                    is_auto=True, user=user,
+                )
+    return results
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  ECL GENERAL APPROACH — PD × LGD × EAD  (PSAK 71)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def _get_ecl_net_carrying(piutang: PiutangHeader) -> Decimal:
+    """Net carrying = gross carrying − accumulated ECL allowance. Used for Stage 3 EIR."""
+    from .models import PiutangPenyisihan
+    gross = _pv_carrying_value(piutang) if piutang.is_pv_adjusted else piutang.sisa_piutang
+    total_psh = Decimal(str(
+        PiutangPenyisihan.objects.filter(piutang_header=piutang)
+        .aggregate(s=Sum('jumlah'))['s'] or Decimal('0')
+    ))
+    return max(Decimal('0'), gross - total_psh)
+
+
+def compute_ecl_general_approach(
+    piutang: PiutangHeader,
+    pd_rate: Decimal,
+    lgd_rate: Decimal,
+    forward_looking_adj: Decimal = Decimal('1.0'),
+    as_of_date=None,
+) -> dict:
+    """
+    PSAK 71 General Approach ECL = PD × LGD × EAD × forward_looking_adj.
+
+    Stage 1: 12-month PD.
+    Stage 2/3: lifetime PD = 1 − (1 − pd_annual)^remaining_years.
+
+    Returns dict: ecl_amount, ead, stage, ecl_horizon, pd_effective (%), ...
+    """
+    today = as_of_date or timezone.now().date()
+    stage = piutang.stage_ecl or assess_ecl_stage(piutang, today)
+
+    # EAD = carrying amount (Stage 3: net of allowance)
+    if stage == 3:
+        ead = _get_ecl_net_carrying(piutang)
+    elif piutang.is_pv_adjusted:
+        ead = _pv_carrying_value(piutang)
+    else:
+        ead = piutang.sisa_piutang
+
+    if stage == 1:
+        ecl_horizon = '12-bulan'
+        pd_effective = pd_rate / 100
+    else:
+        ecl_horizon = 'seumur-hidup'
+        if piutang.jatuh_tempo and piutang.jatuh_tempo > today:
+            remaining_years = Decimal(str((piutang.jatuh_tempo - today).days / 365.25))
+        else:
+            remaining_years = Decimal('1')
+        pd_fl = float(pd_rate) / 100
+        pd_effective = Decimal(str(round(1 - (1 - pd_fl) ** float(remaining_years), 8)))
+
+    ecl_amount = (ead * pd_effective * (lgd_rate / 100) * forward_looking_adj).quantize(Decimal('0.01'))
+
+    return {
+        'stage': stage,
+        'ecl_horizon': ecl_horizon,
+        'ead': ead,
+        'pd_rate_input': pd_rate,
+        'lgd_rate': lgd_rate,
+        'pd_effective_pct': (pd_effective * 100).quantize(Decimal('0.0001')),
+        'forward_looking_adj': forward_looking_adj,
+        'ecl_amount': ecl_amount,
+    }
+
+
+def create_penyisihan_ecl_general(
+    piutang: PiutangHeader,
+    pd_rate: Decimal,
+    lgd_rate: Decimal,
+    allowance_account,
+    expense_account,
+    tanggal,
+    forward_looking_adj: Decimal = Decimal('1.0'),
+    catatan: str = '',
+    user=None,
+):
+    """
+    Create ECL penyisihan journal using General Approach (PSAK 71 only).
+    Uses PD × LGD × EAD instead of flat aging-bucket rate.
+    """
+    from .models import PiutangPenyisihan
+    standar = get_standar_akuntansi(piutang)
+    if standar != 'psak':
+        raise ValueError(
+            f'General Approach ECL hanya tersedia untuk mode PSAK. '
+            f'Piutang ini menggunakan {standar.upper()}. '
+            f'Gunakan create_penyisihan_journal() untuk Simplified Approach.'
+        )
+    result = compute_ecl_general_approach(piutang, pd_rate, lgd_rate, forward_looking_adj)
+    total = result['ecl_amount']
+    if total <= Decimal('0'):
+        raise ValueError('ECL General Approach bernilai 0. Periksa parameter PD dan LGD.')
+
+    keterangan = (
+        f'ECL General Approach {piutang.nomor_piutang} — '
+        f'Stage {result["stage"]}, PD {pd_rate}%, LGD {lgd_rate}%, '
+        f'FwdAdj {forward_looking_adj}'
+    )
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        nomor = _next_penyisihan_journal_number('TRX-PIU-ECL')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=keterangan,
+            entitas_bisnis=piutang.entitas_bisnis,
+            is_penyesuaian=True,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=header, akun=expense_account, debit=total, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=header, akun=allowance_account, debit=Decimal('0'), kredit=total),
+        ])
+        entry = PiutangPenyisihan.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            jenis='manual',
+            jumlah=total,
+            allowance_account=allowance_account,
+            expense_account=expense_account,
+            jurnal_header=header,
+            catatan=catatan or keterangan,
+            created_by=user,
+        )
+        piutang.is_specifically_impaired = True
+        piutang.save(update_fields=['is_specifically_impaired'])
+        _log(piutang, 'PENYISIHAN', user=user, after={
+            'metode': 'general_approach', 'ecl': str(total),
+            'stage': result['stage'], 'nomor': nomor,
+        })
+    return entry
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  MODIFIKASI PIUTANG  (PSAK 71 / SAK EP)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def compute_modification_pv(
+    piutang: PiutangHeader,
+    new_cashflows: list,
+) -> Decimal:
+    """
+    PV of new contractual cash flows discounted at the original EIR.
+    new_cashflows: [{'tanggal': date, 'jumlah': Decimal}, ...]
+    """
+    if not piutang.pv_discount_rate:
+        raise ValueError('EIR asli (pv_discount_rate) diperlukan untuk menghitung PV modifikasi.')
+    today = timezone.now().date()
+    i_daily = (1 + float(piutang.pv_discount_rate) / 100) ** (1 / 365.25) - 1
+    pv = Decimal('0')
+    for cf in new_cashflows:
+        days = (cf['tanggal'] - today).days
+        if days <= 0:
+            pv += Decimal(str(cf['jumlah']))
+        else:
+            pv += Decimal(str(cf['jumlah'])) / Decimal(str((1 + i_daily) ** days))
+    return pv.quantize(Decimal('0.0001'))
+
+
+def process_piutang_modification(
+    piutang: PiutangHeader,
+    new_cashflows: list,
+    gain_loss_account,
+    tanggal,
+    eir_baru: Decimal = None,
+    deskripsi: str = '',
+    user=None,
+) -> PiutangModifikasi:
+    """
+    PSAK 71 / SAK EP: record a loan modification.
+    Calculates modification gain/loss = PV(new CF at original EIR) − carrying amount.
+    Journals the difference to gain_loss_account.
+
+    new_cashflows: [{'tanggal': date, 'jumlah': Decimal}, ...]
+    eir_baru: if provided, updates pv_discount_rate for future amortization.
+    """
+    standar = get_standar_akuntansi(piutang)
+    if standar == 'sak_emkm':
+        raise ValueError('Modification accounting tidak diterapkan untuk SAK EMKM.')
+    if piutang.status in ('paid', 'cancelled', 'written_off'):
+        raise ValueError('Piutang sudah tidak aktif. Tidak dapat dimodifikasi.')
+
+    carrying = _pv_carrying_value(piutang) if piutang.is_pv_adjusted else piutang.sisa_piutang
+    pv_baru = compute_modification_pv(piutang, new_cashflows)
+    gl = (pv_baru - carrying).quantize(Decimal('0.0001'))
+
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        jurnal = None
+        if abs(gl) >= Decimal('0.01'):
+            nomor = _next_piutang_journal_number('TRX-PIU-MOD')
+            jurnal = JurnalHeader.objects.create(
+                tanggal=tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Modifikasi Piutang {piutang.nomor_piutang} — GL {gl:+.0f}',
+                entitas_bisnis=piutang.entitas_bisnis,
+                is_penyesuaian=True,
+            )
+            ar_account = piutang.coa_piutang_account
+            if gl > Decimal('0'):
+                JurnalDetail.objects.bulk_create([
+                    JurnalDetail(jurnal_header=jurnal, akun=ar_account, debit=gl, kredit=Decimal('0')),
+                    JurnalDetail(jurnal_header=jurnal, akun=gain_loss_account, debit=Decimal('0'), kredit=gl),
+                ])
+            else:
+                abs_gl = abs(gl)
+                JurnalDetail.objects.bulk_create([
+                    JurnalDetail(jurnal_header=jurnal, akun=gain_loss_account, debit=abs_gl, kredit=Decimal('0')),
+                    JurnalDetail(jurnal_header=jurnal, akun=ar_account, debit=Decimal('0'), kredit=abs_gl),
+                ])
+
+        update_fields = ['nilai_wajar_awal', 'is_pv_adjusted']
+        piutang.nilai_wajar_awal = pv_baru
+        piutang.is_pv_adjusted = True
+        if eir_baru is not None:
+            piutang.pv_discount_rate = eir_baru
+            update_fields.append('pv_discount_rate')
+        piutang.save(update_fields=update_fields)
+
+        mod = PiutangModifikasi.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            carrying_amount_lama=carrying,
+            pv_syarat_baru=pv_baru,
+            modification_gain_loss=gl,
+            eir_baru=eir_baru,
+            deskripsi_perubahan=deskripsi,
+            gain_loss_account=gain_loss_account,
+            jurnal=jurnal,
+            created_by=user,
+        )
+        _log(piutang, 'MODIFIKASI', user=user, after={
+            'carrying_lama': str(carrying), 'pv_baru': str(pv_baru), 'gl': str(gl),
+        })
+    return mod
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  PEMULIHAN WRITE-OFF  (semua standar)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def recover_written_off_piutang(
+    piutang: PiutangHeader,
+    jumlah_dipulihkan: Decimal,
+    kas_account,
+    recovery_income_account,
+    tanggal,
+    catatan: str = '',
+    user=None,
+) -> PiutangPemulihanWriteOff:
+    """
+    Catat pemulihan piutang yang sebelumnya sudah di-write-off.
+    Jurnal: Dr Kas/Bank / Cr Pendapatan Pemulihan Piutang.
+    Berlaku untuk semua standar (PSAK, SAK EP, SAK EMKM).
+    """
+    if piutang.status != 'written_off':
+        raise ValueError('Hanya piutang berstatus written_off yang dapat dipulihkan.')
+    if jumlah_dipulihkan <= Decimal('0'):
+        raise ValueError('Jumlah pemulihan harus lebih dari nol.')
+    write_off = getattr(piutang, 'write_off', None)
+    if write_off and jumlah_dipulihkan > write_off.jumlah_dihapus:
+        raise ValueError(
+            f'Jumlah pemulihan ({jumlah_dipulihkan:,.0f}) melebihi '
+            f'jumlah yang pernah dihapusbukukan ({write_off.jumlah_dihapus:,.0f}).'
+        )
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+        nomor = _next_piutang_journal_number('TRX-PIU-REC')
+        header = JurnalHeader.objects.create(
+            tanggal=tanggal,
+            nomor_transaksi=nomor,
+            uraian_transaksi=f'Pemulihan Write-Off Piutang {piutang.nomor_piutang}',
+            entitas_bisnis=piutang.entitas_bisnis,
+            is_penyesuaian=False,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=header, akun=kas_account,
+                         debit=jumlah_dipulihkan, kredit=Decimal('0')),
+            JurnalDetail(jurnal_header=header, akun=recovery_income_account,
+                         debit=Decimal('0'), kredit=jumlah_dipulihkan),
+        ])
+        entry = PiutangPemulihanWriteOff.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            jumlah_dipulihkan=jumlah_dipulihkan,
+            kas_account=kas_account,
+            recovery_income_account=recovery_income_account,
+            catatan=catatan,
+            jurnal=header,
+            created_by=user,
+        )
+        _log(piutang, 'RECOVERY', user=user, after={
+            'jumlah': str(jumlah_dipulihkan), 'nomor': nomor,
+        })
+    return entry
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  FACTORING / DERECOGNITION  (PSAK 71 / SAK EP)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def create_factoring_derecognition(
+    piutang: PiutangHeader,
+    nilai_transfer: Decimal,
+    hasil_analisis: str,
+    pihak_penerima: str,
+    kas_account,
+    gain_loss_account,
+    tanggal,
+    continuing_involvement_amount: Decimal = None,
+    analisis_detail: str = '',
+    user=None,
+) -> PiutangFactoring:
+    """
+    PSAK 71 / SAK EP: catat transfer/anjak piutang.
+
+    hasil_analisis:
+      'derecognized'     → semua risiko & manfaat ditransfer; piutang diderecognize, jurnal dibuat.
+      'continuing'       → sebagian risiko ditahan; continuing involvement dicatat, piutang tetap.
+      'not_derecognized' → risiko ditahan penuh; hanya dokumentasi, tidak ada derecognition.
+
+    Jika 'derecognized': Dr Kas / Cr Piutang / Dr|Cr Gain/Loss Derecognition.
+    """
+    standar = get_standar_akuntansi(piutang)
+    if standar == 'sak_emkm':
+        raise ValueError(
+            'Analisis derecognition factoring tidak diperlukan untuk SAK EMKM. '
+            'Cukup catat penerimaan kas secara langsung.'
+        )
+    if hasil_analisis not in ('derecognized', 'continuing', 'not_derecognized'):
+        raise ValueError(
+            "hasil_analisis harus salah satu dari: 'derecognized', 'continuing', 'not_derecognized'."
+        )
+    if piutang.status in ('paid', 'cancelled'):
+        raise ValueError('Piutang sudah lunas atau dibatalkan.')
+
+    carrying = _pv_carrying_value(piutang) if piutang.is_pv_adjusted else piutang.sisa_piutang
+    gl = (nilai_transfer - carrying).quantize(Decimal('0.0001'))
+
+    jurnal = None
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
+
+        if hasil_analisis == 'derecognized':
+            nomor = _next_piutang_journal_number('TRX-PIU-FAC')
+            jurnal = JurnalHeader.objects.create(
+                tanggal=tanggal,
+                nomor_transaksi=nomor,
+                uraian_transaksi=f'Derecognition Factoring {piutang.nomor_piutang}',
+                entitas_bisnis=piutang.entitas_bisnis,
+                is_penyesuaian=False,
+            )
+            ar_account = piutang.coa_piutang_account
+            lines = [
+                JurnalDetail(jurnal_header=jurnal, akun=kas_account,
+                             debit=nilai_transfer, kredit=Decimal('0')),
+                JurnalDetail(jurnal_header=jurnal, akun=ar_account,
+                             debit=Decimal('0'), kredit=carrying),
+            ]
+            if gl > Decimal('0.005'):
+                lines.append(JurnalDetail(
+                    jurnal_header=jurnal, akun=gain_loss_account,
+                    debit=Decimal('0'), kredit=gl,
+                ))
+            elif gl < Decimal('-0.005'):
+                lines.append(JurnalDetail(
+                    jurnal_header=jurnal, akun=gain_loss_account,
+                    debit=abs(gl), kredit=Decimal('0'),
+                ))
+            JurnalDetail.objects.bulk_create(lines)
+            piutang.status = 'cancelled'
+            piutang.save(update_fields=['status'])
+
+        entry = PiutangFactoring.objects.create(
+            piutang_header=piutang,
+            tanggal=tanggal,
+            nilai_transfer=nilai_transfer,
+            hasil_analisis=hasil_analisis,
+            continuing_involvement_amount=continuing_involvement_amount,
+            gain_loss_derecognition=gl if hasil_analisis == 'derecognized' else None,
+            pihak_penerima=pihak_penerima,
+            analisis_detail=analisis_detail,
+            jurnal=jurnal,
+            created_by=user,
+        )
+        _log(piutang, 'FACTORING', user=user, after={
+            'hasil_analisis': hasil_analisis,
+            'nilai_transfer': str(nilai_transfer),
+            'gl': str(gl),
+        })
+    return entry
+
+
+# ════════════════════════════════════════════════════════════════════════════════
+#  ECL ROLL-FORWARD TABLE  (Disclosure PSAK 71)
+# ════════════════════════════════════════════════════════════════════════════════
+
+def get_ecl_rollforward_table(
+    entitas_bisnis=None,
+    periode_awal: date = None,
+    periode_akhir: date = None,
+) -> dict:
+    """
+    PSAK 71 Disclosure: ECL roll-forward table.
+
+    Returns:
+      gross_carrying_by_stage  — carrying amount outstanding per stage per periode_akhir
+      ecl_balance_by_stage     — accumulated penyisihan per stage per periode_akhir
+      ecl_movement             — additions, reversals, net during the period
+      stage_movements_count    — jumlah perubahan stage selama periode
+      staging_logs             — list detail perubahan stage
+    """
+    from .models import PiutangPenyisihan
+    today = date.today()
+    if periode_akhir is None:
+        periode_akhir = today
+    if periode_awal is None:
+        periode_awal = periode_akhir.replace(day=1)
+
+    qs = PiutangHeader.objects.filter(
+        status__in=('open', 'partial', 'overdue', 'written_off'),
+    ).select_related('entitas_bisnis').prefetch_related('penyisihan_entries')
+    if entitas_bisnis is not None:
+        qs = qs.filter(entitas_bisnis=entitas_bisnis)
+
+    stage_carrying: dict[int | None, Decimal] = {1: Decimal('0'), 2: Decimal('0'), 3: Decimal('0'), None: Decimal('0')}
+    stage_ecl: dict[int | None, Decimal] = {1: Decimal('0'), 2: Decimal('0'), 3: Decimal('0'), None: Decimal('0')}
+
+    for piutang in qs:
+        carrying = _pv_carrying_value(piutang) if piutang.is_pv_adjusted else piutang.sisa_piutang
+        s = piutang.stage_ecl
+        stage_carrying[s] = stage_carrying.get(s, Decimal('0')) + carrying
+        psh = Decimal(str(
+            PiutangPenyisihan.objects.filter(
+                piutang_header=piutang, tanggal__lte=periode_akhir,
+            ).aggregate(v=Sum('jumlah'))['v'] or Decimal('0')
+        ))
+        stage_ecl[s] = stage_ecl.get(s, Decimal('0')) + psh
+
+    psh_qs = PiutangPenyisihan.objects.filter(
+        tanggal__gte=periode_awal, tanggal__lte=periode_akhir,
+    )
+    if entitas_bisnis is not None:
+        psh_qs = psh_qs.filter(entitas_bisnis=entitas_bisnis)
+    ecl_additions = Decimal(str(
+        psh_qs.filter(jumlah__gt=0).aggregate(v=Sum('jumlah'))['v'] or Decimal('0')
+    ))
+    ecl_reversals = abs(Decimal(str(
+        psh_qs.filter(jumlah__lt=0).aggregate(v=Sum('jumlah'))['v'] or Decimal('0')
+    )))
+
+    staging_qs = PiutangECLStagingLog.objects.filter(
+        tanggal__gte=periode_awal, tanggal__lte=periode_akhir,
+    )
+    if entitas_bisnis is not None:
+        staging_qs = staging_qs.filter(piutang_header__entitas_bisnis=entitas_bisnis)
+
+    return {
+        'periode_awal': periode_awal,
+        'periode_akhir': periode_akhir,
+        'gross_carrying_by_stage': {
+            'stage_1': stage_carrying[1],
+            'stage_2': stage_carrying[2],
+            'stage_3': stage_carrying[3],
+            'unstaged': stage_carrying[None],
+            'total': sum(stage_carrying.values()),
+        },
+        'ecl_balance_by_stage': {
+            'stage_1': stage_ecl[1],
+            'stage_2': stage_ecl[2],
+            'stage_3': stage_ecl[3],
+            'unstaged': stage_ecl[None],
+            'total': sum(stage_ecl.values()),
+        },
+        'ecl_movement': {
+            'additions': ecl_additions,
+            'reversals': ecl_reversals,
+            'net': ecl_additions - ecl_reversals,
+        },
+        'stage_movements_count': staging_qs.count(),
+        'staging_logs': list(staging_qs.values(
+            'piutang_header__nomor_piutang', 'stage_dari', 'stage_ke',
+            'tanggal', 'alasan', 'is_auto',
+        )),
+    }

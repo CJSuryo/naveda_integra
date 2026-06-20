@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Transaksi Pajak #{{ pajak_trx.pk }}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Transaksi Pajak #{{ pajak_trx.pk }}</h1>
+    <p class="ni-page-header__subtitle">
+      {{ pajak_trx.get_jenis_pajak_display }}
+      &nbsp;·&nbsp; {{ pajak_trx.get_source_type_display }}
+    </p>
+  </div>
+  <div class="ni-page-header__actions">
+    {% if pajak_trx.status == 'draft' or pajak_trx.status == 'final' %}
+    <a href="{% url 'pajak:transaksi_edit' pajak_trx.pk %}" class="ni-btn ni-btn--secondary">Edit / Override</a>
+    {% endif %}
+    {% if pajak_trx.status == 'final' %}
+    <form method="post" action="{% url 'pajak:transaksi_batalkan' pajak_trx.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--outline-danger"
+              onclick="return confirm('Batalkan transaksi pajak ini? Jurnal pembalik akan dibuat.')">
+        <i data-lucide="x-circle" style="width:14px;height:14px;"></i>
+        Batalkan
+      </button>
+    </form>
+    {% endif %}
+    {% if pajak_trx.status != 'disetor' %}
+    <form method="post" action="{% url 'pajak:transaksi_hapus' pajak_trx.pk %}" style="display:inline;">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--danger"
+              onclick="return confirm('Hapus permanen transaksi pajak ini dari database? Tindakan ini tidak dapat dibatalkan.')">
+        <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+        Hapus
+      </button>
+    </form>
+    {% endif %}
+    <a href="{% url 'pajak:transaksi_list' %}" class="ni-btn ni-btn--secondary">&#8592; Kembali</a>
+  </div>
+</div>
+
+{% if messages %}
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }} ni-mb-4">{{ msg }}</div>
+{% endfor %}
+{% endif %}
+
+<div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
+
+  {# ── Informasi Pajak ────────────────────────────────────────────── #}
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Informasi Pajak</h2></div>
+    <div class="ni-card__body">
+      <dl class="ni-detail-grid">
+        <dt>Sumber</dt>
+        <dd>{{ pajak_trx.get_source_type_display }} — #{{ pajak_trx.source_id }}</dd>
+
+        <dt>Jenis Pajak</dt>
+        <dd>{{ pajak_trx.get_jenis_pajak_display }}</dd>
+
+        <dt>Sifat</dt>
+        <dd>{{ pajak_trx.get_sifat_pajak_display }}</dd>
+
+        <dt>Masa Pajak</dt>
+        <dd>{{ pajak_trx.masa_pajak|date:"M Y" }}</dd>
+
+        <dt>DPP</dt>
+        <dd>Rp {{ pajak_trx.dpp|floatformat:0|intcomma }}</dd>
+
+        <dt>Tarif</dt>
+        <dd>{{ pajak_trx.tarif_persen }}%</dd>
+
+        <dt>Jumlah Pajak</dt>
+        <dd>
+          <strong>Rp {{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}</strong>
+          {% if pajak_trx.is_overridden %}
+          &nbsp;<span class="ni-badge ni-badge--warning" style="font-size:0.7rem;">Manual Override</span>
+          {% endif %}
+        </dd>
+
+        <dt>Status</dt>
+        <dd>
+          <span class="ni-badge ni-badge--{% if pajak_trx.status == 'final' or pajak_trx.status == 'disetor' %}success{% elif pajak_trx.status == 'dibatalkan' %}danger{% else %}secondary{% endif %}">
+            {{ pajak_trx.get_status_display }}
+          </span>
+        </dd>
+
+        <dt>Akun Pajak</dt>
+        <dd>{{ pajak_trx.akun_pajak.kode_akun }} — {{ pajak_trx.akun_pajak.nama }}</dd>
+
+        <dt>Akun Lawan</dt>
+        <dd>{{ pajak_trx.akun_lawan.kode_akun }} — {{ pajak_trx.akun_lawan.nama }}</dd>
+
+        {% if pajak_trx.entitas_bisnis %}
+        <dt>Entitas Bisnis</dt>
+        <dd>{{ pajak_trx.entitas_bisnis.nama }}</dd>
+        {% endif %}
+
+        <dt>Dibuat</dt>
+        <dd>{{ pajak_trx.created_at|date:"d M Y, H:i" }}</dd>
+
+        {% if pajak_trx.modified_by %}
+        <dt>Diubah Oleh</dt>
+        <dd>{{ pajak_trx.modified_by }} — {{ pajak_trx.modified_at|date:"d M Y, H:i" }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  {# ── Jurnal Terbentuk ───────────────────────────────────────────── #}
+  <div class="ni-card">
+    <div class="ni-card__header"><h2 class="ni-card__title">Jurnal Terbentuk</h2></div>
+    <div class="ni-card__body">
+      {% if pajak_trx.jurnal_header %}
+      <dl class="ni-detail-grid" style="margin-bottom:16px;">
+        <dt>Nomor Jurnal</dt>
+        <dd><code style="font-size:0.875rem;">{{ pajak_trx.jurnal_header.nomor_transaksi }}</code></dd>
+        <dt>Tanggal</dt>
+        <dd>{{ pajak_trx.jurnal_header.tanggal|date:"d M Y" }}</dd>
+        <dt>Uraian</dt>
+        <dd>{{ pajak_trx.jurnal_header.uraian_transaksi }}</dd>
+      </dl>
+
+      {% if jurnal_details %}
+      <table style="width:100%;border-collapse:collapse;font-size:0.8125rem;">
+        <thead>
+          <tr>
+            <th style="padding:5px 8px;text-align:left;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ni-text-muted);border-bottom:1px solid var(--ni-border);">Kode</th>
+            <th style="padding:5px 8px;text-align:left;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ni-text-muted);border-bottom:1px solid var(--ni-border);">Nama Akun</th>
+            <th style="padding:5px 8px;text-align:right;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ni-text-muted);border-bottom:1px solid var(--ni-border);">Debit (Rp)</th>
+            <th style="padding:5px 8px;text-align:right;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--ni-text-muted);border-bottom:1px solid var(--ni-border);">Kredit (Rp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in jurnal_details %}
+          <tr>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--ni-border);font-family:ui-monospace,monospace;font-size:0.78rem;color:var(--ni-text-muted);">{{ d.akun.kode_akun }}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--ni-border);">{{ d.akun.nama }}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--ni-border);text-align:right;font-variant-numeric:tabular-nums;color:var(--ni-primary);">
+              {% if d.debit %}{{ d.debit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}
+            </td>
+            <td style="padding:6px 8px;border-bottom:1px solid var(--ni-border);text-align:right;font-variant-numeric:tabular-nums;color:var(--ni-text-muted);">
+              {% if d.kredit %}{{ d.kredit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="padding:7px 8px;font-weight:600;font-size:0.8rem;border-top:2px solid var(--ni-border);">Total</td>
+            <td style="padding:7px 8px;text-align:right;font-weight:600;border-top:2px solid var(--ni-border);font-variant-numeric:tabular-nums;color:var(--ni-primary);">
+              {{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}
+            </td>
+            <td style="padding:7px 8px;text-align:right;font-weight:600;border-top:2px solid var(--ni-border);font-variant-numeric:tabular-nums;color:var(--ni-text-muted);">
+              {{ pajak_trx.jumlah_pajak|floatformat:0|intcomma }}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+      {% endif %}
+
+      {% else %}
+      <div style="text-align:center;padding:32px 0;color:var(--ni-text-muted);">
+        <i data-lucide="book" style="width:28px;height:28px;opacity:0.3;margin-bottom:8px;display:block;margin-left:auto;margin-right:auto;"></i>
+        <p style="font-size:0.875rem;margin:0;">Belum ada jurnal — jurnal dibuat saat konfirmasi.</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

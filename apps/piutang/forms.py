@@ -7,6 +7,7 @@ from apps.master_data.utils import akun_sorted_queryset
 from .models import (
     PiutangAttachment, PiutangDetail, PiutangHeader, PiutangPenerimaan,
     PenyisihanRateConfig,
+    STANDAR_AKUNTANSI_CHOICES, KATEGORI_PENGUKURAN_CHOICES, ECL_STAGE_CHOICES,
 )
 
 
@@ -20,6 +21,10 @@ class PiutangHeaderForm(forms.ModelForm):
             'is_approval_required',
             'pv_discount_rate', 'interest_income_account',
             'coa_piutang_lancar_account',
+            # PSAK/SAK fields
+            'standar_akuntansi', 'kategori_pengukuran', 'business_model',
+            'sppi_test_passed', 'biaya_transaksi', 'biaya_transaksi_account',
+            'agunan_jenis', 'agunan_nilai',
         ]
         widgets = {
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
@@ -35,6 +40,14 @@ class PiutangHeaderForm(forms.ModelForm):
             'pv_discount_rate': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
             'interest_income_account': forms.Select(attrs={'class': 'ni-input'}),
             'coa_piutang_lancar_account': forms.Select(attrs={'class': 'ni-input'}),
+            'standar_akuntansi': forms.Select(attrs={'class': 'ni-input', 'id': 'id_standar_akuntansi'}),
+            'kategori_pengukuran': forms.HiddenInput(attrs={'id': 'id_kategori_pengukuran'}),
+            'business_model': forms.HiddenInput(attrs={'id': 'id_business_model'}),
+            'sppi_test_passed': forms.HiddenInput(attrs={'id': 'id_sppi_test_passed'}),
+            'biaya_transaksi': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+            'biaya_transaksi_account': forms.Select(attrs={'class': 'ni-input'}),
+            'agunan_jenis': forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'mis. Tanah, Bangunan, Deposito'}),
+            'agunan_nilai': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -45,12 +58,23 @@ class PiutangHeaderForm(forms.ModelForm):
         self.fields['pv_discount_rate'].required = False
         self.fields['interest_income_account'].required = False
         self.fields['coa_piutang_lancar_account'].required = False
-        self.fields['coa_piutang_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['standar_akuntansi'].required = False
+        self.fields['standar_akuntansi'].empty_label = '— Ikuti standar entitas bisnis —'
+        self.fields['kategori_pengukuran'].required = False
+        self.fields['business_model'].required = False
+        self.fields['sppi_test_passed'].required = False
+        self.fields['biaya_transaksi'].required = False
+        self.fields['biaya_transaksi_account'].required = False
+        self.fields['agunan_jenis'].required = False
+        self.fields['agunan_nilai'].required = False
+        self.fields['coa_piutang_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '1'})
         self.fields['coa_piutang_account'].empty_label = '— Pilih Akun Piutang —'
-        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})
+        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '4'})
         self.fields['interest_income_account'].empty_label = '— Pilih Akun Pendapatan Bunga Efektif —'
-        self.fields['coa_piutang_lancar_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['coa_piutang_lancar_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '1'})
         self.fields['coa_piutang_lancar_account'].empty_label = '— Pilih Akun Piutang Bagian Lancar —'
+        self.fields['biaya_transaksi_account'].queryset = akun_sorted_queryset()
+        self.fields['biaya_transaksi_account'].empty_label = '— Pilih Akun Biaya Transaksi —'
 
 
 class PiutangDetailForm(forms.ModelForm):
@@ -66,7 +90,7 @@ class PiutangDetailForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['revenue_account'].required = False
-        self.fields['revenue_account'].queryset = akun_sorted_queryset()
+        self.fields['revenue_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '4'})
         self.fields['revenue_account'].empty_label = '— Akun Pendapatan (opsional) —'
 
 
@@ -241,7 +265,8 @@ class PvAdjustmentForm(forms.Form):
         queryset=Akun.objects.none(),
         widget=forms.Select(attrs={'class': 'ni-input'}),
         label='Akun Pendapatan Bunga Efektif',
-        empty_label='— Pilih Akun —',
+        empty_label='— Gunakan akun dari piutang —',
+        required=False,
     )
     catatan = forms.CharField(
         required=False,
@@ -251,7 +276,7 @@ class PvAdjustmentForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kategori_id': 'pendapatan'})
+        self.fields['interest_income_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '4'})
 
 
 class PvAccrualForm(forms.Form):
@@ -264,3 +289,175 @@ class PvAccrualForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'ni-input'}),
         label='Catatan',
     )
+
+
+class ECLStageUpdateForm(forms.Form):
+    new_stage = forms.ChoiceField(
+        choices=ECL_STAGE_CHOICES,
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Stage ECL Baru',
+    )
+    alasan = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+        label='Alasan Perubahan',
+    )
+
+
+class ECLGeneralApproachForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Penyisihan',
+    )
+    pd_rate = forms.DecimalField(
+        max_digits=7, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0', 'max': '100'}),
+        label='PD Rate (%) per tahun',
+        help_text='Probability of Default dalam persen. Mis: 2.5 untuk 2,5%.',
+    )
+    lgd_rate = forms.DecimalField(
+        max_digits=7, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0', 'max': '100'}),
+        label='LGD Rate (%) ',
+        help_text='Loss Given Default dalam persen. Mis: 45 untuk 45%.',
+    )
+    forward_looking_adj = forms.DecimalField(
+        max_digits=7, decimal_places=4,
+        initial='1.0000',
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0'}),
+        label='Forward-Looking Adjustment',
+        help_text='Faktor penyesuaian makro-ekonomi. Default 1.0 (tanpa penyesuaian).',
+    )
+    allowance_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Cadangan ECL',
+        empty_label='— Pilih Akun Cadangan —',
+    )
+    expense_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Beban ECL',
+        empty_label='— Pilih Akun Beban —',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input'}),
+        label='Catatan',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['allowance_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['expense_account'].queryset = akun_sorted_queryset({'kategori_id': 'beban'})
+
+
+class PiutangModifikasiForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Modifikasi',
+    )
+    deskripsi_perubahan = forms.CharField(
+        widget=forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
+        label='Deskripsi Perubahan Syarat',
+    )
+    new_cashflows_json = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'class': 'ni-input', 'rows': 5, 'placeholder':
+            '[{"tanggal": "2027-01-01", "jumlah": 5000000}, ...]',
+        }),
+        label='Arus Kas Baru (JSON)',
+        help_text='Array JSON dengan field "tanggal" (YYYY-MM-DD) dan "jumlah".',
+    )
+    gain_loss_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Laba/Rugi Modifikasi',
+        empty_label='— Pilih Akun —',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['gain_loss_account'].queryset = akun_sorted_queryset()
+
+
+class PiutangPemulihanForm(forms.Form):
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Pemulihan',
+    )
+    jumlah = forms.DecimalField(
+        max_digits=19, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0.01'}),
+        label='Jumlah Dipulihkan',
+    )
+    kas_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Kas/Bank',
+        empty_label='— Pilih Akun Kas/Bank —',
+    )
+    recovery_income_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(),
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Pendapatan Pemulihan',
+        empty_label='— Pilih Akun Pendapatan —',
+    )
+    catatan = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'ni-input'}),
+        label='Catatan',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['kas_account'].queryset = akun_sorted_queryset({'kategori_id': 'aset'})
+        self.fields['recovery_income_account'].queryset = akun_sorted_queryset({'kode_akun__startswith': '4'})
+
+
+class PiutangFactoringForm(forms.Form):
+    HASIL_CHOICES = [
+        ('derecognized', 'Diderecognize — risiko/manfaat sudah dialihkan penuh'),
+        ('continuing', 'Continuing Involvement — risiko/manfaat tidak sepenuhnya dialihkan'),
+        ('not_derecognized', 'Tidak Diderecognize — risiko/manfaat tetap pada entitas'),
+    ]
+
+    tanggal = forms.DateField(
+        widget=forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+        label='Tanggal Transaksi',
+    )
+    pihak_penerima = forms.CharField(
+        widget=forms.TextInput(attrs={'class': 'ni-input', 'placeholder': 'Nama bank/lembaga penerima piutang'}),
+        label='Pihak Penerima',
+    )
+    nilai_transfer = forms.DecimalField(
+        max_digits=19, decimal_places=4,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0.01'}),
+        label='Nilai Transfer (Kas Diterima)',
+    )
+    hasil_analisis = forms.ChoiceField(
+        choices=HASIL_CHOICES,
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_hasil_analisis'}),
+        label='Hasil Analisis Risiko & Manfaat',
+    )
+    continuing_involvement_amount = forms.DecimalField(
+        max_digits=19, decimal_places=4, required=False,
+        widget=forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01', 'min': '0'}),
+        label='Nilai Continuing Involvement',
+        help_text='Isi jika hasil analisis adalah Continuing Involvement.',
+    )
+    gain_loss_account = forms.ModelChoiceField(
+        queryset=Akun.objects.none(), required=False,
+        widget=forms.Select(attrs={'class': 'ni-input'}),
+        label='Akun Laba/Rugi Derecognition',
+        empty_label='— Pilih Akun (jika diderecognize) —',
+    )
+    analisis_detail = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'ni-input', 'rows': 4}),
+        label='Uraian Analisis',
+        help_text='Dokumentasi analisis pemindahan risiko dan manfaat.',
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['gain_loss_account'].queryset = akun_sorted_queryset()

@@ -2,6 +2,12 @@
 from django.conf import settings
 from django.db import models
 
+STANDAR_AKUNTANSI_CHOICES = [
+    ('psak', 'PSAK (PSAK 71 / Full IFRS)'),
+    ('sak_ep', 'SAK EP (Entitas Privat)'),
+    ('sak_emkm', 'SAK EMKM (Entitas Mikro, Kecil, Menengah)'),
+]
+
 
 class TipeEntitas(models.Model):
     """Business-type lookup (e.g. FnB, Laundry, Restaurant, Hotel)."""
@@ -45,6 +51,13 @@ class EntitasBisnis(models.Model):
         default=False,
         verbose_name='Profil Perusahaan (Invoice)',
         help_text='Tandai sebagai profil perusahaan penerbit invoice/struk. Hanya satu entitas yang bisa ditandai.',
+    )
+    standar_akuntansi = models.CharField(
+        max_length=10,
+        choices=STANDAR_AKUNTANSI_CHOICES,
+        default='psak',
+        verbose_name='Standar Akuntansi',
+        help_text='Standar yang digunakan entitas ini untuk laporan keuangan.',
     )
     users = models.ManyToManyField(
         settings.AUTH_USER_MODEL,

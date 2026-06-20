@@ -254,6 +254,25 @@
         </div>
       </div>
 
+      <div class="ni-nav-item {% if 'pajak' in request.path %}ni-nav-item--open{% endif %}">
+        <div class="ni-nav-link" data-toggle="submenu">
+          <i data-lucide="receipt" class="ni-nav-link__icon"></i>
+          <span class="ni-nav-link__text">Pajak</span>
+          <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
+        </div>
+        <div class="ni-nav-submenu">
+          <a href="{% url 'pajak:transaksi_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Transaksi Pajak</span>
+          </a>
+          <a href="{% url 'pajak:masa_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Masa Pajak</span>
+          </a>
+          <a href="{% url 'pajak:tarif_list' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Tarif Pajak</span>
+          </a>
+        </div>
+      </div>
+
       <div class="ni-nav-item {% if 'inventory' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="warehouse" class="ni-nav-link__icon"></i>

@@ -40,6 +40,178 @@
   </div>
 </div>
 
+<!-- ── Panduan Alur Kerja ─────────────────────────────────────── -->
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:20px">
+  <div class="ni-card__header" style="cursor:pointer;user-select:none" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+    <h2 class="ni-card__title">
+      {% if standar_efektif == 'psak' %}<span class="ni-badge ni-badge--primary" style="margin-right:8px">SAK</span>
+      {% elif standar_efektif == 'sak_ep' %}<span class="ni-badge ni-badge--warning" style="margin-right:8px">SAK EP</span>
+      {% elif standar_efektif == 'sak_emkm' %}<span class="ni-badge ni-badge--secondary" style="margin-right:8px">SAK EMKM</span>{% endif %}
+      Panduan Alur Kerja Piutang
+    </h2>
+    <span class="ni-text-muted" style="font-size:.85em">Klik untuk buka/tutup</span>
+  </div>
+  <div class="ni-card__body" style="padding-top:0">
+    <div style="display:flex;flex-wrap:wrap;gap:0;position:relative">
+      <!-- Step line connector -->
+      <style>
+        .wf-step{display:flex;flex-direction:column;align-items:center;min-width:110px;flex:1;padding:12px 6px;text-align:center;position:relative}
+        .wf-step::after{content:'';position:absolute;top:20px;left:50%;right:-50%;height:2px;background:var(--ni-border);z-index:0}
+        .wf-step:last-child::after{display:none}
+        .wf-dot{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.9em;position:relative;z-index:1;flex-shrink:0}
+        .wf-dot--done{background:#16a34a;color:#fff}
+        .wf-dot--active{background:#2563eb;color:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.25)}
+        .wf-dot--pending{background:var(--ni-surface-alt,#e5e7eb);color:var(--ni-text-muted)}
+        .wf-dot--warn{background:#d97706;color:#fff}
+        .wf-label{font-size:.78em;margin-top:6px;line-height:1.3;color:var(--ni-text)}
+        .wf-sublabel{font-size:.72em;color:var(--ni-text-muted);margin-top:2px}
+      </style>
+
+      {# Step 1 — Buat Piutang #}
+      <div class="wf-step">
+        <div class="wf-dot wf-dot--done">✓</div>
+        <div class="wf-label">Buat Piutang</div>
+        <div class="wf-sublabel">Draft dibuat</div>
+      </div>
+
+      {# Step 2 — Post #}
+      <div class="wf-step">
+        {% if piutang.status == 'draft' %}
+          <div class="wf-dot wf-dot--active">2</div>
+          <div class="wf-label" style="color:#2563eb"><strong>Post Piutang</strong></div>
+          <div class="wf-sublabel">Jurnal Dr Piutang / Cr Pendapatan</div>
+        {% else %}
+          <div class="wf-dot wf-dot--done">✓</div>
+          <div class="wf-label">Diposting</div>
+          <div class="wf-sublabel">Jurnal pengakuan dibuat</div>
+        {% endif %}
+      </div>
+
+      {# Step 3 — Approval (jika diperlukan) #}
+      {% if piutang.is_approval_required %}
+      <div class="wf-step">
+        {% if piutang.approved_by %}
+          <div class="wf-dot wf-dot--done">✓</div>
+          <div class="wf-label">Disetujui</div>
+          <div class="wf-sublabel">{{ piutang.approved_by }}</div>
+        {% elif piutang.status == 'pending_approval' %}
+          <div class="wf-dot wf-dot--active">3</div>
+          <div class="wf-label" style="color:#2563eb"><strong>Menunggu Approval</strong></div>
+          <div class="wf-sublabel">Submit sudah dilakukan</div>
+        {% else %}
+          <div class="wf-dot wf-dot--pending">3</div>
+          <div class="wf-label">Approval</div>
+          <div class="wf-sublabel">Diperlukan</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Step 4 — EIR/Amortisasi (PSAK & SAK EP, jangka panjang) #}
+      {% if standar_efektif != 'sak_emkm' and piutang.jenis_jangka_waktu == 'long_term' and piutang.is_pv_adjusted %}
+      <div class="wf-step">
+        {% if pv_carrying_value %}
+          <div class="wf-dot wf-dot--{% if pv_has_pending_accrual %}warn{% else %}done{% endif %}">{% if pv_has_pending_accrual %}!{% else %}✓{% endif %}</div>
+          <div class="wf-label">Amortisasi EIR</div>
+          <div class="wf-sublabel">Periode {{ pv_next_periode|add:"-1" }} selesai{% if pv_has_pending_accrual %} — ada akrual pending{% endif %}</div>
+        {% else %}
+          <div class="wf-dot wf-dot--pending">4</div>
+          <div class="wf-label">Amortisasi EIR</div>
+          <div class="wf-sublabel">Klik Amortisasi PV di bawah setiap periode</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Step 5 — ECL Staging (PSAK saja) #}
+      {% if standar_efektif == 'psak' and piutang.status in 'open,partial,overdue' %}
+      <div class="wf-step">
+        {% if piutang.stage_ecl %}
+          <div class="wf-dot wf-dot--{% if piutang.stage_ecl == 1 %}done{% elif piutang.stage_ecl == 2 %}warn{% else %}wf-dot--danger{% endif %}">
+            S{{ piutang.stage_ecl }}
+          </div>
+          <div class="wf-label">ECL Stage {{ piutang.stage_ecl }}</div>
+          <div class="wf-sublabel">{% if piutang.jatuh_tempo %}{{ effective_dpd }} hari DPD{% else %}Jatuh tempo belum diisi{% endif %}</div>
+        {% else %}
+          <div class="wf-dot wf-dot--pending">S?</div>
+          <div class="wf-label">ECL Staging</div>
+          <div class="wf-sublabel">Belum di-assess — klik di bawah</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Step 6 — Penyisihan ECL #}
+      {% if piutang.status in 'open,partial,overdue' %}
+      <div class="wf-step">
+        {% if penyisihan_history %}
+          <div class="wf-dot wf-dot--done">✓</div>
+          <div class="wf-label">Penyisihan ECL</div>
+          <div class="wf-sublabel">{{ penyisihan_history|length }} entri</div>
+        {% else %}
+          <div class="wf-dot wf-dot--pending">P</div>
+          <div class="wf-label">Penyisihan ECL</div>
+          <div class="wf-sublabel">Belum dibuat — lihat bagian Penyisihan</div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {# Step 7 — Terima Penerimaan #}
+      <div class="wf-step">
+        {% if piutang.status == 'paid' or piutang.status == 'closed' %}
+          <div class="wf-dot wf-dot--done">✓</div>
+          <div class="wf-label">Lunas</div>
+          <div class="wf-sublabel">Semua tagihan terbayar</div>
+        {% elif piutang.jumlah_terbayar > 0 %}
+          <div class="wf-dot wf-dot--warn">P</div>
+          <div class="wf-label">Sebagian Lunas</div>
+          <div class="wf-sublabel">Sisa: Rp {{ piutang.sisa_piutang|floatformat:0 }}</div>
+        {% elif piutang.status == 'overdue' %}
+          <div class="wf-dot" style="background:#dc2626;color:#fff">!</div>
+          <div class="wf-label" style="color:#dc2626">Jatuh Tempo</div>
+          <div class="wf-sublabel">{{ piutang.days_overdue }} hari terlambat</div>
+        {% else %}
+          <div class="wf-dot wf-dot--pending">7</div>
+          <div class="wf-label">Terima Pembayaran</div>
+          <div class="wf-sublabel">Gunakan tombol Terima Penerimaan</div>
+        {% endif %}
+      </div>
+
+    </div>
+
+    <!-- Contextual next-action tip -->
+    <div style="margin-top:14px;padding:10px 14px;border-radius:6px;font-size:.87em;
+      {% if piutang.status == 'draft' %}background:#eff6ff;border-left:3px solid #2563eb
+      {% elif piutang.status == 'overdue' %}background:#fef2f2;border-left:3px solid #dc2626
+      {% elif piutang.status == 'pending_approval' %}background:#fffbeb;border-left:3px solid #d97706
+      {% else %}background:var(--ni-surface-alt,#f5f5f5);border-left:3px solid var(--ni-border){% endif %}">
+      {% if piutang.status == 'draft' %}
+        <strong>Langkah selanjutnya:</strong> Klik <strong>Post Piutang</strong> di pojok kanan atas untuk membuat jurnal pengakuan piutang (Dr Piutang / Cr Pendapatan).
+        {% if piutang.can_edit %} Atau <strong>Edit</strong> jika masih ada data yang perlu diubah.{% endif %}
+      {% elif piutang.status == 'pending_approval' %}
+        <strong>Menunggu persetujuan.</strong> Piutang sudah disubmit. Hubungi approver untuk menyetujui.
+      {% elif piutang.status == 'overdue' %}
+        <strong>Piutang terlambat {{ piutang.days_overdue }} hari.</strong>
+        {% if standar_efektif == 'psak' %}
+          {% if piutang.days_overdue >= 90 %}Seharusnya Stage 3 — segera update ECL Stage di bagian ECL Staging di bawah.
+          {% elif piutang.days_overdue >= 30 %}DPD ≥ 30 hari — pertimbangkan update ke Stage 2 (SICR).{% endif %}
+        {% endif %}
+        Segera lakukan penagihan atau pertimbangkan write-off jika tidak tertagih.
+      {% elif piutang.status in 'open,partial' %}
+        {% if standar_efektif == 'psak' and piutang.jenis_jangka_waktu == 'long_term' and piutang.is_pv_adjusted %}
+          <strong>Rutin setiap periode:</strong> (1) Catat amortisasi EIR, (2) Assessment ECL Stage, (3) Update penyisihan ECL. Terima pembayaran saat angsuran diterima.
+        {% elif standar_efektif == 'sak_emkm' %}
+          <strong>Piutang aktif.</strong> Catat penerimaan saat pembayaran diterima. Penyisihan sederhana bersifat opsional.
+        {% else %}
+          <strong>Piutang aktif.</strong> Catat penerimaan setiap pembayaran masuk. Update penyisihan secara periodik.
+        {% endif %}
+      {% elif piutang.status == 'paid' or piutang.status == 'closed' %}
+        <strong>Piutang lunas.</strong> Semua tagihan telah terbayar.
+      {% elif piutang.status == 'written_off' %}
+        <strong>Piutang telah dihapusbukukan.</strong>
+        {% if standar_efektif != 'sak_emkm' %}Jika ada pembayaran setelah write-off, gunakan fitur <strong>Pemulihan Piutang</strong> di bawah.{% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <div class="ni-card-grid ni-card-grid--2 ni-animate-fade-in">
   <div class="ni-card">
     <div class="ni-card__header"><h2 class="ni-card__title">Informasi Piutang</h2></div>
@@ -81,6 +253,52 @@
           {% elif piutang.source_type == 'from_pendapatan' %}<span class="ni-badge ni-badge--info">Dari Pendapatan</span>
           {% else %}{{ piutang.source_type|default:'-' }}{% endif %}
         </dd>
+        <dt>Standar Akuntansi</dt>
+        <dd>
+          {% if standar_efektif == 'psak' %}
+            <span class="ni-badge ni-badge--primary">SAK</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">Full IFRS / PSAK 71</span>
+          {% elif standar_efektif == 'sak_ep' %}
+            <span class="ni-badge ni-badge--warning">SAK EP</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">Entitas Privat</span>
+          {% elif standar_efektif == 'sak_emkm' %}
+            <span class="ni-badge ni-badge--secondary">SAK EMKM</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">Entitas Mikro, Kecil, Menengah</span>
+          {% endif %}
+          {% if piutang.standar_akuntansi %}
+            <span class="ni-text-muted" style="font-size:.78em;margin-left:4px">(override per-piutang)</span>
+          {% endif %}
+        </dd>
+        <dt>Kategori Pengukuran</dt>
+        <dd>{{ piutang.get_kategori_pengukuran_display|default:'Amortised Cost' }}</dd>
+        {% if piutang.stage_ecl %}
+        <dt>ECL Stage</dt>
+        <dd>
+          {% if piutang.stage_ecl == 1 %}
+            <span class="ni-badge ni-badge--success">Stage 1</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">Performing — 12-month ECL</span>
+          {% elif piutang.stage_ecl == 2 %}
+            <span class="ni-badge ni-badge--warning">Stage 2</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">SICR — Lifetime ECL</span>
+          {% elif piutang.stage_ecl == 3 %}
+            <span class="ni-badge ni-badge--danger">Stage 3</span>
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">Credit-impaired — Lifetime ECL (net carrying)</span>
+          {% endif %}
+          {% if piutang.stage_ecl_tanggal %}
+            <span class="ni-text-muted" style="font-size:.82em;margin-left:4px">per {{ piutang.stage_ecl_tanggal }}</span>
+          {% endif %}
+        </dd>
+        {% endif %}
+        {% if piutang.business_model %}
+        <dt>Business Model</dt><dd>{{ piutang.business_model }}</dd>
+        {% endif %}
+        {% if piutang.sppi_test_passed is not None %}
+        <dt>SPPI Test</dt>
+        <dd>
+          {% if piutang.sppi_test_passed %}<span class="ni-badge ni-badge--success">Lulus</span>
+          {% else %}<span class="ni-badge ni-badge--danger">Tidak Lulus</span>{% endif %}
+        </dd>
+        {% endif %}
         <dt>Deskripsi</dt><dd>{{ piutang.deskripsi|default:'-' }}</dd>
       </dl>
     </div>
@@ -103,6 +321,14 @@
         {% endif %}
         {% if piutang.jenis_jangka_waktu == 'long_term' and bagian_lancar is not None %}
         <dt>Bagian Lancar (&le;12 bln)</dt><dd>Rp {{ bagian_lancar|floatformat:0|intcomma }}</dd>
+        {% endif %}
+        {% if piutang.biaya_transaksi and piutang.biaya_transaksi > 0 %}
+        <dt>Biaya Transaksi (kapitalisasi)</dt>
+        <dd>Rp {{ piutang.biaya_transaksi|floatformat:0|intcomma }}</dd>
+        {% endif %}
+        {% if piutang.agunan_jenis %}
+        <dt>Agunan</dt>
+        <dd>{{ piutang.agunan_jenis }}{% if piutang.agunan_nilai %} — Rp {{ piutang.agunan_nilai|floatformat:0|intcomma }}{% endif %}</dd>
         {% endif %}
         <dt style="margin-top:8px;border-top:1px solid var(--ni-border);padding-top:8px">Akun Piutang</dt>
         <dd style="margin-top:8px;border-top:1px solid var(--ni-border);padding-top:8px">
@@ -405,6 +631,263 @@
       </tbody>
     </table>
   </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if standar_efektif == 'psak' %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">
+      ECL Staging — Penilaian Risiko Kredit
+      {% if piutang.stage_ecl == 1 %}<span class="ni-badge ni-badge--success" style="margin-left:8px">Stage 1 · Sehat</span>
+      {% elif piutang.stage_ecl == 2 %}<span class="ni-badge ni-badge--warning" style="margin-left:8px">Stage 2 · Risiko Meningkat</span>
+      {% elif piutang.stage_ecl == 3 %}<span class="ni-badge ni-badge--danger" style="margin-left:8px">Stage 3 · Bermasalah</span>
+      {% else %}<span class="ni-badge ni-badge--secondary" style="margin-left:8px">Belum Dinilai</span>{% endif %}
+    </h2>
+    <div style="display:flex;gap:.5rem">
+      <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('eclStageModal')">Perbarui Stage</button>
+      <button type="button" class="ni-btn ni-btn--sm ni-btn--outline" onclick="openModal('eclGeneralModal')">Hitung &amp; Catat ECL</button>
+    </div>
+  </div>
+  <div class="ni-card__body" style="padding-bottom:0">
+
+    {# — Apa itu ECL Staging — #}
+    <div style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:.87em">
+      <strong>Apa ini?</strong> PSAK 71 mengharuskan setiap piutang dinilai tingkat risikonya secara rutin.
+      Hasilnya menentukan <em>berapa besar cadangan kerugian yang harus dibentuk</em> — semakin tinggi risiko, semakin besar cadangan.
+      Penilaian dilakukan minimal sekali per periode pelaporan, atau segera saat ada indikasi perubahan risiko.
+    </div>
+
+    {# — 3 Stage Visual — #}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+
+      <div style="border-radius:8px;padding:14px;border:2px solid {% if piutang.stage_ecl == 1 %}#16a34a;background:#f0fdf4{% else %}var(--ni-border);background:var(--ni-surface-alt){% endif %}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:1.4em">🟢</span>
+          <strong style="{% if piutang.stage_ecl == 1 %}color:#15803d{% endif %}">Stage 1 — Sehat</strong>
+          {% if piutang.stage_ecl == 1 %}<span class="ni-badge ni-badge--success" style="margin-left:auto;font-size:.75em">▶ Sekarang</span>{% endif %}
+        </div>
+        <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> Tidak ada keterlambatan signifikan — bayar on-time atau &lt;30 hari terlambat.</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> 12-bulan ECL — hanya kerugian yang diperkirakan dalam 12 bulan ke depan.</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Bunga dicatat atas:</strong> Nilai bruto piutang (sebelum cadangan).</p>
+      </div>
+
+      <div style="border-radius:8px;padding:14px;border:2px solid {% if piutang.stage_ecl == 2 %}#d97706;background:#fffbeb{% else %}var(--ni-border);background:var(--ni-surface-alt){% endif %}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:1.4em">🟡</span>
+          <strong style="{% if piutang.stage_ecl == 2 %}color:#b45309{% endif %}">Stage 2 — Risiko Meningkat</strong>
+          {% if piutang.stage_ecl == 2 %}<span class="ni-badge ni-badge--warning" style="margin-left:auto;font-size:.75em">▶ Sekarang</span>{% endif %}
+        </div>
+        <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> Terlambat ≥30 hari, atau ada tanda risiko memburuk (keuangan melemah, kondisi industri buruk).</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> Lifetime ECL — kerugian diperkirakan selama sisa usia piutang (lebih besar dari Stage 1).</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Bunga dicatat atas:</strong> Nilai bruto piutang (sebelum cadangan).</p>
+      </div>
+
+      <div style="border-radius:8px;padding:14px;border:2px solid {% if piutang.stage_ecl == 3 %}#dc2626;background:#fef2f2{% else %}var(--ni-border);background:var(--ni-surface-alt){% endif %}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:1.4em">🔴</span>
+          <strong style="{% if piutang.stage_ecl == 3 %}color:#b91c1c{% endif %}">Stage 3 — Bermasalah</strong>
+          {% if piutang.stage_ecl == 3 %}<span class="ni-badge ni-badge--danger" style="margin-left:auto;font-size:.75em">▶ Sekarang</span>{% endif %}
+        </div>
+        <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> Terlambat ≥90 hari, atau ada bukti nyata gagal bayar (restrukturisasi, indikasi pailit).</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> Lifetime ECL — sama seperti Stage 2, tetapi biasanya jauh lebih besar.</p>
+        <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Bunga dicatat atas:</strong> Nilai <em>neto</em> (setelah cadangan) — lebih konservatif.</p>
+      </div>
+
+    </div>
+
+    {# — DPD status & rekomendasi sistem — #}
+    {% if not piutang.jatuh_tempo %}
+    <div style="border-radius:6px;padding:12px 16px;font-size:.87em;margin-bottom:16px;background:#fffbeb;border-left:4px solid #d97706">
+      <strong>⚠️ Tanggal jatuh tempo belum diisi — DPD tidak dapat dihitung.</strong>
+      DPD (Days Past Due) dihitung dari tanggal jatuh tempo kontrak. Tanpa jatuh tempo, sistem tidak dapat merekomendasikan ECL Stage secara otomatis.
+      <a href="{% url 'piutang:update' piutang.pk %}" style="color:#d97706;font-weight:600">→ Edit piutang untuk mengisi jatuh tempo</a>
+    </div>
+    {% else %}
+    <div style="border-radius:6px;padding:12px 16px;font-size:.87em;margin-bottom:16px;
+      {% if effective_dpd >= 90 %}background:#fef2f2;border-left:4px solid #dc2626
+      {% elif effective_dpd >= 30 %}background:#fffbeb;border-left:4px solid #d97706
+      {% else %}background:#f0fdf4;border-left:4px solid #16a34a{% endif %}">
+      <strong>Status DPD Saat Ini: {{ effective_dpd }} hari terlambat</strong>
+      {% if piutang.jenis_jangka_waktu == 'long_term' %}
+        (dari angsuran pertama yang belum terbayar)
+      {% else %}
+        (jatuh tempo: {{ piutang.jatuh_tempo }})
+      {% endif %}.
+      {% if effective_dpd >= 90 %}
+        Sistem merekomendasikan <strong>Stage 3</strong>. Piutang ini melewati batas 90 hari keterlambatan — bukti kredit bermasalah.
+        {% if piutang.stage_ecl != 3 %}<strong style="color:#dc2626"> Perlu perbarui stage sekarang!</strong>{% endif %}
+      {% elif effective_dpd >= 30 %}
+        Sistem merekomendasikan <strong>Stage 2</strong>. Keterlambatan ≥30 hari adalah indikator peningkatan risiko kredit (SICR) per PSAK 71.
+        {% if piutang.stage_ecl and piutang.stage_ecl < 2 %}<strong style="color:#d97706"> Pertimbangkan perbarui ke Stage 2.</strong>{% endif %}
+      {% else %}
+        Piutang masih dalam kategori sehat (DPD &lt;30 hari). Pertahankan di Stage 1 selama tidak ada indikator kualitatif yang memburuk.
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+
+  {# — Riwayat log — #}
+  {% if ecl_staging_log %}
+  <div style="padding:0 20px 4px;font-size:.84em;color:var(--ni-text-muted);font-weight:600">Riwayat Perubahan Stage</div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table" style="font-size:.88em">
+      <thead><tr><th>Tanggal</th><th>Perubahan</th><th>DPD saat itu</th><th>Alasan</th><th>Jenis</th><th>Oleh</th></tr></thead>
+      <tbody>
+        {% for log in ecl_staging_log %}
+        <tr>
+          <td>{{ log.tanggal }}</td>
+          <td>
+            {% if log.stage_dari %}
+              <span class="ni-badge ni-badge--{% if log.stage_dari == 1 %}success{% elif log.stage_dari == 2 %}warning{% else %}danger{% endif %}">S{{ log.stage_dari }}</span>
+              →
+            {% endif %}
+            <span class="ni-badge ni-badge--{% if log.stage_ke == 1 %}success{% elif log.stage_ke == 2 %}warning{% else %}danger{% endif %}">S{{ log.stage_ke }}</span>
+          </td>
+          <td>{{ log.days_past_due|default:'—' }} hari</td>
+          <td style="max-width:200px;white-space:normal">{{ log.alasan|default:'-' }}</td>
+          <td>{% if log.is_auto %}<span class="ni-badge ni-badge--info">Otomatis</span>{% else %}<span class="ni-badge">Manual</span>{% endif %}</td>
+          <td>{{ log.created_by|default:'-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body" style="padding-top:0"><p class="ni-text-muted" style="font-size:.87em">Belum ada riwayat perubahan stage ECL. Klik <strong>Perbarui Stage</strong> untuk memulai penilaian pertama.</p></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if standar_efektif == 'psak' or standar_efektif == 'sak_ep' %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Modifikasi Syarat Piutang</h2>
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('modifikasiModal')">+ Catat Modifikasi</button>
+  </div>
+  <div class="ni-card__body" style="padding-bottom:{% if modifikasi_history %}0{% else %}16px{% endif %}">
+    <div style="background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;padding:12px 16px;margin-bottom:{% if modifikasi_history %}16px{% else %}0{% endif %};font-size:.87em">
+      <strong>Apa ini?</strong> Jika syarat piutang diubah (contoh: perpanjangan jangka waktu, penurunan suku bunga, atau pengurangan pokok) tanpa menghapus dan membuat piutang baru,
+      ini disebut <strong>modifikasi</strong>. PSAK 71 mengharuskan penghitungan ulang nilai wajar piutang berdasarkan syarat baru menggunakan EIR lama.
+      Selisihnya dicatat sebagai <em>keuntungan atau kerugian modifikasi</em> di laba rugi — otomatis dihitung dan dijurnal oleh sistem.
+    </div>
+  </div>
+  {% if modifikasi_history %}
+  <div style="padding:0 20px 4px;font-size:.84em;color:var(--ni-text-muted);font-weight:600">Riwayat Modifikasi</div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table" style="font-size:.88em">
+      <thead><tr><th>Tanggal</th><th>Perubahan Syarat</th><th class="ni-text-right">Nilai Tercatat Lama</th><th class="ni-text-right">PV Syarat Baru</th><th class="ni-text-right">Gain / Loss</th></tr></thead>
+      <tbody>
+        {% for m in modifikasi_history %}
+        <tr>
+          <td>{{ m.tanggal }}</td>
+          <td style="max-width:200px;white-space:normal">{{ m.deskripsi_perubahan|default:'-' }}</td>
+          <td class="ni-text-right">{{ m.carrying_amount_lama|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ m.pv_syarat_baru|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">
+            {% if m.modification_gain_loss >= 0 %}
+              <span style="color:#16a34a;font-weight:600">+{{ m.modification_gain_loss|floatformat:0|intcomma }}</span>
+              <span class="ni-text-muted" style="font-size:.8em"> (Keuntungan)</span>
+            {% else %}
+              <span style="color:#dc2626;font-weight:600">{{ m.modification_gain_loss|floatformat:0|intcomma }}</span>
+              <span class="ni-text-muted" style="font-size:.8em"> (Kerugian)</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body" style="padding-top:0"><p class="ni-text-muted" style="font-size:.87em">Belum ada modifikasi. Jika syarat piutang berubah, klik tombol di atas untuk mencatatnya.</p></div>
+  {% endif %}
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Factoring &amp; Derecognition</h2>
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--primary" onclick="openModal('factoringModal')">+ Catat Factoring / Penjualan</button>
+  </div>
+  <div class="ni-card__body" style="padding-bottom:{% if factoring_history %}0{% else %}16px{% endif %}">
+    <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:6px;padding:12px 16px;margin-bottom:{% if factoring_history %}16px{% else %}0{% endif %};font-size:.87em">
+      <strong>Apa ini?</strong> Factoring adalah menjual piutang kepada pihak lain (bank/lembaga keuangan) untuk mendapatkan kas lebih cepat.
+      PSAK 71 mewajibkan analisis apakah <em>risiko dan manfaat</em> piutang sudah benar-benar berpindah.
+      Sistem akan memandu Anda dengan 3 pertanyaan sederhana dan menentukan perlakuan akuntansi yang tepat secara otomatis.
+      <br><br>
+      <strong>Kemungkinan hasil:</strong>
+      <span class="ni-badge ni-badge--success">Diderecognize</span> piutang dihapus dari neraca (jurnal Dr Kas / Cr Piutang otomatis) ·
+      <span class="ni-badge ni-badge--warning">Continuing Involvement</span> dicatat sebagian ·
+      <span class="ni-badge">Tidak Diderecognize</span> piutang tetap di neraca, dicatat sebagai utang jaminan
+    </div>
+  </div>
+  {% if factoring_history %}
+  <div style="padding:0 20px 4px;font-size:.84em;color:var(--ni-text-muted);font-weight:600">Riwayat Factoring</div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table" style="font-size:.88em">
+      <thead><tr><th>Tanggal</th><th>Pembeli Piutang</th><th class="ni-text-right">Kas Diterima</th><th>Hasil Analisis</th><th class="ni-text-right">Gain / Loss</th></tr></thead>
+      <tbody>
+        {% for f in factoring_history %}
+        <tr>
+          <td>{{ f.tanggal }}</td>
+          <td>{{ f.pihak_penerima }}</td>
+          <td class="ni-text-right">Rp {{ f.nilai_transfer|floatformat:0|intcomma }}</td>
+          <td>
+            {% if f.hasil_analisis == 'derecognized' %}
+              <span class="ni-badge ni-badge--success">✓ Diderecognize</span>
+              <span class="ni-text-muted" style="font-size:.8em;display:block">Piutang dihapus dari neraca</span>
+            {% elif f.hasil_analisis == 'continuing' %}
+              <span class="ni-badge ni-badge--warning">⚠ Continuing Involvement</span>
+              <span class="ni-text-muted" style="font-size:.8em;display:block">Sebagian dicatat tetap</span>
+            {% else %}
+              <span class="ni-badge">Tidak Diderecognize</span>
+              <span class="ni-text-muted" style="font-size:.8em;display:block">Piutang tetap di neraca</span>
+            {% endif %}
+          </td>
+          <td class="ni-text-right">
+            {% if f.gain_loss_derecognition %}
+              <span style="color:{% if f.gain_loss_derecognition >= 0 %}#16a34a{% else %}#dc2626{% endif %};font-weight:600">
+                {% if f.gain_loss_derecognition >= 0 %}+{% endif %}{{ f.gain_loss_derecognition|floatformat:0|intcomma }}
+              </span>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body" style="padding-top:0"><p class="ni-text-muted" style="font-size:.87em">Belum ada transaksi factoring. Gunakan fitur ini jika piutang dijual/difaktorkan ke bank atau lembaga keuangan.</p></div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if piutang.status == 'written_off' %}
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Pemulihan Piutang (Recovery)</h2>
+    <button type="button" class="ni-btn ni-btn--sm ni-btn--success" onclick="openModal('pemulihanModal')">+ Catat Pemulihan</button>
+  </div>
+  {% if pemulihan_history %}
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Tanggal</th><th class="ni-text-right">Jumlah Dipulihkan</th><th>Akun Kas</th><th>Akun Pendapatan</th><th>Catatan</th></tr></thead>
+      <tbody>
+        {% for p in pemulihan_history %}
+        <tr>
+          <td>{{ p.tanggal }}</td>
+          <td class="ni-text-right ni-text-success">{{ p.jumlah_dipulihkan|floatformat:0|intcomma }}</td>
+          <td>{{ p.kas_account|default:'-' }}</td>
+          <td>{{ p.recovery_income_account|default:'-' }}</td>
+          <td>{{ p.catatan|default:'-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="ni-card__body"><p class="ni-text-muted">Belum ada pemulihan tercatat.</p></div>
   {% endif %}
 </div>
 {% endif %}
@@ -763,17 +1246,674 @@
 </div>
 {% endif %}
 
+<!-- ── ECL Stage Update Modal ───────────────────────────────── -->
+{% if standar_efektif == 'psak' %}
+<div class="ni-modal-backdrop" id="eclStageModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Perbarui Stage ECL — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('eclStageModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+      <div style="background:#f8fafc;border:1px solid var(--ni-border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;font-size:.88em">
+        <div><span class="ni-text-muted">DPD Saat Ini:</span> <strong>{% if piutang.jatuh_tempo %}{{ effective_dpd }} hari{% else %}N/A (jatuh tempo belum diisi){% endif %}</strong></div>
+        <div><span class="ni-text-muted">Stage Saat Ini:</span>
+          {% if piutang.stage_ecl %}<strong>Stage {{ piutang.stage_ecl }}</strong>{% else %}<strong>Belum dinilai</strong>{% endif %}
+        </div>
+        <div><span class="ni-text-muted">Rekomendasi Sistem:</span>
+          {% if not piutang.jatuh_tempo %}<strong style="color:#d97706">Tidak dapat dihitung</strong>
+          {% elif effective_dpd >= 90 %}<strong style="color:#dc2626">Stage 3</strong>
+          {% elif effective_dpd >= 30 %}<strong style="color:#d97706">Stage 2</strong>
+          {% else %}<strong style="color:#16a34a">Stage 1</strong>{% endif %}
+        </div>
+      </div>
+
+      <p style="font-size:.87em;font-weight:600;margin-bottom:10px">Pilih stage yang sesuai dengan kondisi piutang saat ini:</p>
+
+      <form method="post" action="{% url 'piutang:ecl_stage_update' piutang.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="new_stage" id="ecl-stage-hidden" value="{{ piutang.stage_ecl|default:'' }}">
+
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+          <label class="ecl-stage-card" data-stage="1"
+            style="border-radius:8px;padding:14px;border:2px solid var(--ni-border);cursor:pointer;transition:all .15s;display:block">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:1.3em">🟢</span>
+              <strong>Stage 1</strong>
+            </div>
+            <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> DPD &lt;30 hari, tidak ada tanda risiko memburuk.</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> 12-bulan ECL (lebih kecil).</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Kapan pakai:</strong> Piutang baru, bayar rutin, tidak ada kekhawatiran.</p>
+          </label>
+          <label class="ecl-stage-card" data-stage="2"
+            style="border-radius:8px;padding:14px;border:2px solid var(--ni-border);cursor:pointer;transition:all .15s;display:block">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:1.3em">🟡</span>
+              <strong>Stage 2</strong>
+            </div>
+            <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> DPD ≥30 hari, atau kondisi keuangan debitur memburuk signifikan.</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> Lifetime ECL (lebih besar dari Stage 1).</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Kapan pakai:</strong> Mulai terlambat, tanda-tanda kesulitan awal.</p>
+          </label>
+          <label class="ecl-stage-card" data-stage="3"
+            style="border-radius:8px;padding:14px;border:2px solid var(--ni-border);cursor:pointer;transition:all .15s;display:block">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span style="font-size:1.3em">🔴</span>
+              <strong>Stage 3</strong>
+            </div>
+            <p style="font-size:.82em;margin:0;color:var(--ni-text-muted)"><strong>Kriteria:</strong> DPD ≥90 hari, atau bukti nyata gagal bayar (restrukturisasi, pailit).</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Cadangan:</strong> Lifetime ECL — dan bunga dihitung dari nilai neto.</p>
+            <p style="font-size:.82em;margin:6px 0 0;color:var(--ni-text-muted)"><strong>Kapan pakai:</strong> Sudah gagal bayar nyata, negosiasi keras, atau pailit.</p>
+          </label>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Alasan Perubahan <span style="color:var(--ni-danger)">*</span></label>
+          <textarea name="alasan" class="ni-input" rows="3" required
+            placeholder="Contoh: DPD mencapai 35 hari per 15 Juni 2026 — naik ke Stage 2 sesuai kebijakan PSAK 71. / Debitur membayar penuh — turun ke Stage 1."></textarea>
+        </div>
+
+        <div id="ecl-stage-warn" style="display:none;background:#fef2f2;border-left:4px solid #dc2626;border-radius:6px;padding:10px 14px;font-size:.84em;margin-bottom:12px">
+          Pilih stage terlebih dahulu.
+        </div>
+
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary" id="ecl-stage-submit">Simpan Perubahan Stage</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('eclStageModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── ECL General Approach Modal ──────────────────────────── -->
+<div class="ni-modal-backdrop" id="eclGeneralModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Hitung &amp; Catat Cadangan ECL — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('eclGeneralModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+
+      <div style="background:#eff6ff;border-left:4px solid #2563eb;border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:.87em">
+        <strong>Apa yang akan terjadi?</strong> Sistem menghitung cadangan kerugian piutang berdasarkan rumus PSAK 71,
+        lalu membuat jurnal otomatis: <em>Dr. Beban Penyisihan / Cr. Cadangan Kerugian Piutang</em>.<br>
+        Anda hanya perlu mengisi 3 parameter risiko di bawah — selebihnya dihitung otomatis.
+      </div>
+
+      <div style="background:var(--ni-surface-alt);border:1px solid var(--ni-border);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:.87em">
+        <strong>Nilai Eksposur (EAD):</strong>
+        <strong style="font-size:1.1em">Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }}</strong>
+        <span class="ni-text-muted">(sisa piutang saat ini — diisi otomatis oleh sistem)</span><br>
+        <strong>Stage Aktif:</strong>
+        {% if piutang.stage_ecl == 1 %}<span class="ni-badge ni-badge--success">Stage 1 → Cadangan 12-Bulan ECL</span>
+        {% elif piutang.stage_ecl == 2 %}<span class="ni-badge ni-badge--warning">Stage 2 → Cadangan Lifetime ECL</span>
+        {% elif piutang.stage_ecl == 3 %}<span class="ni-badge ni-badge--danger">Stage 3 → Cadangan Lifetime ECL</span>
+        {% else %}<span class="ni-badge ni-badge--secondary">Belum di-stage — tetapkan stage dahulu</span>{% endif %}
+      </div>
+
+      <form method="post" action="{% url 'piutang:ecl_general' piutang.pk %}">
+        {% csrf_token %}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">
+              PD — Peluang Gagal Bayar (%)
+              <span data-tooltip="Berapa persen kemungkinan debitur gagal bayar? Mis: 2.5 = ada 2,5% kemungkinan tidak dibayar. Lihat riwayat kredit debitur atau industri sejenis." style="cursor:help;color:#2563eb">ⓘ</span>
+            </label>
+            {{ ecl_general_form.pd_rate }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Contoh: 1–3% piutang sehat, 10–30% berisiko tinggi</p>
+            {% if ecl_general_form.pd_rate.errors %}<div class="ni-form-error">{{ ecl_general_form.pd_rate.errors }}</div>{% endif %}
+          </div>
+
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">
+              LGD — Kerugian Jika Gagal Bayar (%)
+              <span data-tooltip="Jika debitur benar-benar gagal bayar, berapa % yang tidak bisa dipulihkan? Mis: 45 = 45% hilang. Bergantung pada agunan yang dimiliki." style="cursor:help;color:#2563eb">ⓘ</span>
+            </label>
+            {{ ecl_general_form.lgd_rate }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Ada agunan kuat → lebih rendah. Tanpa agunan → 45–100%</p>
+            {% if ecl_general_form.lgd_rate.errors %}<div class="ni-form-error">{{ ecl_general_form.lgd_rate.errors }}</div>{% endif %}
+          </div>
+
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">
+              Faktor Makroekonomi
+              <span data-tooltip="Penyesuaian kondisi ekonomi ke depan. 1.0 = tidak ada penyesuaian. >1.0 = kondisi memburuk. <1.0 = kondisi membaik." style="cursor:help;color:#2563eb">ⓘ</span>
+            </label>
+            {{ ecl_general_form.forward_looking_adj }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Default 1.0 (normal). Kondisi memburuk: 1.1–1.5</p>
+            {% if ecl_general_form.forward_looking_adj.errors %}<div class="ni-form-error">{{ ecl_general_form.forward_looking_adj.errors }}</div>{% endif %}
+          </div>
+
+        </div>
+
+        <div id="ecl-calc-preview" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:.9em">
+          <strong>Estimasi ECL:</strong>
+          <span id="ecl-calc-result" style="font-size:1.15em;font-weight:700;color:#15803d;margin-left:8px">— isi parameter di atas</span><br>
+          <span id="ecl-calc-formula" class="ni-text-muted" style="font-size:.82em"></span>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">{{ ecl_general_form.allowance_account.label }}</label>
+            {{ ecl_general_form.allowance_account }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Akun kontra-aset untuk cadangan kerugian piutang</p>
+            {% if ecl_general_form.allowance_account.errors %}<div class="ni-form-error">{{ ecl_general_form.allowance_account.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">{{ ecl_general_form.expense_account.label }}</label>
+            {{ ecl_general_form.expense_account }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Akun beban di laporan laba rugi</p>
+            {% if ecl_general_form.expense_account.errors %}<div class="ni-form-error">{{ ecl_general_form.expense_account.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">{{ ecl_general_form.tanggal.label }}</label>
+            {{ ecl_general_form.tanggal }}
+            {% if ecl_general_form.tanggal.errors %}<div class="ni-form-error">{{ ecl_general_form.tanggal.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">{{ ecl_general_form.catatan.label }}</label>
+            {{ ecl_general_form.catatan }}
+          </div>
+        </div>
+
+        <div style="margin-top:14px;padding:10px 14px;background:#fffbeb;border-left:3px solid #d97706;border-radius:4px;font-size:.83em">
+          <strong>Jurnal yang akan dibuat:</strong><br>
+          Dr. <em>Beban Penyisihan Kredit</em> &nbsp;|&nbsp; Cr. <em>Cadangan Kerugian Piutang</em><br>
+          Nilai = PD% × LGD% × Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }} × Faktor Makro
+        </div>
+
+        <div class="ni-btn-row" style="margin-top:14px">
+          <button type="submit" class="ni-btn ni-btn--primary">Hitung &amp; Buat Jurnal</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('eclGeneralModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Modifikasi Modal ─────────────────────────────────────── -->
+{% if standar_efektif == 'psak' or standar_efektif == 'sak_ep' %}
+<div class="ni-modal-backdrop" id="modifikasiModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Catat Modifikasi Syarat — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('modifikasiModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+
+      <div style="background:var(--ni-surface-alt);border:1px solid var(--ni-border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;font-size:.88em">
+        <div><span class="ni-text-muted">Nilai Tercatat Saat Ini:</span> <strong>Rp {{ pv_carrying_value|default:piutang.sisa_piutang|floatformat:0|intcomma }}</strong></div>
+        <div><span class="ni-text-muted">EIR (digunakan untuk diskon):</span>
+          <strong>{{ piutang.pv_discount_rate|default:piutang.suku_bunga|default:'—' }}%</strong>
+        </div>
+        <div><span class="ni-text-muted">Sistem akan hitung:</span> <strong>PV(arus kas baru) − Nilai Tercatat Lama = Gain/Loss</strong></div>
+      </div>
+
+      <form method="post" action="{% url 'piutang:modifikasi' piutang.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="new_cashflows_json" id="modif-cashflows-json">
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Deskripsi Perubahan Syarat <span style="color:var(--ni-danger)">*</span></label>
+          <textarea name="deskripsi_perubahan" class="ni-input" rows="2" required
+            placeholder="Contoh: Perpanjangan jatuh tempo dari 31 Des 2025 menjadi 31 Des 2026, suku bunga dikurangi dari 12% menjadi 8%."></textarea>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Arus Kas Baru (Angsuran / Pembayaran Setelah Modifikasi) <span style="color:var(--ni-danger)">*</span></label>
+          <p style="font-size:.83em;color:var(--ni-text-muted);margin:0 0 8px">Masukkan setiap tanggal dan jumlah pembayaran yang akan diterima sesuai syarat baru. Klik <strong>+ Tambah Baris</strong> untuk menambah angsuran.</p>
+          <div style="border:1px solid var(--ni-border);border-radius:8px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:.88em">
+              <thead style="background:var(--ni-surface-alt)">
+                <tr>
+                  <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--ni-border)">No</th>
+                  <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--ni-border)">Tanggal Pembayaran</th>
+                  <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--ni-border)">Jumlah (Rp)</th>
+                  <th style="padding:8px 4px;border-bottom:1px solid var(--ni-border)"></th>
+                </tr>
+              </thead>
+              <tbody id="modif-cf-tbody">
+                <tr class="modif-cf-row">
+                  <td style="padding:6px 12px;color:var(--ni-text-muted);font-size:.85em">1</td>
+                  <td style="padding:4px 8px"><input type="date" class="ni-input ni-input--sm modif-cf-date" required></td>
+                  <td style="padding:4px 8px"><input type="number" class="ni-input ni-input--sm modif-cf-amount" step="0.01" min="0" placeholder="0" required></td>
+                  <td style="padding:4px 8px"><button type="button" class="ni-btn ni-btn--xs ni-btn--danger modif-cf-del" onclick="modifDelRow(this)" title="Hapus">×</button></td>
+                </tr>
+              </tbody>
+            </table>
+            <div style="padding:8px 12px;border-top:1px solid var(--ni-border)">
+              <button type="button" class="ni-btn ni-btn--sm ni-btn--secondary" onclick="modifAddRow()">+ Tambah Baris</button>
+              <span id="modif-total-label" class="ni-text-muted" style="font-size:.83em;margin-left:12px"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Akun Laba/Rugi Modifikasi <span style="color:var(--ni-danger)">*</span></label>
+          {{ modifikasi_form.gain_loss_account }}
+          <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Akun untuk mencatat keuntungan (gain) atau kerugian (loss) hasil penghitungan ulang nilai piutang</p>
+          {% if modifikasi_form.gain_loss_account.errors %}<div class="ni-form-error">{{ modifikasi_form.gain_loss_account.errors }}</div>{% endif %}
+        </div>
+
+        <div style="background:#fffbeb;border-left:3px solid #d97706;border-radius:4px;padding:10px 14px;font-size:.83em;margin-bottom:12px">
+          <strong>Jurnal otomatis yang akan dibuat:</strong><br>
+          Jika PV syarat baru &gt; Nilai tercatat lama → Dr. Piutang / Cr. Keuntungan Modifikasi<br>
+          Jika PV syarat baru &lt; Nilai tercatat lama → Dr. Kerugian Modifikasi / Cr. Piutang
+        </div>
+
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--warning" onclick="return modifSubmit(event)">Proses Modifikasi &amp; Buat Jurnal</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('modifikasiModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ── Factoring Modal ─────────────────────────────────────── -->
+<div class="ni-modal-backdrop" id="factoringModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Analisis &amp; Catat Factoring — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('factoringModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+
+      <form method="post" action="{% url 'piutang:factoring' piutang.pk %}">
+        {% csrf_token %}
+        <input type="hidden" name="hasil_analisis" id="factoring-hasil-hidden" value="">
+
+        {# Langkah 1: Data Dasar #}
+        <div style="margin-bottom:16px">
+          <p style="font-weight:600;font-size:.95em;margin-bottom:10px">Langkah 1 — Data Transaksi</p>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="ni-form-group" style="margin:0">
+              <label class="ni-form-label">Tanggal Transaksi <span style="color:var(--ni-danger)">*</span></label>
+              {{ factoring_form.tanggal }}
+              {% if factoring_form.tanggal.errors %}<div class="ni-form-error">{{ factoring_form.tanggal.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group" style="margin:0">
+              <label class="ni-form-label">Nama Pembeli Piutang <span style="color:var(--ni-danger)">*</span>
+                <span class="ni-text-muted" style="font-weight:400;font-size:.85em">(bank / perusahaan factoring)</span>
+              </label>
+              {{ factoring_form.pihak_penerima }}
+              {% if factoring_form.pihak_penerima.errors %}<div class="ni-form-error">{{ factoring_form.pihak_penerima.errors }}</div>{% endif %}
+            </div>
+            <div class="ni-form-group" style="margin:0">
+              <label class="ni-form-label">Kas yang Diterima (Rp) <span style="color:var(--ni-danger)">*</span>
+                <span class="ni-text-muted" style="font-weight:400;font-size:.85em">— nilai piutang: Rp {{ piutang.sisa_piutang|floatformat:0|intcomma }}</span>
+              </label>
+              {{ factoring_form.nilai_transfer }}
+              <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Biasanya lebih kecil dari nilai piutang — selisihnya adalah biaya factoring (fee/diskonto)</p>
+              {% if factoring_form.nilai_transfer.errors %}<div class="ni-form-error">{{ factoring_form.nilai_transfer.errors }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+
+        <hr style="margin:0 0 16px;border-color:var(--ni-border)">
+
+        {# Langkah 2: Analisis Derecognisi — 3 pertanyaan #}
+        <div style="margin-bottom:16px">
+          <p style="font-weight:600;font-size:.95em;margin-bottom:4px">Langkah 2 — Analisis: Apakah Piutang Harus Dihapus dari Neraca?</p>
+          <p style="font-size:.84em;color:var(--ni-text-muted);margin-bottom:12px">Jawab 3 pertanyaan di bawah. Sistem akan menentukan perlakuan akuntansi yang tepat secara otomatis.</p>
+
+          <div style="border:1px solid var(--ni-border);border-radius:8px;overflow:hidden">
+
+            {# Pertanyaan 1 #}
+            <div style="padding:14px 16px;border-bottom:1px solid var(--ni-border)">
+              <p style="font-weight:600;margin:0 0 8px;font-size:.9em">
+                <span style="background:#2563eb;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em;margin-right:8px">1</span>
+                Apakah hak menerima pembayaran dari debitur sudah sepenuhnya dialihkan ke pembeli?
+              </p>
+              <p style="font-size:.82em;color:var(--ni-text-muted);margin:0 0 10px">Artinya: pembeli piutang yang sekarang berhak menagih langsung ke debitur, bukan lagi perusahaan Anda.</p>
+              <div style="display:flex;gap:10px">
+                <label class="fact-q1 fact-yesno" data-val="yes" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ✅ Ya — Pembeli langsung menagih debitur
+                </label>
+                <label class="fact-q1 fact-yesno" data-val="no" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ❌ Tidak — Kami masih yang menagih, lalu setor ke pembeli
+                </label>
+              </div>
+            </div>
+
+            {# Pertanyaan 2 #}
+            <div style="padding:14px 16px;border-bottom:1px solid var(--ni-border);display:none" id="fact-q2-section">
+              <p style="font-weight:600;margin:0 0 8px;font-size:.9em">
+                <span style="background:#2563eb;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em;margin-right:8px">2</span>
+                Apakah risiko gagal bayar debitur sudah sepenuhnya ditanggung oleh pembeli piutang?
+              </p>
+              <p style="font-size:.82em;color:var(--ni-text-muted);margin:0 0 10px">
+                Artinya: jika debitur tidak membayar, yang rugi adalah pembeli piutang — bukan perusahaan Anda.
+                <strong>Factoring with recourse</strong> (Anda masih menanggung risiko) = jawab Tidak.
+              </p>
+              <div style="display:flex;gap:10px">
+                <label class="fact-q2 fact-yesno" data-val="yes" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ✅ Ya — Pembeli menanggung risiko gagal bayar sepenuhnya (without recourse)
+                </label>
+                <label class="fact-q2 fact-yesno" data-val="no" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ❌ Tidak — Kami masih menanggung sebagian risiko (with recourse / jaminan)
+                </label>
+              </div>
+            </div>
+
+            {# Pertanyaan 3 (jika Q2 = No) #}
+            <div style="padding:14px 16px;border-bottom:1px solid var(--ni-border);display:none" id="fact-q3-section">
+              <p style="font-weight:600;margin:0 0 8px;font-size:.9em">
+                <span style="background:#d97706;color:#fff;border-radius:50%;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;font-size:.8em;margin-right:8px">3</span>
+                Berapa besar risiko yang masih Anda tanggung?
+              </p>
+              <p style="font-size:.82em;color:var(--ni-text-muted);margin:0 0 10px">Misalnya: Anda menjamin maksimal 20% dari nilai piutang, atau ada klausul buy-back untuk piutang bermasalah.</p>
+              <div style="display:flex;gap:10px">
+                <label class="fact-q3 fact-yesno" data-val="partial" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ⚠ Sebagian kecil — ada jaminan terbatas atau klausul tertentu
+                </label>
+                <label class="fact-q3 fact-yesno" data-val="all" style="flex:1;padding:10px 14px;border:2px solid var(--ni-border);border-radius:6px;cursor:pointer;font-size:.88em;text-align:center">
+                  ❌ Hampir semua — kami praktis masih menanggung semua risiko
+                </label>
+              </div>
+            </div>
+
+            {# Hasil otomatis #}
+            <div id="fact-result" style="padding:14px 16px;display:none">
+              <div id="fact-result-content"></div>
+            </div>
+
+          </div>
+        </div>
+
+        {# Bagian tambahan: Continuing Involvement #}
+        <div id="fact-ci-section" style="display:none;margin-bottom:16px">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Nilai Keterlibatan Berkelanjutan (Rp)</label>
+            {{ factoring_form.continuing_involvement_amount }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Misalnya: nilai jaminan / guarantee yang masih Anda tanggung</p>
+          </div>
+        </div>
+
+        {# Akun Gain/Loss — tampil jika diderecognize #}
+        <div id="fact-gl-section" style="display:none;margin-bottom:16px">
+          <div class="ni-form-group">
+            <label class="ni-form-label">Akun Laba/Rugi Derecognition
+              <span class="ni-text-muted" style="font-weight:400;font-size:.85em">(jika kas yang diterima ≠ nilai tercatat piutang)</span>
+            </label>
+            {{ factoring_form.gain_loss_account }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Contoh: Akun "Keuntungan/Kerugian Penjualan Piutang"</p>
+          </div>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Uraian Analisis (Dokumentasi)</label>
+          {{ factoring_form.analisis_detail }}
+          <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Rekam bukti dan alasan penilaian risiko di atas untuk keperluan audit</p>
+        </div>
+
+        <div id="fact-submit-warn" style="display:none;background:#fef2f2;border-left:4px solid #dc2626;border-radius:6px;padding:10px 14px;font-size:.84em;margin-bottom:12px">
+          Lengkapi analisis risiko di atas terlebih dahulu.
+        </div>
+
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--primary" onclick="return factoringSubmit(event)">Proses &amp; Buat Jurnal</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('factoringModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Pemulihan Modal ─────────────────────────────────────── -->
+{% if piutang.status == 'written_off' %}
+<div class="ni-modal-backdrop" id="pemulihanModal">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Catat Pemulihan Piutang — {{ piutang.nomor_piutang }}</h3>
+      <button class="ni-modal__close" type="button" onclick="closeModal('pemulihanModal')">&times;</button>
+    </div>
+    <div class="ni-modal__body">
+
+      <div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:6px;padding:12px 16px;margin-bottom:16px;font-size:.87em">
+        <strong>Konteks:</strong> Piutang ini sudah pernah dihapusbukukan (write-off). Namun ternyata debitur membayar sebagian atau seluruhnya.
+        Ini disebut <strong>pemulihan (recovery)</strong> — kas yang masuk dicatat sebagai <em>pendapatan pemulihan piutang</em> di laba rugi.
+        <br><br>
+        <strong>Jurnal yang akan dibuat otomatis:</strong><br>
+        <code>Dr. Kas/Bank &nbsp;|&nbsp; Cr. Pendapatan Pemulihan Piutang</code>
+      </div>
+
+      <div style="background:var(--ni-surface-alt);border:1px solid var(--ni-border);border-radius:8px;padding:12px 16px;margin-bottom:16px;display:flex;gap:24px;flex-wrap:wrap;font-size:.88em">
+        <div>
+          <span class="ni-text-muted">Nilai yang Dihapusbukukan:</span>
+          <strong style="color:#dc2626"> Rp {{ piutang.write_off.jumlah_dihapus|floatformat:0|intcomma }}</strong>
+        </div>
+        {% if pemulihan_history %}
+        <div>
+          <span class="ni-text-muted">Sudah Dipulihkan:</span>
+          <strong style="color:#16a34a"> Rp {% for p in pemulihan_history %}{{ p.jumlah_dipulihkan }}{% if not forloop.last %}+{% endif %}{% endfor %}</strong>
+        </div>
+        {% endif %}
+        <div>
+          <span class="ni-text-muted">Isi jumlah sesuai kas yang benar-benar diterima.</span>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'piutang:pemulihan' piutang.pk %}">
+        {% csrf_token %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">Tanggal Kas Diterima <span style="color:var(--ni-danger)">*</span></label>
+            {{ pemulihan_form.tanggal }}
+            {% if pemulihan_form.tanggal.errors %}<div class="ni-form-error">{{ pemulihan_form.tanggal.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">Jumlah yang Diterima (Rp) <span style="color:var(--ni-danger)">*</span></label>
+            {{ pemulihan_form.jumlah }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Isi sesuai kas yang benar-benar masuk — bisa kurang dari nilai write-off</p>
+            {% if pemulihan_form.jumlah.errors %}<div class="ni-form-error">{{ pemulihan_form.jumlah.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">Akun Kas/Bank <span style="color:var(--ni-danger)">*</span></label>
+            {{ pemulihan_form.kas_account }}
+            {% if pemulihan_form.kas_account.errors %}<div class="ni-form-error">{{ pemulihan_form.kas_account.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="margin:0">
+            <label class="ni-form-label">Akun Pendapatan Pemulihan <span style="color:var(--ni-danger)">*</span></label>
+            {{ pemulihan_form.recovery_income_account }}
+            <p style="font-size:.78em;color:var(--ni-text-muted);margin:4px 0 0">Contoh: "Pendapatan Pemulihan Piutang Tak Tertagih" (grup pendapatan lain-lain)</p>
+            {% if pemulihan_form.recovery_income_account.errors %}<div class="ni-form-error">{{ pemulihan_form.recovery_income_account.errors }}</div>{% endif %}
+          </div>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">Catatan</label>
+          {{ pemulihan_form.catatan }}
+        </div>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--success">Catat Pemulihan &amp; Buat Jurnal</button>
+          <button type="button" class="ni-btn ni-btn--secondary" onclick="closeModal('pemulihanModal')">Batal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <script>
 function openModal(id) {
-  document.getElementById(id).classList.add('ni-modal-backdrop--visible');
+  var el = document.getElementById(id);
+  if (el) el.classList.add('ni-modal-backdrop--visible');
 }
 function closeModal(id) {
-  document.getElementById(id).classList.remove('ni-modal-backdrop--visible');
+  var el = document.getElementById(id);
+  if (el) el.classList.remove('ni-modal-backdrop--visible');
 }
 document.querySelectorAll('.ni-modal-backdrop').forEach(function(backdrop) {
   backdrop.addEventListener('click', function(e) {
     if (e.target === backdrop) closeModal(backdrop.id);
   });
 });
+
+/* ── ECL Stage Cards ─────────────────────────────────────────── */
+(function() {
+  var COLORS = { '1': '#16a34a', '2': '#d97706', '3': '#dc2626' };
+  var hidden = document.getElementById('ecl-stage-hidden');
+  function activateCard(stage) {
+    document.querySelectorAll('.ecl-stage-card').forEach(function(c) {
+      var s = c.dataset.stage;
+      c.style.borderColor = s === stage ? COLORS[s] : 'var(--ni-border)';
+      c.style.background  = s === stage ? (s==='1'?'#f0fdf4':s==='2'?'#fffbeb':'#fef2f2') : '';
+    });
+    if (hidden) hidden.value = stage;
+  }
+  document.querySelectorAll('.ecl-stage-card').forEach(function(card) {
+    card.addEventListener('click', function() { activateCard(this.dataset.stage); });
+  });
+  if (hidden && hidden.value) activateCard(hidden.value);
+})();
+
+/* ── ECL General Live Calculator ────────────────────────────── */
+(function() {
+  var ead = {{ piutang.sisa_piutang|default:0|stringformat:".2f" }};
+  var pdEl = document.querySelector('[name="pd_rate"]');
+  var lgdEl = document.querySelector('[name="lgd_rate"]');
+  var flaEl = document.querySelector('[name="forward_looking_adj"]');
+  var resultEl = document.getElementById('ecl-calc-result');
+  var formulaEl = document.getElementById('ecl-calc-formula');
+  function calc() {
+    if (!pdEl || !lgdEl || !flaEl || !resultEl) return;
+    var pd = parseFloat(pdEl.value) || 0;
+    var lgd = parseFloat(lgdEl.value) || 0;
+    var fla = parseFloat(flaEl.value) || 1;
+    var ecl = (pd / 100) * (lgd / 100) * ead * fla;
+    resultEl.textContent = 'Rp ' + Math.round(ecl).toLocaleString('id-ID');
+    if (formulaEl) formulaEl.textContent = pd + '% × ' + lgd + '% × Rp ' + Math.round(ead).toLocaleString('id-ID') + ' × ' + fla + ' = Rp ' + Math.round(ecl).toLocaleString('id-ID');
+  }
+  [pdEl, lgdEl, flaEl].forEach(function(el) { if (el) el.addEventListener('input', calc); });
+  calc();
+})();
+
+/* ── Modifikasi Cashflow Row Builder ────────────────────────── */
+var modifRowCount = 1;
+function modifAddRow() {
+  modifRowCount++;
+  var tbody = document.getElementById('modif-cf-tbody');
+  var row = document.createElement('tr');
+  row.className = 'modif-cf-row';
+  row.innerHTML = '<td style="padding:6px 12px;color:var(--ni-text-muted);font-size:.85em">' + modifRowCount + '</td>' +
+    '<td style="padding:4px 8px"><input type="date" class="ni-input ni-input--sm modif-cf-date" required></td>' +
+    '<td style="padding:4px 8px"><input type="number" class="ni-input ni-input--sm modif-cf-amount" step="0.01" min="0" placeholder="0" required></td>' +
+    '<td style="padding:4px 8px"><button type="button" class="ni-btn ni-btn--xs ni-btn--danger" onclick="modifDelRow(this)" title="Hapus">&times;</button></td>';
+  tbody.appendChild(row);
+  row.querySelector('input[type="date"]').addEventListener('input', modifUpdateTotal);
+  row.querySelector('input[type="number"]').addEventListener('input', modifUpdateTotal);
+}
+function modifDelRow(btn) {
+  var row = btn.closest('tr');
+  if (document.querySelectorAll('.modif-cf-row').length > 1) {
+    row.remove();
+    modifUpdateTotal();
+  }
+}
+function modifUpdateTotal() {
+  var total = 0;
+  document.querySelectorAll('.modif-cf-amount').forEach(function(el) { total += parseFloat(el.value) || 0; });
+  var lbl = document.getElementById('modif-total-label');
+  if (lbl) lbl.textContent = 'Total arus kas baru: Rp ' + Math.round(total).toLocaleString('id-ID');
+}
+function modifSubmit(e) {
+  var rows = document.querySelectorAll('.modif-cf-row');
+  var cashflows = [];
+  var valid = true;
+  rows.forEach(function(row) {
+    var d = row.querySelector('.modif-cf-date');
+    var a = row.querySelector('.modif-cf-amount');
+    if (d && a && d.value && parseFloat(a.value) > 0) {
+      cashflows.push({ tanggal: d.value, jumlah: parseFloat(a.value) });
+    } else { valid = false; }
+  });
+  if (!valid || cashflows.length === 0) {
+    alert('Lengkapi semua baris arus kas terlebih dahulu (tanggal dan jumlah).');
+    e.preventDefault(); return false;
+  }
+  var json = document.getElementById('modif-cashflows-json');
+  if (json) json.value = JSON.stringify(cashflows);
+  return confirm('Proses modifikasi piutang?\n\nGain/Loss akan dijurnal dan nilai tercatat piutang diperbarui.\nTindakan ini tidak dapat dibatalkan.');
+}
+document.querySelectorAll('.modif-cf-date, .modif-cf-amount').forEach(function(el) {
+  el.addEventListener('input', modifUpdateTotal);
+});
+
+/* ── Factoring Wizard ────────────────────────────────────────── */
+(function() {
+  var q1ans = null, q2ans = null, q3ans = null;
+  var HASIL = { 'derecognized': 'derecognized', 'continuing': 'continuing', 'not': 'not_derecognized' };
+  var RESULT_HTML = {
+    derecognized: '<div style="background:#f0fdf4;border-left:4px solid #16a34a;border-radius:6px;padding:12px 16px;font-size:.88em"><strong style="color:#15803d">✅ Hasil: Diderecognize — Piutang Dihapus dari Neraca</strong><br><span class="ni-text-muted">Semua risiko dan manfaat sudah berpindah. Jurnal otomatis: Dr. Kas / Cr. Piutang. Selisih dengan kas yang diterima → Keuntungan/Kerugian Derecognition.</span></div>',
+    continuing:   '<div style="background:#fffbeb;border-left:4px solid #d97706;border-radius:6px;padding:12px 16px;font-size:.88em"><strong style="color:#b45309">⚠ Hasil: Continuing Involvement — Dicatat Sebagian</strong><br><span class="ni-text-muted">Ada risiko yang masih Anda tanggung. Piutang tidak dihapus sepenuhnya — hanya bagian yang bisa di-derecognize yang dihapus. Isi nilai keterlibatan berkelanjutan di bawah.</span></div>',
+    not:          '<div style="background:#fef2f2;border-left:4px solid #dc2626;border-radius:6px;padding:12px 16px;font-size:.88em"><strong style="color:#b91c1c">❌ Hasil: Tidak Diderecognize — Piutang Tetap di Neraca</strong><br><span class="ni-text-muted">Risiko gagal bayar masih hampir seluruhnya pada Anda. Transaksi ini dicatat sebagai pinjaman yang dijaminkan dengan piutang (secured borrowing), bukan penjualan.</span></div>'
+  };
+
+  function setResult(key) {
+    var hidden = document.getElementById('factoring-hasil-hidden');
+    var resultDiv = document.getElementById('fact-result');
+    var resultContent = document.getElementById('fact-result-content');
+    var ciSection = document.getElementById('fact-ci-section');
+    var glSection = document.getElementById('fact-gl-section');
+    if (hidden) hidden.value = key === 'not' ? 'not_derecognized' : key;
+    if (resultDiv) resultDiv.style.display = '';
+    if (resultContent) resultContent.innerHTML = RESULT_HTML[key] || '';
+    if (ciSection) ciSection.style.display = (key === 'continuing') ? '' : 'none';
+    if (glSection) glSection.style.display = (key === 'derecognized' || key === 'continuing') ? '' : 'none';
+  }
+
+  function evaluate() {
+    if (q1ans === null) return;
+    var q2 = document.getElementById('fact-q2-section');
+    if (q2) q2.style.display = (q1ans === 'yes') ? '' : 'none';
+    if (q1ans === 'no') { setResult('not'); return; }
+    if (q2ans === null) return;
+    var q3 = document.getElementById('fact-q3-section');
+    if (q3) q3.style.display = (q2ans === 'no') ? '' : 'none';
+    if (q2ans === 'yes') { setResult('derecognized'); return; }
+    if (q3ans === null) return;
+    setResult(q3ans === 'partial' ? 'continuing' : 'not');
+  }
+
+  function wireGroup(cls, cb) {
+    document.querySelectorAll('.' + cls).forEach(function(el) {
+      el.addEventListener('click', function() {
+        document.querySelectorAll('.' + cls).forEach(function(c) {
+          c.style.borderColor = 'var(--ni-border)'; c.style.background = '';
+        });
+        el.style.borderColor = '#2563eb'; el.style.background = '#eff6ff';
+        cb(el.dataset.val);
+      });
+    });
+  }
+
+  wireGroup('fact-q1', function(v) { q1ans = v; q2ans = null; q3ans = null; evaluate(); });
+  wireGroup('fact-q2', function(v) { q2ans = v; q3ans = null; evaluate(); });
+  wireGroup('fact-q3', function(v) { q3ans = v; evaluate(); });
+})();
+
+function factoringSubmit(e) {
+  var hidden = document.getElementById('factoring-hasil-hidden');
+  if (!hidden || !hidden.value) {
+    e.preventDefault();
+    var warn = document.getElementById('fact-submit-warn');
+    if (warn) warn.style.display = '';
+    return false;
+  }
+  var msg = hidden.value === 'derecognized'
+    ? 'Piutang akan DIHAPUS dari neraca dan jurnal dibuat. Lanjutkan?'
+    : hidden.value === 'not_derecognized'
+    ? 'Piutang dicatat sebagai secured borrowing — TIDAK dihapus dari neraca. Lanjutkan?'
+    : 'Catat continuing involvement. Lanjutkan?';
+  return confirm(msg);
+}
 </script>
 {% endblock %}

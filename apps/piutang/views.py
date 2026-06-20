@@ -14,16 +14,20 @@ from .forms import (
     PiutangAttachmentForm, PiutangDetailFormSet, PiutangHeaderForm,
     PiutangPenerimaanForm, PiutangPenyisihanForm, PiutangReklasifikasiForm, PiutangWriteOffForm,
     PvAccrualForm, PvAdjustmentForm,
+    ECLStageUpdateForm, ECLGeneralApproachForm,
+    PiutangModifikasiForm, PiutangPemulihanForm, PiutangFactoringForm,
 )
 from .models import (
     PenyisihanRateConfig,
     PiutangAttachment, PiutangHeader, PiutangPenerimaan, PiutangPenyisihan, PiutangReklasifikasi,
+    PiutangECLStagingLog, PiutangModifikasi, PiutangPemulihanWriteOff, PiutangFactoring,
 )
 from .services import (
     _AGING_BUCKET_KEYS,
     _AGING_BUCKET_LABELS,
     compute_amortization_schedule_pv,
     compute_angsuran_schedule,
+    compute_effective_dpd,
     compute_bagian_lancar,
     compute_batch_penyisihan,
     compute_penyisihan_for_piutang,
@@ -42,6 +46,9 @@ from .services import (
     post_piutang, submit_for_approval, approve_piutang, reject_piutang,
     create_pv_accrual_journal, create_pv_accrual_reversal,
     _pv_carrying_value, _pv_last_amortization_date, _pv_effective_interest_days,
+    get_standar_akuntansi, update_ecl_stage, assess_ecl_stage,
+    create_penyisihan_ecl_general,
+    process_piutang_modification, recover_written_off_piutang, create_factoring_derecognition,
 )
 
 
@@ -146,11 +153,15 @@ def _piutang_deletion_preview(piutang) -> dict:
 
 
 def _pv_next_periode(piutang) -> int:
-    """Returns the next unrecorded amortization period number for a piutang."""
+    """Returns the next unrecorded amortization period number for a piutang.
+
+    Only counts periodic journals ('— Periode N') to avoid false matches with
+    pre-payment EIR journals ('— {from_date} s.d. {to_date}').
+    """
     if not piutang.is_pv_adjusted:
         return 1
     from apps.jurnal.models import JurnalHeader as _JH
-    prefix = f'Amortisasi PV Piutang {piutang.nomor_piutang}'
+    prefix = f'Amortisasi PV Piutang {piutang.nomor_piutang} — Periode'
     recorded = _JH.objects.filter(uraian_transaksi__startswith=prefix).count()
     return recorded + 1
 
@@ -266,22 +277,42 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
                         pv_discount_rate=cd.get('pv_discount_rate'),
                         interest_income_account=cd.get('interest_income_account'),
                         coa_piutang_lancar_account=cd.get('coa_piutang_lancar_account'),
+                        standar_akuntansi=cd.get('standar_akuntansi', ''),
+                        kategori_pengukuran=cd.get('kategori_pengukuran', 'amortised_cost'),
+                        business_model=cd.get('business_model', ''),
+                        sppi_test_passed=cd.get('sppi_test_passed'),
+                        biaya_transaksi=cd.get('biaya_transaksi'),
+                        biaya_transaksi_account=cd.get('biaya_transaksi_account'),
+                        agunan_jenis=cd.get('agunan_jenis', ''),
+                        agunan_nilai=cd.get('agunan_nilai'),
                         user=request.user,
                     )
                     dj_messages.success(request, f'Piutang {piutang.nomor_piutang} berhasil dibuat.')
                     return redirect('piutang:detail', pk=piutang.pk)
                 except ValueError as exc:
                     form.add_error(None, str(exc))
+        from apps.entitas_bisnis.models import EntitasBisnis as _EB
+        _eb_standar_map = {
+            f'lv1:{row["pk"]}': row['standar_akuntansi']
+            for row in _EB.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
+        }
         return render(request, 'piutang/form.html', {
             'form': form, 'formset': formset, 'mode': 'create',
             'eb_options_json': json.dumps(_get_eb_dropdown_options()),
             'eb_selected': eb_selection,
+            'eb_standar_map_json': json.dumps(_eb_standar_map),
         })
     form = PiutangHeaderForm()
     formset = PiutangDetailFormSet(prefix='details', queryset=PiutangHeader.objects.none())
+    from apps.entitas_bisnis.models import EntitasBisnis as _EB
+    eb_standar_map = {
+        f'lv1:{row["pk"]}': row['standar_akuntansi']
+        for row in _EB.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
+    }
     return render(request, 'piutang/form.html', {
         'form': form, 'formset': formset, 'mode': 'create',
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_standar_map_json': json.dumps(eb_standar_map),
     })
 
 
@@ -381,6 +412,8 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
             }
             if piutang.jenis_bunga != 'tanpa_bunga':
                 sisa_total_bayar = angsuran_totals['sisa_bayar']
+    # DPD from earliest unpaid installment (not final maturity) for installment loans
+    effective_dpd = compute_effective_dpd(piutang, schedule=angsuran_schedule or None)
 
     penyisihan_preview = compute_penyisihan_for_piutang(piutang)
     penyisihan_form = PiutangPenyisihanForm(initial={'tanggal': timezone.now().date()})
@@ -409,6 +442,34 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
     riwayat_jurnal = _collect_riwayat_jurnal(piutang, penyisihan_history)
 
+    # PSAK 71 / SAK context
+    standar_efektif = get_standar_akuntansi(piutang)
+    ecl_staging_log = list(
+        PiutangECLStagingLog.objects.filter(piutang_header=piutang)
+        .select_related('created_by').order_by('-tanggal')
+    )
+    modifikasi_history = list(
+        PiutangModifikasi.objects.filter(piutang_header=piutang)
+        .select_related('gain_loss_account', 'created_by').order_by('-tanggal')
+    )
+    pemulihan_history = list(
+        PiutangPemulihanWriteOff.objects.filter(piutang_header=piutang)
+        .select_related('kas_account', 'recovery_income_account', 'created_by').order_by('-tanggal')
+    )
+    factoring_history = list(
+        PiutangFactoring.objects.filter(piutang_header=piutang)
+        .select_related('created_by').order_by('-tanggal')
+    )
+    today = timezone.now().date()
+    ecl_stage_form = ECLStageUpdateForm(initial={'new_stage': piutang.stage_ecl or 1})
+    ecl_general_form = ECLGeneralApproachForm(initial={
+        'tanggal': today,
+        'forward_looking_adj': '1.0000',
+    })
+    modifikasi_form = PiutangModifikasiForm(initial={'tanggal': today})
+    pemulihan_form = PiutangPemulihanForm(initial={'tanggal': today})
+    factoring_form = PiutangFactoringForm(initial={'tanggal': today})
+
     return render(request, 'piutang/detail.html', {
         'piutang': piutang,
         'penerimaan_form': penerimaan_form,
@@ -416,23 +477,38 @@ def piutang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'bagian_lancar': bagian_lancar,
         'akun_piutang_list': akun_piutang_list,
         'akun_all_list': akun_all_list,
-        'write_off_form': PiutangWriteOffForm(initial={'tanggal': timezone.now().date()}),
-        'reklasifikasi_form': PiutangReklasifikasiForm(initial={'tanggal': timezone.now().date()}),
+        'write_off_form': PiutangWriteOffForm(initial={'tanggal': today}),
+        'reklasifikasi_form': PiutangReklasifikasiForm(initial={'tanggal': today}),
         'angsuran_schedule': angsuran_schedule,
         'angsuran_totals': angsuran_totals,
         'sisa_total_bayar': sisa_total_bayar,
         'penyisihan_preview': penyisihan_preview,
         'penyisihan_form': penyisihan_form,
         'penyisihan_history': penyisihan_history,
-        'pv_form': PvAdjustmentForm(initial={'tanggal': timezone.now().date()}),
-        'pv_accrual_form': PvAccrualForm(initial={'tanggal': timezone.now().date()}),
+        'pv_form': PvAdjustmentForm(initial={
+            'tanggal': today,
+            'interest_income_account': piutang.interest_income_account_id,
+        }),
+        'pv_accrual_form': PvAccrualForm(initial={'tanggal': today}),
         'riwayat_jurnal': riwayat_jurnal,
         'pv_next_periode': _pv_next_periode(piutang),
         'pv_amort_schedule': _annotate_carrying_awal(compute_amortization_schedule_pv(piutang)) if piutang.is_pv_adjusted else [],
         'pv_carrying_value': _pv_carrying_value(piutang) if piutang.is_pv_adjusted else None,
         'pv_last_amort_date': _pv_last_amortization_date(piutang) if piutang.is_pv_adjusted else None,
         'pv_has_pending_accrual': _pv_has_pending_accrual(piutang),
-        'today': timezone.now().date(),
+        'today': today,
+        'effective_dpd': effective_dpd,
+        # PSAK/SAK
+        'standar_efektif': standar_efektif,
+        'ecl_staging_log': ecl_staging_log,
+        'modifikasi_history': modifikasi_history,
+        'pemulihan_history': pemulihan_history,
+        'factoring_history': factoring_history,
+        'ecl_stage_form': ecl_stage_form,
+        'ecl_general_form': ecl_general_form,
+        'modifikasi_form': modifikasi_form,
+        'pemulihan_form': pemulihan_form,
+        'factoring_form': factoring_form,
     })
 
 
@@ -457,18 +533,30 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
             instance.save(update_fields=['entitas_bisnis'])
             dj_messages.success(request, 'Piutang berhasil diperbarui.')
             return redirect('piutang:detail', pk=pk)
+        from apps.entitas_bisnis.models import EntitasBisnis as _EB
+        eb_standar_map = {
+            f'lv1:{row["pk"]}': row['standar_akuntansi']
+            for row in _EB.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
+        }
         return render(request, 'piutang/form.html', {
             'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
             'eb_options_json': json.dumps(_get_eb_dropdown_options()),
             'eb_selected': eb_selection,
+            'eb_standar_map_json': json.dumps(eb_standar_map),
         })
     form = PiutangHeaderForm(instance=piutang)
     formset = PiutangDetailFormSet(prefix='details', instance=piutang)
     eb_selected = f'lv1:{piutang.entitas_bisnis_id}' if piutang.entitas_bisnis_id else ''
+    from apps.entitas_bisnis.models import EntitasBisnis as _EB
+    eb_standar_map = {
+        f'lv1:{row["pk"]}': row['standar_akuntansi']
+        for row in _EB.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
+    }
     return render(request, 'piutang/form.html', {
         'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'eb_selected': eb_selected,
+        'eb_standar_map_json': json.dumps(eb_standar_map),
     })
 
 
@@ -1168,10 +1256,11 @@ def piutang_pv_adjustment(request: HttpRequest, pk: int) -> HttpResponse:
         form = PvAdjustmentForm(request.POST)
         if form.is_valid():
             cd = form.cleaned_data
+            income_account = cd.get('interest_income_account') or piutang.interest_income_account
             try:
                 create_pv_adjustment_journal(
                     piutang=piutang,
-                    interest_income_account=cd['interest_income_account'],
+                    interest_income_account=income_account,
                     tanggal=cd['tanggal'],
                     catatan=cd.get('catatan', ''),
                     user=request.user,
@@ -1228,4 +1317,139 @@ def piutang_reject(request: HttpRequest, pk: int) -> HttpResponse:
             dj_messages.success(request, f'Piutang {piutang.nomor_piutang} ditolak.')
         except ValueError as exc:
             dj_messages.error(request, str(exc))
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_ecl_stage_update(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = ECLStageUpdateForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                update_ecl_stage(
+                    piutang=piutang,
+                    new_stage=int(cd['new_stage']),
+                    alasan=cd['alasan'],
+                    is_auto=False,
+                    user=request.user,
+                )
+                dj_messages.success(request, f'ECL Stage diperbarui ke Stage {cd["new_stage"]}.')
+            except (ValueError, Exception) as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_ecl_general(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = ECLGeneralApproachForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                from decimal import Decimal as D
+                ecl_result = create_penyisihan_ecl_general(
+                    piutang=piutang,
+                    pd_rate=cd['pd_rate'],
+                    lgd_rate=cd['lgd_rate'],
+                    forward_looking_adj=cd.get('forward_looking_adj') or D('1'),
+                    allowance_account=cd['allowance_account'],
+                    expense_account=cd['expense_account'],
+                    tanggal=cd['tanggal'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(
+                    request,
+                    f'Jurnal penyisihan ECL (General Approach) berhasil dibuat. '
+                    f'ECL: Rp {ecl_result:,.0f}',
+                )
+            except (ValueError, Exception) as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_modifikasi(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PiutangModifikasiForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                import json as _json
+                new_cashflows = _json.loads(cd['new_cashflows_json'])
+                process_piutang_modification(
+                    piutang=piutang,
+                    new_cashflows=new_cashflows,
+                    gain_loss_account=cd['gain_loss_account'],
+                    tanggal=cd['tanggal'],
+                    deskripsi_perubahan=cd['deskripsi_perubahan'],
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Modifikasi piutang berhasil dicatat.')
+            except (_json.JSONDecodeError,):
+                dj_messages.error(request, 'Format JSON arus kas baru tidak valid.')
+            except (ValueError, Exception) as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_pemulihan(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PiutangPemulihanForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                recover_written_off_piutang(
+                    piutang=piutang,
+                    jumlah=cd['jumlah'],
+                    kas_account=cd['kas_account'],
+                    recovery_income_account=cd['recovery_income_account'],
+                    tanggal=cd['tanggal'],
+                    catatan=cd.get('catatan', ''),
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Pemulihan piutang berhasil dicatat.')
+            except (ValueError, Exception) as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
+    return redirect('piutang:detail', pk=pk)
+
+
+@login_required
+def piutang_factoring(request: HttpRequest, pk: int) -> HttpResponse:
+    piutang = get_object_or_404(PiutangHeader, pk=pk)
+    if request.method == 'POST':
+        form = PiutangFactoringForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            try:
+                create_factoring_derecognition(
+                    piutang=piutang,
+                    nilai_transfer=cd['nilai_transfer'],
+                    hasil_analisis=cd['hasil_analisis'],
+                    continuing_involvement_amount=cd.get('continuing_involvement_amount'),
+                    pihak_penerima=cd['pihak_penerima'],
+                    analisis_detail=cd.get('analisis_detail', ''),
+                    gain_loss_account=cd.get('gain_loss_account'),
+                    tanggal=cd['tanggal'],
+                    user=request.user,
+                )
+                dj_messages.success(request, 'Factoring/derecognition berhasil dicatat.')
+            except (ValueError, Exception) as exc:
+                dj_messages.error(request, str(exc))
+        else:
+            dj_messages.error(request, 'Form tidak valid.')
     return redirect('piutang:detail', pk=pk)

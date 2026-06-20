@@ -1,0 +1,403 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Hapus {{ header.transaction_id }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.ni-hapus-danger-banner {
+  background: #fee2e2;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--ni-radius);
+  padding: 16px 20px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.ni-hapus-danger-banner__icon {
+  color: #dc2626;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ni-hapus-danger-banner__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 4px;
+}
+.ni-hapus-danger-banner__desc {
+  font-size: 0.8125rem;
+  color: #7f1d1d;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ni-delete-section {
+  margin-bottom: 20px;
+}
+.ni-delete-section__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ni-text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ni-delete-section__title--danger { color: #dc2626; }
+.ni-delete-section__title--warn   { color: #d97706; }
+
+.ni-delete-list {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  overflow: hidden;
+}
+.ni-delete-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  font-size: 0.8125rem;
+  border-bottom: 1px solid var(--ni-border);
+  gap: 12px;
+}
+.ni-delete-list__row:last-child { border-bottom: none; }
+.ni-delete-list__row--header {
+  background: var(--ni-bg);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ni-text-muted);
+}
+
+.ni-jrn-del {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.ni-jrn-del:last-child { margin-bottom: 0; }
+.ni-jrn-del summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  background: var(--ni-bg);
+  font-size: 0.8125rem;
+  user-select: none;
+}
+.ni-jrn-del summary::-webkit-details-marker { display: none; }
+.ni-jrn-del[open] summary { background: #fff5f5; }
+.ni-jrn-del__nomor { font-weight: 600; color: #dc2626; min-width: 140px; font-size: 0.8rem; }
+.ni-jrn-del__date  { color: var(--ni-text-muted); white-space: nowrap; }
+.ni-jrn-del__uraian { flex: 1; color: var(--ni-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ni-jrn-del__body { padding: 0 14px 12px; }
+.ni-jrn-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 8px; }
+.ni-jrn-table th { padding: 4px 8px; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ni-text-muted); border-bottom: 1px solid var(--ni-border); }
+.ni-jrn-table td { padding: 5px 8px; border-bottom: 1px solid var(--ni-border); color: var(--ni-text); }
+.ni-jrn-table tr:last-child td { border-bottom: none; }
+.ni-jrn-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.ni-konfirmasi-box {
+  background: #fff5f5;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--ni-radius);
+  padding: 20px;
+  margin-top: 28px;
+}
+.ni-konfirmasi-box__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991b1b;
+  margin-bottom: 8px;
+  display: block;
+}
+.ni-konfirmasi-box__hint {
+  font-size: 0.8rem;
+  color: var(--ni-text-muted);
+  margin-bottom: 12px;
+}
+.ni-konfirmasi-box code {
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title" style="color:#dc2626;">Hapus Transaksi</h1>
+    <p class="ni-page-header__subtitle">{{ header.transaction_id }}</p>
+  </div>
+  <a href="{% url 'pendapatan:detail' header.pk %}" class="ni-btn ni-btn--secondary">
+    <i data-lucide="arrow-left" style="width:14px;height:14px;"></i>
+    Kembali
+  </a>
+</div>
+
+{# ── Danger banner ────────────────────────────────────────────────────────── #}
+<div class="ni-hapus-danger-banner">
+  <i data-lucide="alert-triangle" class="ni-hapus-danger-banner__icon" style="width:22px;height:22px;"></i>
+  <div>
+    <div class="ni-hapus-danger-banner__title">Tindakan ini permanen dan tidak dapat dibatalkan</div>
+    <p class="ni-hapus-danger-banner__desc">
+      Semua data di bawah akan dihapus dari database secara permanen.
+      Berbeda dengan <strong>Batalkan</strong> (yang membuat jurnal pembalik dan menyimpan riwayat),
+      <strong>Hapus</strong> menghilangkan seluruh rekam jejak transaksi ini.
+      Gunakan hanya jika transaksi dibuat karena kesalahan dan tidak boleh tercatat sama sekali.
+    </p>
+  </div>
+</div>
+
+{# ── Summary strip ───────────────────────────────────────────────────────── #}
+<div class="ni-card">
+  <div class="ni-card__header"><h2 class="ni-card__title">Informasi Transaksi</h2></div>
+  <div class="ni-card__body" style="font-size:0.875rem;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;">
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-text-muted);margin-bottom:3px;">ID Transaksi</div>
+        <code style="font-size:0.875rem;">{{ header.transaction_id }}</code>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-text-muted);margin-bottom:3px;">Tanggal</div>
+        <strong>{{ header.tanggal|date:"d F Y" }}</strong>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-text-muted);margin-bottom:3px;">Status</div>
+        <span class="ni-badge ni-badge--{{ header.status }}">{{ header.get_status_display }}</span>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-text-muted);margin-bottom:3px;">Pelanggan</div>
+        <strong>{% with eg=header.entitas_groups.first %}{% if eg %}{{ eg.entitas_bisnis.nama }}{% else %}&mdash;{% endif %}{% endwith %}</strong>
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--ni-text-muted);margin-bottom:3px;">Dibuat Oleh</div>
+        <span>{{ header.created_by|default:'—' }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Yang akan DIHAPUS PERMANEN ───────────────────────────────────────────── #}
+<div class="ni-card">
+  <div class="ni-card__header">
+    <div>
+      <h2 class="ni-card__title" style="color:#dc2626;">Yang Akan Dihapus Permanen</h2>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:3px 0 0;">Semua item di bawah tidak dapat dipulihkan setelah penghapusan</p>
+    </div>
+  </div>
+  <div class="ni-card__body">
+
+    {# Jurnal #}
+    <div class="ni-delete-section">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="book-open" style="width:13px;height:13px;"></i>
+        {{ journals|length }} Jurnal &bull; {{ jurnal_detail_count }} Baris Jurnal
+      </div>
+      {% if journals %}
+        {% for jh in journals %}
+        <details class="ni-jrn-del" {% if forloop.first %}open{% endif %}>
+          <summary>
+            <i data-lucide="file-text" style="width:13px;height:13px;color:#dc2626;flex-shrink:0;"></i>
+            <span class="ni-jrn-del__nomor">{{ jh.nomor_transaksi }}</span>
+            <span class="ni-jrn-del__date">{{ jh.tanggal|date:"d M Y" }}</span>
+            <span class="ni-jrn-del__uraian">{{ jh.uraian_transaksi }}</span>
+            <i data-lucide="chevron-down" style="width:13px;height:13px;color:var(--ni-text-muted);margin-left:auto;flex-shrink:0;"></i>
+          </summary>
+          <div class="ni-jrn-del__body">
+            <table class="ni-jrn-table">
+              <thead>
+                <tr>
+                  <th>Kode Akun</th>
+                  <th>Nama Akun</th>
+                  <th class="num">Debit (Rp)</th>
+                  <th class="num">Kredit (Rp)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for d in jh.details.all %}
+                <tr>
+                  <td style="font-family:ui-monospace,monospace;font-size:0.75rem;">{{ d.akun.kode_akun }}</td>
+                  <td>{{ d.akun.nama }}</td>
+                  <td class="num">{% if d.debit %}{{ d.debit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+                  <td class="num">{% if d.kredit %}{{ d.kredit|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+        {% endfor %}
+      {% else %}
+      <p style="font-size:0.8125rem;color:var(--ni-text-muted);margin:0;">Tidak ada jurnal (transaksi masih draft).</p>
+      {% endif %}
+    </div>
+
+    {# KPs #}
+    <div class="ni-delete-section">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="layers" style="width:13px;height:13px;"></i>
+        {{ kp_list|length }} Kewajiban Pelaksanaan (termasuk jadwal & entri pengakuan)
+      </div>
+      <div class="ni-delete-list">
+        <div class="ni-delete-list__row ni-delete-list__row--header">
+          <span style="flex:1;">Deskripsi</span>
+          <span style="width:100px;text-align:right;">Nilai Kontrak</span>
+          <span style="width:110px;">Tipe Pengakuan</span>
+        </div>
+        {% for kp in kp_list %}
+        <div class="ni-delete-list__row">
+          <span style="flex:1;">{{ kp.deskripsi_item }}</span>
+          <span style="width:100px;text-align:right;font-variant-numeric:tabular-nums;">Rp {{ kp.nilai_kontrak|floatformat:0|intcomma }}</span>
+          <span style="width:110px;color:var(--ni-text-muted);">{{ kp.get_recognition_type_display }}</span>
+        </div>
+        {% empty %}
+        <div class="ni-delete-list__row"><span style="color:var(--ni-text-muted);">Tidak ada item.</span></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {# Pajak Transaksi #}
+    {% if pajak_trx_list %}
+    <div class="ni-delete-section">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="receipt" style="width:13px;height:13px;"></i>
+        {{ pajak_trx_list|length }} Transaksi Pajak (termasuk jurnal pajak terkait)
+      </div>
+      <div class="ni-delete-list">
+        <div class="ni-delete-list__row ni-delete-list__row--header">
+          <span style="flex:1;">Jenis Pajak</span>
+          <span style="width:110px;text-align:right;">Jumlah Pajak</span>
+          <span style="width:90px;">Status</span>
+          <span style="width:140px;">Jurnal Pajak</span>
+        </div>
+        {% for pt in pajak_trx_list %}
+        <div class="ni-delete-list__row">
+          <span style="flex:1;">{{ pt.get_jenis_pajak_display }}</span>
+          <span style="width:110px;text-align:right;font-variant-numeric:tabular-nums;">Rp {{ pt.jumlah_pajak|floatformat:0|intcomma }}</span>
+          <span style="width:90px;">
+            <span class="ni-badge ni-badge--{% if pt.status == 'final' or pt.status == 'disetor' %}success{% elif pt.status == 'dibatalkan' %}danger{% else %}secondary{% endif %}" style="font-size:0.7rem;">{{ pt.get_status_display }}</span>
+          </span>
+          <span style="width:140px;font-family:ui-monospace,monospace;font-size:0.75rem;color:var(--ni-text-muted);">
+            {% if pt.jurnal_header %}{{ pt.jurnal_header.nomor_transaksi }}{% else %}&mdash;{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Aset Kontrak #}
+    {% if aset_list %}
+    <div class="ni-delete-section">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="briefcase" style="width:13px;height:13px;"></i>
+        {{ aset_list|length }} Aset Kontrak
+      </div>
+      <div class="ni-delete-list">
+        {% for aset in aset_list %}
+        <div class="ni-delete-list__row">
+          <span style="flex:1;color:var(--ni-text-muted);">Aset kontrak #{{ aset.pk }}</span>
+          <span>Rp {{ aset.nilai|floatformat:0|intcomma }}</span>
+          <span class="ni-badge ni-badge--{% if aset.status == 'active' %}warning{% else %}secondary{% endif %}" style="font-size:0.7rem;">{{ aset.get_status_display }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Piutang #}
+    {% if piutang_list %}
+    <div class="ni-delete-section">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="credit-card" style="width:13px;height:13px;"></i>
+        {{ piutang_list|length }} Piutang Terkait (termasuk rincian, penerimaan, dan write-off)
+      </div>
+      <div class="ni-delete-list">
+        <div class="ni-delete-list__row ni-delete-list__row--header">
+          <span style="width:160px;">Nomor Piutang</span>
+          <span style="flex:1;">Debitur</span>
+          <span style="width:100px;text-align:right;">Jumlah Pokok</span>
+          <span style="width:80px;">Status</span>
+        </div>
+        {% for p in piutang_list %}
+        <div class="ni-delete-list__row">
+          <span style="width:160px;font-weight:600;font-size:0.8rem;color:#dc2626;">{{ p.nomor_piutang }}</span>
+          <span style="flex:1;">{{ p.debitur|default:p.entitas_bisnis }}</span>
+          <span style="width:100px;text-align:right;font-variant-numeric:tabular-nums;">Rp {{ p.jumlah_pokok|floatformat:0|intcomma }}</span>
+          <span style="width:80px;">
+            <span class="ni-badge ni-badge--{{ p.status }}" style="font-size:0.7rem;">{{ p.get_status_display }}</span>
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {# Event Logs (audit) #}
+    <div class="ni-delete-section" style="margin-bottom:0;">
+      <div class="ni-delete-section__title ni-delete-section__title--danger">
+        <i data-lucide="clock" style="width:13px;height:13px;"></i>
+        {{ header.event_logs.count }} Entri Audit Log
+      </div>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:0;">Semua riwayat aktivitas transaksi ini akan terhapus.</p>
+    </div>
+
+  </div>
+</div>
+
+{# ── Konfirmasi ──────────────────────────────────────────────────────────── #}
+<div class="ni-card">
+  <div class="ni-card__body">
+    <form method="post" action="{% url 'pendapatan:hapus' header.pk %}">
+      {% csrf_token %}
+      <div class="ni-konfirmasi-box">
+        <span class="ni-konfirmasi-box__label">
+          <i data-lucide="shield-alert" style="width:15px;height:15px;vertical-align:middle;"></i>
+          Konfirmasi Penghapusan
+        </span>
+        <p class="ni-konfirmasi-box__hint">
+          Ketik ID transaksi <code>{{ header.transaction_id }}</code> untuk mengonfirmasi bahwa Anda memahami tindakan ini tidak dapat dibatalkan.
+        </p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input type="text" name="konfirmasi" class="ni-input"
+                 style="width:240px;font-family:ui-monospace,monospace;"
+                 placeholder="{{ header.transaction_id }}"
+                 autocomplete="off">
+          <button type="submit" class="ni-btn ni-btn--danger"
+                  onclick="return validateHapus(this.form, '{{ header.transaction_id }}')">
+            <i data-lucide="trash-2" style="width:14px;height:14px;"></i>
+            Hapus Permanen
+          </button>
+          <a href="{% url 'pendapatan:detail' header.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function validateHapus(form, expectedId) {
+  const val = form.querySelector('[name="konfirmasi"]').value.trim();
+  if (val !== expectedId) {
+    alert('ID transaksi tidak sesuai. Ketik "' + expectedId + '" dengan tepat.');
+    return false;
+  }
+  return true;
+}
+</script>
+{% endblock %}

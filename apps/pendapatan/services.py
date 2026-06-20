@@ -239,7 +239,7 @@ def create_pendapatan_header(
 
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
-def _sync_confirm_tax_line(kp, header, tax_line, amount, user=None):
+def _sync_confirm_tax_line(kp, header, tax_line, amount, entitas_bisnis=None, user=None):
     """Create and immediately confirm a PajakTransaksi for one KPTaxLine."""
     jenis_pajak = TAX_TYPE_MAP.get(tax_line.tax_type)
     if not jenis_pajak:
@@ -255,6 +255,7 @@ def _sync_confirm_tax_line(kp, header, tax_line, amount, user=None):
         akun_lawan=tax_line.tax_payment_account,
         sifat_pajak=sifat_pajak,
         override_amount=tax_line.tax,
+        entitas_bisnis_override=entitas_bisnis,
     )
     confirm_pajak_trx(pajak_trx)
 
@@ -301,7 +302,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
 
         # Step 2: per-group per-KP processing
         has_credit_pit = False
-        for eb_group in header.entitas_groups.prefetch_related(
+        for eb_group in header.entitas_groups.select_related('entitas_bisnis').prefetch_related(
             'items__revenue_account', 'items__payment_account',
             'items__tax_lines__tax_account', 'items__tax_lines__tax_payment_account',
             'items__ot_liabilitas_kontrak_acct', 'items__ot_aset_kontrak_acct',
@@ -320,7 +321,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                         user=user,
                     )
                     for tax_line in kp.tax_lines.all():
-                        _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
+                        _sync_confirm_tax_line(kp, header, tax_line, harga_j, entitas_bisnis=eb_group.entitas_bisnis, user=user)
                     if header.payment_type == 'credit':
                         has_credit_pit = True
 
@@ -342,7 +343,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             user=user,
                         )
                         for tax_line in kp.tax_lines.all():
-                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
+                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, entitas_bisnis=eb_group.entitas_bisnis, user=user)
                         _create_jadwal(kp, harga_j, user)
                         _log_event(header, 'JADWAL_CREATED',
                                    description=f'KP {kp.pk} — advance_payment_cash', actor=user)
@@ -363,7 +364,7 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                             user=user,
                         )
                         for tax_line in kp.tax_lines.all():
-                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, user=user)
+                            _sync_confirm_tax_line(kp, header, tax_line, harga_j, entitas_bisnis=eb_group.entitas_bisnis, user=user)
                         # Record contract asset
                         AsetKontrak.objects.create(
                             kp=kp,
