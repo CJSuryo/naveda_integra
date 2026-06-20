@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     'apps.ekuitas',
     'apps.manufacturing',
     'apps.dashboard',
+    'apps.customers',
     'pos_config',
     'pos_catalog',
     'pos_orders',
