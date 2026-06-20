@@ -14,8 +14,9 @@ from .services import (
     confirm_pendapatan, create_pendapatan_header, void_pendapatan,
     get_pendapatan_dashboard_kpi, generate_from_recurring,
     recognize_entry, konversi_aset_kontrak_ke_piutang,
+    recognize_percentage_completion,
 )
-from .forms import PendapatanHeaderForm, PendapatanItemForm, KewajibabPelaksanaanForm, RecurringTemplateForm
+from .forms import PendapatanHeaderForm, PendapatanItemForm, KewajibabPelaksanaanForm, RecurringTemplateForm, KPTaxLineForm
 
 
 @login_required
@@ -60,6 +61,40 @@ def pendapatan_list(request: HttpRequest) -> HttpResponse:
     })
 
 
+def _parse_tax_lines_from_post(post, item_idx: int) -> list:
+    """Parse tax line POST fields for item at position item_idx."""
+    from decimal import Decimal, InvalidOperation
+    from apps.master_data.models import Akun
+
+    tax_count = int(post.get(f'item_{item_idx}_tax_count', '0') or '0')
+    tax_lines = []
+    for j in range(tax_count):
+        tax_type = post.get(f'item_{item_idx}_tax_{j}_tax_type', '').strip()
+        if not tax_type:
+            continue
+        tax_account_raw = post.get(f'item_{item_idx}_tax_{j}_tax_account', '').strip()
+        tax_payment_account_raw = post.get(f'item_{item_idx}_tax_{j}_tax_payment_account', '').strip()
+        if not tax_account_raw or not tax_payment_account_raw:
+            continue
+        try:
+            tax_account = Akun.objects.get(pk=int(tax_account_raw))
+            tax_payment_account = Akun.objects.get(pk=int(tax_payment_account_raw))
+        except (Akun.DoesNotExist, ValueError):
+            continue
+        tax_raw = post.get(f'item_{item_idx}_tax_{j}_tax', '').strip()
+        try:
+            tax = Decimal(tax_raw) if tax_raw else None
+        except InvalidOperation:
+            tax = None
+        tax_lines.append({
+            'tax_type': tax_type,
+            'tax': tax,
+            'tax_account': tax_account,
+            'tax_payment_account': tax_payment_account,
+        })
+    return tax_lines
+
+
 @login_required
 def pendapatan_create(request: HttpRequest) -> HttpResponse:
     from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
@@ -74,7 +109,11 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
 
         if form.is_valid() and all(f.is_valid() for f in item_forms):
             cd = form.cleaned_data
-            items = [f.cleaned_data for f in item_forms]
+            items = []
+            for i, f in enumerate(item_forms):
+                item_data = f.cleaned_data.copy()
+                item_data['tax_lines'] = _parse_tax_lines_from_post(request.POST, i)
+                items.append(item_data)
             try:
                 eb = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
                 pay_acct = items[0].get('payment_account')
@@ -100,6 +139,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
         'item_forms': item_forms,
         'mode': 'create',
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'tax_lines_initial_json': '{}',
     })
 
 
@@ -116,6 +156,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
 
     eb_group = header.entitas_groups.select_related('entitas_bisnis').prefetch_related('items').first()
     existing_items = list(eb_group.items.all()) if eb_group else []
+    tax_lines_initial: dict = {}
 
     if request.method == 'POST':
         form = PendapatanHeaderForm(request.POST, instance=header)
@@ -130,6 +171,8 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                     form.save()
                     eb = EntitasBisnis.objects.get(pk=resolved_eb['lv1_id']) if resolved_eb else None
                     items_data = [f.cleaned_data for f in item_forms]
+                    for i, item in enumerate(items_data):
+                        item['tax_lines'] = _parse_tax_lines_from_post(request.POST, i)
                     pay_acct = items_data[0].get('payment_account')
 
                     if eb_group:
@@ -146,9 +189,10 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                         )
                         eb_group = eb_group_new
 
-                    from .models import KewajibabPelaksanaan as _KP
-                    _KP.objects.bulk_create([
-                        _KP(
+                    from .models import KewajibabPelaksanaan as _KP, KPTaxLine as _TL
+
+                    for item in items_data:
+                        kp = _KP.objects.create(
                             pendapatan_eb=eb_group,
                             deskripsi_item=item['deskripsi_item'],
                             kategori=item['kategori'],
@@ -156,9 +200,6 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             nilai_kontrak=item.get('nilai_kontrak') or item.get('jumlah_bruto'),
                             revenue_account=item['revenue_account'],
                             payment_account=item.get('payment_account'),
-                            tax=item.get('tax'),
-                            tax_type=item.get('tax_type', ''),
-                            tax_account=item.get('tax_account'),
                             recognition_type=item.get('recognition_type', 'point_in_time'),
                             ot_tipe_aliran=item.get('ot_tipe_aliran', ''),
                             ot_progress_method=item.get('ot_progress_method', ''),
@@ -168,8 +209,14 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                             ot_aset_kontrak_acct=item.get('ot_aset_kontrak_acct'),
                             ot_biaya_estimasi_total=item.get('ot_biaya_estimasi_total'),
                         )
-                        for item in items_data
-                    ])
+                        for tl in item.get('tax_lines', []):
+                            _TL.objects.create(
+                                kp=kp,
+                                tax_type=tl['tax_type'],
+                                tax=tl.get('tax'),
+                                tax_account=tl['tax_account'],
+                                tax_payment_account=tl['tax_payment_account'],
+                            )
 
                 dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil diperbarui.')
                 return redirect('pendapatan:detail', pk=header.pk)
@@ -185,9 +232,6 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 'nilai_kontrak': item.nilai_kontrak,
                 'revenue_account': item.revenue_account_id,
                 'payment_account': item.payment_account_id,
-                'tax': item.tax,
-                'tax_type': item.tax_type,
-                'tax_account': item.tax_account_id,
                 'recognition_type': item.recognition_type,
                 'ot_tipe_aliran': item.ot_tipe_aliran,
                 'ot_progress_method': item.ot_progress_method,
@@ -200,6 +244,17 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
             for i, item in enumerate(existing_items)
         ] or [KewajibabPelaksanaanForm(prefix='item_0')]
 
+        for i, item in enumerate(existing_items):
+            tax_lines_initial[i] = [
+                {
+                    'tax_type': tl.tax_type,
+                    'tax': str(tl.tax) if tl.tax else '',
+                    'tax_account_id': tl.tax_account_id,
+                    'tax_payment_account_id': tl.tax_payment_account_id,
+                }
+                for tl in item.tax_lines.all()
+            ]
+
     eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
 
     return render(request, 'pendapatan/form.html', {
@@ -209,6 +264,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'header': header,
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'eb_selected': eb_selected,
+        'tax_lines_initial_json': json.dumps(tax_lines_initial),
     })
 
 
@@ -216,10 +272,58 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
 def pendapatan_detail(request: HttpRequest, pk: int) -> HttpResponse:
     header = get_object_or_404(
         PendapatanHeader.objects
-        .prefetch_related('entitas_groups__items', 'event_logs__actor'),
+        .select_related('created_by', 'source_recurring', 'source_sales')
+        .prefetch_related(
+            'entitas_groups__entitas_bisnis',
+            'entitas_groups__payment_account',
+            'entitas_groups__items__revenue_account',
+            'entitas_groups__items__sub_transaction_type',
+            'entitas_groups__items__jadwal__entri__jurnal_header',
+            'entitas_groups__items__aset_kontrak',
+            'event_logs__actor',
+        ),
         pk=pk,
     )
-    return render(request, 'pendapatan/detail.html', {'header': header})
+    from apps.jurnal.models import JurnalHeader
+    journals = list(
+        JurnalHeader.objects
+        .filter(uraian_transaksi__icontains=header.transaction_id)
+        .prefetch_related('details__akun')
+        .order_by('tanggal', 'id')
+    )
+    from apps.piutang.models import PiutangHeader
+    piutang_list = list(
+        PiutangHeader.objects
+        .filter(source_pendapatan=header)
+        .select_related('entitas_bisnis')
+        .order_by('tanggal', 'id')
+    )
+    total_nilai = sum(
+        kp.nilai_kontrak
+        for eg in header.entitas_groups.all()
+        for kp in eg.items.all()
+    )
+    # Annotate each KP with its linked PajakTransaksi records
+    from apps.pajak.models import PajakTransaksi
+    kp_ids = [kp.pk for eg in header.entitas_groups.all() for kp in eg.items.all()]
+    pajak_per_kp: dict[int, list] = {}
+    if kp_ids:
+        for pt in (
+            PajakTransaksi.objects
+            .filter(source_type='pendapatan_kp', source_id__in=kp_ids)
+            .select_related('akun_pajak', 'akun_lawan', 'jurnal_header')
+            .order_by('created_at')
+        ):
+            pajak_per_kp.setdefault(pt.source_id, []).append(pt)
+    for eg in header.entitas_groups.all():
+        for kp in eg.items.all():
+            kp.pajak_list = pajak_per_kp.get(kp.pk, [])
+    return render(request, 'pendapatan/detail.html', {
+        'header': header,
+        'journals': journals,
+        'piutang_list': piutang_list,
+        'total_nilai': total_nilai,
+    })
 
 
 @login_required
@@ -246,6 +350,78 @@ def pendapatan_void(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect('pendapatan:detail', pk=pk)
 
 
+@login_required
+def pendapatan_hapus(request: HttpRequest, pk: int) -> HttpResponse:
+    from apps.jurnal.models import JurnalHeader, JurnalDetail
+    from apps.piutang.models import PiutangHeader
+    from apps.pajak.models import PajakTransaksi
+
+    header = get_object_or_404(PendapatanHeader, pk=pk)
+    if header.is_locked:
+        dj_messages.error(request, 'Transaksi terkunci tidak dapat dihapus.')
+        return redirect('pendapatan:detail', pk=pk)
+
+    from .models import KewajibabPelaksanaan as KP, AsetKontrak
+    kp_qs = list(KP.objects.filter(pendapatan_eb__pendapatan_header=header).select_related('revenue_account'))
+    kp_ids = [kp.pk for kp in kp_qs]
+
+    journals = list(
+        JurnalHeader.objects
+        .filter(uraian_transaksi__icontains=header.transaction_id)
+        .prefetch_related('details__akun')
+        .order_by('tanggal', 'id')
+    )
+    piutang_list = list(
+        PiutangHeader.objects
+        .filter(source_pendapatan=header)
+        .select_related('entitas_bisnis')
+        .order_by('tanggal', 'id')
+    )
+    aset_qs = AsetKontrak.objects.filter(kp__pendapatan_eb__pendapatan_header=header)
+    jurnal_detail_count = sum(j.details.count() for j in journals)
+
+    pajak_trx_list = list(
+        PajakTransaksi.objects
+        .filter(source_type='pendapatan_kp', source_id__in=kp_ids)
+        .select_related('akun_pajak', 'akun_lawan', 'jurnal_header')
+        .order_by('created_at')
+    ) if kp_ids else []
+
+    if request.method == 'POST' and request.POST.get('konfirmasi') == header.transaction_id:
+        from django.db import transaction as db_transaction
+        transaction_id = header.transaction_id
+        with db_transaction.atomic():
+            # Delete tax journals then PajakTransaksi
+            pajak_jurnal_ids = [pt.jurnal_header_id for pt in pajak_trx_list if pt.jurnal_header_id]
+            if pajak_jurnal_ids:
+                JurnalDetail.objects.filter(jurnal_header_id__in=pajak_jurnal_ids).delete()
+                JurnalHeader.objects.filter(pk__in=pajak_jurnal_ids).delete()
+            if kp_ids:
+                PajakTransaksi.objects.filter(source_type='pendapatan_kp', source_id__in=kp_ids).delete()
+            # Delete piutang records (cascades to details, penerimaan, write-off, etc.)
+            piutang_ids = [p.pk for p in piutang_list]
+            if piutang_ids:
+                PiutangHeader.objects.filter(pk__in=piutang_ids).delete()
+            # Delete revenue journals (not cascade-linked)
+            journal_ids = [j.pk for j in journals]
+            JurnalDetail.objects.filter(jurnal_header_id__in=journal_ids).delete()
+            JurnalHeader.objects.filter(pk__in=journal_ids).delete()
+            # Cascade deletes everything else: EB groups, KPs, jadwal, entri, aset kontrak, event logs
+            header.delete()
+        dj_messages.success(request, f'Transaksi {transaction_id} dan semua data terkait berhasil dihapus.')
+        return redirect('pendapatan:list')
+
+    return render(request, 'pendapatan/hapus_konfirmasi.html', {
+        'header': header,
+        'journals': journals,
+        'piutang_list': piutang_list,
+        'kp_list': kp_qs,
+        'aset_list': aset_qs,
+        'jurnal_detail_count': jurnal_detail_count,
+        'pajak_trx_list': pajak_trx_list,
+    })
+
+
 # ── PSAK 72 Action Views ─────────────────────────────────────────────────────
 
 @login_required
@@ -260,6 +436,32 @@ def recognize_entry_view(request, entry_id):
     except (ValueError, AssertionError) as e:
         dj_messages.error(request, str(e))
     header_id = entri.jadwal.kp.pendapatan_eb.pendapatan_header_id
+    return redirect('pendapatan:detail', pk=header_id)
+
+
+@login_required
+@require_POST
+def recognize_percentage_view(request: HttpRequest, jadwal_id: int) -> HttpResponse:
+    jadwal = get_object_or_404(
+        __import__('apps.pendapatan.models', fromlist=['JadwalPengakuan']).JadwalPengakuan,
+        pk=jadwal_id,
+    )
+    from decimal import Decimal, InvalidOperation
+    progress_str = request.POST.get('progress_pct', '').strip()
+    date_str = request.POST.get('journal_date', '').strip()
+    try:
+        progress_pct = Decimal(progress_str)
+    except (InvalidOperation, ValueError):
+        dj_messages.error(request, 'Progress harus berupa angka antara 0 dan 100.')
+        header_id = jadwal.kp.pendapatan_eb.pendapatan_header_id
+        return redirect('pendapatan:detail', pk=header_id)
+    journal_date = datetime.date.fromisoformat(date_str) if date_str else None
+    try:
+        recognize_percentage_completion(jadwal.pk, progress_pct, request.user, journal_date)
+        dj_messages.success(request, f'Progress {progress_pct}% berhasil diakui.')
+    except (ValueError, AssertionError) as e:
+        dj_messages.error(request, str(e))
+    header_id = jadwal.kp.pendapatan_eb.pendapatan_header_id
     return redirect('pendapatan:detail', pk=header_id)
 
 
