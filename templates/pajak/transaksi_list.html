@@ -11,35 +11,25 @@
 
 <div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
   <div class="ni-card__body">
-    <div class="ni-filter-bar">
+    <form id="pajakFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
+        {% include 'components/eb_filter_modal.html' with filter_form_id="pajakFilterForm" %}
         <div class="ni-form-group">
           <label class="ni-form-label">Status</label>
-          <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
-            <a href="{% url 'pajak:transaksi_list' %}"
-               class="ni-btn ni-btn--sm {% if not status_filter %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
-              Semua
-            </a>
-            <a href="?status=draft"
-               class="ni-btn ni-btn--sm {% if status_filter == 'draft' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
-              Draft
-            </a>
-            <a href="?status=final"
-               class="ni-btn ni-btn--sm {% if status_filter == 'final' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
-              Final
-            </a>
-            <a href="?status=disetor"
-               class="ni-btn ni-btn--sm {% if status_filter == 'disetor' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
-              Disetor
-            </a>
-            <a href="?status=dibatalkan"
-               class="ni-btn ni-btn--sm {% if status_filter == 'dibatalkan' %}ni-btn--primary{% else %}ni-btn--secondary{% endif %}">
-              Dibatalkan
-            </a>
-          </div>
+          <select name="status" class="ni-input">
+            <option value="">— Semua —</option>
+            <option value="draft"      {% if status_filter == 'draft'      %}selected{% endif %}>Draft</option>
+            <option value="final"      {% if status_filter == 'final'      %}selected{% endif %}>Final</option>
+            <option value="disetor"    {% if status_filter == 'disetor'    %}selected{% endif %}>Disetor</option>
+            <option value="dibatalkan" {% if status_filter == 'dibatalkan' %}selected{% endif %}>Dibatalkan</option>
+          </select>
         </div>
       </div>
-    </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+        <a href="{% url 'pajak:transaksi_list' %}" class="ni-btn ni-btn--secondary">Reset</a>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -49,6 +39,7 @@
       <thead>
         <tr>
           <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
           <th>Sumber</th>
           <th>Jenis Pajak</th>
           <th class="ni-text-right">DPP</th>
@@ -62,6 +53,7 @@
         {% for pajak_trx in transaksi_list %}
         <tr>
           <td>{{ pajak_trx.created_at|date:"d M Y" }}</td>
+          <td>{{ pajak_trx.entitas_bisnis.nama|default:'—' }}</td>
           <td>
             <span class="ni-text-muted" style="font-size:.85em;">{{ pajak_trx.get_source_type_display }}</span><br>
             <span>{{ pajak_trx.source_id }}</span>
@@ -74,6 +66,7 @@
             <span class="ni-badge ni-badge--{{ pajak_trx.status }}">{{ pajak_trx.get_status_display }}</span>
           </td>
           <td>
+            <a href="{% url 'pajak:transaksi_detail' pajak_trx.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Detail</a>
             {% if pajak_trx.status == 'draft' or pajak_trx.status == 'final' %}
             <a href="{% url 'pajak:transaksi_edit' pajak_trx.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Edit</a>
             {% endif %}
@@ -81,7 +74,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="ni-text-center ni-text-muted">Belum ada data transaksi pajak.</td>
+          <td colspan="9" class="ni-text-center ni-text-muted">Belum ada data transaksi pajak.</td>
         </tr>
         {% endfor %}
       </tbody>

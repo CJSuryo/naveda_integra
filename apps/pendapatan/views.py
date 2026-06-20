@@ -45,19 +45,42 @@ def pendapatan_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def pendapatan_list(request: HttpRequest) -> HttpResponse:
-    from django.db.models import Q
-    qs = PendapatanHeader.objects.order_by('-tanggal', '-created_at')
+    from django.db.models import Q, Prefetch
+    from apps.purchase.views import _get_eb_tree, _resolve_eb_selection
+    from apps.entitas_bisnis.models import EntitasBisnis
+
     status_filter = request.GET.get('status', '')
     search = request.GET.get('q', '').strip()
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+
+    from .models import PendapatanEntitasBisnis as _PEB
+    qs = PendapatanHeader.objects.prefetch_related(
+        Prefetch(
+            'entitas_groups',
+            queryset=_PEB.objects.select_related('entitas_bisnis').order_by('id'),
+        )
+    ).order_by('-tanggal', '-created_at')
+
     if status_filter:
         qs = qs.filter(status=status_filter)
     if search:
         qs = qs.filter(Q(transaction_id__icontains=search) | Q(deskripsi__icontains=search))
+    if eb_filter_list:
+        lv1_ids = set()
+        for sel in eb_filter_list:
+            resolved = _resolve_eb_selection(sel)
+            if resolved:
+                lv1_ids.add(resolved['lv1_id'])
+        if lv1_ids:
+            qs = qs.filter(entitas_groups__entitas_bisnis_id__in=lv1_ids).distinct()
+
     return render(request, 'pendapatan/list.html', {
         'pendapatans': list(qs),
         'status_filter': status_filter,
         'search': search,
         'status_choices': PendapatanHeader.STATUS_CHOICES,
+        'eb_tree': _get_eb_tree(),
+        'eb_filter_list': eb_filter_list,
     })
 
 

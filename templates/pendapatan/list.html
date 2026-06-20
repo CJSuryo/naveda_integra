@@ -15,8 +15,9 @@
 
 <div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
   <div class="ni-card__body">
-    <form method="get" class="ni-filter-bar">
+    <form id="pendapatanFilterForm" method="get" class="ni-filter-bar">
       <div class="ni-filter-bar__row">
+        {% include 'components/eb_filter_modal.html' with filter_form_id="pendapatanFilterForm" %}
         <div class="ni-form-group ni-form-group--grow">
           <label class="ni-form-label">Cari</label>
           <input type="text" name="q" value="{{ search }}" class="ni-input" placeholder="ID transaksi, deskripsi...">
@@ -46,6 +47,7 @@
         <tr>
           <th>ID Transaksi</th>
           <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
           <th>Deskripsi</th>
           <th>Tipe</th>
           <th>Status</th>
@@ -57,7 +59,12 @@
         <tr>
           <td><a href="{% url 'pendapatan:detail' p.pk %}" class="ni-link">{{ p.transaction_id }}</a></td>
           <td>{{ p.tanggal }}</td>
-          <td>{{ p.deskripsi|default:'-'|truncatechars:60 }}</td>
+          <td>
+            {% for eg in p.entitas_groups.all %}
+              {{ eg.entitas_bisnis.nama }}{% if not forloop.last %}, {% endif %}
+            {% empty %}—{% endfor %}
+          </td>
+          <td>{{ p.deskripsi|default:'-'|truncatechars:50 }}</td>
           <td>{{ p.get_payment_type_display }}</td>
           <td><span class="ni-badge ni-badge--{{ p.status }}">{{ p.get_status_display }}</span></td>
           <td style="white-space:nowrap;">
@@ -66,7 +73,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada data pendapatan.</td></tr>
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada data pendapatan.</td></tr>
         {% endfor %}
       </tbody>
     </table>
