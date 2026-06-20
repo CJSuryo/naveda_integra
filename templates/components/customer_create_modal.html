@@ -1,0 +1,160 @@
+{# Reusable Customer Quick-Create modal.
+   Include with: {% include 'components/customer_create_modal.html' %}
+   Show with:    niCustomerModal.open(ebOptions)
+   On success:   onCustomerCreated(id, nama) is called if that function is defined.
+#}
+
+<div class="ni-modal-backdrop" id="customerCreateModalBackdrop">
+  <div class="ni-modal ni-modal--lg">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title">Tambah Customer Baru</h3>
+      <button class="ni-modal__close" type="button" onclick="niCustomerModal.close()">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <div class="ni-modal__body">
+      <div id="custModal_error" class="ni-alert ni-alert--danger"></div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="custModal_eb">Entitas Bisnis <span class="ni-required">*</span></label>
+        <select id="custModal_eb" class="ni-input">
+          <option value="">— Pilih Entitas Bisnis —</option>
+        </select>
+      </div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="custModal_nama">Nama <span class="ni-required">*</span></label>
+        <input type="text" id="custModal_nama" class="ni-input" placeholder="Nama lengkap customer">
+      </div>
+
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="custModal_email">Email</label>
+          <input type="email" id="custModal_email" class="ni-input" placeholder="email@contoh.com">
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="custModal_telepon">Telepon</label>
+          <input type="text" id="custModal_telepon" class="ni-input" placeholder="08xx-xxxx-xxxx">
+        </div>
+      </div>
+
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="custModal_gender">Gender</label>
+          <select id="custModal_gender" class="ni-input">
+            <option value="">— Pilih —</option>
+            <option value="L">Laki-laki</option>
+            <option value="P">Perempuan</option>
+            <option value="O">Lainnya</option>
+          </select>
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="custModal_tanggal_lahir">Tanggal Lahir</label>
+          <input type="date" id="custModal_tanggal_lahir" class="ni-input">
+        </div>
+      </div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="custModal_npwp">NPWP</label>
+        <input type="text" id="custModal_npwp" class="ni-input" placeholder="xx.xxx.xxx.x-xxx.xxx">
+      </div>
+
+      <div class="ni-form-group">
+        <label class="ni-form-label" for="custModal_alamat">Alamat</label>
+        <textarea id="custModal_alamat" class="ni-input" rows="3" placeholder="Alamat lengkap"></textarea>
+      </div>
+    </div>
+
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="niCustomerModal.close()">Batal</button>
+      <button type="button" class="ni-btn ni-btn--primary" onclick="niCustomerModal.submit()">
+        <i data-lucide="user-plus"></i>
+        Simpan Customer
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var _ebTs = null;
+  var QUICK_CREATE_URL = '{% url "customers:quick_create" %}';
+
+  window.niCustomerModal = {
+    open: function (ebOptions) {
+      var backdrop = document.getElementById('customerCreateModalBackdrop');
+      backdrop.classList.add('ni-modal-backdrop--visible');
+      ['custModal_nama','custModal_email','custModal_telepon','custModal_tanggal_lahir','custModal_npwp','custModal_alamat'].forEach(function(id){
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('custModal_gender').value = '';
+      var errorEl = document.getElementById('custModal_error');
+      errorEl.style.display = 'none';
+
+      var ebSelect = document.getElementById('custModal_eb');
+      if (ebOptions && ebOptions.length && ebSelect.options.length <= 1) {
+        ebOptions.forEach(function (opt) {
+          var o = document.createElement('option');
+          o.value = opt.value;
+          o.textContent = opt.label;
+          ebSelect.appendChild(o);
+        });
+      }
+      if (!_ebTs && typeof TomSelect !== 'undefined') {
+        _ebTs = new TomSelect(ebSelect, { maxOptions: 500, allowEmptyOption: true });
+      } else if (_ebTs) {
+        _ebTs.setValue('', true);
+      }
+    },
+
+    close: function () {
+      document.getElementById('customerCreateModalBackdrop').classList.remove('ni-modal-backdrop--visible');
+    },
+
+    submit: function () {
+      var eb_selection = _ebTs ? _ebTs.getValue() : document.getElementById('custModal_eb').value;
+      var nama = document.getElementById('custModal_nama').value.trim();
+      var errorEl = document.getElementById('custModal_error');
+      errorEl.style.display = 'none';
+
+      if (!nama) { errorEl.textContent = 'Nama wajib diisi.'; errorEl.style.display = 'block'; return; }
+      if (!eb_selection) { errorEl.textContent = 'Pilih entitas bisnis.'; errorEl.style.display = 'block'; return; }
+
+      var csrfToken = (document.cookie.match(/csrftoken=([^;]+)/) || [])[1] || '';
+      var body = new URLSearchParams({
+        nama: nama,
+        email: document.getElementById('custModal_email').value,
+        telepon: document.getElementById('custModal_telepon').value,
+        gender: document.getElementById('custModal_gender').value,
+        tanggal_lahir: document.getElementById('custModal_tanggal_lahir').value,
+        npwp: document.getElementById('custModal_npwp').value,
+        alamat: document.getElementById('custModal_alamat').value,
+        eb_selection: eb_selection,
+      });
+
+      fetch(QUICK_CREATE_URL, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': csrfToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString(),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success) {
+            niCustomerModal.close();
+            if (typeof onCustomerCreated === 'function') onCustomerCreated(data.customer.id, data.customer.nama);
+          } else {
+            var msgs = [];
+            Object.values(data.errors || {}).forEach(function (errs) { errs.forEach(function (e) { msgs.push(e); }); });
+            errorEl.textContent = msgs.join(' ');
+            errorEl.style.display = 'block';
+          }
+        })
+        .catch(function () {
+          errorEl.textContent = 'Terjadi kesalahan. Coba lagi.';
+          errorEl.style.display = 'block';
+        });
+    },
+  };
+})();
+</script>
