@@ -258,10 +258,15 @@ def pendapatan_to_piutang_payload(header):
         )
 
     eb_group = header.entitas_groups.select_related('entitas_bisnis').first()
+    if not eb_group:
+        raise ValueError(
+            f'Pendapatan {header.transaction_id} tidak memiliki entitas bisnis. '
+            f'Tambahkan entitas bisnis sebelum konfirmasi.'
+        )
     payload = {
         'tanggal': header.tanggal,
         'deskripsi': f'Piutang dari Pendapatan {header.transaction_id}',
-        'entitas_bisnis': eb_group.entitas_bisnis if eb_group else None,
+        'entitas_bisnis': eb_group.entitas_bisnis,
     }
     for f in PIUTANG_PROFIL_FIELDS:
         payload[f] = getattr(profil, f)
