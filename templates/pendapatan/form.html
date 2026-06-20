@@ -195,108 +195,17 @@
               <span class="ni-help-text">Akun debit saat konfirmasi — pilih akun kas/bank untuk tunai, akun piutang untuk kredit</span>
             </div>
 
+            {# ── Pajak (Multiple Tax Lines) ─────────────────────────────────── #}
             <div class="ni-form-group ni-form-group--full">
-              <label class="ni-form-label">
-                Tipe Pajak
-                <button type="button" class="tax-guide-toggle" style="margin-left:8px;font-size:0.72rem;font-weight:500;color:var(--ni-primary,#2563eb);background:none;border:none;cursor:pointer;padding:0;text-decoration:underline dotted;">Panduan →</button>
-              </label>
-              {{ item_form.tax_type }}
-              {% if item_form.tax_type.errors %}<div class="ni-form-error">{{ item_form.tax_type.errors }}</div>{% endif %}
-
-              {# Panduan kontekstual — tampil sesuai pilihan #}
-              <div class="tax-guide-panel" style="display:none;margin-top:10px;border:1px solid var(--ni-border,#e5e7eb);border-radius:8px;overflow:hidden;font-size:0.8rem;">
-                {# Default: tabel ringkas semua tipe #}
-                <div class="tgp-default" style="padding:12px 14px;">
-                  <p style="margin:0 0 8px;padding:6px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;font-size:0.75rem;color:#92400e;">
-                    <strong>Sudut pandang:</strong> Anda mencatat <strong>penjualan klien</strong>. Pajak di bawah dilihat dari sisi <strong>klien sebagai penjual</strong> — bukan dari sisi kantor Anda. "Klien" = entitas yang bukunya dicatat; "pembeli" = pelanggan klien.
-                  </p>
-                  <p style="font-weight:600;margin:0 0 8px;color:var(--ni-text,#111);">Kapan pakai tipe pajak apa?</p>
-                  <table style="width:100%;border-collapse:collapse;line-height:1.5;">
-                    <thead>
-                      <tr style="background:var(--ni-bg-subtle,#f9fafb);font-size:0.75rem;color:var(--ni-text-muted,#6b7280);">
-                        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--ni-border,#e5e7eb);">Tipe</th>
-                        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid var(--ni-border,#e5e7eb);">Pakai jika (sisi klien sebagai penjual)…</th>
-                        <th style="padding:5px 8px;text-align:right;border-bottom:1px solid var(--ni-border,#e5e7eb);">Tarif</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr><td style="padding:5px 8px;font-weight:600;">PPN Keluaran</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);"><strong>Klien</strong> ber-status PKP & menjual barang/jasa kena pajak → klien <strong>memungut</strong> PPN (jadi utang pajak klien)</td><td style="padding:5px 8px;text-align:right;">11 % efektif</td></tr>
-                      <tr style="background:var(--ni-bg-subtle,#f9fafb);"><td style="padding:5px 8px;font-weight:600;">PPh 23</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien menjual <strong>jasa</strong> & <strong>pembelinya badan/instansi pemotong</strong> (PT, CV, KAP, pemerintah, KKP) → pembeli <strong>memotong</strong> dari uang klien (jadi kredit pajak klien)</td><td style="padding:5px 8px;text-align:right;">2 % DPP</td></tr>
-                      <tr><td style="padding:5px 8px;font-weight:600;">PPh 21</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien adalah <strong>orang pribadi</strong> (tenaga ahli, bukan badan) & pembelinya pemotong → pembeli <strong>memotong</strong> (jadi kredit pajak klien)</td><td style="padding:5px 8px;text-align:right;">50 % × progresif</td></tr>
-                      <tr style="background:var(--ni-bg-subtle,#f9fafb);"><td style="padding:5px 8px;font-weight:600;">PPh 4(2)</td><td style="padding:5px 8px;color:var(--ni-text-muted,#6b7280);">Klien menerima penghasilan <strong>sewa</strong> tanah/bangunan → penyewa memotong pajak <strong>final</strong> (jadi beban final klien)</td><td style="padding:5px 8px;text-align:right;">10 % final</td></tr>
-                    </tbody>
-                  </table>
-                  <div style="margin:10px 0 0;padding:8px 10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;font-size:0.74rem;color:#166534;line-height:1.55;">
-                    <strong>Untuk klien UMKM:</strong>
-                    <ul style="margin:4px 0 0;padding-left:18px;">
-                      <li>Klien <strong>non-PKP</strong> (omzet ≤ Rp 4,8 M/th): tidak memungut PPN → <strong>kosongkan</strong> PPN Keluaran.</li>
-                      <li>Klien pakai <strong>PPh Final UMKM 0,5%</strong>: itu pajak penghasilan klien yang dihitung dari <strong>total omzet per masa</strong>, bukan per transaksi penjualan → <strong>jangan</strong> isi di sini, catat terpisah saat tutup masa.</li>
-                    </ul>
-                  </div>
-                  <p style="margin:8px 0 0;color:var(--ni-text-muted,#6b7280);font-size:0.73rem;">Biarkan kosong jika transaksi tidak kena pajak atau pajak ditangani terpisah.</p>
-                </div>
-
-                {# Kontekstual per-tipe #}
-                <div class="tgp-detail" style="display:none;padding:12px 14px;">
-                  <div data-tax="ppn_keluaran" style="display:none;">
-                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPN Keluaran — 11% efektif (PMK 131/2024)</p>
-                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien Anda adalah PKP dan menjual barang/jasa kena pajak. Klien <strong>memungut</strong> PPN dari pembeli — jadi ini <strong>utang pajak klien</strong> ke negara.</p>
-                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> DPP Efektif = DPP × 11/12 → PPN = 12% × DPP Efektif (= 11% × DPP)</p>
-                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh penjualan klien:</strong> klien dagang menjual barang, klien jasa servis, klien kontraktor.</p>
-                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas/Piutang naik sebesar harga + PPN. <strong>Akun Pajak</strong> → Utang PPN Keluaran (kewajiban, 2xx). <strong>Akun Lawan</strong> → Kas/Bank/Piutang (uang ekstra yang diterima klien).</p>
-                  </div>
-                  <div data-tax="pph_23" style="display:none;">
-                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 23 — 2% atas jasa</p>
-                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien (badan) menjual jasa, dan <strong>pembelinya</strong> adalah pemotong (PT/CV/KAP/instansi/KKP). Pembeli <strong>memotong</strong> 2% dari pembayaran ke klien — jadi ini <strong>kredit pajak / pajak dibayar dimuka klien</strong> (aset).</p>
-                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PPh 23 = 2% × DPP (nilai bruto jasa)</p>
-                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien menyediakan jasa teknik, manajemen, konsultan, pemeliharaan ke perusahaan lain.</p>
-                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas yang diterima klien berkurang 2%. <strong>Akun Pajak</strong> → PPh 23 Dibayar Dimuka (aset, 1xx). <strong>Akun Lawan</strong> → Kas/Bank/Piutang (uang yang tidak jadi diterima karena dipotong).</p>
-                  </div>
-                  <div data-tax="pph_21" style="display:none;">
-                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 21 — Tenaga Ahli (Progresif Pasal 17)</p>
-                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien adalah <strong>orang pribadi</strong> (tenaga ahli — bukan badan), dan pembelinya badan pemotong. Pembeli <strong>memotong</strong> PPh 21 — jadi <strong>kredit pajak klien</strong> (aset).</p>
-                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PKP = 50% × DPP → PPh 21 progresif (5%–35%) atas PKP</p>
-                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien dokter, pengacara, arsitek, konsultan perorangan menerima honor dari perusahaan.</p>
-                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas klien berkurang sebesar pajak. <strong>Akun Pajak</strong> → PPh 21 Dibayar Dimuka (aset, 1xx). <strong>Akun Lawan</strong> → Kas/Bank.</p>
-                  </div>
-                  <div data-tax="pph_4_2" style="display:none;">
-                    <p style="font-weight:600;margin:0 0 4px;color:#0369a1;">PPh Pasal 4 Ayat 2 — 10% Final (Sewa)</p>
-                    <p style="margin:0 0 6px;color:var(--ni-text-muted,#6b7280);">Klien menerima penghasilan <strong>sewa</strong> tanah/bangunan; penyewa memotong pajak <strong>final</strong> 10%. Karena final, ini <strong>bukan kredit pajak</strong> — melainkan <strong>beban pajak final klien</strong>.</p>
-                    <p style="margin:0;font-size:0.75rem;"><strong>Formula:</strong> PPh 4(2) = 10% × DPP (nilai sewa bruto)</p>
-                    <p style="margin:4px 0 0;font-size:0.75rem;color:var(--ni-text-muted,#6b7280);"><strong>Contoh:</strong> klien menyewakan gudang, kantor, ruko, atau lahan.</p>
-                    <p style="margin:6px 0 0;font-size:0.75rem;padding:5px 8px;background:#eff6ff;border-radius:4px;color:#1d4ed8;"><strong>Jurnal:</strong> Kas klien berkurang sebesar pajak final. <strong>Akun Pajak</strong> → Beban PPh Final (beban). <strong>Akun Lawan</strong> → Kas/Bank.</p>
-                  </div>
-                </div>
-
-                <div class="tgp-footer" style="border-top:1px solid var(--ni-border,#e5e7eb);padding:7px 14px;background:var(--ni-bg-subtle,#f9fafb);display:flex;justify-content:flex-end;">
-                  <button type="button" class="tax-guide-close" style="font-size:0.75rem;color:var(--ni-text-muted,#6b7280);background:none;border:none;cursor:pointer;">Tutup panduan ✕</button>
-                </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <label class="ni-form-label" style="margin-bottom:0;">Baris Pajak</label>
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--secondary add-tax-btn">+ Tambah Pajak</button>
               </div>
-            </div>
-
-            <div class="ni-form-group">
-              <label class="ni-form-label">Akun Pajak</label>
-              {{ item_form.tax_account }}
-              {% if item_form.tax_account.errors %}<div class="ni-form-error">{{ item_form.tax_account.errors }}</div>{% endif %}
-              <span class="ni-help-text">Akun pajak di buku klien. <strong>PPN Keluaran</strong> → Utang PPN (kewajiban). <strong>PPh 23/21</strong> → Pajak Dibayar Dimuka (aset). <strong>PPh 4(2)</strong> → Beban Pajak Final. Lihat Panduan.</span>
-            </div>
-
-            <div class="ni-form-group">
-              <label class="ni-form-label">Akun Lawan Pajak (Kas/Bank)</label>
-              {{ item_form.tax_payment_account }}
-              {% if item_form.tax_payment_account.errors %}<div class="ni-form-error">{{ item_form.tax_payment_account.errors }}</div>{% endif %}
-              <span class="ni-help-text">Akun kas/bank/piutang yang terdampak pajak. Wajib diisi agar pajak tercatat otomatis saat konfirmasi.</span>
-            </div>
-
-            <div class="ni-form-group">
-              <label class="ni-form-label">
-                Pajak (Nominal)
-                <span class="tax-auto-badge" style="display:none;margin-left:6px;font-size:0.75rem;background:var(--ni-primary,#2563eb);color:#fff;padding:1px 7px;border-radius:999px;font-weight:500;">Auto</span>
-                <span class="tax-loading-badge" style="display:none;margin-left:6px;font-size:0.75rem;color:var(--ni-text-muted);">Menghitung…</span>
-              </label>
-              {{ item_form.tax }}
-              {% if item_form.tax.errors %}<div class="ni-form-error">{{ item_form.tax.errors }}</div>{% endif %}
-              <span class="ni-help-text tax-hint">Akan dihitung otomatis saat tipe pajak dan nilai kontrak diisi. Bisa diubah manual.</span>
+              <p style="font-size:0.78rem;color:var(--ni-text-muted);margin:0 0 8px;">
+                Satu baris = satu kewajiban pajak atas item ini. Contoh: PPN Keluaran + PPh 23 bisa diisi sekaligus.
+              </p>
+              <input type="hidden" name="item_0_tax_count" class="kp-tax-count" value="0">
+              <div class="kp-tax-lines-cont"></div>
             </div>
 
           </div>{# end form-grid #}
@@ -552,6 +461,177 @@
     if (aset) aset.style.display = (v === 'performance_first')    ? '' : 'none';
   }
 
+  // ── Tax line helpers ──────────────────────────────────────────────
+  function getOptionsHtml(selector) {
+    var src = document.querySelector(selector);
+    if (!src) return '';
+    return Array.from(src.options)
+      .filter(function (o) { return o.value; })
+      .map(function (o) {
+        return '<option value="' + o.value + '">'
+          + o.textContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          + '</option>';
+      }).join('');
+  }
+
+  var TAX_TYPE_OPTIONS = [
+    ['ppn_keluaran', 'PPN Keluaran (11%)'],
+    ['pph_23',       'PPh Pasal 23 (2%)'],
+    ['pph_21',       'PPh Pasal 21 (Tenaga Ahli)'],
+    ['pph_4_2',      'PPh Pasal 4(2) — Sewa 10%'],
+  ];
+
+  function buildTaxTypeSelect(name, selectedValue) {
+    var opts = '<option value="">— Pilih Tipe Pajak —</option>';
+    TAX_TYPE_OPTIONS.forEach(function (p) {
+      var sel = p[0] === selectedValue ? ' selected' : '';
+      opts += '<option value="' + p[0] + '"' + sel + '>' + p[1] + '</option>';
+    });
+    return '<select name="' + name + '" class="ni-input kp-tax-type-sel">' + opts + '</select>';
+  }
+
+  function createTaxLineHtml(kpIdx, taxIdx, initial) {
+    initial = initial || {};
+    var prefix = 'item_' + kpIdx + '_tax_' + taxIdx;
+    var allOpts = getOptionsHtml('[name$="-revenue_account"]');
+    var assetOpts = getOptionsHtml('[name$="-payment_account"]');
+
+    function makeSelect(name, optHtml, selected) {
+      var opts = '<option value="">— Pilih —</option>' + optHtml;
+      if (selected) {
+        opts = opts.replace('value="' + selected + '"', 'value="' + selected + '" selected');
+      }
+      return '<select name="' + name + '" class="ni-input">' + opts + '</select>';
+    }
+
+    return (
+      '<div class="kp-tax-line ni-mb-2" style="background:var(--ni-bg-subtle,#f9fafb);border:1px solid var(--ni-border,#e5e7eb);border-radius:8px;padding:12px;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+          '<span style="font-size:0.78rem;font-weight:600;color:var(--ni-text-muted);">Baris Pajak ' + (taxIdx + 1) + '</span>' +
+          '<button type="button" class="ni-btn ni-btn--xs ni-btn--danger kp-tax-remove-btn">✕</button>' +
+        '</div>' +
+        '<div class="ni-form-grid ni-form-grid--2">' +
+          '<div class="ni-form-group ni-form-group--full">' +
+            '<label class="ni-form-label" style="font-size:0.8rem;">Tipe Pajak</label>' +
+            buildTaxTypeSelect(prefix + '_tax_type', initial.tax_type || '') +
+          '</div>' +
+          '<div class="ni-form-group">' +
+            '<label class="ni-form-label" style="font-size:0.8rem;">Akun Pajak</label>' +
+            makeSelect(prefix + '_tax_account', allOpts, initial.tax_account_id || '') +
+          '</div>' +
+          '<div class="ni-form-group">' +
+            '<label class="ni-form-label" style="font-size:0.8rem;">Akun Lawan</label>' +
+            makeSelect(prefix + '_tax_payment_account', assetOpts, initial.tax_payment_account_id || '') +
+          '</div>' +
+          '<div class="ni-form-group ni-form-group--full">' +
+            '<label class="ni-form-label" style="font-size:0.8rem;">Pajak (Nominal) ' +
+              '<span class="tax-auto-badge" style="display:none;font-size:0.72rem;background:var(--ni-primary,#2563eb);color:#fff;padding:1px 6px;border-radius:999px;">Auto</span>' +
+              '<span class="tax-loading-badge" style="display:none;font-size:0.72rem;color:var(--ni-text-muted);">Menghitung…</span>' +
+            '</label>' +
+            '<input type="number" name="' + prefix + '_tax" class="ni-input kp-tax-amt" step="0.01" value="' + (initial.tax || '') + '">' +
+            '<span class="ni-help-text kp-tax-hint">Dihitung otomatis. Bisa diubah manual.</span>' +
+          '</div>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function addTaxLine(row, initial) {
+    var kpIdx = parseInt(row.getAttribute('data-index'));
+    var countInp = row.querySelector('.kp-tax-count');
+    var taxCont = row.querySelector('.kp-tax-lines-cont');
+    var taxIdx = parseInt(countInp.value || '0');
+    var div = document.createElement('div');
+    div.innerHTML = createTaxLineHtml(kpIdx, taxIdx, initial);
+    var newLine = div.firstElementChild;
+    taxCont.appendChild(newLine);
+    attachTaxLineEvents(newLine, row);
+    countInp.value = taxIdx + 1;
+  }
+
+  function removeTaxLine(btn) {
+    var line = btn.closest('.kp-tax-line');
+    var row = line.closest('.ni-item-row');
+    var taxCont = row.querySelector('.kp-tax-lines-cont');
+    var countInp = row.querySelector('.kp-tax-count');
+    line.remove();
+    taxCont.querySelectorAll('.kp-tax-line').forEach(function (l, j) {
+      l.querySelectorAll('[name*="_tax_"]').forEach(function (el) {
+        if (el.name) el.name = el.name.replace(/_tax_\d+_/, '_tax_' + j + '_');
+      });
+      var label = l.querySelector('span[style*="font-weight:600"]');
+      if (label) label.textContent = 'Baris Pajak ' + (j + 1);
+    });
+    countInp.value = taxCont.querySelectorAll('.kp-tax-line').length;
+  }
+
+  function attachTaxLineEvents(line, row) {
+    var typeSelect = line.querySelector('.kp-tax-type-sel');
+    var amtInput   = line.querySelector('.kp-tax-amt');
+    var autoBadge  = line.querySelector('.tax-auto-badge');
+    var loadBadge  = line.querySelector('.tax-loading-badge');
+    var hintEl     = line.querySelector('.kp-tax-hint');
+    var nilaiInp   = row ? row.querySelector('[id$="-nilai_kontrak"]') : null;
+    var userEdited = false;
+    var timer      = null;
+
+    function doCompute() {
+      if (!typeSelect || !typeSelect.value) return;
+      if (!nilaiInp || !nilaiInp.value) return;
+      var tanggalInp = document.getElementById('{{ form.tanggal.id_for_label }}');
+      var tanggal = tanggalInp ? tanggalInp.value : '';
+      var url = '/pajak/hitung/?tax_type=' + encodeURIComponent(typeSelect.value)
+              + '&dpp=' + encodeURIComponent(nilaiInp.value)
+              + (tanggal ? '&tanggal=' + encodeURIComponent(tanggal) : '');
+      if (loadBadge) loadBadge.style.display = 'inline';
+      if (autoBadge) autoBadge.style.display = 'none';
+      fetch(url)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (loadBadge) loadBadge.style.display = 'none';
+          if (d.error) { if (hintEl) hintEl.textContent = 'Tidak dapat menghitung: ' + d.error; return; }
+          if (amtInput && !userEdited) {
+            amtInput.value = d.jumlah_pajak;
+            if (autoBadge) autoBadge.style.display = 'inline';
+            if (hintEl) hintEl.textContent = d.tarif_persen + '% × DPP efektif Rp ' + parseFloat(d.dpp_efektif).toLocaleString('id-ID');
+          }
+        })
+        .catch(function () { if (loadBadge) loadBadge.style.display = 'none'; });
+    }
+
+    if (typeSelect) {
+      typeSelect.addEventListener('change', function () {
+        userEdited = false;
+        clearTimeout(timer);
+        if (!typeSelect.value) { if (amtInput) amtInput.value = ''; return; }
+        timer = setTimeout(doCompute, 300);
+      });
+    }
+    if (nilaiInp) {
+      nilaiInp.addEventListener('input', function () {
+        if (!typeSelect || !typeSelect.value) return;
+        userEdited = false;
+        clearTimeout(timer);
+        timer = setTimeout(doCompute, 500);
+      });
+    }
+    if (amtInput) {
+      amtInput.addEventListener('input', function () {
+        userEdited = true;
+        if (autoBadge) autoBadge.style.display = 'none';
+        if (hintEl) hintEl.textContent = 'Nilai diubah manual.';
+      });
+    }
+    var removeBtn = line.querySelector('.kp-tax-remove-btn');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', function () { removeTaxLine(removeBtn); });
+    }
+    if (typeSelect && typeSelect.value && nilaiInp && nilaiInp.value && amtInput && amtInput.value) {
+      if (autoBadge) autoBadge.style.display = 'inline';
+      if (hintEl) hintEl.textContent = 'Nilai tersimpan sebelumnya.';
+    }
+  }
+
   // ── Attach events to a KP row ─────────────────────────────────────────
   function attachRowEvents(row) {
     var recSel    = row.querySelector('[id$="-recognition_type"]');
@@ -603,119 +683,12 @@
     var nilaiInp = row.querySelector('[id$="-nilai_kontrak"]');
     if (nilaiInp) nilaiInp.addEventListener('input', updateSSPBadges);
 
-    // ── Tax guide panel ─────────────────────────────────────────────────
-    var taxGuidePanel  = row.querySelector('.tax-guide-panel');
-    var taxGuideToggle = row.querySelector('.tax-guide-toggle');
-    var taxGuideClose  = row.querySelector('.tax-guide-close');
-    var tgpDefault     = taxGuidePanel ? taxGuidePanel.querySelector('.tgp-default') : null;
-    var tgpDetail      = taxGuidePanel ? taxGuidePanel.querySelector('.tgp-detail') : null;
-
-    function showTaxGuide(taxTypeValue) {
-      if (!taxGuidePanel) return;
-      taxGuidePanel.style.display = '';
-      if (taxTypeValue && tgpDetail) {
-        tgpDefault && (tgpDefault.style.display = 'none');
-        tgpDetail.style.display = '';
-        tgpDetail.querySelectorAll('[data-tax]').forEach(function (el) {
-          el.style.display = el.dataset.tax === taxTypeValue ? '' : 'none';
-        });
-      } else {
-        tgpDefault && (tgpDefault.style.display = '');
-        tgpDetail && (tgpDetail.style.display = 'none');
-      }
-    }
-
-    if (taxGuideToggle) {
-      taxGuideToggle.addEventListener('click', function () {
-        var taxTypeSel2 = row.querySelector('select[name$="-tax_type"]');
-        var cur = taxTypeSel2 ? taxTypeSel2.value : '';
-        if (taxGuidePanel && taxGuidePanel.style.display !== 'none') {
-          taxGuidePanel.style.display = 'none';
-        } else {
-          showTaxGuide(cur);
-        }
+    // ── Multi-tax: "Tambah Pajak" button ──────────────────────────────
+    var addTaxBtn = row.querySelector('.add-tax-btn');
+    if (addTaxBtn) {
+      addTaxBtn.addEventListener('click', function () {
+        addTaxLine(row);
       });
-    }
-    if (taxGuideClose) {
-      taxGuideClose.addEventListener('click', function () {
-        if (taxGuidePanel) taxGuidePanel.style.display = 'none';
-      });
-    }
-
-    // ── Tax auto-calculate ──────────────────────────────────────────────
-    var taxTypeSel  = row.querySelector('select[name$="-tax_type"]');
-    var taxAmtInp   = row.querySelector('[name$="-tax"]:not([name$="-tax_type"]):not([name$="-tax_account"]):not([name$="-tax_payment_account"])');
-    var taxBadge    = taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-auto-badge') : null;
-    var taxLoadBadge= taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-loading-badge') : null;
-    var taxHint     = taxAmtInp ? taxAmtInp.closest('.ni-form-group').querySelector('.tax-hint') : null;
-    var taxTimer    = null;
-    var taxUserEdited = false;
-
-    function doComputeTax() {
-      if (!taxTypeSel || !taxTypeSel.value) return;
-      if (!nilaiInp || !nilaiInp.value) return;
-      var tanggalInp = document.getElementById('{{ form.tanggal.id_for_label }}');
-      var tanggal = tanggalInp ? tanggalInp.value : '';
-      var url = '/pajak/hitung/?tax_type=' + encodeURIComponent(taxTypeSel.value)
-              + '&dpp=' + encodeURIComponent(nilaiInp.value)
-              + (tanggal ? '&tanggal=' + encodeURIComponent(tanggal) : '');
-      if (taxLoadBadge) taxLoadBadge.style.display = 'inline';
-      if (taxBadge) taxBadge.style.display = 'none';
-      fetch(url)
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          if (taxLoadBadge) taxLoadBadge.style.display = 'none';
-          if (d.error) {
-            if (taxHint) taxHint.textContent = 'Tidak dapat menghitung: ' + d.error;
-            return;
-          }
-          if (taxAmtInp && !taxUserEdited) {
-            taxAmtInp.value = d.jumlah_pajak;
-            if (taxBadge) taxBadge.style.display = 'inline';
-            if (taxHint) taxHint.textContent = 'Dihitung otomatis: ' + d.tarif_persen + '% × DPP efektif Rp ' + parseFloat(d.dpp_efektif).toLocaleString('id-ID');
-          }
-        })
-        .catch(function () {
-          if (taxLoadBadge) taxLoadBadge.style.display = 'none';
-        });
-    }
-
-    if (taxTypeSel) {
-      taxTypeSel.addEventListener('change', function () {
-        taxUserEdited = false;
-        // Update guide panel if open
-        if (taxGuidePanel && taxGuidePanel.style.display !== 'none') {
-          showTaxGuide(taxTypeSel.value);
-        }
-        if (!taxTypeSel.value && taxAmtInp) {
-          taxAmtInp.value = '';
-          if (taxBadge) taxBadge.style.display = 'none';
-          if (taxHint) taxHint.textContent = 'Akan dihitung otomatis saat tipe pajak dan nilai kontrak diisi. Bisa diubah manual.';
-          return;
-        }
-        clearTimeout(taxTimer);
-        taxTimer = setTimeout(doComputeTax, 300);
-      });
-    }
-    if (nilaiInp) {
-      nilaiInp.addEventListener('input', function () {
-        if (!taxTypeSel || !taxTypeSel.value) return;
-        taxUserEdited = false;
-        clearTimeout(taxTimer);
-        taxTimer = setTimeout(doComputeTax, 500);
-      });
-    }
-    if (taxAmtInp) {
-      taxAmtInp.addEventListener('input', function () {
-        taxUserEdited = true;
-        if (taxBadge) taxBadge.style.display = 'none';
-        if (taxHint) taxHint.textContent = 'Nilai diubah manual.';
-      });
-    }
-    // Run immediately if both values already filled (edit mode)
-    if (taxTypeSel && taxTypeSel.value && nilaiInp && nilaiInp.value && taxAmtInp && taxAmtInp.value) {
-      if (taxBadge) taxBadge.style.display = 'inline';
-      if (taxHint) taxHint.textContent = 'Nilai tersimpan sebelumnya.';
     }
 
     // Remove button
@@ -823,6 +796,11 @@
     newRow.querySelectorAll('.recognition-cards-cont, .ot-aliran-cards-cont').forEach(function (c) {
       c.innerHTML = '';
     });
+    // Clear tax lines from cloned row — each new KP starts with 0 tax lines
+    var clonedTaxCont = newRow.querySelector('.kp-tax-lines-cont');
+    if (clonedTaxCont) clonedTaxCont.innerHTML = '';
+    var clonedTaxCount = newRow.querySelector('.kp-tax-count');
+    if (clonedTaxCount) clonedTaxCount.value = '0';
     // Reset SSP badge
     newRow.querySelectorAll('.ni-ssp-badge').forEach(function (b) { b.remove(); });
     container.appendChild(newRow);
@@ -849,6 +827,16 @@
       if (ebSelected) ts.setValue(ebSelected, true);
     }
   }
+  // ── Populate tax lines from server data (edit mode) ───────────────
+  var taxLinesInitial = {{ tax_lines_initial_json|default:'{}'|safe }};
+  Object.keys(taxLinesInitial).forEach(function (kpIdxStr) {
+    var kpIdx = parseInt(kpIdxStr);
+    var row = container.querySelector('[data-index="' + kpIdx + '"]');
+    if (!row) return;
+    taxLinesInitial[kpIdxStr].forEach(function (tl) {
+      addTaxLine(row, tl);
+    });
+  });
 })();
 </script>
 {% endblock %}
