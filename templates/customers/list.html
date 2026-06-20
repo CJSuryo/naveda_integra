@@ -38,6 +38,7 @@
           <th>Entitas Bisnis</th>
           <th>Email</th>
           <th>Telepon</th>
+          <th>Alamat</th>
           <th>Gender</th>
           <th>Umur</th>
           <th></th>
@@ -58,8 +59,9 @@
           </td>
           <td>{{ customer.email|default:'—' }}</td>
           <td>{{ customer.telepon|default:'—' }}</td>
+          <td>{{ customer.alamat|default:'—' }}</td>
           <td>{{ customer.get_gender_display|default:'—' }}</td>
-          <td>{% if customer.umur %}{{ customer.umur }} thn{% else %}—{% endif %}</td>
+          <td>{% if customer.tanggal_lahir %}{{ customer.umur }} thn{% else %}—{% endif %}</td>
           <td>
             <a href="{% url 'customers:update' customer.pk %}" class="ni-btn ni-btn--xs ni-btn--secondary">Edit</a>
             <a href="{% url 'customers:delete' customer.pk %}" class="ni-btn ni-btn--xs ni-btn--danger">Hapus</a>
@@ -67,7 +69,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="ni-text-center ni-text-muted">Belum ada data customer.</td>
+          <td colspan="8" class="ni-text-center ni-text-muted">Belum ada data customer.</td>
         </tr>
         {% endfor %}
       </tbody>
