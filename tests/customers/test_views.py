@@ -33,7 +33,7 @@ class CustomerListViewTest(TestCase):
     def test_list_requires_login(self):
         self.client.logout()
         response = self.client.get(reverse('customers:list'))
-        self.assertNotEqual(response.status_code, 200)
+        self.assertIn(response.status_code, [301, 302])
 
 
 class CustomerCreateViewTest(TestCase):
@@ -76,6 +76,51 @@ class CustomerCreateViewTest(TestCase):
         })
         self.assertEqual(response.status_code, 200)
         self.assertFormError(response.context['form'], None, 'Pilih entitas bisnis.')
+
+
+class CustomerUpdateViewTest(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = make_user()
+        self.client.force_login(self.user)
+        self.eb = make_eb()
+        from .factories import make_customer
+        self.customer = make_customer(eb=self.eb, nama='Asli Nama')
+
+    def test_update_get_prepopulates_form(self):
+        response = self.client.get(
+            reverse('customers:update', args=[self.customer.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Asli Nama')
+
+    def test_update_get_prepopulates_eb_selected_lv1(self):
+        response = self.client.get(
+            reverse('customers:update', args=[self.customer.pk])
+        )
+        self.assertIn('eb_selected', response.context)
+        self.assertEqual(response.context['eb_selected'], f'lv1:{self.eb.pk}')
+
+    def test_update_post_saves_changes(self):
+        from apps.customers.models import Customer
+        self.client.post(
+            reverse('customers:update', args=[self.customer.pk]),
+            {'nama': 'Nama Baru', 'eb_selection': f'lv1:{self.eb.pk}'},
+        )
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.nama, 'Nama Baru')
+
+    def test_update_post_lv2_sets_all_fields(self):
+        from .factories import make_eb_lv2
+        lv2 = make_eb_lv2(eb=self.eb)
+        self.client.post(
+            reverse('customers:update', args=[self.customer.pk]),
+            {'nama': 'Asli Nama', 'eb_selection': f'lv2:{lv2.pk}'},
+        )
+        self.customer.refresh_from_db()
+        self.assertEqual(self.customer.entitas_bisnis, self.eb)
+        self.assertEqual(self.customer.entitas_bisnis_lv2, lv2)
+        self.assertIsNone(self.customer.entitas_bisnis_lv3)
 
 
 class CustomerQuickCreateViewTest(TestCase):
@@ -121,3 +166,10 @@ class CustomerDeleteViewTest(TestCase):
         c = make_customer()
         self.client.post(reverse('customers:delete', args=[c.pk]))
         self.assertFalse(Customer.objects.filter(pk=c.pk).exists())
+
+    def test_delete_get_shows_confirmation(self):
+        c = make_customer()
+        from apps.customers.models import Customer
+        response = self.client.get(reverse('customers:delete', args=[c.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Customer.objects.filter(pk=c.pk).exists())

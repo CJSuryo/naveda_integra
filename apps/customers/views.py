@@ -18,12 +18,12 @@ def _resolve_eb(eb_selection: str):
 def _apply_eb_to_customer(customer: Customer, resolved: dict) -> None:
     """Populate all three EB FK fields from a resolved EB selection dict."""
     from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
-    customer.entitas_bisnis = EntitasBisnis.objects.get(pk=resolved['lv1_id'])
+    customer.entitas_bisnis = EntitasBisnis.objects.filter(pk=resolved['lv1_id']).first()
     customer.entitas_bisnis_lv2 = (
-        EntitasBisnisLv2.objects.get(pk=resolved['lv2_id']) if resolved.get('lv2_id') else None
+        EntitasBisnisLv2.objects.filter(pk=resolved['lv2_id']).first() if resolved.get('lv2_id') else None
     )
     customer.entitas_bisnis_lv3 = (
-        EntitasBisnisLv3.objects.get(pk=resolved['lv3_id']) if resolved.get('lv3_id') else None
+        EntitasBisnisLv3.objects.filter(pk=resolved['lv3_id']).first() if resolved.get('lv3_id') else None
     )
 
 
@@ -121,7 +121,7 @@ def customer_update(request: HttpRequest, pk: int) -> HttpResponse:
         elif customer.entitas_bisnis_lv2_id:
             eb_selected = f'lv2:{customer.entitas_bisnis_lv2_id}'
         else:
-            eb_selected = f'lv1:{customer.entitas_bisnis_id}'
+            eb_selected = f'lv1:{customer.entitas_bisnis_id}' if customer.entitas_bisnis_id else ''
 
     return render(request, 'customers/form.html', {
         'form': form,
