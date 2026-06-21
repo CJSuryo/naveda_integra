@@ -42,20 +42,20 @@
   </div>
   <div class="ni-card__body" id="klasifikasi-body">
 
+    <!-- Hidden field for computed result (single instance) -->
+    {{ form.kategori_pengukuran }}
+
     <!-- SAK EMKM: simplified info only -->
     <div id="klasifikasi-emkm" style="display:none;padding:12px 0">
       <div style="background:#f9fafb;border-left:4px solid #6b7280;border-radius:6px;padding:12px 16px">
         <strong>SAK EMKM — Biaya Perolehan (Historical Cost)</strong><br>
         <span style="font-size:.87em;color:var(--ni-text-muted)">SAK EMKM tidak memerlukan klasifikasi instrumen keuangan. Piutang dicatat dan diukur pada biaya perolehan (jumlah nominal). Tidak ada amortisasi EIR atau klasifikasi FVOCI/FVPL.</span>
       </div>
-      {{ form.kategori_pengukuran }}
     </div>
 
     <!-- PSAK / SAK EP: full classification wizard -->
     <div id="klasifikasi-wizard">
 
-      <!-- Hidden field for computed result -->
-      {{ form.kategori_pengukuran }}
       {{ form.business_model }}
       {{ form.sppi_test_passed }}
 
