@@ -1547,3 +1547,21 @@ class BuildPiutangServiceTest(TestCase):
         piutang = build_piutang(payload, source='pendapatan', source_obj=None, details=details, user=None)
         self.assertEqual(piutang.status, 'open')
         self.assertEqual(piutang.source_type, 'from_pendapatan')
+
+
+# ── Task 5 refactor: piutang form partial + piutang_form.js ─────────────────
+
+class PiutangFormRendersTest(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.user = get_user_model().objects.create_user(
+            email='testpiutang@example.com', password='p', name='Test Piutang'
+        )
+        self.client.force_login(self.user)
+
+    def test_create_page_renders_wizard(self):
+        from django.urls import reverse
+        url = reverse('piutang:create')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'piutang_form.js')
