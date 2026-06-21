@@ -1,0 +1,115 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{% if mode == 'create' %}Tambah Customer{% else %}Edit Customer{% endif %}{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{% if mode == 'create' %}Tambah Customer{% else %}Edit Customer{% endif %}</h1>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'customers:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left"></i>
+      Kembali
+    </a>
+  </div>
+</div>
+
+{% if form.non_field_errors %}
+<div class="ni-alert ni-alert--danger ni-mb-4">{{ form.non_field_errors }}</div>
+{% endif %}
+
+<form method="post" id="customer-form">
+  {% csrf_token %}
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Data Customer</h2>
+    </div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--2">
+
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="id_eb_selection" name="eb_selection" class="ni-input">
+            <option value="">— Pilih Entitas Bisnis —</option>
+          </select>
+        </div>
+
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label" for="{{ form.nama.id_for_label }}">{{ form.nama.label }}</label>
+          {{ form.nama }}
+          {% if form.nama.errors %}<div class="ni-form-error">{{ form.nama.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+          {{ form.email }}
+          {% if form.email.errors %}<div class="ni-form-error">{{ form.email.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.telepon.id_for_label }}">{{ form.telepon.label }}</label>
+          {{ form.telepon }}
+          {% if form.telepon.errors %}<div class="ni-form-error">{{ form.telepon.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.npwp.id_for_label }}">{{ form.npwp.label }}</label>
+          {{ form.npwp }}
+          {% if form.npwp.errors %}<div class="ni-form-error">{{ form.npwp.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.gender.id_for_label }}">{{ form.gender.label }}</label>
+          {{ form.gender }}
+          {% if form.gender.errors %}<div class="ni-form-error">{{ form.gender.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ form.tanggal_lahir.id_for_label }}">{{ form.tanggal_lahir.label }}</label>
+          {{ form.tanggal_lahir }}
+          {% if form.tanggal_lahir.errors %}<div class="ni-form-error">{{ form.tanggal_lahir.errors }}</div>{% endif %}
+        </div>
+
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label" for="{{ form.alamat.id_for_label }}">{{ form.alamat.label }}</label>
+          {{ form.alamat }}
+          {% if form.alamat.errors %}<div class="ni-form-error">{{ form.alamat.errors }}</div>{% endif %}
+        </div>
+
+      </div>
+    </div>
+    <div class="ni-card__footer">
+      <button type="submit" class="ni-btn ni-btn--primary">
+        {% if mode == 'create' %}Simpan Customer{% else %}Perbarui Customer{% endif %}
+      </button>
+      <a href="{% url 'customers:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+    </div>
+  </div>
+
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var ebOptions  = {{ eb_options_json|default:"[]"|safe }};
+  var ebSelected = "{{ eb_selected|default:''|escapejs }}";
+  var ebSelect   = document.getElementById('id_eb_selection');
+  if (ebSelect && ebOptions.length) {
+    ebOptions.forEach(function (opt) {
+      var o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (ebSelected && opt.value === ebSelected) o.selected = true;
+      ebSelect.appendChild(o);
+    });
+    if (typeof TomSelect !== 'undefined') {
+      var ts = new TomSelect(ebSelect, { maxOptions: 500, allowEmptyOption: true });
+      if (ebSelected) ts.setValue(ebSelected, true);
+    }
+  }
+})();
+</script>
+{% endblock %}

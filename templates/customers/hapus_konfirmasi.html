@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+
+{% block title %}Hapus Customer — {{ object.nama }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.ni-hapus-danger-banner {
+  background: #fee2e2;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--ni-radius);
+  padding: 16px 20px;
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+.ni-hapus-danger-banner__icon {
+  color: #dc2626;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.ni-hapus-danger-banner__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #991b1b;
+  margin-bottom: 4px;
+}
+.ni-hapus-danger-banner__desc {
+  font-size: 0.8125rem;
+  color: #7f1d1d;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.ni-delete-section {
+  margin-bottom: 20px;
+}
+.ni-delete-section__title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ni-text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ni-delete-section__title--danger { color: #dc2626; }
+
+.ni-konfirmasi-box {
+  background: #fff5f5;
+  border: 1.5px solid #fca5a5;
+  border-radius: var(--ni-radius);
+  padding: 20px;
+  margin-top: 8px;
+}
+.ni-konfirmasi-box__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #991b1b;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.ni-customer-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+.ni-customer-info-field__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ni-text-muted);
+  margin-bottom: 3px;
+}
+.ni-customer-info-field__value {
+  font-size: 0.875rem;
+}
+
+.ni-page-header__title--danger {
+  color: #dc2626;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title ni-page-header__title--danger">Hapus Customer</h1>
+    <p class="ni-page-header__subtitle">{{ object.nama }}</p>
+  </div>
+  <a href="{% url 'customers:list' %}" class="ni-btn ni-btn--secondary">
+    <i data-lucide="arrow-left"></i>
+    Kembali
+  </a>
+</div>
+
+{# ── Danger banner ──────────────────────────────────────────────────────── #}
+<div class="ni-hapus-danger-banner">
+  <i data-lucide="alert-triangle" class="ni-hapus-danger-banner__icon"></i>
+  <div>
+    <div class="ni-hapus-danger-banner__title">Tindakan ini permanen dan tidak dapat dibatalkan</div>
+    <p class="ni-hapus-danger-banner__desc">
+      Data customer ini akan dihapus dari database secara permanen.
+      Tindakan ini tidak dapat dibatalkan.
+    </p>
+  </div>
+</div>
+
+{# ── Informasi Customer ─────────────────────────────────────────────────── #}
+<div class="ni-card">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Informasi Customer</h2>
+  </div>
+  <div class="ni-card__body">
+    <div class="ni-customer-info-grid">
+      <div>
+        <div class="ni-customer-info-field__label">Nama</div>
+        <strong class="ni-customer-info-field__value">{{ object.nama }}</strong>
+      </div>
+      <div>
+        <div class="ni-customer-info-field__label">Entitas Bisnis</div>
+        <span class="ni-customer-info-field__value">
+          {{ object.entitas_bisnis.nama }}
+          {% if object.entitas_bisnis_lv2 %}
+            <span class="ni-text-muted"> / {{ object.entitas_bisnis_lv2.nama }}</span>
+          {% endif %}
+          {% if object.entitas_bisnis_lv3 %}
+            <span class="ni-text-muted"> / {{ object.entitas_bisnis_lv3.nama }}</span>
+          {% endif %}
+        </span>
+      </div>
+      {% if object.email %}
+      <div>
+        <div class="ni-customer-info-field__label">Email</div>
+        <span class="ni-customer-info-field__value">{{ object.email }}</span>
+      </div>
+      {% endif %}
+      {% if object.telepon %}
+      <div>
+        <div class="ni-customer-info-field__label">Telepon</div>
+        <span class="ni-customer-info-field__value">{{ object.telepon }}</span>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── Konfirmasi ──────────────────────────────────────────────────────────── #}
+<div class="ni-card">
+  <div class="ni-card__body">
+    <form method="post" action="{% url 'customers:delete' object.pk %}">
+      {% csrf_token %}
+      <div class="ni-konfirmasi-box">
+        <span class="ni-konfirmasi-box__label">
+          <i data-lucide="shield-alert"></i>
+          Konfirmasi Penghapusan
+        </span>
+        <div class="ni-btn-row">
+          <button type="submit" class="ni-btn ni-btn--danger">
+            <i data-lucide="trash-2"></i>
+            Hapus Permanen
+          </button>
+          <a href="{% url 'customers:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
