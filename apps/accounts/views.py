@@ -9,7 +9,15 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
-from .forms import LoginForm, RegisterForm, UserForm, UserPermissionForm
+from .forms import (
+    LoginForm, RegisterForm, UserForm, UserPermissionForm,
+    CurrentPasswordForm, NamedSetPasswordForm,
+)
+from .emails import send_password_change_email
+from .sessions import revoke_all_sessions
+from .tokens import password_change_token
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from .models import NiPermission, UserEntitasBisnis
 
 User = get_user_model()
@@ -80,7 +88,12 @@ def register_view(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def password_change_request(request: HttpRequest) -> HttpResponse:
-    pass  # implemented in Task 7
+    """Step 1: user re-enters current password; on success email a change link."""
+    form = CurrentPasswordForm(request.POST or None, user=request.user)
+    if request.method == 'POST' and form.is_valid():
+        send_password_change_email(request, request.user)
+        return render(request, 'accounts/password_change_sent.html', {'email': request.user.email})
+    return render(request, 'accounts/password_change_request.html', {'form': form})
 
 
 @login_required
