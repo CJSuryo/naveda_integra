@@ -204,3 +204,14 @@ CHANNEL_LAYERS = {
         "CONFIG": {"hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")]},
     }
 }
+
+# ── Email + password-change link ─────────────────────────────────────────────
+PASSWORD_RESET_TIMEOUT = 900  # 15 min — governs the password-change link
+
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'Naveda Finance <noreply@navedafinance.com>')
+EMAIL_BACKEND = os.environ.get('EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
