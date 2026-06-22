@@ -9,6 +9,9 @@ from django.conf import settings
 
 from django.contrib import messages
 
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from apps.accounts.views import _check_perm
 from pos_config.models import StorePOSConfig, PaymentMethod, WebPushSubscription
 from pos_catalog.services.product_service import validate_modifier_selections
@@ -36,6 +39,7 @@ def vapid_public_key(request):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('push_subscribe'), method='POST', block=True)
 def push_subscribe(request, store_id):
     store = get_object_or_404(StorePOSConfig, pk=store_id)
     data, err = _json_body(request)
@@ -180,6 +184,7 @@ def shift_close(request, store_id):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_create_order(request):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -200,6 +205,7 @@ def api_create_order(request):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_add_item(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -223,6 +229,7 @@ def api_add_item(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_remove_item(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -236,6 +243,7 @@ def api_remove_item(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_update_qty(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -250,6 +258,7 @@ def api_update_qty(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_submit_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -261,6 +270,7 @@ def api_submit_order(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_process_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -276,6 +286,7 @@ def api_process_payment(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_confirm_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -292,6 +303,7 @@ def api_confirm_payment(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_confirm_single_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -303,6 +315,7 @@ def api_confirm_single_payment(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_complete_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
@@ -317,6 +330,7 @@ def api_complete_order(request, pk):
 
 @login_required
 @require_POST
+@ratelimit(key='user', rate=rate_from('pos_api'), method='POST', block=True)
 def api_cancel_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
