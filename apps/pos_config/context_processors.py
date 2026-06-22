@@ -1,5 +1,5 @@
 def pos_nav_context(request):
-    if not request.user.is_authenticated:
+    if not getattr(request, 'user', None) or not request.user.is_authenticated:
         return {}
     try:
         from pos_config.models import MerchantPOSConfig, StorePOSConfig
