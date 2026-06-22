@@ -75,6 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'axes.middleware.AxesMiddleware',
+    'django_ratelimit.middleware.RatelimitMiddleware',
 ]
 
 ROOT_URLCONF = 'naveda_integra.urls'

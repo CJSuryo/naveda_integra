@@ -9,6 +9,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import Resolver404, resolve, reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import client_ip_key, rate_from
 from .forms import (
     LoginForm, RegisterForm, UserForm, UserPermissionForm,
     CurrentPasswordForm, NamedSetPasswordForm,
@@ -55,6 +58,7 @@ def _get_safe_next(request: HttpRequest) -> str | None:
     return reconstructed
 
 
+@ratelimit(key=client_ip_key, rate=rate_from('login'), method='POST', block=True)
 def login_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         return redirect('home')
@@ -75,6 +79,7 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     return redirect('login')
 
 
+@ratelimit(key=client_ip_key, rate=rate_from('register'), method='POST', block=True)
 def register_view(request: HttpRequest) -> HttpResponse:
     if request.user.is_authenticated:
         return redirect('home')
@@ -87,6 +92,7 @@ def register_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('password_change_request'), method='POST', block=True)
 def password_change_request(request: HttpRequest) -> HttpResponse:
     """Step 1: user re-enters current password; on success email a change link."""
     form = CurrentPasswordForm(request.POST or None, user=request.user)
