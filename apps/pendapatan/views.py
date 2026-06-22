@@ -19,6 +19,35 @@ from .services import (
 from .forms import PendapatanHeaderForm, PendapatanItemForm, KewajibabPelaksanaanForm, RecurringTemplateForm, KPTaxLineForm
 
 
+def _save_piutang_profil(request, header):
+    """Validate piutang-* POST fields via PiutangHeaderForm(prefix='piutang') and
+    upsert PendapatanPiutangProfil. Returns (ok: bool, piutang_form: Form)."""
+    from decimal import Decimal
+    from apps.piutang.forms import PiutangHeaderForm
+    from .models import PendapatanPiutangProfil, PIUTANG_PROFIL_FIELDS
+
+    pf = PiutangHeaderForm(request.POST, prefix='piutang')
+    if not pf.is_valid():
+        return False, pf
+    cd = pf.cleaned_data
+    defaults = {f: cd[f] for f in PIUTANG_PROFIL_FIELDS if f in cd}
+    # Ensure non-null decimal fields have a safe default when form leaves them None
+    if not defaults.get('suku_bunga'):
+        defaults['suku_bunga'] = Decimal('0')
+    if not defaults.get('biaya_transaksi'):
+        defaults['biaya_transaksi'] = Decimal('0')
+    PendapatanPiutangProfil.objects.update_or_create(
+        pendapatan_header=header, defaults=defaults)
+    return True, pf
+
+
+def _pendapatan_eb_standar_map_json():
+    """Returns JSON string mapping EB pk → standar_akuntansi for the piutang wizard JS."""
+    from apps.entitas_bisnis.models import EntitasBisnis
+    rows = EntitasBisnis.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
+    return json.dumps({str(r['pk']): r['standar_akuntansi'] for r in rows})
+
+
 @login_required
 def stt_defaults(request: HttpRequest) -> JsonResponse:
     from apps.purchase.models import SubTransactionType
@@ -124,6 +153,7 @@ def _parse_tax_lines_from_post(post, item_idx: int) -> list:
 def pendapatan_create(request: HttpRequest) -> HttpResponse:
     from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
     from apps.entitas_bisnis.models import EntitasBisnis
+    from apps.piutang.forms import PiutangHeaderForm
 
     if request.method == 'POST':
         form = PendapatanHeaderForm(request.POST)
@@ -151,13 +181,34 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
                     items=items,
                     user=request.user,
                 )
+                # Wire piutang profil for credit transactions
+                if cd.get('payment_type') == 'credit':
+                    ok, piutang_form = _save_piutang_profil(request, header)
+                    if not ok:
+                        header.delete()  # roll back the just-created header
+                        from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
+                        return render(request, 'pendapatan/form.html', {
+                            'form': form,
+                            'item_forms': item_forms,
+                            'mode': 'create',
+                            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+                            'tax_lines_initial_json': '{}',
+                            'tax_type_choices': _TAX_TYPE_CHOICES,
+                            'piutang_form': piutang_form,
+                            'piutang_profil_exists': False,
+                            'eb_standar_map_json': _pendapatan_eb_standar_map_json(),
+                        })
                 dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil dibuat.')
                 return redirect('pendapatan:detail', pk=header.pk)
             except ValueError as exc:
                 form.add_error(None, str(exc))
+
+        # POST with invalid main form — include a fresh piutang form
+        piutang_form = PiutangHeaderForm(request.POST, prefix='piutang')
     else:
         form = PendapatanHeaderForm()
         item_forms = [KewajibabPelaksanaanForm(prefix='item_0')]
+        piutang_form = PiutangHeaderForm(prefix='piutang')
 
     from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
     return render(request, 'pendapatan/form.html', {
@@ -167,6 +218,9 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
         'eb_options_json': json.dumps(_get_eb_dropdown_options()),
         'tax_lines_initial_json': '{}',
         'tax_type_choices': _TAX_TYPE_CHOICES,
+        'piutang_form': piutang_form,
+        'piutang_profil_exists': False,
+        'eb_standar_map_json': _pendapatan_eb_standar_map_json(),
     })
 
 
@@ -174,7 +228,9 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
 def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
     from apps.purchase.views import _get_eb_dropdown_options, _resolve_eb_selection
     from apps.entitas_bisnis.models import EntitasBisnis
+    from apps.piutang.forms import PiutangHeaderForm
     from django.db import transaction
+    from .models import PendapatanPiutangProfil, PIUTANG_PROFIL_FIELDS
 
     header = get_object_or_404(PendapatanHeader, pk=pk)
     if header.status != 'draft':
@@ -246,10 +302,44 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                                 tax_payment_account=tl['tax_payment_account'],
                             )
 
+                    # Wire piutang profil for credit / delete for cash
+                    cd = form.cleaned_data
+                    if cd.get('payment_type') == 'credit':
+                        ok, piutang_form_post = _save_piutang_profil(request, header)
+                        if not ok:
+                            # Raise to trigger the atomic block rollback
+                            raise ValueError('__piutang_form_invalid__')
+                    else:
+                        PendapatanPiutangProfil.objects.filter(pendapatan_header=header).delete()
+
                 dj_messages.success(request, f'Pendapatan {header.transaction_id} berhasil diperbarui.')
                 return redirect('pendapatan:detail', pk=header.pk)
             except (ValueError, Exception) as exc:
+                if str(exc) == '__piutang_form_invalid__':
+                    # Piutang form failed — re-render with its errors
+                    piutang_form_err = PiutangHeaderForm(request.POST, prefix='piutang')
+                    piutang_form_err.is_valid()  # populate errors
+                    profil_edit = PendapatanPiutangProfil.objects.filter(pendapatan_header=header).first()
+                    eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
+                    from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
+                    return render(request, 'pendapatan/form.html', {
+                        'form': form,
+                        'item_forms': item_forms,
+                        'mode': 'edit',
+                        'header': header,
+                        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+                        'eb_selected': eb_selected,
+                        'tax_lines_initial_json': json.dumps(tax_lines_initial),
+                        'tax_type_choices': _TAX_TYPE_CHOICES,
+                        'piutang_form': piutang_form_err,
+                        'piutang_profil_exists': bool(profil_edit),
+                        'eb_standar_map_json': _pendapatan_eb_standar_map_json(),
+                    })
                 form.add_error(None, str(exc))
+
+        # POST with invalid main form — include piutang form with submitted data
+        profil_existing = PendapatanPiutangProfil.objects.filter(pendapatan_header=header).first()
+        piutang_form = PiutangHeaderForm(request.POST, prefix='piutang')
     else:
         form = PendapatanHeaderForm(instance=header)
         item_forms = [
@@ -284,6 +374,11 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 for tl in item.tax_lines.all()
             ]
 
+        # Pre-fill piutang form from existing profil
+        profil_existing = PendapatanPiutangProfil.objects.filter(pendapatan_header=header).first()
+        initial = {f: getattr(profil_existing, f) for f in PIUTANG_PROFIL_FIELDS} if profil_existing else None
+        piutang_form = PiutangHeaderForm(prefix='piutang', initial=initial)
+
     eb_selected = f'lv1:{eb_group.entitas_bisnis_id}' if eb_group and eb_group.entitas_bisnis_id else ''
 
     from .models import TAX_TYPE_CHOICES as _TAX_TYPE_CHOICES
@@ -296,6 +391,9 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_selected': eb_selected,
         'tax_lines_initial_json': json.dumps(tax_lines_initial),
         'tax_type_choices': _TAX_TYPE_CHOICES,
+        'piutang_form': piutang_form,
+        'piutang_profil_exists': bool(profil_existing),
+        'eb_standar_map_json': _pendapatan_eb_standar_map_json(),
     })
 
 

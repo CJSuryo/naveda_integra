@@ -7,7 +7,7 @@ from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
 from apps.master_data.models import Akun
 from apps.purchase.models import SubTransactionType
 
-from .models import PendapatanHeader, PendapatanEntitasBisnis, PendapatanItem, PendapatanEventLog
+from .models import PendapatanHeader, PendapatanEntitasBisnis, PendapatanItem, PendapatanEventLog, PendapatanPiutangProfil
 from .services import confirm_pendapatan, create_pendapatan_header, compute_next_date, generate_from_recurring
 
 
@@ -98,6 +98,11 @@ class ConfirmPendapatanCreditTests(TestCase):
     def setUp(self):
         self.f = make_fixtures()
         self.header = make_header(self.f, payment_type='credit')
+        PendapatanPiutangProfil.objects.create(
+            pendapatan_header=self.header,
+            debitur=str(self.f['eb']),
+            coa_piutang_account=self.f['coa_piutang'],
+        )
 
     def test_creates_piutang_header(self):
         from apps.piutang.models import PiutangHeader

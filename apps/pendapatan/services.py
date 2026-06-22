@@ -238,6 +238,50 @@ def create_pendapatan_header(
     return header
 
 
+# ── Piutang Payload Adapter ───────────────────────────────────────────────────
+
+def pendapatan_to_piutang_payload(header):
+    """Convert a credit PendapatanHeader (+ its PendapatanPiutangProfil + KP items)
+    into (payload, details) for apps.piutang.services.build_piutang().
+
+    This is THE single mapping point. If a new auto-prefilled piutang field is added,
+    extend PIUTANG_PROFIL_FIELDS and (if not a direct copy) this function only.
+    """
+    from .models import PendapatanPiutangProfil, PIUTANG_PROFIL_FIELDS
+
+    try:
+        profil = header.piutang_profil
+    except PendapatanPiutangProfil.DoesNotExist:
+        raise ValueError(
+            f'Pendapatan {header.transaction_id} bertipe kredit tetapi belum memiliki '
+            f'profil piutang. Atur Detail Piutang sebelum konfirmasi.'
+        )
+
+    eb_group = header.entitas_groups.select_related('entitas_bisnis').first()
+    if not eb_group:
+        raise ValueError(
+            f'Pendapatan {header.transaction_id} tidak memiliki entitas bisnis. '
+            f'Tambahkan entitas bisnis sebelum konfirmasi.'
+        )
+    payload = {
+        'tanggal': header.tanggal,
+        'deskripsi': f'Piutang dari Pendapatan {header.transaction_id}',
+        'entitas_bisnis': eb_group.entitas_bisnis,
+    }
+    for f in PIUTANG_PROFIL_FIELDS:
+        payload[f] = getattr(profil, f)
+
+    details = []
+    for eg in header.entitas_groups.prefetch_related('items__revenue_account').all():
+        for kp in eg.items.all():
+            details.append({
+                'deskripsi': kp.deskripsi_item[:255],
+                'jumlah': kp.nilai_kontrak,
+                'revenue_account': kp.revenue_account,
+            })
+    return payload, details
+
+
 # ── Confirm ───────────────────────────────────────────────────────────────────
 
 def _sync_confirm_tax_line(kp, header, tax_line, amount, entitas_bisnis=None, user=None):
@@ -294,6 +338,20 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
             f'karena status-nya adalah "{header.status}" (bukan "draft").'
         )
 
+    # Guard: credit pendapatan must have a piutang profil before any processing begins.
+    is_credit = header.payment_type == 'credit'
+    piutang_acct = None
+    credit_ar_journals = []
+    if is_credit:
+        from .models import PendapatanPiutangProfil
+        try:
+            piutang_acct = header.piutang_profil.coa_piutang_account
+        except PendapatanPiutangProfil.DoesNotExist:
+            raise ValueError(
+                f'Pendapatan {header.transaction_id} bertipe kredit tetapi belum '
+                f'memiliki profil piutang. Atur Detail Piutang sebelum konfirmasi.'
+            )
+
     with transaction.atomic():
         # Step 1: compute and persist price allocation for all KPs
         alokasi = compute_alokasi_harga(header)
@@ -317,18 +375,21 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                 pay_acct = kp.payment_account or eb_group.payment_account
 
                 if kp.recognition_type == KewajibabPelaksanaan.RecognitionType.POINT_IN_TIME:
-                    # Case 1 & 2: immediate recognition — books DPP only
-                    _create_kp_journal(
+                    # Case 1 & 2: immediate recognition — books DPP only.
+                    # For credit: debit the AR/piutang account (from profil), not cash/bank.
+                    debit_acct = piutang_acct if is_credit else pay_acct
+                    jh = _create_kp_journal(
                         header, eb_group, kp,
-                        debit_acct=pay_acct,
+                        debit_acct=debit_acct,
                         credit_acct=kp.revenue_account,
                         amount=harga_j,
                         user=user,
                     )
                     for tax_line in kp.tax_lines.all():
                         _sync_confirm_tax_line(kp, header, tax_line, harga_j, entitas_bisnis=eb_group.entitas_bisnis, user=user)
-                    if header.payment_type == 'credit':
+                    if is_credit:
                         has_credit_pit = True
+                        credit_ar_journals.append(jh)
 
                 elif kp.recognition_type == KewajibabPelaksanaan.RecognitionType.OVER_TIME:
                     tipe = kp.ot_tipe_aliran
@@ -383,11 +444,21 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
                         _log_event(header, 'JOURNAL_PSAK72',
                                    description=f'KP {kp.pk} — aset kontrak created', actor=user)
 
-        # Case 2: create exactly one piutang for all point_in_time credit KPs
+        # Case 2: create exactly one full piutang for all point_in_time credit KPs,
+        # then link the AR journals to the piutang for traceability.
         if has_credit_pit:
-            from apps.piutang.services import create_piutang_from_pendapatan
+            from apps.piutang.services import create_piutang_from_pendapatan, apply_pv_assessment
             piutang = create_piutang_from_pendapatan(header, user)
-            _log_event(header, 'PIUTANG_CREATED', description=piutang.nomor_piutang, actor=user)
+            # post_piutang is not called for pendapatan flow (AR journal already booked above),
+            # so we apply PV assessment separately here.
+            pv_fields = apply_pv_assessment(piutang)
+            if pv_fields:
+                piutang.save(update_fields=pv_fields)
+            piutang_num = piutang.nomor_piutang
+            for jh in credit_ar_journals:
+                jh.uraian_transaksi = f'{jh.uraian_transaksi} — {piutang_num}'
+                jh.save(update_fields=['uraian_transaksi'])
+            _log_event(header, 'PIUTANG_CREATED', description=piutang_num, actor=user)
 
         header.status = 'confirmed'
         header.save(update_fields=['status'])

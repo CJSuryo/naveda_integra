@@ -434,22 +434,17 @@ class ComputeBatchPenyisihanTest(TestCase):
             )
 
     def test_returns_required_keys(self):
-        akun, _ = Akun.objects.get_or_create(
-            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
-        )
-        result = compute_batch_penyisihan(date.today(), akun)
-        assert 'target_saldo' in result
-        assert 'saldo_existing' in result
-        assert 'delta' in result
-        assert 'breakdown' in result
+        result = compute_batch_penyisihan(date.today())
+        assert 'groups' in result
+        assert 'unconfigured' in result
         assert 'piutang_count' in result
+        assert 'total_target' in result
+        assert 'total_delta' in result
 
     def test_delta_equals_target_minus_existing(self):
-        akun, _ = Akun.objects.get_or_create(
-            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
-        )
-        result = compute_batch_penyisihan(date.today(), akun)
-        assert result['delta'] == result['target_saldo'] - result['saldo_existing']
+        result = compute_batch_penyisihan(date.today())
+        total_existing = sum(g['saldo_existing'] for g in result['groups'])
+        assert result['total_delta'] == result['total_target'] - total_existing
 
 
 # ── Task 1: periode_label field ──────────────────────────────────────────────
@@ -472,9 +467,10 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             )
         self.coa_all = Akun.objects.create(kategori_id='kewajiban', nama='Cad Piutang', kode_akun='2.1.8')
         self.coa_exp = Akun.objects.create(kategori_id='beban', nama='Beban Penyisihan', kode_akun='6.1.8')
+        self.coa_piutang = Akun.objects.create(kategori_id='aset', nama='Piutang Usaha', kode_akun='1.1.8')
 
     def test_saldo_existing_reads_from_piutang_penyisihan_model(self):
-        from apps.piutang.models import PiutangPenyisihan
+        from apps.piutang.models import PiutangPenyisihan, PiutangHeader
         from apps.jurnal.models import JurnalHeader
         jh = JurnalHeader.objects.create(
             tanggal=date(2026, 5, 31), nomor_transaksi='TRX-TEST-001',
@@ -485,8 +481,16 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             allowance_account=self.coa_all, expense_account=self.coa_exp,
             jurnal_header=jh, periode_label='2026-05',
         )
-        result = compute_batch_penyisihan(date(2026, 6, 30), self.coa_all)
-        self.assertEqual(result['saldo_existing'], Decimal('500000.00'))
+        PiutangHeader.objects.create(
+            jumlah_pokok=Decimal('1000000'), status='open',
+            coa_piutang_account=self.coa_piutang,
+            penyisihan_allowance_account=self.coa_all,
+            penyisihan_expense_account=self.coa_exp,
+            jatuh_tempo=date(2026, 6, 30),
+        )
+        result = compute_batch_penyisihan(date(2026, 6, 30))
+        group = next(g for g in result['groups'] if g['allowance_account'] == self.coa_all)
+        self.assertEqual(group['saldo_existing'], Decimal('500000.00'))
 
     def test_no_duplicate_batch_same_periode(self):
         from apps.piutang.services import create_batch_penyisihan_journal
@@ -502,14 +506,18 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             jurnal_header=jh, periode_label='2026-06',
         )
         batch_data = {
-            'target_saldo': Decimal('120000'), 'saldo_existing': Decimal('100000'),
-            'delta': Decimal('20000'), 'breakdown': [], 'piutang_count': 0,
+            'groups': [
+                {
+                    'allowance_account': self.coa_all,
+                    'expense_account': self.coa_exp,
+                    'delta': Decimal('20000'),
+                    'entitas_bisnis': None,
+                }
+            ],
         }
         with self.assertRaises(ValueError):
             create_batch_penyisihan_journal(
                 batch_data=batch_data,
-                allowance_account=self.coa_all,
-                expense_account=self.coa_exp,
                 tanggal=date(2026, 6, 30),
                 periode_label='2026-06',
             )
@@ -1499,3 +1507,69 @@ class ReklasifikasiPSAK71Test(TestCase):
         )
         self.assertLess(rkl.jumlah, Decimal('24000000'))
         self.assertGreater(rkl.jumlah, Decimal('0'))
+
+
+# ── Task 2: build_piutang canonical factory ───────────────────────────────────
+
+class BuildPiutangServiceTest(TestCase):
+    def _akun(self, kode, nama, kategori_id='aset'):
+        from apps.master_data.models import Akun
+        return Akun.objects.create(kode_akun=kode, nama=nama, kategori_id=kategori_id)
+
+    def test_build_piutang_creates_full_header_and_details(self):
+        from decimal import Decimal
+        from datetime import date
+        from apps.piutang.services import build_piutang
+        from apps.piutang.models import PiutangHeader
+
+        akun_piutang = self._akun('1.1.4', 'Piutang Usaha')
+        akun_pend = self._akun('4.1.1', 'Pendapatan Jasa', kategori_id='pendapatan')
+        payload = {
+            'tanggal': date(2026, 1, 10),
+            'debitur': 'PT Maju',
+            'deskripsi': 'Piutang uji',
+            'coa_piutang_account': akun_piutang,
+            'jatuh_tempo': date(2026, 3, 10),
+            'jenis_bunga': 'flat',
+            'suku_bunga': Decimal('12'),
+            'kategori_pengukuran': 'amortised_cost',
+        }
+        details = [{'deskripsi': 'Baris 1', 'jumlah': Decimal('1000'), 'revenue_account': akun_pend}]
+        piutang = build_piutang(payload, source='manual', source_obj=None, details=details, user=None)
+
+        self.assertIsInstance(piutang, PiutangHeader)
+        self.assertEqual(piutang.jumlah_pokok, Decimal('1000'))
+        self.assertEqual(piutang.debitur, 'PT Maju')
+        self.assertEqual(piutang.jenis_bunga, 'flat')
+        self.assertEqual(piutang.suku_bunga, Decimal('12'))
+        self.assertEqual(piutang.details.count(), 1)
+        self.assertEqual(piutang.status, 'draft')  # manual default
+
+    def test_build_piutang_pendapatan_source_status_open(self):
+        from decimal import Decimal
+        from datetime import date
+        from apps.piutang.services import build_piutang
+        akun_piutang = self._akun('1.1.5', 'Piutang B')
+        payload = {'tanggal': date(2026, 1, 10), 'coa_piutang_account': akun_piutang}
+        details = [{'deskripsi': 'x', 'jumlah': Decimal('500'), 'revenue_account': None}]
+        piutang = build_piutang(payload, source='pendapatan', source_obj=None, details=details, user=None)
+        self.assertEqual(piutang.status, 'open')
+        self.assertEqual(piutang.source_type, 'from_pendapatan')
+
+
+# ── Task 5 refactor: piutang form partial + piutang_form.js ─────────────────
+
+class PiutangFormRendersTest(TestCase):
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.user = get_user_model().objects.create_user(
+            email='testpiutang@example.com', password='p', name='Test Piutang'
+        )
+        self.client.force_login(self.user)
+
+    def test_create_page_renders_wizard(self):
+        from django.urls import reverse
+        url = reverse('piutang:create')
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'piutang_form.js')

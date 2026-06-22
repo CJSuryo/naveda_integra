@@ -1,0 +1,321 @@
+{# Reusable piutang wizard body. Context: form, formset, embedded (bool). #}
+{# Included by templates/piutang/form.html and the pendapatan modal. #}
+
+{% if not embedded %}
+  <!-- ── KARTU 1 : Entitas Bisnis & Standar Akuntansi ─────────── -->
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Langkah 1 — Entitas Bisnis &amp; Standar Akuntansi</h2>
+    </div>
+    <div class="ni-card__body">
+      <div class="ni-form-grid ni-form-grid--2">
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">Entitas Bisnis</label>
+          <select id="id_eb_selection" name="eb_selection" class="ni-input">
+            <option value="">— Pilih Entitas Bisnis (opsional) —</option>
+          </select>
+          <p id="eb-standar-hint" style="font-size:.82em;margin-top:4px;display:none"></p>
+        </div>
+
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.standar_akuntansi.label }}
+            <span class="ni-text-muted" style="font-weight:400;font-size:.85em"> — pilih atau ikuti entitas bisnis</span>
+          </label>
+          {{ form.standar_akuntansi }}
+          {% if form.standar_akuntansi.errors %}<div class="ni-form-error">{{ form.standar_akuntansi.errors }}</div>{% endif %}
+        </div>
+
+      </div>
+
+      <!-- Dynamic callout based on effective standar -->
+      <div id="standar-callout" style="margin-top:12px;padding:14px 16px;border-radius:8px;border-left:4px solid var(--ni-border)"></div>
+    </div>
+  </div>
+{% endif %}
+
+<!-- ── KARTU 2 : Klasifikasi Instrumen ──────────────────────── -->
+<div class="ni-card ni-animate-fade-in" id="klasifikasi-card">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Langkah 2 — Klasifikasi Instrumen Keuangan</h2>
+    <span id="klasifikasi-standar-badge" class="ni-badge ni-badge--primary"></span>
+  </div>
+  <div class="ni-card__body" id="klasifikasi-body">
+
+    <!-- Hidden field for computed result (single instance) -->
+    {{ form.kategori_pengukuran }}
+
+    <!-- SAK EMKM: simplified info only -->
+    <div id="klasifikasi-emkm" style="display:none;padding:12px 0">
+      <div style="background:#f9fafb;border-left:4px solid #6b7280;border-radius:6px;padding:12px 16px">
+        <strong>SAK EMKM — Biaya Perolehan (Historical Cost)</strong><br>
+        <span style="font-size:.87em;color:var(--ni-text-muted)">SAK EMKM tidak memerlukan klasifikasi instrumen keuangan. Piutang dicatat dan diukur pada biaya perolehan (jumlah nominal). Tidak ada amortisasi EIR atau klasifikasi FVOCI/FVPL.</span>
+      </div>
+    </div>
+
+    <!-- PSAK / SAK EP: full classification wizard -->
+    <div id="klasifikasi-wizard">
+
+      {{ form.business_model }}
+      {{ form.sppi_test_passed }}
+
+      <!-- A: Business Model Test -->
+      <div style="margin-bottom:20px">
+        <p style="font-weight:600;margin-bottom:4px">A. Business Model Test — bagaimana piutang ini dikelola?</p>
+        <p style="font-size:.84em;color:var(--ni-text-muted);margin-bottom:12px">Pilih model bisnis yang menggambarkan tujuan pengelolaan aset keuangan ini sesuai IFRS 9 / PSAK 71.</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+
+          <label id="bm-htc" class="bm-option" data-value="hold_to_collect" style="display:flex;flex-direction:column;gap:6px;padding:14px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;transition:all .15s">
+            <span style="font-size:1.3em">📦</span>
+            <strong>Hold to Collect</strong>
+            <span style="font-size:.82em;color:var(--ni-text-muted)">Tujuan: memegang hingga jatuh tempo untuk mengumpulkan arus kas kontraktual (pokok + bunga). Contoh: piutang dagang, pinjaman yang tidak dijual.</span>
+            <span class="bm-badge" style="font-size:.78em;font-weight:600;display:none"></span>
+          </label>
+
+          <label id="bm-htcs" class="bm-option" data-value="hold_to_collect_and_sell" style="display:flex;flex-direction:column;gap:6px;padding:14px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;transition:all .15s">
+            <span style="font-size:1.3em">📊</span>
+            <strong>Hold to Collect &amp; Sell</strong>
+            <span style="font-size:.82em;color:var(--ni-text-muted)">Tujuan ganda: mengumpulkan arus kas kontraktual <em>dan</em> menjual aset sebelum jatuh tempo. Contoh: portofolio yang kadang dijual untuk likuiditas.</span>
+            <span class="bm-badge" style="font-size:.78em;font-weight:600;display:none"></span>
+          </label>
+
+          <label id="bm-other" class="bm-option" data-value="other" style="display:flex;flex-direction:column;gap:6px;padding:14px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;transition:all .15s">
+            <span style="font-size:1.3em">💹</span>
+            <strong>Other / Trading</strong>
+            <span style="font-size:.82em;color:var(--ni-text-muted)">Dikelola untuk diperdagangkan atau tujuan lain — arus kas kontraktual bukan tujuan utama. Mis: piutang yang sering difaktorkan/dijual.</span>
+            <span class="bm-badge" style="font-size:.78em;font-weight:600;display:none"></span>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- B: SPPI Test -->
+      <div id="sppi-section" style="margin-bottom:20px">
+        <p style="font-weight:600;margin-bottom:4px">B. SPPI Test — jenis arus kas piutang ini?</p>
+        <p style="font-size:.84em;color:var(--ni-text-muted);margin-bottom:12px"><strong>SPPI</strong> = Solely Payments of Principal and Interest. Arus kas hanya berupa pembayaran pokok dan bunga atas saldo pokok yang outstanding?</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+          <label class="sppi-option" data-value="True" style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;flex:1;min-width:200px;transition:all .15s">
+            <span style="font-size:1.4em;line-height:1">✅</span>
+            <span>
+              <strong>Lulus SPPI</strong><br>
+              <span style="font-size:.82em;color:var(--ni-text-muted)">Arus kas hanya terdiri dari pokok + bunga. Berlaku untuk sebagian besar piutang dagang dan pinjaman biasa dengan bunga tetap/mengambang.</span>
+            </span>
+          </label>
+
+          <label class="sppi-option" data-value="False" style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;flex:1;min-width:200px;transition:all .15s">
+            <span style="font-size:1.4em;line-height:1">❌</span>
+            <span>
+              <strong>Tidak Lulus SPPI</strong><br>
+              <span style="font-size:.82em;color:var(--ni-text-muted)">Arus kas mengandung elemen lain (mis. berbasis ekuitas, leverage, pembayaran kontingen). Jarang untuk piutang dagang biasa.</span>
+            </span>
+          </label>
+
+          <label class="sppi-option" data-value="" style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border:2px solid var(--ni-border);border-radius:8px;cursor:pointer;flex:1;min-width:200px;transition:all .15s">
+            <span style="font-size:1.4em;line-height:1">⏳</span>
+            <span>
+              <strong>Belum Diuji</strong><br>
+              <span style="font-size:.82em;color:var(--ni-text-muted)">Pengujian SPPI belum dilakukan. Kategori pengukuran belum dapat ditentukan secara otomatis.</span>
+            </span>
+          </label>
+
+        </div>
+      </div>
+
+      <!-- C: Result -->
+      <div id="klasifikasi-result" style="border-radius:8px;padding:14px 16px;border-left:4px solid var(--ni-border);background:var(--ni-surface-alt)">
+        <strong>C. Kategori Pengukuran — Hasil Otomatis Sistem</strong>
+        <div id="klasifikasi-result-content" style="margin-top:8px;font-size:.9em">
+          <span class="ni-text-muted">← Pilih Business Model dan SPPI Test di atas untuk menentukan kategori pengukuran secara otomatis.</span>
+        </div>
+      </div>
+
+    </div>{# /klasifikasi-wizard #}
+  </div>
+</div>
+
+<!-- ── KARTU 3 : Informasi Piutang ───────────────────────────── -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:0">
+  <div class="ni-card__header"><h2 class="ni-card__title">Langkah 3 — Informasi Piutang</h2></div>
+  <div class="ni-card__body">
+    <div class="ni-form-grid ni-form-grid--2">
+      {% for field in form %}
+        {% if field.name == 'tanggal' or field.name == 'debitur' or field.name == 'jatuh_tempo' or field.name == 'jenis_jangka_waktu' or field.name == 'coa_piutang_account' or field.name == 'is_approval_required' %}
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endif %}
+        {% if field.name == 'deskripsi' %}
+        <div class="ni-form-group ni-form-group--full">
+          <label class="ni-form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+        {% endif %}
+      {% endfor %}
+      {% if form.non_field_errors %}
+        <div class="ni-form-error ni-form-group--full">{{ form.non_field_errors }}</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- ── KARTU 4 : Bunga & Angsuran (jangka panjang saja) ──────── -->
+<div class="ni-card ni-animate-fade-in" id="bunga-angsuran-card" style="display:none">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Langkah 4 — Bunga &amp; Angsuran</h2>
+    <span class="ni-badge ni-badge--info">Jangka Panjang</span>
+  </div>
+  <div class="ni-card__body">
+    <div class="ni-form-grid ni-form-grid--3">
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.jenis_bunga.label }}</label>
+        {{ form.jenis_bunga }}
+        {% if form.jenis_bunga.errors %}<div class="ni-form-error">{{ form.jenis_bunga.errors }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group" id="suku-bunga-group">
+        <label class="ni-form-label">{{ form.suku_bunga.label }}</label>
+        {{ form.suku_bunga }}
+        <p style="font-size:.8em;color:var(--ni-text-muted);margin-top:3px">Suku bunga kontrak per tahun (%).</p>
+        {% if form.suku_bunga.errors %}<div class="ni-form-error">{{ form.suku_bunga.errors }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.periode_angsuran.label }}</label>
+        {{ form.periode_angsuran }}
+        {% if form.periode_angsuran.errors %}<div class="ni-form-error">{{ form.periode_angsuran.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── KARTU 5 : EIR & Nilai Wajar (PSAK/SAK EP, jangka panjang) -->
+<div class="ni-card ni-animate-fade-in" id="pv-setup-card" style="display:none">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Langkah 5 — Nilai Wajar &amp; Amortised Cost (EIR)</h2>
+    <span class="ni-badge ni-badge--primary" id="pv-standar-badge">PSAK / SAK EP</span>
+  </div>
+  <div class="ni-card__body">
+    <div style="background:var(--ni-surface-alt,#f0f4ff);border-radius:6px;padding:12px 14px;margin-bottom:16px;font-size:.87em">
+      <strong>Apa ini?</strong> Jika suku bunga kontrak lebih rendah dari bunga pasar (mis. pinjaman karyawan 0%), nilai wajar awal dihitung dari arus kas yang didiskon pada bunga pasar (Market Rate). Selisih (Day 1 loss) diamortisasi setiap periode menggunakan Suku Bunga Efektif (EIR) hingga jatuh tempo — carrying amount naik setiap periode.<br>
+      <span class="ni-text-muted">Biarkan kosong jika bunga kontrak sudah sama dengan pasar.</span>
+    </div>
+    <div class="ni-form-grid ni-form-grid--2">
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.pv_discount_rate.label }}</label>
+        {{ form.pv_discount_rate }}
+        <p style="font-size:.8em;color:var(--ni-text-muted);margin-top:3px">Market rate (bunga pasar / BI Rate). Mis: 5.5 untuk 5,5% per tahun.</p>
+        {% if form.pv_discount_rate.errors %}<div class="ni-form-error">{{ form.pv_discount_rate.errors }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.interest_income_account.label }}</label>
+        {{ form.interest_income_account }}
+        <p style="font-size:.8em;color:var(--ni-text-muted);margin-top:3px">Akun untuk mencatat pendapatan bunga efektif setiap periode.</p>
+        {% if form.interest_income_account.errors %}<div class="ni-form-error">{{ form.interest_income_account.errors }}</div>{% endif %}
+      </div>
+    </div>
+    <hr style="margin:14px 0">
+    <p style="font-size:.87em;margin-bottom:10px"><strong>Reklasifikasi Bagian Lancar</strong> — isi untuk mengaktifkan jurnal reklasifikasi otomatis. Bagian carrying amount yang jatuh tempo &le;12 bulan direklasifikasi ke akun piutang lancar setiap tutup buku.</p>
+    <div class="ni-form-grid ni-form-grid--1">
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.coa_piutang_lancar_account.label }}</label>
+        {{ form.coa_piutang_lancar_account }}
+        {% if form.coa_piutang_lancar_account.errors %}<div class="ni-form-error">{{ form.coa_piutang_lancar_account.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── KARTU 6 : Biaya Transaksi & Agunan ──────────────────────── -->
+<div class="ni-card ni-animate-fade-in" id="biaya-agunan-card" style="display:none">
+  <div class="ni-card__header">
+    <h2 class="ni-card__title">Langkah 6 — Biaya Transaksi &amp; Agunan <span class="ni-text-muted" style="font-weight:400;font-size:.85em">(opsional)</span></h2>
+  </div>
+  <div class="ni-card__body">
+    <div id="biaya-transaksi-group">
+      <p style="font-size:.87em;margin-bottom:10px"><strong>Biaya Transaksi</strong> — biaya langsung yang timbul saat pengakuan (mis. biaya legal, provisi). Dikapitalisasi ke carrying amount awal sehingga mengurangi EIR efektif. <span class="ni-text-muted">(PSAK / SAK EP saja)</span></p>
+      <div class="ni-form-grid ni-form-grid--2" style="margin-bottom:0">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.biaya_transaksi.label }}</label>
+          {{ form.biaya_transaksi }}
+          {% if form.biaya_transaksi.errors %}<div class="ni-form-error">{{ form.biaya_transaksi.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.biaya_transaksi_account.label }}</label>
+          {{ form.biaya_transaksi_account }}
+          <p style="font-size:.8em;color:var(--ni-text-muted);margin-top:3px">Akun yang dikredit saat biaya transaksi dikapitalisasi (mis. Kas/Biaya Dibayar Di Muka).</p>
+          {% if form.biaya_transaksi_account.errors %}<div class="ni-form-error">{{ form.biaya_transaksi_account.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <hr style="margin:14px 0">
+    </div>
+    <p style="font-size:.87em;margin-bottom:10px"><strong>Agunan / Jaminan</strong> — catat jenis dan nilai agunan yang diterima sebagai jaminan pembayaran (data dokumentasi, tidak dijurnal).</p>
+    <div class="ni-form-grid ni-form-grid--2">
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.agunan_jenis.label }}</label>
+        {{ form.agunan_jenis }}
+        {% if form.agunan_jenis.errors %}<div class="ni-form-error">{{ form.agunan_jenis.errors }}</div>{% endif %}
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ form.agunan_nilai.label }}</label>
+        {{ form.agunan_nilai }}
+        {% if form.agunan_nilai.errors %}<div class="ni-form-error">{{ form.agunan_nilai.errors }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── KARTU 7 : Detail Baris Piutang ────────────────────────── -->
+{% if not embedded %}
+  <div class="ni-card ni-animate-fade-in" id="detail-piutang-card">
+    <div class="ni-card__header">
+      <h2 class="ni-card__title">Langkah 7 — Detail Baris Piutang</h2>
+      <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" id="add-detail-row">+ Tambah Baris</button>
+    </div>
+    {{ formset.management_form }}
+    <div class="ni-table-wrapper">
+      <table class="ni-table" id="detail-table">
+        <thead>
+          <tr>
+            <th>Deskripsi</th>
+            <th class="ni-text-right">Jumlah</th>
+            <th>Akun Pendapatan (opsional)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="detail-tbody">
+          {% for detail_form in formset %}
+            <tr class="detail-row" {% if detail_form.instance.pk %}data-existing="1"{% endif %}>
+              <td>
+                {{ detail_form.deskripsi }}
+                {{ detail_form.id }}
+                {% if detail_form.instance.pk %}{{ detail_form.DELETE }}{% endif %}
+              </td>
+              <td class="ni-text-right">{{ detail_form.jumlah }}</td>
+              <td>{{ detail_form.revenue_account }}</td>
+              <td>
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-row">&#10005;</button>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td class="ni-text-right"><strong>Total</strong></td>
+            <td class="ni-text-right"><strong id="detail-total">0</strong></td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+{% else %}
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__header"><h2 class="ni-card__title">Baris Piutang (otomatis dari item pendapatan)</h2></div>
+    <div class="ni-card__body">
+      <ul id="piutang-detail-summary" style="margin:0;padding-left:18px"></ul>
+      <p class="ni-text-muted" style="font-size:.82em;margin-top:8px">Baris ini mengikuti item pendapatan dan tidak diubah di sini.</p>
+    </div>
+  </div>
+{% endif %}

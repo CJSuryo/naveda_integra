@@ -107,6 +107,14 @@
           </span>
         </div>
 
+        <div class="ni-form-group" id="piutang-trigger-group" style="display:none">
+          <label class="ni-form-label">Detail Piutang (Kredit)</label>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button type="button" class="ni-btn ni-btn--secondary" id="open-piutang-modal">Atur Detail Piutang</button>
+            <span id="piutang-status-badge" class="ni-badge ni-badge--warning">Belum diatur</span>
+          </div>
+        </div>
+
         <div class="ni-form-group">
           <label class="ni-form-label" for="{{ form.standar_akuntansi.id_for_label }}">{{ form.standar_akuntansi.label }}</label>
           {{ form.standar_akuntansi }}
@@ -311,6 +319,27 @@
     <button type="submit" class="ni-btn ni-btn--primary">Simpan Pendapatan</button>
     <a href="{% url 'pendapatan:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
   </div>
+
+  {# ── Piutang Modal ────────────────────────────────────────────────── #}
+  <div id="piutang-modal" class="ni-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;overflow:auto">
+    <div class="ni-modal__dialog" style="background:var(--ni-surface,#fff);max-width:900px;margin:32px auto;border-radius:10px;padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 class="ni-card__title">Detail Piutang</h2>
+        <button type="button" class="ni-btn ni-btn--xs" id="close-piutang-modal">&#10005;</button>
+      </div>
+      <div id="piutang-modal-body">
+        {% if piutang_form %}
+          {% with form=piutang_form %}
+            {% include 'piutang/_form_body.html' with embedded=True %}
+          {% endwith %}
+        {% endif %}
+      </div>
+      <div class="ni-btn-row" style="margin-top:14px">
+        <button type="button" class="ni-btn ni-btn--primary" id="save-piutang-modal">Simpan Detail Piutang</button>
+        <button type="button" class="ni-btn ni-btn--secondary" id="cancel-piutang-modal">Batal</button>
+      </div>
+    </div>
+  </div>
 </form>
 
 {# Hidden prototype — JS reads these options for buildTaxTypeSelect() #}
@@ -321,6 +350,7 @@
   {% endfor %}
 </select>
 
+<script src="{% static 'js/piutang_form.js' %}"></script>
 <script>
 (function () {
   // ── Option card data ───────────────────────────────────────────────────
@@ -849,6 +879,94 @@
     payTypeSel.addEventListener('change', refreshPaymentHints);
     refreshPaymentHints();
   }
+
+  /* ── Piutang modal wiring ───────────────────────────────────────── */
+  var piutangTriggerGroup = document.getElementById('piutang-trigger-group');
+  var piutangModal    = document.getElementById('piutang-modal');
+  var openPiutangBtn  = document.getElementById('open-piutang-modal');
+  var closePiutangBtn = document.getElementById('close-piutang-modal');
+  var cancelPiutangBtn= document.getElementById('cancel-piutang-modal');
+  var savePiutangBtn  = document.getElementById('save-piutang-modal');
+  var piutangBadge    = document.getElementById('piutang-status-badge');
+  var pendapatanForm  = document.getElementById('pendapatan-form');
+  var piutangConfigured = {{ piutang_profil_exists|default:"False"|yesno:"true,false" }};
+
+  function isCredit() { return payTypeSel && payTypeSel.value === 'credit'; }
+
+  function syncPiutangTriggerVisibility() {
+    if (piutangTriggerGroup) piutangTriggerGroup.style.display = isCredit() ? '' : 'none';
+  }
+  function setBadge(ok) {
+    if (!piutangBadge) return;
+    piutangBadge.textContent = ok ? 'Sudah diatur' : 'Belum diatur';
+    piutangBadge.className = 'ni-badge ' + (ok ? 'ni-badge--success' : 'ni-badge--warning');
+  }
+
+  if (payTypeSel) payTypeSel.addEventListener('change', syncPiutangTriggerVisibility);
+  syncPiutangTriggerVisibility();
+  setBadge(piutangConfigured);
+
+  // Init the piutang wizard inside the modal, scoped to the modal element.
+  if (piutangModal && typeof initPiutangForm === 'function') {
+    initPiutangForm(piutangModal, {
+      ebStandarMap: {{ eb_standar_map_json|default:"{}"|safe }},
+      ebOptions: [], ebSelected: ''
+    });
+  }
+
+  function prefillPiutangFromKP() {
+    // Auto-fill debitur from the EB select on the pendapatan form.
+    var ebSelect = document.getElementById('id_eb_selection');
+    var debiturInput = piutangModal ? piutangModal.querySelector('[name="piutang-debitur"]') : null;
+    if (debiturInput && !debiturInput.value && ebSelect) {
+      var ebLabel = '';
+      if (ebSelect.selectedIndex >= 0 && ebSelect.options[ebSelect.selectedIndex]) {
+        ebLabel = ebSelect.options[ebSelect.selectedIndex].text || '';
+      }
+      if (ebLabel && ebLabel !== '— Pilih Entitas Bisnis (opsional) —') {
+        debiturInput.value = ebLabel;
+      }
+    }
+    // Show a read-only KP summary in the modal.
+    var summary = piutangModal ? piutangModal.querySelector('#piutang-detail-summary') : null;
+    if (summary) {
+      var rows = [];
+      // Target each KP item card using its actual CSS classes from this form.
+      document.querySelectorAll('.ni-item-row.kp-formrow').forEach(function(card) {
+        var desc = card.querySelector('[id$="-deskripsi_item"]');
+        var amt  = card.querySelector('[id$="-nilai_kontrak"]');
+        if (desc && amt && amt.value) rows.push((desc.value||'(item)') + ' — Rp ' + amt.value);
+      });
+      summary.innerHTML = rows.length
+        ? rows.map(function(r){ return '<li>' + r + '</li>'; }).join('')
+        : '<li><em>Belum ada item pendapatan</em></li>';
+    }
+  }
+
+  if (openPiutangBtn) openPiutangBtn.addEventListener('click', function() {
+    prefillPiutangFromKP();
+    if (piutangModal) piutangModal.style.display = '';
+  });
+  function closePiutangModal() { if (piutangModal) piutangModal.style.display = 'none'; }
+  if (closePiutangBtn) closePiutangBtn.addEventListener('click', closePiutangModal);
+  if (cancelPiutangBtn) cancelPiutangBtn.addEventListener('click', closePiutangModal);
+
+  if (savePiutangBtn) savePiutangBtn.addEventListener('click', function() {
+    var acct = piutangModal ? piutangModal.querySelector('[name="piutang-coa_piutang_account"]') : null;
+    if (acct && !acct.value) { acct.focus(); alert('Pilih Akun Piutang terlebih dahulu.'); return; }
+    setBadge(true);
+    piutangConfigured = true;
+    closePiutangModal();
+  });
+
+  // Block pendapatan submit if credit but modal not configured.
+  if (pendapatanForm) pendapatanForm.addEventListener('submit', function(e) {
+    if (isCredit() && !piutangConfigured) {
+      e.preventDefault();
+      alert('Transaksi kredit memerlukan Detail Piutang. Klik "Atur Detail Piutang".');
+      if (piutangTriggerGroup) piutangTriggerGroup.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
 
   // ── Row management ────────────────────────────────────────────────────
   var container     = document.getElementById('item-rows-container');

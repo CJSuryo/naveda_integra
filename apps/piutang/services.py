@@ -191,6 +191,59 @@ def _next_piutang_journal_number(prefix: str) -> str:
 
 # ── Create ────────────────────────────────────────────────────────────────────
 
+# Mapping source → (source_type value on PiutangHeader, default status)
+_PIUTANG_SOURCE_MAP = {
+    'manual': ('manual', 'draft'),
+    'pendapatan': ('from_pendapatan', 'open'),
+    'sales': ('from_sales', 'open'),
+}
+
+
+def build_piutang(payload: dict, *, source: str, source_obj, details: list, user=None) -> PiutangHeader:
+    """Canonical piutang factory used by every module.
+
+    payload: dict of PiutangHeader header fields (debitur, coa_piutang_account, credit terms…).
+    details: list of {'deskripsi', 'jumlah', 'revenue_account'(, 'sub_transaction_type')}.
+    source: 'manual' | 'pendapatan' | 'sales'.
+    source_obj: the originating header (PendapatanHeader / SalesHeader) or None.
+
+    Does NOT post an AR journal — posting is a separate step (manual) or already
+    booked by the originating module's confirm (pendapatan).
+    """
+    if not details:
+        raise ValueError('Minimal satu detail piutang diperlukan.')
+    total = sum(Decimal(str(d['jumlah'])) for d in details)
+    if total <= 0:
+        raise ValueError('Total piutang harus lebih besar dari 0.')
+
+    source_type, default_status = _PIUTANG_SOURCE_MAP[source]
+    header_kwargs = dict(payload)
+    header_kwargs.setdefault('status', default_status)
+    header_kwargs['source_type'] = source_type
+    if source == 'pendapatan':
+        header_kwargs['source_pendapatan'] = source_obj
+    elif source == 'sales':
+        header_kwargs['source_sales'] = source_obj
+    header_kwargs['jumlah_pokok'] = total
+    if user is not None:
+        header_kwargs['created_by'] = user
+
+    with transaction.atomic():
+        piutang = PiutangHeader.objects.create(**header_kwargs)
+        PiutangDetail.objects.bulk_create([
+            PiutangDetail(
+                piutang_header=piutang,
+                deskripsi=d.get('deskripsi', ''),
+                jumlah=Decimal(str(d['jumlah'])),
+                revenue_account=d.get('revenue_account'),
+                sub_transaction_type=d.get('sub_transaction_type'),
+            )
+            for d in details
+        ])
+        _log(piutang, 'CREATED', user=user, after=_snapshot(piutang))
+    return piutang
+
+
 def create_manual_piutang(
     tanggal,
     entitas_bisnis,
@@ -219,54 +272,33 @@ def create_manual_piutang(
     agunan_nilai=None,
     user=None,
 ) -> PiutangHeader:
-    if not details:
-        raise ValueError('Minimal satu detail piutang diperlukan.')
-    total = sum(Decimal(str(d['jumlah'])) for d in details)
-    if total <= 0:
-        raise ValueError('Total piutang harus lebih besar dari 0.')
-
-    with transaction.atomic():
-        piutang = PiutangHeader.objects.create(
-            tanggal=tanggal,
-            entitas_bisnis=entitas_bisnis,
-            debitur=debitur,
-            deskripsi=deskripsi,
-            coa_piutang_account=coa_piutang_account,
-            jatuh_tempo=jatuh_tempo,
-            jumlah_pokok=total,
-            status='draft',
-            jenis_jangka_waktu=jenis_jangka_waktu,
-            jenis_bunga=jenis_bunga,
-            suku_bunga=suku_bunga,
-            periode_angsuran=periode_angsuran,
-            is_approval_required=is_approval_required,
-            pv_discount_rate=pv_discount_rate,
-            deferred_income_account=deferred_income_account,
-            interest_income_account=interest_income_account,
-            coa_piutang_lancar_account=coa_piutang_lancar_account,
-            deferred_income_lancar_account=deferred_income_lancar_account,
-            standar_akuntansi=standar_akuntansi or '',
-            kategori_pengukuran=kategori_pengukuran or 'amortised_cost',
-            business_model=business_model or '',
-            sppi_test_passed=sppi_test_passed,
-            biaya_transaksi=biaya_transaksi or Decimal('0'),
-            biaya_transaksi_account=biaya_transaksi_account,
-            agunan_jenis=agunan_jenis or '',
-            agunan_nilai=agunan_nilai,
-            created_by=user,
-        )
-        PiutangDetail.objects.bulk_create([
-            PiutangDetail(
-                piutang_header=piutang,
-                deskripsi=d.get('deskripsi', ''),
-                jumlah=Decimal(str(d['jumlah'])),
-                revenue_account=d.get('revenue_account'),
-                sub_transaction_type=d.get('sub_transaction_type'),
-            )
-            for d in details
-        ])
-        _log(piutang, 'CREATED', user=user, after=_snapshot(piutang))
-    return piutang
+    payload = {
+        'tanggal': tanggal,
+        'entitas_bisnis': entitas_bisnis,
+        'debitur': debitur,
+        'deskripsi': deskripsi,
+        'coa_piutang_account': coa_piutang_account,
+        'jatuh_tempo': jatuh_tempo,
+        'jenis_jangka_waktu': jenis_jangka_waktu,
+        'jenis_bunga': jenis_bunga,
+        'suku_bunga': suku_bunga,
+        'periode_angsuran': periode_angsuran,
+        'is_approval_required': is_approval_required,
+        'pv_discount_rate': pv_discount_rate,
+        'deferred_income_account': deferred_income_account,
+        'interest_income_account': interest_income_account,
+        'coa_piutang_lancar_account': coa_piutang_lancar_account,
+        'deferred_income_lancar_account': deferred_income_lancar_account,
+        'standar_akuntansi': standar_akuntansi or '',
+        'kategori_pengukuran': kategori_pengukuran or 'amortised_cost',
+        'business_model': business_model or '',
+        'sppi_test_passed': sppi_test_passed,
+        'biaya_transaksi': biaya_transaksi or Decimal('0'),
+        'biaya_transaksi_account': biaya_transaksi_account,
+        'agunan_jenis': agunan_jenis or '',
+        'agunan_nilai': agunan_nilai,
+    }
+    return build_piutang(payload, source='manual', source_obj=None, details=details, user=user)
 
 
 # ── Stubs for callers that will be implemented in later phases ─────────────────
@@ -323,58 +355,10 @@ def create_piutang_from_sales(sales_header, user=None) -> PiutangHeader:
 
 
 def create_piutang_from_pendapatan(pendapatan_header, user=None) -> PiutangHeader:
-    total = Decimal('0')
-    details = []
-    for eb_group in pendapatan_header.entitas_groups.prefetch_related('items__revenue_account').all():
-        for item in eb_group.items.all():
-            total += item.jumlah_bruto
-            details.append({
-                'deskripsi': item.deskripsi_item[:255],
-                'jumlah': item.jumlah_bruto,
-                'revenue_account': item.revenue_account,
-            })
-
-    if total <= 0:
-        raise ValueError('Total pendapatan kredit harus lebih besar dari 0.')
-
-    coa_piutang = (
-        pendapatan_header.entitas_groups.first().payment_account
-        if pendapatan_header.entitas_groups.exists()
-        else None
-    )
-    if not coa_piutang:
-        raise ValueError('Payment account (akun piutang) diperlukan pada PendapatanEntitasBisnis.')
-
-    eb = (
-        pendapatan_header.entitas_groups.first().entitas_bisnis
-        if pendapatan_header.entitas_groups.exists()
-        else None
-    )
-
-    with transaction.atomic():
-        piutang = PiutangHeader.objects.create(
-            tanggal=pendapatan_header.tanggal,
-            entitas_bisnis=eb,
-            debitur=str(eb) if eb else '',
-            deskripsi=f'Piutang dari Pendapatan {pendapatan_header.transaction_id}',
-            source_type='from_pendapatan',
-            source_pendapatan=pendapatan_header,
-            jumlah_pokok=total,
-            status='open',
-            coa_piutang_account=coa_piutang,
-            created_by=user,
-        )
-        PiutangDetail.objects.bulk_create([
-            PiutangDetail(
-                piutang_header=piutang,
-                deskripsi=d['deskripsi'],
-                jumlah=d['jumlah'],
-                revenue_account=d.get('revenue_account'),
-            )
-            for d in details
-        ])
-        _log(piutang, 'CREATED', user=user, after=_snapshot(piutang))
-    return piutang
+    from apps.pendapatan.services import pendapatan_to_piutang_payload
+    payload, details = pendapatan_to_piutang_payload(pendapatan_header)
+    return build_piutang(payload, source='pendapatan', source_obj=pendapatan_header,
+                         details=details, user=user)
 
 
 # ── Payment ───────────────────────────────────────────────────────────────────
@@ -1827,6 +1811,22 @@ def _create_piutang_ar_journal(piutang: PiutangHeader) -> JurnalHeader:
     return header
 
 
+def apply_pv_assessment(piutang: PiutangHeader) -> list[str]:
+    """Compute and apply PV adjustment on piutang if eligible.
+
+    Sets nilai_wajar_awal and is_pv_adjusted directly on the instance (caller must save).
+    Returns list of field names that were modified (empty list if no change needed).
+    Skipped for SAK EMKM or when pv_discount_rate is not set.
+    """
+    if get_standar_akuntansi(piutang) == 'sak_emkm':
+        return []
+    if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+        piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
+        piutang.is_pv_adjusted = True
+        return ['nilai_wajar_awal', 'is_pv_adjusted']
+    return []
+
+
 def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
     with transaction.atomic():
         piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
@@ -1835,12 +1835,7 @@ def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
                 f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
             )
         update_fields = ['status', 'is_locked']
-        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
-        if get_standar_akuntansi(piutang) != 'sak_emkm':
-            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-                piutang.is_pv_adjusted = True
-                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        update_fields += apply_pv_assessment(piutang)
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1865,12 +1860,7 @@ def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
         if piutang.status != 'pending_approval':
             raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
         update_fields = ['status', 'is_locked', 'approved_by', 'approved_at']
-        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
-        if get_standar_akuntansi(piutang) != 'sak_emkm':
-            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-                piutang.is_pv_adjusted = True
-                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        update_fields += apply_pv_assessment(piutang)
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
