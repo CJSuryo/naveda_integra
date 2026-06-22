@@ -4,6 +4,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -298,6 +301,7 @@ def purchase_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def purchase_export(request: HttpRequest) -> HttpResponse:
     """Export purchase list as XLSX with same filters as the list page."""
     import openpyxl
@@ -406,6 +410,7 @@ def purchase_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def purchase_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly purchase list for browser PDF printing."""
     qs = (

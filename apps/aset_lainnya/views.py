@@ -1,6 +1,9 @@
 """Aset Lainnya views — CRUD for AsetLainnyaRecord."""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -357,6 +360,7 @@ def _aset_lainnya_export_qs(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def aset_lainnya_export(request: HttpRequest) -> HttpResponse:
     """Export aset lainnya list as XLSX with same filters as list page."""
     import openpyxl
@@ -420,6 +424,7 @@ def aset_lainnya_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def aset_lainnya_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly aset lainnya list for browser PDF printing."""
     import datetime

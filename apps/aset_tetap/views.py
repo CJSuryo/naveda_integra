@@ -3,6 +3,9 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -568,6 +571,7 @@ def _aset_tetap_export_qs(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def aset_tetap_export(request: HttpRequest) -> HttpResponse:
     """Export aset tetap list as XLSX with same filters as list page."""
     import openpyxl
@@ -633,6 +637,7 @@ def aset_tetap_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def aset_tetap_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly aset tetap list for browser PDF printing."""
     records = list(_aset_tetap_export_qs(request))

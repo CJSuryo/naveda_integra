@@ -6,6 +6,9 @@ import logging
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -853,6 +856,7 @@ _COA_HEADERS = [
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def coa_export(request: HttpRequest) -> HttpResponse:
     """Export Chart of Accounts as a CSV file."""
     response = HttpResponse(content_type='text/csv; charset=utf-8')

@@ -4,6 +4,9 @@ from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db.models import Max, Q, Sum, Value, DecimalField
 from django.db.models.functions import Coalesce
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -149,6 +152,7 @@ def rekap_jurnal(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def rekap_jurnal_export(request: HttpRequest) -> HttpResponse:
     """Export filtered Rekap Jurnal as XLSX."""
     import openpyxl

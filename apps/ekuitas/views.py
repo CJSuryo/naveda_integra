@@ -4,6 +4,9 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db.models import Sum
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -301,6 +304,7 @@ def _ekuitas_export_qs(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def ekuitas_export(request: HttpRequest) -> HttpResponse:
     """Export modal disetor list as XLSX with same filters as list page."""
     import openpyxl
@@ -359,6 +363,7 @@ def ekuitas_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def ekuitas_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly modal disetor list for browser PDF printing."""
     import datetime

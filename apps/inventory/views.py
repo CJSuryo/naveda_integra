@@ -7,6 +7,9 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db.models import Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1085,6 +1088,7 @@ def _inventory_export_qs(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def inventory_export(request: HttpRequest) -> HttpResponse:
     """Export inventory list as XLSX with same filters as list page."""
     import openpyxl
@@ -1145,6 +1149,7 @@ def inventory_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def inventory_export_pdf(request: HttpRequest) -> HttpResponse:
     """Render print-friendly inventory list for browser PDF printing."""
     records = list(_inventory_export_qs(request))

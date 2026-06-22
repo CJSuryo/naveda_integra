@@ -3,6 +3,9 @@ from decimal import Decimal
 
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
+from django_ratelimit.decorators import ratelimit
+
+from naveda_integra.ratelimit_utils import rate_from
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -1089,6 +1092,7 @@ def aging_schedule_report(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def aging_schedule_export(request: HttpRequest) -> HttpResponse:
     from datetime import date as date_cls
     from io import BytesIO
