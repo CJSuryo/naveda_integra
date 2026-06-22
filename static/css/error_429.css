@@ -1,0 +1,16 @@
+.error429 {
+    max-width: 32rem;
+    margin: 6rem auto;
+    padding: 2rem;
+    text-align: center;
+    font-family: system-ui, sans-serif;
+}
+.error429__code {
+    font-size: 3rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+.error429__msg {
+    color: #555;
+    line-height: 1.5;
+}
