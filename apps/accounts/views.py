@@ -79,6 +79,16 @@ def register_view(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def password_change_request(request: HttpRequest) -> HttpResponse:
+    pass  # implemented in Task 7
+
+
+@login_required
+def password_change_confirm(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
+    pass  # implemented in Task 8
+
+
+@login_required
 def home_view(request: HttpRequest) -> HttpResponse:
     from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 

@@ -16,4 +16,7 @@ urlpatterns = [
     path('users/<int:pk>/delete/', views.user_delete, name='user_delete'),
     path('users/<int:pk>/permissions/', views.user_permissions, name='user_permissions'),
     path('users/<int:pk>/eb-access/', views.user_eb_access, name='user_eb_access'),
+    # Email-verified password change (own account only)
+    path('password-change/request/', views.password_change_request, name='password_change_request'),
+    path('password-change/<uidb64>/<token>/', views.password_change_confirm, name='password_change_confirm'),
 ]
