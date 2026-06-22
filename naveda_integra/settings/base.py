@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     'apps.pos_crm',
     'apps.pos_promotions',
     'apps.pos_reports',
+    'axes',
 ]
 
 MIDDLEWARE = [
@@ -73,6 +74,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
 
 ROOT_URLCONF = 'naveda_integra.urls'
@@ -142,6 +144,20 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/home/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',   # must be first
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# ── django-axes (login brute-force lockout) ──────────────────────────────────
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = 0.25  # hours = 15 minutes
+AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']  # lock the pair, not all
+AXES_RESET_ON_SUCCESS = True
+AXES_LOCKOUT_CALLABLE = 'naveda_integra.ratelimit_utils.axes_lockout_response'
+AXES_IPWARE_META_PRECEDENCE_ORDER = ['HTTP_CF_CONNECTING_IP', 'REMOTE_ADDR']
+AXES_ENABLED = True
 
 INTERNAL_IPS = ['127.0.0.1']
 
