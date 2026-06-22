@@ -215,3 +215,46 @@ EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
 EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True').lower() in ('true', '1', 'yes')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+
+# ── Caching / rate-limit backend ─────────────────────────────────────────────
+# Redis shared across all gunicorn workers. Falls back to LocMem when REDIS_URL
+# is unset (dev without Redis) so the app still boots.
+_REDIS_URL = os.environ.get('REDIS_URL', '')
+if _REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': _REDIS_URL,
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,  # fail open if Redis is down
+            },
+        }
+    }
+    DJANGO_REDIS_IGNORE_EXCEPTIONS = True
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        }
+    }
+
+# ── Rate limiting ────────────────────────────────────────────────────────────
+# Central, tunable limits. Values are django-ratelimit "rate" strings
+# ("count/period"); the global ceiling is an int (requests per minute).
+RATELIMIT_RATES = {
+    'login': '20/5m',                 # coarse IP limit layered over axes lockout
+    'register': '5/h',                # per IP
+    'password_change_request': '3/h', # per authenticated user
+    'export': '10/m',                 # per authenticated user
+    'pos_api': '120/m',               # per authenticated user
+    'push_subscribe': '10/m',         # per authenticated user
+    'global_ceiling_per_min': 300,    # per IP, enforced by middleware
+}
+
+# django-ratelimit: route blocked requests to our smart-429 view.
+RATELIMIT_VIEW = 'naveda_integra.ratelimit_utils.ratelimit_view'
+RATELIMIT_ENABLE = True
+
+# Global throttle is on in real deployments; tests opt in per-case.
+GLOBAL_THROTTLE_ENABLE = os.environ.get('GLOBAL_THROTTLE_ENABLE', 'True').lower() in ('true', '1', 'yes')
