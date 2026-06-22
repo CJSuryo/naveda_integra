@@ -96,9 +96,34 @@ def password_change_request(request: HttpRequest) -> HttpResponse:
     return render(request, 'accounts/password_change_request.html', {'form': form})
 
 
+def _get_user_from_uidb64(uidb64: str):
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        return User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return None
+
+
 @login_required
 def password_change_confirm(request: HttpRequest, uidb64: str, token: str) -> HttpResponse:
-    pass  # implemented in Task 8
+    """Step 2: validate the emailed link, set new password, revoke all sessions."""
+    target = _get_user_from_uidb64(uidb64)
+    valid = (
+        target is not None
+        and target.pk == request.user.pk
+        and password_change_token.check_token(target, token)
+    )
+    if not valid:
+        return render(request, 'accounts/password_change_invalid.html')
+
+    form = NamedSetPasswordForm(target, request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        form.save()                       # sets + saves new password
+        revoke_all_sessions(target)       # logout from all devices
+        logout(request)                   # clear current request session
+        dj_messages.success(request, 'Kata sandi berhasil diubah. Silakan masuk kembali.')
+        return redirect('login')
+    return render(request, 'accounts/password_change_confirm.html', {'form': form})
 
 
 @login_required
