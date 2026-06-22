@@ -34,6 +34,14 @@ services:
         sync: false          # e.g. naveda-integra.onrender.com
       - key: CSRF_TRUSTED_ORIGINS
         sync: false          # e.g. https://naveda-integra.onrender.com
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST_USER
+        sync: false          # Google Workspace mailbox, e.g. noreply@navedafinance.com
+      - key: EMAIL_HOST_PASSWORD
+        sync: false          # 16-char Gmail App Password
+      - key: DEFAULT_FROM_EMAIL
+        sync: false          # e.g. Naveda Finance <noreply@navedafinance.com>
 
   # ── Nightly Backup Cron Job (1 AM WIB = 18:00 UTC) ─────────────────────────
   # - type: cron
