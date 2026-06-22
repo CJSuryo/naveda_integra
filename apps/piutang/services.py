@@ -1811,6 +1811,22 @@ def _create_piutang_ar_journal(piutang: PiutangHeader) -> JurnalHeader:
     return header
 
 
+def apply_pv_assessment(piutang: PiutangHeader) -> list[str]:
+    """Compute and apply PV adjustment on piutang if eligible.
+
+    Sets nilai_wajar_awal and is_pv_adjusted directly on the instance (caller must save).
+    Returns list of field names that were modified (empty list if no change needed).
+    Skipped for SAK EMKM or when pv_discount_rate is not set.
+    """
+    if get_standar_akuntansi(piutang) == 'sak_emkm':
+        return []
+    if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
+        piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
+        piutang.is_pv_adjusted = True
+        return ['nilai_wajar_awal', 'is_pv_adjusted']
+    return []
+
+
 def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
     with transaction.atomic():
         piutang = PiutangHeader.objects.select_for_update().get(pk=piutang.pk)
@@ -1819,12 +1835,7 @@ def post_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
                 f'Hanya piutang berstatus draft yang dapat di-post. Status saat ini: {piutang.get_status_display()}.'
             )
         update_fields = ['status', 'is_locked']
-        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
-        if get_standar_akuntansi(piutang) != 'sak_emkm':
-            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-                piutang.is_pv_adjusted = True
-                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        update_fields += apply_pv_assessment(piutang)
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True
@@ -1849,12 +1860,7 @@ def approve_piutang(piutang: PiutangHeader, user=None) -> JurnalHeader:
         if piutang.status != 'pending_approval':
             raise ValueError('Hanya piutang berstatus pending_approval yang dapat disetujui.')
         update_fields = ['status', 'is_locked', 'approved_by', 'approved_at']
-        # SAK EMKM: tidak menggunakan amortised cost / PV adjustment
-        if get_standar_akuntansi(piutang) != 'sak_emkm':
-            if piutang.pv_discount_rate and not piutang.nilai_wajar_awal:
-                piutang.nilai_wajar_awal = compute_present_value(piutang, piutang.pv_discount_rate)
-                piutang.is_pv_adjusted = True
-                update_fields += ['nilai_wajar_awal', 'is_pv_adjusted']
+        update_fields += apply_pv_assessment(piutang)
         jurnal = _create_piutang_ar_journal(piutang)
         piutang.status = 'open'
         piutang.is_locked = True

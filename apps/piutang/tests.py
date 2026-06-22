@@ -434,22 +434,17 @@ class ComputeBatchPenyisihanTest(TestCase):
             )
 
     def test_returns_required_keys(self):
-        akun, _ = Akun.objects.get_or_create(
-            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
-        )
-        result = compute_batch_penyisihan(date.today(), akun)
-        assert 'target_saldo' in result
-        assert 'saldo_existing' in result
-        assert 'delta' in result
-        assert 'breakdown' in result
+        result = compute_batch_penyisihan(date.today())
+        assert 'groups' in result
+        assert 'unconfigured' in result
         assert 'piutang_count' in result
+        assert 'total_target' in result
+        assert 'total_delta' in result
 
     def test_delta_equals_target_minus_existing(self):
-        akun, _ = Akun.objects.get_or_create(
-            kode_akun='2200', defaults={'nama': 'Cad Kerugian Piutang', 'kategori_id': 'kewajiban'}
-        )
-        result = compute_batch_penyisihan(date.today(), akun)
-        assert result['delta'] == result['target_saldo'] - result['saldo_existing']
+        result = compute_batch_penyisihan(date.today())
+        total_existing = sum(g['saldo_existing'] for g in result['groups'])
+        assert result['total_delta'] == result['total_target'] - total_existing
 
 
 # ── Task 1: periode_label field ──────────────────────────────────────────────
@@ -472,9 +467,10 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             )
         self.coa_all = Akun.objects.create(kategori_id='kewajiban', nama='Cad Piutang', kode_akun='2.1.8')
         self.coa_exp = Akun.objects.create(kategori_id='beban', nama='Beban Penyisihan', kode_akun='6.1.8')
+        self.coa_piutang = Akun.objects.create(kategori_id='aset', nama='Piutang Usaha', kode_akun='1.1.8')
 
     def test_saldo_existing_reads_from_piutang_penyisihan_model(self):
-        from apps.piutang.models import PiutangPenyisihan
+        from apps.piutang.models import PiutangPenyisihan, PiutangHeader
         from apps.jurnal.models import JurnalHeader
         jh = JurnalHeader.objects.create(
             tanggal=date(2026, 5, 31), nomor_transaksi='TRX-TEST-001',
@@ -485,8 +481,16 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             allowance_account=self.coa_all, expense_account=self.coa_exp,
             jurnal_header=jh, periode_label='2026-05',
         )
-        result = compute_batch_penyisihan(date(2026, 6, 30), self.coa_all)
-        self.assertEqual(result['saldo_existing'], Decimal('500000.00'))
+        PiutangHeader.objects.create(
+            jumlah_pokok=Decimal('1000000'), status='open',
+            coa_piutang_account=self.coa_piutang,
+            penyisihan_allowance_account=self.coa_all,
+            penyisihan_expense_account=self.coa_exp,
+            jatuh_tempo=date(2026, 6, 30),
+        )
+        result = compute_batch_penyisihan(date(2026, 6, 30))
+        group = next(g for g in result['groups'] if g['allowance_account'] == self.coa_all)
+        self.assertEqual(group['saldo_existing'], Decimal('500000.00'))
 
     def test_no_duplicate_batch_same_periode(self):
         from apps.piutang.services import create_batch_penyisihan_journal
@@ -502,14 +506,18 @@ class ComputeBatchPenyisihanSaldoSourceTest(TestCase):
             jurnal_header=jh, periode_label='2026-06',
         )
         batch_data = {
-            'target_saldo': Decimal('120000'), 'saldo_existing': Decimal('100000'),
-            'delta': Decimal('20000'), 'breakdown': [], 'piutang_count': 0,
+            'groups': [
+                {
+                    'allowance_account': self.coa_all,
+                    'expense_account': self.coa_exp,
+                    'delta': Decimal('20000'),
+                    'entitas_bisnis': None,
+                }
+            ],
         }
         with self.assertRaises(ValueError):
             create_batch_penyisihan_journal(
                 batch_data=batch_data,
-                allowance_account=self.coa_all,
-                expense_account=self.coa_exp,
                 tanggal=date(2026, 6, 30),
                 periode_label='2026-06',
             )

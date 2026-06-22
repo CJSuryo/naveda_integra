@@ -447,8 +447,13 @@ def confirm_pendapatan(header: PendapatanHeader, user=None) -> None:
         # Case 2: create exactly one full piutang for all point_in_time credit KPs,
         # then link the AR journals to the piutang for traceability.
         if has_credit_pit:
-            from apps.piutang.services import create_piutang_from_pendapatan
+            from apps.piutang.services import create_piutang_from_pendapatan, apply_pv_assessment
             piutang = create_piutang_from_pendapatan(header, user)
+            # post_piutang is not called for pendapatan flow (AR journal already booked above),
+            # so we apply PV assessment separately here.
+            pv_fields = apply_pv_assessment(piutang)
+            if pv_fields:
+                piutang.save(update_fields=pv_fields)
             piutang_num = piutang.nomor_piutang
             for jh in credit_ar_journals:
                 jh.uraian_transaksi = f'{jh.uraian_transaksi} — {piutang_num}'
