@@ -23,6 +23,9 @@
       <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'accounts:user_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+        {% if user_obj and user_obj.pk == request.user.pk %}
+        <a href="{% url 'accounts:password_change_request' %}" class="ni-btn ni-btn--secondary">Ubah Kata Sandi</a>
+        {% endif %}
       </div>
     </form>
   </div>
