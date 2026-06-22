@@ -22,13 +22,13 @@ class MerchantConfigViewTest(TestCase):
         self.assertIn('/accounts/login', response['Location'])
 
     def test_config_view_forbidden_without_permission(self):
-        self.client.login(email='kasir@test.com', password='pass')
+        self.client.force_login(self.kasir)
         url = reverse('pos_config:merchant_config', kwargs={'pk': self.entitas.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
     def test_config_view_accessible_with_permission(self):
-        self.client.login(email='admin@test.com', password='pass')
+        self.client.force_login(self.user)
         url = reverse('pos_config:merchant_config', kwargs={'pk': self.entitas.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
