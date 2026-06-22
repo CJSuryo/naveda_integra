@@ -42,6 +42,7 @@ class UserAdmin(DjangoUserAdmin):
     ordering = ('email',)
     list_select_related = ('role',)
     filter_horizontal = ('ni_permissions',)
+    readonly_fields = ('last_login', 'date_joined')
     inlines = (UserEntitasBisnisInline,)
 
 
