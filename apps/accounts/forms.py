@@ -1,7 +1,7 @@
 """Account forms."""
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, SetPasswordForm
 
 from .models import NiPermission, Role
 
@@ -42,13 +42,8 @@ class RegisterForm(forms.ModelForm):
 
 
 class UserForm(forms.ModelForm):
-    """Form for creating/editing users (admin use)."""
-    password = forms.CharField(
-        label='Password',
-        required=False,
-        widget=forms.PasswordInput(attrs={'class': 'ni-input', 'placeholder': 'Kosongkan jika tidak diubah'}),
-        help_text='Kosongkan untuk tidak mengubah password.',
-    )
+    """Form for creating/editing users (web CRUD). Password is NOT editable here —
+    use the email-verified password-change flow (own account) or the admin panel."""
 
     class Meta:
         model = User
@@ -60,16 +55,6 @@ class UserForm(forms.ModelForm):
             'is_active': forms.CheckboxInput(attrs={'class': 'ni-checkbox'}),
         }
 
-    def save(self, commit: bool = True) -> User:
-        user = super().save(commit=False)
-        pw = self.cleaned_data.get('password')
-        if pw:
-            user.set_password(pw)
-        if commit:
-            user.save()
-            self.save_m2m()
-        return user
-
 
 class UserPermissionForm(forms.Form):
     """Form for managing a user's permissions."""
@@ -79,3 +64,30 @@ class UserPermissionForm(forms.Form):
         required=False,
         label='Permissions',
     )
+
+
+class CurrentPasswordForm(forms.Form):
+    """Re-authentication step: user confirms their current password."""
+    current_password = forms.CharField(
+        label='Kata Sandi Saat Ini',
+        widget=forms.PasswordInput(attrs={'class': 'ni-input', 'autofocus': True}),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        self.user = user
+        super().__init__(*args, **kwargs)
+
+    def clean_current_password(self):
+        pw = self.cleaned_data['current_password']
+        if not self.user or not self.user.check_password(pw):
+            raise forms.ValidationError('Kata sandi saat ini salah.')
+        return pw
+
+
+class NamedSetPasswordForm(SetPasswordForm):
+    """SetPasswordForm with project input styling."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ('new_password1', 'new_password2'):
+            self.fields[name].widget.attrs['class'] = 'ni-input'
