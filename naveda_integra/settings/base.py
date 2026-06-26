@@ -66,6 +66,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'debug_toolbar.middleware.DebugToolbarMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'naveda_integra.middleware.security_headers.SecurityHeadersMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'naveda_integra.middleware.throttle.GlobalThrottleMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -159,6 +160,18 @@ AXES_RESET_ON_SUCCESS = True
 AXES_LOCKOUT_CALLABLE = 'naveda_integra.ratelimit_utils.axes_lockout_response'
 AXES_IPWARE_META_PRECEDENCE_ORDER = ['HTTP_CF_CONNECTING_IP', 'REMOTE_ADDR']
 AXES_ENABLED = True
+
+# ── Security headers (apply in every environment via SecurityMiddleware) ─────
+# X-Content-Type-Options: nosniff — stop browsers MIME-sniffing responses.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+
+# Permissions-Policy — deny browser features the app never uses. The POS only
+# needs service-worker push/notifications, which are not gated here. Emitted by
+# naveda_integra.middleware.security_headers.SecurityHeadersMiddleware.
+PERMISSIONS_POLICY = (
+    'camera=(), microphone=(), geolocation=(), usb=(), bluetooth=(), '
+    'payment=(), magnetometer=(), gyroscope=(), accelerometer=()'
+)
 
 INTERNAL_IPS = ['127.0.0.1']
 
