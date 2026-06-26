@@ -14,6 +14,7 @@ from django_ratelimit.decorators import ratelimit
 from naveda_integra.ratelimit_utils import rate_from
 from apps.accounts.views import _check_perm
 from pos_config.models import StorePOSConfig, PaymentMethod, WebPushSubscription
+from pos_config.access import accessible_store_qs
 from pos_catalog.services.product_service import validate_modifier_selections
 from pos_orders.models import Order, OrderItem, OrderPayment, Refund
 from pos_orders.services.order_service import (
@@ -41,7 +42,7 @@ def vapid_public_key(request):
 @require_POST
 @ratelimit(key='user', rate=rate_from('push_subscribe'), method='POST', block=True)
 def push_subscribe(request, store_id):
-    store = get_object_or_404(StorePOSConfig, pk=store_id)
+    store = get_object_or_404(accessible_store_qs(request.user), pk=store_id)
     data, err = _json_body(request)
     if err:
         return err
@@ -79,7 +80,7 @@ def cashier(request, store_id):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    store = get_object_or_404(StorePOSConfig, pk=store_id)
+    store = get_object_or_404(accessible_store_qs(request.user), pk=store_id)
     from apps.purchase.models import ItemMasterPurchase
     products = ItemMasterPurchase.objects.all().order_by('nama')
     categories = store.merchant_config.categories.filter(is_active=True).order_by('display_order')
@@ -102,7 +103,7 @@ def queue(request, store_id):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    store = get_object_or_404(StorePOSConfig, pk=store_id)
+    store = get_object_or_404(accessible_store_qs(request.user), pk=store_id)
     pending = Order.objects.filter(store=store, status=Order.STATUS_OPEN).order_by('created_at')
     preparing = Order.objects.filter(
         store=store, status__in=[Order.STATUS_IN_QUEUE, Order.STATUS_PREPARING]
@@ -118,7 +119,9 @@ def order_list(request):
     denied = _check_perm(request.user, 'pos_orders_manage')
     if denied:
         return denied
-    orders = Order.objects.select_related('store', 'cashier').order_by('-created_at')[:100]
+    orders = Order.objects.filter(
+        store__in=accessible_store_qs(request.user)
+    ).select_related('store', 'cashier').order_by('-created_at')[:100]
     return render(request, 'pos_orders/order_list.html', {'orders': orders})
 
 
@@ -127,7 +130,7 @@ def order_detail(request, pk):
     denied = _check_perm(request.user, 'pos_orders_manage')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     return render(request, 'pos_orders/order_detail.html', {'order': order})
 
 
@@ -139,7 +142,7 @@ def shift_open(request, store_id):
     from pos_config.models import WorkShift, ShiftLog
     from django.utils import timezone
     from django.contrib import messages
-    store = get_object_or_404(StorePOSConfig, pk=store_id)
+    store = get_object_or_404(accessible_store_qs(request.user), pk=store_id)
     shifts = store.shifts.filter(is_active=True)
     if request.method == 'POST':
         shift_id = request.POST.get('shift')
@@ -162,7 +165,7 @@ def shift_close(request, store_id):
     from pos_config.models import ShiftLog
     from django.utils import timezone
     from django.contrib import messages
-    store = get_object_or_404(StorePOSConfig, pk=store_id)
+    store = get_object_or_404(accessible_store_qs(request.user), pk=store_id)
     log = ShiftLog.objects.filter(store=store, clock_out__isnull=True).order_by('-clock_in').first()
     if request.method == 'POST' and log:
         log.closing_cash = Decimal(request.POST.get('closing_cash', '0'))
@@ -192,7 +195,7 @@ def api_create_order(request):
     data, err = _json_body(request)
     if err:
         return err
-    store = get_object_or_404(StorePOSConfig, pk=data['store_id'])
+    store = get_object_or_404(accessible_store_qs(request.user), pk=data['store_id'])
     order = create_order(
         store, request.user,
         data.get('order_type', Order.ORDER_TYPE_DINE_IN),
@@ -275,7 +278,7 @@ def api_process_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     data, err = _json_body(request)
     if err:
         return err
@@ -291,7 +294,7 @@ def api_confirm_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     data, err = _json_body(request)
     if err:
         return err
@@ -308,7 +311,7 @@ def api_confirm_single_payment(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    op = get_object_or_404(OrderPayment, pk=pk)
+    op = get_object_or_404(OrderPayment, pk=pk, order__store__in=accessible_store_qs(request.user))
     is_paid = confirm_payment(op, request.user)
     return JsonResponse({'is_confirmed': True, 'is_fully_paid': is_paid})
 
@@ -320,7 +323,7 @@ def api_complete_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     try:
         order = complete_order(order)
     except ValueError as e:
@@ -335,7 +338,7 @@ def api_cancel_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     data, err = _json_body(request)
     if err:
         return err
@@ -352,7 +355,7 @@ def api_transition_order(request, pk):
     denied = _check_perm(request.user, 'pos_cashier')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=pk)
+    order = get_object_or_404(Order, pk=pk, store__in=accessible_store_qs(request.user))
     data, err = _json_body(request)
     if err:
         return err
@@ -371,7 +374,7 @@ def refund_initiate(request, order_pk):
     if denied:
         return denied
     from pos_orders.services.refund_service import initiate_refund
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     if order.status != Order.STATUS_COMPLETED:
         messages.error(request, 'Hanya order COMPLETED yang bisa direfund.')
         return redirect('pos_orders:order_detail', pk=order_pk)
@@ -404,7 +407,7 @@ def refund_detail(request, order_pk, refund_pk):
     denied = _check_perm(request.user, 'pos_orders_manage')
     if denied:
         return denied
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     refund = get_object_or_404(Refund, pk=refund_pk, order=order)
     return render(request, 'pos_orders/refund_detail.html', {'order': order, 'refund': refund})
 
@@ -416,7 +419,7 @@ def refund_approve(request, order_pk, refund_pk):
     if denied:
         return denied
     from pos_orders.services.refund_service import approve_refund
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     refund = get_object_or_404(Refund, pk=refund_pk, order=order)
     try:
         approve_refund(refund, approved_by=request.user)
@@ -433,7 +436,7 @@ def refund_complete(request, order_pk, refund_pk):
     if denied:
         return denied
     from pos_orders.services.refund_service import complete_refund
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     refund = get_object_or_404(Refund, pk=refund_pk, order=order)
     try:
         complete_refund(refund)
@@ -449,7 +452,9 @@ def refund_list(request):
     if denied:
         return denied
     store_id = request.GET.get('store')
-    refunds = Refund.objects.select_related(
+    refunds = Refund.objects.filter(
+        order__store__in=accessible_store_qs(request.user)
+    ).select_related(
         'order__store', 'initiated_by', 'approved_by'
     ).order_by('-id')
     if store_id:
@@ -463,7 +468,7 @@ def receipt_preview(request, order_pk):
     if denied:
         return denied
     from pos_orders.services.receipt_service import generate_receipt_text
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     text = generate_receipt_text(order)
     return render(request, 'pos_orders/receipt_preview.html', {
         'order': order, 'receipt_text': text,
@@ -477,7 +482,7 @@ def receipt_print(request, order_pk):
     if denied:
         return denied
     from pos_orders.services.receipt_service import generate_receipt_text, send_to_printer
-    order = get_object_or_404(Order, pk=order_pk)
+    order = get_object_or_404(Order, pk=order_pk, store__in=accessible_store_qs(request.user))
     text = generate_receipt_text(order)
     send_to_printer(order.store, text)
     return JsonResponse({'ok': True})
