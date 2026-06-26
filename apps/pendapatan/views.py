@@ -2,6 +2,7 @@ import datetime
 import json
 
 from django.contrib.auth.decorators import login_required
+from naveda_integra.json_utils import safe_json
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.contrib import messages as dj_messages
@@ -45,7 +46,7 @@ def _pendapatan_eb_standar_map_json():
     """Returns JSON string mapping EB pk → standar_akuntansi for the piutang wizard JS."""
     from apps.entitas_bisnis.models import EntitasBisnis
     rows = EntitasBisnis.objects.filter(status_aktif=True).values('pk', 'standar_akuntansi')
-    return json.dumps({str(r['pk']): r['standar_akuntansi'] for r in rows})
+    return safe_json({str(r['pk']): r['standar_akuntansi'] for r in rows})
 
 
 @login_required
@@ -97,7 +98,7 @@ def pendapatan_list(request: HttpRequest) -> HttpResponse:
     if eb_filter_list:
         lv1_ids = set()
         for sel in eb_filter_list:
-            resolved = _resolve_eb_selection(sel)
+            resolved = _resolve_eb_selection(sel, request.user)
             if resolved:
                 lv1_ids.add(resolved['lv1_id'])
         if lv1_ids:
@@ -108,7 +109,7 @@ def pendapatan_list(request: HttpRequest) -> HttpResponse:
         'status_filter': status_filter,
         'search': search,
         'status_choices': PendapatanHeader.STATUS_CHOICES,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 
@@ -160,7 +161,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
         item_count = max(int(request.POST.get('item_count', '1')), 1)
         item_forms = [KewajibabPelaksanaanForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
 
         if form.is_valid() and all(f.is_valid() for f in item_forms):
             cd = form.cleaned_data
@@ -191,7 +192,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
                             'form': form,
                             'item_forms': item_forms,
                             'mode': 'create',
-                            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+                            'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
                             'tax_lines_initial_json': '{}',
                             'tax_type_choices': _TAX_TYPE_CHOICES,
                             'piutang_form': piutang_form,
@@ -215,7 +216,7 @@ def pendapatan_create(request: HttpRequest) -> HttpResponse:
         'form': form,
         'item_forms': item_forms,
         'mode': 'create',
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'tax_lines_initial_json': '{}',
         'tax_type_choices': _TAX_TYPE_CHOICES,
         'piutang_form': piutang_form,
@@ -246,7 +247,7 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
         item_count = max(int(request.POST.get('item_count', '1')), 1)
         item_forms = [KewajibabPelaksanaanForm(request.POST, prefix=f'item_{i}') for i in range(item_count)]
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
 
         if form.is_valid() and all(f.is_valid() for f in item_forms):
             try:
@@ -327,9 +328,9 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
                         'item_forms': item_forms,
                         'mode': 'edit',
                         'header': header,
-                        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+                        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
                         'eb_selected': eb_selected,
-                        'tax_lines_initial_json': json.dumps(tax_lines_initial),
+                        'tax_lines_initial_json': safe_json(tax_lines_initial),
                         'tax_type_choices': _TAX_TYPE_CHOICES,
                         'piutang_form': piutang_form_err,
                         'piutang_profil_exists': bool(profil_edit),
@@ -387,9 +388,9 @@ def pendapatan_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'item_forms': item_forms,
         'mode': 'edit',
         'header': header,
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': eb_selected,
-        'tax_lines_initial_json': json.dumps(tax_lines_initial),
+        'tax_lines_initial_json': safe_json(tax_lines_initial),
         'tax_type_choices': _TAX_TYPE_CHOICES,
         'piutang_form': piutang_form,
         'piutang_profil_exists': bool(profil_existing),

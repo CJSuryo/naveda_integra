@@ -2,6 +2,8 @@
 import json
 from decimal import Decimal, InvalidOperation
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
@@ -31,10 +33,13 @@ from .services import (
 )
 
 
-def _get_eb_dropdown_options() -> list[dict[str, str]]:
-    """Build hierarchical EntitasBisnis dropdown options (lv1/lv2/lv3)."""
+def _get_eb_dropdown_options(user) -> list[dict[str, str]]:
+    """Build hierarchical EntitasBisnis dropdown options (lv1/lv2/lv3),
+    scoped to the entities the user may access."""
     from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+    from apps.purchase.views import accessible_eb_lv1_ids
 
+    allowed = accessible_eb_lv1_ids(user)
     lv1_list = list(EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'))
     lv2_list = list(
         EntitasBisnisLv2.objects.filter(status_aktif=True)
@@ -44,6 +49,10 @@ def _get_eb_dropdown_options() -> list[dict[str, str]]:
         EntitasBisnisLv3.objects.filter(status_aktif=True)
         .select_related('parent_lv2__entitas_bisnis').order_by('nama')
     )
+    if allowed is not None:
+        lv1_list = [eb for eb in lv1_list if eb.pk in allowed]
+        lv2_list = [lv2 for lv2 in lv2_list if lv2.entitas_bisnis_id in allowed]
+        lv3_list = [lv3 for lv3 in lv3_list if lv3.parent_lv2.entitas_bisnis_id in allowed]
 
     lv2_by_lv1: dict[int, list] = {}
     for lv2 in lv2_list:
@@ -62,43 +71,11 @@ def _get_eb_dropdown_options() -> list[dict[str, str]]:
     return options
 
 
-def _resolve_eb_selection(selection: str | int | None) -> dict | None:
-    """Resolve a lv1:/lv2:/lv3: prefixed selection to EB level ids."""
-    from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
-
-    if selection is None or selection == '':
-        return None
-    if isinstance(selection, int):
-        return {'lv1_id': selection, 'lv2_id': None, 'lv3_id': None}
-    selection = str(selection)
-    if ':' not in selection:
-        try:
-            return {'lv1_id': int(selection), 'lv2_id': None, 'lv3_id': None}
-        except (ValueError, TypeError):
-            return None
-    try:
-        level, raw_pk = selection.split(':', 1)
-        pk = int(raw_pk)
-    except (ValueError, TypeError):
-        return None
-
-    if level == 'lv1':
-        return {'lv1_id': pk, 'lv2_id': None, 'lv3_id': None}
-    if level == 'lv2':
-        lv2 = EntitasBisnisLv2.objects.filter(pk=pk).select_related('entitas_bisnis').first()
-        if not lv2:
-            return None
-        return {'lv1_id': lv2.entitas_bisnis_id, 'lv2_id': lv2.pk, 'lv3_id': None}
-    if level == 'lv3':
-        lv3 = EntitasBisnisLv3.objects.filter(pk=pk).select_related('parent_lv2__entitas_bisnis').first()
-        if not lv3:
-            return None
-        return {
-            'lv1_id': lv3.parent_lv2.entitas_bisnis_id,
-            'lv2_id': lv3.parent_lv2_id,
-            'lv3_id': lv3.pk,
-        }
-    return None
+def _resolve_eb_selection(selection: str | int | None, user) -> dict | None:
+    """Thin wrapper over the scoped resolver in purchase.views, kept so existing
+    sales imports/usages keep working. Rejects entities the user cannot access."""
+    from apps.purchase.views import _resolve_eb_selection as _impl
+    return _impl(selection, user)
 
 
 # ── Sales List ───────────────────────────────────────────────────────────────
@@ -132,7 +109,7 @@ def sales_list(request: HttpRequest) -> HttpResponse:
     if stt_filter:
         qs = qs.filter(entitas_groups__items__sub_transaction_type_id=stt_filter).distinct()
     if eb_filter_list:
-        qs = qs.filter(entitas_groups__entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list)).distinct()
+        qs = qs.filter(entitas_groups__entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user)).distinct()
 
     # Build flat rows
     rows = []
@@ -181,7 +158,7 @@ def sales_list(request: HttpRequest) -> HttpResponse:
         'tanggal_sampai': tanggal_sampai,
         'items': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'item_filter': item_filter,
         'stt_filter': stt_filter,
         'eb_filter_list': eb_filter_list,
@@ -381,7 +358,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
         'akun_list': get_akun_sorted(),
-        'eb_options': _get_eb_dropdown_options(),
+        'eb_options': _get_eb_dropdown_options(request.user),
     })
 
 
@@ -451,8 +428,8 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'items_master': inventory_items,
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
         'akun_list': get_akun_sorted(),
-        'eb_options': _get_eb_dropdown_options(),
-        'eb_groups_json': json.dumps(eb_groups_data),
+        'eb_options': _get_eb_dropdown_options(request.user),
+        'eb_groups_json': safe_json(eb_groups_data),
     })
 
 
@@ -718,7 +695,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             errors[f'group_{g_idx}_eb'] = f'Grup {g_idx + 1}: Entitas Bisnis wajib dipilih.'
             continue
 
-        eb_resolved = _resolve_eb_selection(eb_sel)
+        eb_resolved = _resolve_eb_selection(eb_sel, request.user)
         if not eb_resolved:
             errors[f'group_{g_idx}_eb'] = f'Grup {g_idx + 1}: Entitas Bisnis tidak valid.'
             continue
@@ -838,9 +815,9 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'items_master': inventory_items,
             'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
             'akun_list': get_akun_sorted(),
-            'eb_options': _get_eb_dropdown_options(),
+            'eb_options': _get_eb_dropdown_options(request.user),
             'errors': errors,
-            'eb_groups_json': json.dumps(eb_groups_list),
+            'eb_groups_json': safe_json(eb_groups_list),
         })
 
     # Save
@@ -861,7 +838,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             )
 
         for group in eb_groups_list:
-            eb_resolved = _resolve_eb_selection(group['eb_selection'])
+            eb_resolved = _resolve_eb_selection(group['eb_selection'], request.user)
             eb_group = SalesEntitasBisnis.objects.create(
                 sales_header=sales,
                 entitas_bisnis_id=eb_resolved['lv1_id'],

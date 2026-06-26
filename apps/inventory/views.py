@@ -1,6 +1,8 @@
 """Inventory views — CRUD for InventoryRecord."""
 import json
 import math
+
+from naveda_integra.json_utils import safe_json
 from collections import defaultdict
 from datetime import timedelta
 from decimal import Decimal
@@ -41,7 +43,7 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
     if item_filter:
         qs = qs.filter(item_id=item_filter)
     if eb_filter_list:
-        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
 
     BULK_TYPES = ('RMB', 'FGB', 'ITMB')
     SATUAN_TYPES = ('RM', 'FG', 'ITM')
@@ -55,7 +57,7 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
 
     tagged_qs = DashboardInventoryTag.objects
     if eb_filter_list:
-        tagged_qs = tagged_qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        tagged_qs = tagged_qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
     tagged_ids = set(tagged_qs.values_list('item_id', flat=True))
 
     return render(request, 'inventory/inventory_list.html', {
@@ -64,7 +66,7 @@ def inventory_list(request: HttpRequest) -> HttpResponse:
         'items': ItemMasterPurchase.objects.filter(
             tipe_item__in=list(SATUAN_TYPES) + list(BULK_TYPES),
         ).order_by('item_id'),
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,
@@ -665,7 +667,7 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
 
     context = {
         'metrics': metrics,
-        'chart_data_json': json.dumps(chart_data, default=str),
+        'chart_data_json': safe_json(chart_data, default=str),
         'waterfall': waterfall,
         'eb_breakdown': eb_breakdown,
         'expiry_past': expiry_past,
@@ -673,7 +675,7 @@ def laporan_persediaan(request: HttpRequest) -> HttpResponse:
         'rop_alerts': rop_alerts,
         'slow_dead': slow_dead,
         'aging_buckets': aging_buckets,
-        'aging_json': json.dumps(_aging_chart_data(aging_buckets), default=str),
+        'aging_json': safe_json(_aging_chart_data(aging_buckets), default=str),
         'cost_data': cost_data,
         'positions': positions,
         'mutasi_list': mutasi_list,

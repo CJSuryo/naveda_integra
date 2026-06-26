@@ -224,6 +224,8 @@ class PendapatanCreateViewProfilTest(TestCase):
             nama='PT View Test', standar_akuntansi='psak', tipe_entitas=self.tipe,
         )
         self.stt = _stt_for_view(self.akun_pend)
+        from apps.accounts.models import UserEntitasBisnis
+        UserEntitasBisnis.objects.create(user=self.user, entitas_bisnis=self.eb)
 
     def _base_post_data(self, payment_type='credit'):
         """Minimal valid POST data for pendapatan_create (one item)."""

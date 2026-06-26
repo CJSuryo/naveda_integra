@@ -222,6 +222,8 @@ class EkuitasViewTests(TestCase):
         )
         self.client.force_login(self.user)
         self.eb = _make_eb()
+        from apps.accounts.models import UserEntitasBisnis
+        UserEntitasBisnis.objects.create(user=self.user, entitas_bisnis=self.eb)
         self.pemilik = Pemilik.objects.create(nama='Pemilik View Test')
         self.modal_akun, self.kas_akun = _make_accounts()
 

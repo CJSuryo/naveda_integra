@@ -44,7 +44,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     if item_filter:
         qs = qs.filter(item_id=item_filter)
     if eb_filter_list:
-        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
     if kondisi_filter:
         qs = qs.filter(kondisi=kondisi_filter)
     if kategori_filter:
@@ -63,7 +63,7 @@ def aset_tetap_list(request: HttpRequest) -> HttpResponse:
     return render(request, 'aset_tetap/aset_tetap_list.html', {
         'records': qs,
         'items': ItemMasterPurchase.objects.filter(tipe_item='ATP').order_by('item_id'),
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'entitas_list': EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'),
         'kondisi_choices': AsetTetapRecord.KONDISI_CHOICES,
         'metode_choices': AsetTetapRecord.METODE_PENYUSUTAN_CHOICES,

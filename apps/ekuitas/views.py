@@ -2,6 +2,8 @@
 import json
 from decimal import Decimal, InvalidOperation
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
@@ -30,7 +32,7 @@ def ekuitas_list(request: HttpRequest) -> HttpResponse:
     qs = list(ModalDisetor.objects.select_related('entitas_bisnis', 'pemilik', 'jurnal_header').all())
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     if eb_filter_list:
-        lv1_ids = _resolve_eb_lv1_ids(eb_filter_list)
+        lv1_ids = _resolve_eb_lv1_ids(eb_filter_list, request.user)
         qs = [r for r in qs if r.entitas_bisnis_id in lv1_ids]
     if eb_filter_list:
         total_all = sum(r.jumlah_modal for r in qs) or Decimal('1')
@@ -41,7 +43,7 @@ def ekuitas_list(request: HttpRequest) -> HttpResponse:
             r.persentase = None
     return render(request, 'ekuitas/ekuitas_list.html', {
         'records': qs,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 
@@ -222,7 +224,7 @@ def ekuitas_create(request: HttpRequest) -> HttpResponse:
             'posted_eb': eb_id,
             'posted_tanggal': tanggal,
             'akun_autocomplete_url': akun_autocomplete_url,
-            'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+            'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
         })
 
     return render(request, 'ekuitas/ekuitas_create.html', {
@@ -231,7 +233,7 @@ def ekuitas_create(request: HttpRequest) -> HttpResponse:
         'errors': {},
         'posted_tanggal': timezone.now().date().isoformat(),
         'akun_autocomplete_url': akun_autocomplete_url,
-        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
     })
 
 

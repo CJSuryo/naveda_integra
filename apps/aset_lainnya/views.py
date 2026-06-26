@@ -35,12 +35,12 @@ def aset_lainnya_list(request: HttpRequest) -> HttpResponse:
     if item_filter:
         qs = qs.filter(item_id=item_filter)
     if eb_filter_list:
-        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
 
     return render(request, 'aset_lainnya/aset_lainnya_list.html', {
         'records': qs,
         'items': ItemMasterPurchase.objects.filter(tipe_item='ALL').order_by('item_id'),
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'item_filter': item_filter,

@@ -71,7 +71,7 @@ def transaksi_list(request):
     if eb_filter_list:
         lv1_ids = set()
         for sel in eb_filter_list:
-            resolved = _resolve_eb_selection(sel)
+            resolved = _resolve_eb_selection(sel, request.user)
             if resolved:
                 lv1_ids.add(resolved['lv1_id'])
         if lv1_ids:
@@ -101,7 +101,7 @@ def transaksi_list(request):
     return render(request, 'pajak/transaksi_list.html', {
         'transaksi_list': trx_list,
         'status_filter': status,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 

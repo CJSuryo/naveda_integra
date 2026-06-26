@@ -1,6 +1,8 @@
 # apps/customers/views.py
 import json
 from django.contrib.auth.decorators import login_required
+
+from naveda_integra.json_utils import safe_json
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
@@ -9,10 +11,10 @@ from .models import Customer
 from .forms import CustomerForm
 
 
-def _resolve_eb(eb_selection: str):
+def _resolve_eb(eb_selection: str, user):
     """Return resolved EB dict or None. Import here to avoid circular at module load."""
     from apps.purchase.views import _resolve_eb_selection
-    return _resolve_eb_selection(eb_selection) if eb_selection else None
+    return _resolve_eb_selection(eb_selection, user) if eb_selection else None
 
 
 def _apply_eb_to_customer(customer: Customer, resolved: dict) -> None:
@@ -48,7 +50,7 @@ def customer_list(request: HttpRequest) -> HttpResponse:
     if eb_filter_list:
         lv1_ids = set()
         for sel in eb_filter_list:
-            resolved = _resolve_eb_selection(sel)
+            resolved = _resolve_eb_selection(sel, request.user)
             if resolved:
                 lv1_ids.add(resolved['lv1_id'])
         if lv1_ids:
@@ -62,7 +64,7 @@ def customer_list(request: HttpRequest) -> HttpResponse:
         'page_obj': page,
         'search': search,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
     })
 
 
@@ -73,7 +75,7 @@ def customer_create(request: HttpRequest) -> HttpResponse:
     if request.method == 'POST':
         form = CustomerForm(request.POST)
         eb_selection = request.POST.get('eb_selection', '')
-        resolved = _resolve_eb(eb_selection)
+        resolved = _resolve_eb(eb_selection, request.user)
         form_valid = form.is_valid()
         if not resolved:
             form.add_error(None, 'Pilih entitas bisnis.')
@@ -90,7 +92,7 @@ def customer_create(request: HttpRequest) -> HttpResponse:
     return render(request, 'customers/form.html', {
         'form': form,
         'mode': 'create',
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': eb_selected,
     })
 
@@ -104,7 +106,7 @@ def customer_update(request: HttpRequest, pk: int) -> HttpResponse:
     if request.method == 'POST':
         form = CustomerForm(request.POST, instance=customer)
         eb_selection = request.POST.get('eb_selection', '')
-        resolved = _resolve_eb(eb_selection)
+        resolved = _resolve_eb(eb_selection, request.user)
         form_valid = form.is_valid()
         if not resolved:
             form.add_error(None, 'Pilih entitas bisnis.')
@@ -127,7 +129,7 @@ def customer_update(request: HttpRequest, pk: int) -> HttpResponse:
         'form': form,
         'mode': 'update',
         'object': customer,
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': eb_selected,
     })
 
@@ -146,7 +148,7 @@ def customer_delete(request: HttpRequest, pk: int) -> HttpResponse:
 def customer_quick_create(request: HttpRequest) -> JsonResponse:
     form = CustomerForm(request.POST)
     eb_selection = request.POST.get('eb_selection', '')
-    resolved = _resolve_eb(eb_selection)
+    resolved = _resolve_eb(eb_selection, request.user)
 
     errors = {}
     if not resolved:

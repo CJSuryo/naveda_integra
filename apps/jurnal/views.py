@@ -2,6 +2,8 @@
 import json
 from decimal import Decimal
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
@@ -444,7 +446,7 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         return {row['akun_id']: row for row in result}
 
     # EB filter: resolve to lv1 PKs
-    eb_lv1_ids = _resolve_eb_lv1_ids(eb_filter_list) if eb_filter_list else None
+    eb_lv1_ids = _resolve_eb_lv1_ids(eb_filter_list, request.user) if eb_filter_list else None
     eb_filter_kwargs = {'jurnal_header__entitas_bisnis_id__in': eb_lv1_ids} if eb_lv1_ids is not None else {}
 
     # Period filter
@@ -544,7 +546,7 @@ def neraca_saldo(request: HttpRequest) -> HttpResponse:
         'totals': totals,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 
@@ -824,7 +826,7 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
                 'errors': errors,
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
-                'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+                'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
             })
 
         with db_transaction.atomic():
@@ -1008,7 +1010,7 @@ def manual_jurnal_create(request: HttpRequest) -> HttpResponse:
         'today': timezone.now().date(),
         'eb_list': eb_list,
         'errors': {},
-        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
     })
 
 
@@ -1042,7 +1044,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
     if eb_filter_list:
-        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # Aggregate by akun
     agg = (
@@ -1147,7 +1149,7 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'tampilan': tampilan,
         # Data
         'pendapatan_op_items': pendapatan_op_items,
@@ -1238,7 +1240,7 @@ def saldo_awal_list(request: HttpRequest) -> HttpResponse:
     tanggal_dari = request.GET.get('tanggal_dari', '')
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     if eb_filter_list:
-        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
     if tanggal_dari:
         qs = qs.filter(tanggal__gte=tanggal_dari)
     if tanggal_sampai:
@@ -1249,7 +1251,7 @@ def saldo_awal_list(request: HttpRequest) -> HttpResponse:
         'eb_filter_list': eb_filter_list,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
     })
 
 
@@ -1344,7 +1346,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                 'errors': errors,
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
-                'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+                'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
             })
 
         with db_transaction.atomic():
@@ -1529,7 +1531,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         'today': timezone.now().date(),
         'eb_list': eb_list,
         'errors': {},
-        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
         'initial_rows_json': '[]',
     })
 
@@ -1601,7 +1603,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 'errors': errors,
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
-                'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+                'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
                 'edit_header': header,
                 'initial_rows_json': initial_rows,
             })
@@ -1796,7 +1798,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_list': eb_list,
         'errors': {},
         'selected_entitas_bisnis': selected_eb,
-        'akun_detail_prefixes_json': json.dumps(AKUN_DETAIL_PREFIXES),
+        'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
         'edit_header': header,
         'initial_rows_json': initial_rows,
     })
@@ -1923,7 +1925,7 @@ def _build_initial_rows_json(header) -> str:
             modal_attached = True
 
         rows.append(row)
-    return json.dumps(rows)
+    return safe_json(rows)
 
 
 # ── Neraca (Balance Sheet) ──────────────────────────────────────────────────
@@ -1938,7 +1940,7 @@ def neraca(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
     if eb_filter_list:
-        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # Aggregate all journal details up to tanggal_sampai
     agg = (
@@ -2011,7 +2013,7 @@ def neraca(request: HttpRequest) -> HttpResponse:
     return render(request, 'jurnal/neraca.html', {
         'tanggal_sampai': tanggal_sampai,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         # Aset
         'aset_lancar_items': aset_lancar_items, 'total_aset_lancar': total_aset_lancar,
         'aset_tetap_items': aset_tetap_items, 'total_aset_tetap': total_aset_tetap,
@@ -2047,12 +2049,12 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         period_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
     if eb_filter_list:
-        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        period_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # Build filter for before-period (saldo awal)
     before_filter: dict = {}
     if eb_filter_list:
-        before_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        before_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # 1. Saldo Awal Ekuitas = net balance of 3.x accounts BEFORE tanggal_dari
     saldo_awal_ekuitas = Decimal('0')
@@ -2110,7 +2112,7 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'saldo_awal_ekuitas': saldo_awal_ekuitas,
         'laba_bersih': laba_bersih,
         'prive': prive,
@@ -2123,8 +2125,6 @@ def laporan_perubahan_ekuitas(request: HttpRequest) -> HttpResponse:
 @login_required
 def analisis_keuangan(request: HttpRequest) -> HttpResponse:
     """Financial ratio analysis: Likuiditas, Profitabilitas, Efisiensi, Solvabilitas."""
-    import json as _json
-
     tanggal_sampai = request.GET.get('tanggal_sampai', '')
     tanggal_dari = request.GET.get('tanggal_dari', '')
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
@@ -2134,7 +2134,7 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         bs_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
     if eb_filter_list:
-        bs_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        bs_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # ── P&L period filter (tanggal_dari – tanggal_sampai) ──
     pl_filter: dict = {}
@@ -2143,7 +2143,7 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
     if tanggal_sampai:
         pl_filter['jurnal_header__tanggal__lte'] = tanggal_sampai
     if eb_filter_list:
-        pl_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+        pl_filter['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
     # ── Aggregate balance sheet ──
     bs_agg = (
@@ -2273,7 +2273,7 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         # Balance sheet intermediate values
         'total_aset_lancar': total_aset_lancar,
         'total_aset': total_aset,
@@ -2286,8 +2286,8 @@ def analisis_keuangan(request: HttpRequest) -> HttpResponse:
         'laba_bersih': laba_bersih,
         # Ratios
         'ratios': ratios,
-        'ratios_json': _json.dumps(ratios),
-        'radar_json': _json.dumps(radar_data),
+        'ratios_json': safe_json(ratios),
+        'radar_json': safe_json(radar_data),
     })
 
 
@@ -2364,7 +2364,7 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
         # Build filters
         filters: dict = {'akun': selected_akun}
         if eb_filter_list:
-            filters['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list)
+            filters['jurnal_header__entitas_bisnis_id__in'] = _resolve_eb_lv1_ids(eb_filter_list, request.user)
 
         # Saldo awal: sum of all entries before tanggal_dari
         if tanggal_dari:
@@ -2414,7 +2414,7 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
     return render(request, 'jurnal/buku_besar.html', {
         'akun_list': akun_list,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'selected_akun': selected_akun,
         'akun_id': akun_id,
         'tanggal_dari': tanggal_dari,

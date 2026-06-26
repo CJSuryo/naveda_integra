@@ -1,6 +1,8 @@
 import json
 from decimal import Decimal
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
@@ -38,7 +40,7 @@ from .services import (
 def _utang_eb_filter_q(eb_selections: list[str]) -> Q | None:
     lv1_ids: set[int] = set()
     for sel in eb_selections:
-        resolved = _resolve_eb_selection(sel)
+        resolved = _resolve_eb_selection(sel, request.user)
         if not resolved:
             continue
         lv1_ids.add(resolved['lv1_id'])
@@ -93,7 +95,7 @@ def utang_list(request: HttpRequest) -> HttpResponse:
 
     return render(request, 'utang/list.html', {
         'utangs': list(qs),
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
         'tanggal_dari': tanggal_dari,
         'tanggal_sampai': tanggal_sampai,
@@ -148,7 +150,7 @@ def utang_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'akun_kewajiban': akun_kewajiban,
         'angsuran_schedule': angsuran_schedule,
         'angsuran_totals': angsuran_totals,
-        'angsuran_paid_map_json': json.dumps(angsuran_paid_map),
+        'angsuran_paid_map_json': safe_json(angsuran_paid_map),
     })
 
 
@@ -158,7 +160,7 @@ def utang_create(request: HttpRequest) -> HttpResponse:
         form = UtangHeaderForm(request.POST)
         formset = UtangDetailFormSet(request.POST, prefix='details')
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
         entitas_bisnis_obj = EntitasBisnisModel.objects.filter(pk=resolved_eb['lv1_id']).first() if resolved_eb else None
         if form.is_valid() and formset.is_valid():
             details = []
@@ -198,7 +200,7 @@ def utang_create(request: HttpRequest) -> HttpResponse:
                     form.add_error(None, str(exc))
         return render(request, 'utang/form.html', {
             'form': form, 'formset': formset, 'title': 'Tambah Utang',
-            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
             'eb_selected': eb_selection,
         })
     else:
@@ -206,7 +208,7 @@ def utang_create(request: HttpRequest) -> HttpResponse:
         formset = UtangDetailFormSet(prefix='details', queryset=UtangDetail.objects.none())
     return render(request, 'utang/form.html', {
         'form': form, 'formset': formset, 'title': 'Tambah Utang',
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': '',
     })
 
@@ -224,7 +226,7 @@ def utang_update(request: HttpRequest, pk: int) -> HttpResponse:
         form = UtangHeaderForm(request.POST, instance=utang)
         formset = UtangDetailFormSet(request.POST, instance=utang, prefix='details')
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
         entitas_bisnis_obj = EntitasBisnisModel.objects.filter(pk=resolved_eb['lv1_id']).first() if resolved_eb else None
         if form.is_valid() and formset.is_valid():
             saved_utang = form.save()
@@ -239,7 +241,7 @@ def utang_update(request: HttpRequest, pk: int) -> HttpResponse:
             return redirect('utang:detail', pk=saved_utang.pk)
         return render(request, 'utang/form.html', {
             'form': form, 'formset': formset, 'title': 'Edit Utang', 'utang': utang,
-            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
             'eb_selected': eb_selection,
         })
     else:
@@ -248,7 +250,7 @@ def utang_update(request: HttpRequest, pk: int) -> HttpResponse:
         formset = UtangDetailFormSet(instance=utang, prefix='details')
     return render(request, 'utang/form.html', {
         'form': form, 'formset': formset, 'title': 'Edit Utang', 'utang': utang,
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': eb_selected,
     })
 

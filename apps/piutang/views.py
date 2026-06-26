@@ -1,6 +1,8 @@
 import json
 from decimal import Decimal
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages as dj_messages
 from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
@@ -224,7 +226,7 @@ def piutang_list(request: HttpRequest) -> HttpResponse:
     if eb_filter_list:
         lv1_ids = set()
         for sel in eb_filter_list:
-            resolved = _resolve_eb_selection(sel)
+            resolved = _resolve_eb_selection(sel, request.user)
             if resolved:
                 lv1_ids.add(resolved['lv1_id'])
         if lv1_ids:
@@ -235,7 +237,7 @@ def piutang_list(request: HttpRequest) -> HttpResponse:
         'tanggal_dari': tanggal_dari, 'tanggal_sampai': tanggal_sampai,
         'status_filter': status_filter, 'search': search,
         'status_choices': PiutangHeader.STATUS_CHOICES,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 
@@ -249,7 +251,7 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
         form = PiutangHeaderForm(request.POST)
         formset = PiutangDetailFormSet(request.POST, prefix='details')
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
         if form.is_valid() and formset.is_valid():
             details = [
                 {'deskripsi': f.cleaned_data.get('deskripsi', ''),
@@ -301,9 +303,9 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
         }
         return render(request, 'piutang/form.html', {
             'form': form, 'formset': formset, 'mode': 'create',
-            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
             'eb_selected': eb_selection,
-            'eb_standar_map_json': json.dumps(_eb_standar_map),
+            'eb_standar_map_json': safe_json(_eb_standar_map),
         })
     form = PiutangHeaderForm()
     formset = PiutangDetailFormSet(prefix='details', queryset=PiutangHeader.objects.none())
@@ -314,8 +316,8 @@ def piutang_create(request: HttpRequest) -> HttpResponse:
     }
     return render(request, 'piutang/form.html', {
         'form': form, 'formset': formset, 'mode': 'create',
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
-        'eb_standar_map_json': json.dumps(eb_standar_map),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
+        'eb_standar_map_json': safe_json(eb_standar_map),
     })
 
 
@@ -528,7 +530,7 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
         form = PiutangHeaderForm(request.POST, instance=piutang)
         formset = PiutangDetailFormSet(request.POST, prefix='details', instance=piutang)
         eb_selection = request.POST.get('eb_selection', '')
-        resolved_eb = _resolve_eb_selection(eb_selection) if eb_selection else None
+        resolved_eb = _resolve_eb_selection(eb_selection, request.user) if eb_selection else None
         if form.is_valid() and formset.is_valid():
             instance = form.save()
             formset.save()
@@ -543,9 +545,9 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
         }
         return render(request, 'piutang/form.html', {
             'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
-            'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+            'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
             'eb_selected': eb_selection,
-            'eb_standar_map_json': json.dumps(eb_standar_map),
+            'eb_standar_map_json': safe_json(eb_standar_map),
         })
     form = PiutangHeaderForm(instance=piutang)
     formset = PiutangDetailFormSet(prefix='details', instance=piutang)
@@ -557,9 +559,9 @@ def piutang_update(request: HttpRequest, pk: int) -> HttpResponse:
     }
     return render(request, 'piutang/form.html', {
         'form': form, 'formset': formset, 'mode': 'edit', 'piutang': piutang,
-        'eb_options_json': json.dumps(_get_eb_dropdown_options()),
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
         'eb_selected': eb_selected,
-        'eb_standar_map_json': json.dumps(eb_standar_map),
+        'eb_standar_map_json': safe_json(eb_standar_map),
     })
 
 
@@ -977,8 +979,8 @@ def piutang_report_penyisihan(request: HttpRequest) -> HttpResponse:
         'eligible_piutangs': eligible_piutangs,
         'eb_choices': eb_choices,
         'eb_filter_pk': eb_filter_pk,
-        'akun_aset_json': json.dumps(akun_aset_qs),
-        'akun_beban_json': json.dumps(akun_beban_qs),
+        'akun_aset_json': safe_json(akun_aset_qs),
+        'akun_beban_json': safe_json(akun_beban_qs),
     })
 
 

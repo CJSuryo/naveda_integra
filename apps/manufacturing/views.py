@@ -2,6 +2,8 @@
 import json
 from decimal import Decimal, InvalidOperation
 
+from naveda_integra.json_utils import safe_json
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
@@ -43,10 +45,10 @@ def bom_list(request):
     )
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     if eb_filter_list:
-        boms = boms.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        boms = boms.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
     return render(request, 'manufacturing/bom_list.html', {
         'bom_list': boms,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'eb_filter_list': eb_filter_list,
     })
 
@@ -88,7 +90,7 @@ def bom_create(request):
 
     return render(request, 'manufacturing/bom_form.html', {
         'form': form,
-        'rm_data_json': json.dumps(rm_data),
+        'rm_data_json': safe_json(rm_data),
         'is_create': True,
     })
 
@@ -166,7 +168,7 @@ def bom_update(request, pk):
         'form': form,
         'bom': bom,
         'existing_lines': existing_lines,
-        'rm_data_json': json.dumps(rm_data),
+        'rm_data_json': safe_json(rm_data),
         'is_create': False,
     })
 
@@ -200,13 +202,13 @@ def production_list(request):
     if status_filter:
         orders = orders.filter(status=status_filter)
     if eb_filter_list:
-        orders = orders.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list))
+        orders = orders.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
 
     return render(request, 'manufacturing/production_list.html', {
         'orders': orders,
         'status_filter': status_filter,
         'eb_filter_list': eb_filter_list,
-        'eb_tree': _get_eb_tree(),
+        'eb_tree': _get_eb_tree(request.user),
         'status_choices': ProductionOrder.STATUS_CHOICES,
     })
 

@@ -1,6 +1,8 @@
 import datetime
 import json
 from decimal import Decimal
+
+from naveda_integra.json_utils import safe_json
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 
@@ -63,11 +65,11 @@ def dashboard(request):
         'top_products': top,
         'payment_breakdown': breakdown,
         'laba_rugi': laba,
-        'chart_labels': json.dumps(chart_labels),
-        'chart_net_sales': json.dumps(chart_net_sales),
-        'chart_orders': json.dumps(chart_orders),
-        'chart_payment_labels': json.dumps(list(breakdown.keys())),
-        'chart_payment_amounts': json.dumps([_dec(v) for v in breakdown.values()]),
+        'chart_labels': safe_json(chart_labels),
+        'chart_net_sales': safe_json(chart_net_sales),
+        'chart_orders': safe_json(chart_orders),
+        'chart_payment_labels': safe_json(list(breakdown.keys())),
+        'chart_payment_amounts': safe_json([_dec(v) for v in breakdown.values()]),
     })
 
 
@@ -101,8 +103,8 @@ def top_products_report(request):
     store = get_object_or_404(StorePOSConfig, pk=store_id) if store_id else None
     date_from, date_to = _parse_date_range(request, default_days=30)
     top = get_top_products(store, date_from, date_to, limit=20) if store else []
-    chart_labels = json.dumps([p.pos_name for p, _, _ in top])
-    chart_revenue = json.dumps([_dec(rev) for _, _, rev in top])
+    chart_labels = safe_json([p.pos_name for p, _, _ in top])
+    chart_revenue = safe_json([_dec(rev) for _, _, rev in top])
     return render(request, 'pos_reports/top_products.html', {
         'store': store,
         'date_from': date_from,
@@ -121,8 +123,8 @@ def payment_breakdown_report(request):
     store = get_object_or_404(StorePOSConfig, pk=store_id) if store_id else None
     date_from, date_to = _parse_date_range(request, default_days=30)
     breakdown = get_payment_breakdown(store, date_from, date_to) if store else {}
-    chart_labels = json.dumps(list(breakdown.keys()))
-    chart_amounts = json.dumps([_dec(v) for v in breakdown.values()])
+    chart_labels = safe_json(list(breakdown.keys()))
+    chart_amounts = safe_json([_dec(v) for v in breakdown.values()])
     return render(request, 'pos_reports/payment_breakdown.html', {
         'store': store,
         'date_from': date_from,
