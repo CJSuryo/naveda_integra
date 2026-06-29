@@ -51,7 +51,6 @@ services:
   - type: web
     name: naveda-landing
     runtime: static
-    plan: free
     rootDir: landing
     buildCommand: ""
     staticPublishPath: .
