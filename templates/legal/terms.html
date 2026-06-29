@@ -1,0 +1,376 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ketentuan Layanan &amp; Kebijakan Data — Naveda Integra Finance</title>
+  <meta name="description" content="Ketentuan Layanan, Kebijakan Privasi, penyimpanan dan penggunaan data, serta keamanan Naveda Integra Finance.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://navedafinance.com/terms/">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/legal.css' %}">
+</head>
+<body class="legal" data-lang="id">
+
+<!-- ─────────────── HEADER ─────────────── -->
+<header class="lg-header">
+  <div class="lg-container lg-header__inner">
+    <a href="{% url 'landing' %}" class="lg-logo" aria-label="Naveda Integra Finance — Beranda">
+      <span class="lg-logo__name">Naveda Integra</span>
+      <span class="lg-logo__sub">Finance</span>
+    </a>
+    <div class="lg-header__actions">
+      <div class="lg-langtoggle" role="group" aria-label="Pilih bahasa / Select language">
+        <button type="button" class="lg-langtoggle__btn is-active" data-lang-btn="id" aria-pressed="true">ID</button>
+        <button type="button" class="lg-langtoggle__btn" data-lang-btn="en" aria-pressed="false">EN</button>
+      </div>
+      <a href="{% url 'landing' %}" class="lg-back"><i class="fas fa-arrow-left" aria-hidden="true"></i> <span class="lang-id">Kembali</span><span class="lang-en">Back</span></a>
+    </div>
+  </div>
+</header>
+
+<main class="lg-container lg-main">
+
+  <!-- Title -->
+  <div class="lg-title">
+    <h1 class="lang-id">Ketentuan Layanan &amp; Kebijakan Data</h1>
+    <h1 class="lang-en">Terms of Service &amp; Data Policy</h1>
+    <p class="lg-meta">
+      <span class="lang-id">Berlaku efektif: 26 Juni 2026 &middot; Terakhir diperbarui: 26 Juni 2026</span>
+      <span class="lang-en">Effective: 26 June 2026 &middot; Last updated: 26 June 2026</span>
+    </p>
+    <p class="lg-govnote">
+      <span class="lang-id"><i class="fas fa-circle-info" aria-hidden="true"></i> Dokumen ini tersedia dalam Bahasa Indonesia dan Bahasa Inggris. Apabila terdapat perbedaan penafsiran, <strong>versi Bahasa Indonesia yang berlaku</strong>.</span>
+      <span class="lang-en"><i class="fas fa-circle-info" aria-hidden="true"></i> This document is provided in Indonesian and English. In case of any conflict of interpretation, the <strong>Indonesian version prevails</strong>.</span>
+    </p>
+  </div>
+
+  <!-- Table of contents -->
+  <nav class="lg-toc" aria-label="Daftar isi">
+    <p class="lg-toc__title"><span class="lang-id">Daftar Isi</span><span class="lang-en">Contents</span></p>
+    <ol class="lg-toc__list">
+      <li><a href="#s1"><span class="lang-id">Penerimaan Ketentuan</span><span class="lang-en">Acceptance of Terms</span></a></li>
+      <li><a href="#s2"><span class="lang-id">Definisi</span><span class="lang-en">Definitions</span></a></li>
+      <li><a href="#s3"><span class="lang-id">Layanan Kami</span><span class="lang-en">Our Services</span></a></li>
+      <li><a href="#s4"><span class="lang-id">Kelayakan &amp; Akun Pengguna</span><span class="lang-en">Eligibility &amp; Accounts</span></a></li>
+      <li><a href="#s5"><span class="lang-id">Kewajiban &amp; Penggunaan yang Dapat Diterima</span><span class="lang-en">Obligations &amp; Acceptable Use</span></a></li>
+      <li><a href="#s6"><span class="lang-id">Data Klien &amp; Kepemilikan</span><span class="lang-en">Client Data &amp; Ownership</span></a></li>
+      <li><a href="#s7"><span class="lang-id">Privasi &amp; Perlindungan Data Pribadi</span><span class="lang-en">Privacy &amp; Personal Data Protection</span></a></li>
+      <li><a href="#s8"><span class="lang-id">Penyimpanan, Lokasi &amp; Retensi Data</span><span class="lang-en">Data Storage, Location &amp; Retention</span></a></li>
+      <li><a href="#s9"><span class="lang-id">Keamanan</span><span class="lang-en">Security</span></a></li>
+      <li><a href="#s10"><span class="lang-id">Kerahasiaan</span><span class="lang-en">Confidentiality</span></a></li>
+      <li><a href="#s11"><span class="lang-id">Kekayaan Intelektual</span><span class="lang-en">Intellectual Property</span></a></li>
+      <li><a href="#s12"><span class="lang-id">Biaya &amp; Pembayaran</span><span class="lang-en">Fees &amp; Payment</span></a></li>
+      <li><a href="#s13"><span class="lang-id">Penafian (Disclaimer)</span><span class="lang-en">Disclaimers</span></a></li>
+      <li><a href="#s14"><span class="lang-id">Batasan Tanggung Jawab</span><span class="lang-en">Limitation of Liability</span></a></li>
+      <li><a href="#s15"><span class="lang-id">Ganti Rugi</span><span class="lang-en">Indemnification</span></a></li>
+      <li><a href="#s16"><span class="lang-id">Penghentian Layanan</span><span class="lang-en">Termination</span></a></li>
+      <li><a href="#s17"><span class="lang-id">Perubahan Ketentuan</span><span class="lang-en">Changes to These Terms</span></a></li>
+      <li><a href="#s18"><span class="lang-id">Hukum yang Berlaku &amp; Penyelesaian Sengketa</span><span class="lang-en">Governing Law &amp; Disputes</span></a></li>
+      <li><a href="#s19"><span class="lang-id">Kontak</span><span class="lang-en">Contact</span></a></li>
+    </ol>
+  </nav>
+
+  <!-- 1 -->
+  <section class="lg-section" id="s1">
+    <h2><span class="lg-num">1.</span> <span class="lang-id">Penerimaan Ketentuan</span><span class="lang-en">Acceptance of Terms</span></h2>
+    <div class="lang-id">
+      <p>Ketentuan Layanan ini ("<strong>Ketentuan</strong>") mengatur akses Anda terhadap dan penggunaan situs web, platform, serta layanan profesional yang disediakan oleh Naveda Integra Finance ("<strong>Naveda</strong>", "<strong>kami</strong>"). Dengan mengakses situs, membuat akun, atau menggunakan layanan kami, Anda ("<strong>Klien</strong>", "<strong>Anda</strong>", "<strong>Pengguna</strong>") menyatakan telah membaca, memahami, dan menyetujui Ketentuan ini.</p>
+      <p>Apabila Anda menyetujui Ketentuan ini atas nama suatu badan usaha atau organisasi, Anda menyatakan memiliki kewenangan untuk mengikat badan usaha tersebut. Jika Anda tidak menyetujui Ketentuan ini, mohon untuk tidak menggunakan layanan kami.</p>
+    </div>
+    <div class="lang-en">
+      <p>These Terms of Service (the "<strong>Terms</strong>") govern your access to and use of the website, platform, and professional services provided by Naveda Integra Finance ("<strong>Naveda</strong>", "<strong>we</strong>", "<strong>us</strong>"). By accessing the site, creating an account, or using our services, you (the "<strong>Client</strong>", "<strong>you</strong>", "<strong>User</strong>") confirm that you have read, understood, and agree to these Terms.</p>
+      <p>If you accept these Terms on behalf of a company or organization, you represent that you have the authority to bind that entity. If you do not agree to these Terms, please do not use our services.</p>
+    </div>
+  </section>
+
+  <!-- 2 -->
+  <section class="lg-section" id="s2">
+    <h2><span class="lg-num">2.</span> <span class="lang-id">Definisi</span><span class="lang-en">Definitions</span></h2>
+    <div class="lang-id">
+      <ul>
+        <li><strong>Layanan</strong> — layanan akuntansi terkelola, penyiapan dan analitik data keuangan, serta akses ke platform berbasis web yang dikembangkan dan dioperasikan oleh Naveda.</li>
+        <li><strong>Platform</strong> — aplikasi web Naveda untuk pencatatan, pelaporan, dan analitik keuangan yang diakses melalui akun Pengguna.</li>
+        <li><strong>Data Klien</strong> — seluruh data, dokumen, dan informasi yang Anda kirimkan atau hasilkan melalui penggunaan Layanan, termasuk data keuangan dan data pribadi.</li>
+        <li><strong>Data Pribadi</strong> — data tentang orang perseorangan yang teridentifikasi atau dapat diidentifikasi, sebagaimana dimaksud dalam peraturan perlindungan data pribadi Indonesia.</li>
+      </ul>
+    </div>
+    <div class="lang-en">
+      <ul>
+        <li><strong>Services</strong> — managed accounting, financial data preparation and analytics, and access to the web-based platform developed and operated by Naveda.</li>
+        <li><strong>Platform</strong> — Naveda's web application for financial recording, reporting, and analytics, accessed through a User account.</li>
+        <li><strong>Client Data</strong> — all data, documents, and information you submit to or generate through the Services, including financial data and personal data.</li>
+        <li><strong>Personal Data</strong> — data relating to an identified or identifiable natural person, as defined under Indonesian personal data protection law.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="lg-section" id="s3">
+    <h2><span class="lg-num">3.</span> <span class="lang-id">Layanan Kami</span><span class="lang-en">Our Services</span></h2>
+    <div class="lang-id">
+      <p>Naveda menyediakan layanan akuntansi profesional dan teknologi keuangan, yang dapat mencakup pembukuan, rekonsiliasi, penyusunan dan penyiapan laporan keuangan, penyiapan data pendukung perpajakan dan audit, analitik data keuangan, serta akses ke Platform untuk operasional dan pelaporan keuangan Anda.</p>
+      <p>Cakupan, hasil kerja (deliverables), tingkat layanan, dan biaya yang berlaku untuk Anda diatur dalam perjanjian layanan, proposal, atau surat penugasan terpisah ("<strong>Perjanjian Layanan</strong>"). Apabila terdapat pertentangan antara Ketentuan ini dan Perjanjian Layanan, maka Perjanjian Layanan yang berlaku untuk hal yang dipertentangkan tersebut.</p>
+      <p>Kami dapat memperbarui, menambah, atau menghentikan fitur Platform dari waktu ke waktu untuk peningkatan kualitas, keamanan, atau kepatuhan.</p>
+    </div>
+    <div class="lang-en">
+      <p>Naveda provides professional accounting and financial technology services, which may include bookkeeping, reconciliation, preparation and assembly of financial statements, preparation of tax and audit supporting data, financial data analytics, and access to the Platform for your financial operations and reporting.</p>
+      <p>The scope, deliverables, service levels, and fees applicable to you are set out in a separate service agreement, proposal, or engagement letter (the "<strong>Service Agreement</strong>"). In the event of a conflict between these Terms and a Service Agreement, the Service Agreement prevails for the conflicting matter.</p>
+      <p>We may update, add to, or discontinue Platform features from time to time to improve quality, security, or compliance.</p>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="lg-section" id="s4">
+    <h2><span class="lg-num">4.</span> <span class="lang-id">Kelayakan &amp; Akun Pengguna</span><span class="lang-en">Eligibility &amp; Accounts</span></h2>
+    <div class="lang-id">
+      <p>Layanan ditujukan untuk pelaku usaha, organisasi, dan profesional. Akun pada Platform dibuat dan diberikan oleh Naveda atau administrator yang ditunjuk Klien. Anda bertanggung jawab untuk menjaga kerahasiaan kredensial akun, membatasi akses ke perangkat Anda, dan atas seluruh aktivitas yang terjadi melalui akun Anda.</p>
+      <p>Anda wajib segera memberitahu kami apabila terdapat dugaan penggunaan akun tanpa izin atau pelanggaran keamanan. Anda tidak diperkenankan membagikan kredensial, menggunakan akun pengguna lain, atau memberikan akses kepada pihak yang tidak berwenang.</p>
+    </div>
+    <div class="lang-en">
+      <p>The Services are intended for businesses, organizations, and professionals. Platform accounts are created and granted by Naveda or by an administrator designated by the Client. You are responsible for keeping your account credentials confidential, restricting access to your devices, and for all activity occurring under your account.</p>
+      <p>You must notify us promptly of any suspected unauthorized use or security breach. You may not share credentials, use another user's account, or grant access to unauthorized parties.</p>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="lg-section" id="s5">
+    <h2><span class="lg-num">5.</span> <span class="lang-id">Kewajiban &amp; Penggunaan yang Dapat Diterima</span><span class="lang-en">Obligations &amp; Acceptable Use</span></h2>
+    <div class="lang-id">
+      <p>Anda setuju untuk menggunakan Layanan secara sah dan bertanggung jawab. Anda <strong>tidak</strong> diperkenankan:</p>
+      <ul>
+        <li>mengunggah data yang melanggar hukum, hak pihak ketiga, atau yang Anda tidak memiliki hak untuk memprosesnya;</li>
+        <li>mengakses atau mencoba mengakses data, entitas, atau akun yang bukan milik atau bukan kewenangan Anda;</li>
+        <li>mengganggu, membebani berlebih, atau merusak integritas dan keamanan Platform, termasuk melakukan pemindaian, pengujian penetrasi tanpa izin, atau melewati kontrol akses;</li>
+        <li>melakukan rekayasa balik (reverse engineering), menyalin, atau menjual kembali Platform tanpa izin tertulis;</li>
+        <li>menggunakan Layanan untuk pencucian uang, penipuan, atau aktivitas melanggar hukum lainnya.</li>
+      </ul>
+      <p>Anda bertanggung jawab atas keakuratan, kelengkapan, dan keabsahan Data Klien yang Anda berikan. Kualitas keluaran (output) bergantung pada kualitas data masukan (input) yang Anda sediakan.</p>
+    </div>
+    <div class="lang-en">
+      <p>You agree to use the Services lawfully and responsibly. You may <strong>not</strong>:</p>
+      <ul>
+        <li>upload data that is unlawful, infringes third-party rights, or that you have no right to process;</li>
+        <li>access or attempt to access data, entities, or accounts that are not yours or beyond your authorization;</li>
+        <li>disrupt, overload, or compromise the integrity or security of the Platform, including unauthorized scanning, penetration testing, or bypassing access controls;</li>
+        <li>reverse engineer, copy, or resell the Platform without written permission;</li>
+        <li>use the Services for money laundering, fraud, or any other unlawful activity.</li>
+      </ul>
+      <p>You are responsible for the accuracy, completeness, and lawfulness of the Client Data you provide. Output quality depends on the quality of the input data you supply.</p>
+    </div>
+  </section>
+
+  <!-- 6 -->
+  <section class="lg-section" id="s6">
+    <h2><span class="lg-num">6.</span> <span class="lang-id">Data Klien &amp; Kepemilikan</span><span class="lang-en">Client Data &amp; Ownership</span></h2>
+    <div class="lang-id">
+      <p>Anda tetap menjadi pemilik seluruh Data Klien Anda. Anda memberikan kepada Naveda lisensi yang terbatas, non-eksklusif, dan bebas royalti untuk memproses Data Klien semata-mata untuk tujuan menyediakan, memelihara, dan meningkatkan Layanan kepada Anda, serta untuk memenuhi kewajiban hukum.</p>
+      <p>Kami tidak menjual Data Klien. Kami tidak menggunakan Data Klien Anda untuk tujuan di luar penyediaan Layanan tanpa persetujuan Anda, kecuali diwajibkan oleh hukum. Anda dapat meminta salinan atau penghapusan Data Klien sesuai ketentuan pada bagian Privasi dan Penghentian di bawah ini.</p>
+    </div>
+    <div class="lang-en">
+      <p>You retain ownership of all your Client Data. You grant Naveda a limited, non-exclusive, royalty-free license to process Client Data solely to provide, maintain, and improve the Services for you, and to comply with legal obligations.</p>
+      <p>We do not sell Client Data. We do not use your Client Data for purposes beyond providing the Services without your consent, except where required by law. You may request a copy or deletion of Client Data as described in the Privacy and Termination sections below.</p>
+    </div>
+  </section>
+
+  <!-- 7 -->
+  <section class="lg-section" id="s7">
+    <h2><span class="lg-num">7.</span> <span class="lang-id">Privasi &amp; Perlindungan Data Pribadi</span><span class="lang-en">Privacy &amp; Personal Data Protection</span></h2>
+    <div class="lang-id">
+      <p>Kami memproses Data Pribadi sesuai dengan peraturan perlindungan data pribadi yang berlaku di Indonesia, termasuk Undang-Undang No. 27 Tahun 2022 tentang Pelindungan Data Pribadi ("<strong>UU PDP</strong>").</p>
+      <p><strong>Data yang kami kumpulkan:</strong> data akun (nama, email, peran), data otentikasi (kata sandi yang disimpan dalam bentuk hash, bukan teks biasa), Data Klien yang Anda masukkan (data keuangan, transaksi, mitra, pelanggan, dan dokumen pendukung), serta data teknis terbatas (alamat IP, jenis peramban, dan log aktivitas) untuk keamanan dan diagnostik.</p>
+      <p><strong>Dasar &amp; tujuan pemrosesan:</strong> pelaksanaan perjanjian dengan Anda, pemenuhan kewajiban hukum, kepentingan sah untuk mengamankan dan meningkatkan Layanan, dan/atau persetujuan Anda apabila diperlukan.</p>
+      <p><strong>Pembagian data:</strong> kami dapat membagikan data secara terbatas kepada penyedia infrastruktur tepercaya (hosting, basis data, dan email) yang bertindak sebagai pemroses atas nama kami, serta kepada otoritas apabila diwajibkan hukum. Kami tidak membagikan data untuk tujuan pemasaran pihak ketiga.</p>
+      <p><strong>Hak Anda:</strong> sesuai UU PDP, Anda berhak mengakses, memperbaiki, memperbarui, menghapus, membatasi, atau menarik persetujuan atas pemrosesan Data Pribadi Anda, serta mengajukan keberatan. Permohonan dapat disampaikan melalui kontak pada bagian akhir dokumen ini.</p>
+    </div>
+    <div class="lang-en">
+      <p>We process Personal Data in accordance with applicable Indonesian personal data protection law, including Law No. 27 of 2022 on Personal Data Protection ("<strong>PDP Law</strong>").</p>
+      <p><strong>Data we collect:</strong> account data (name, email, role), authentication data (passwords stored as hashes, not plain text), Client Data you enter (financial, transaction, vendor, customer data and supporting documents), and limited technical data (IP address, browser type, and activity logs) for security and diagnostics.</p>
+      <p><strong>Basis &amp; purpose of processing:</strong> performance of our agreement with you, compliance with legal obligations, legitimate interests in securing and improving the Services, and/or your consent where required.</p>
+      <p><strong>Data sharing:</strong> we may share data on a limited basis with trusted infrastructure providers (hosting, database, and email) acting as processors on our behalf, and with authorities where legally required. We do not share data for third-party marketing.</p>
+      <p><strong>Your rights:</strong> under the PDP Law, you have the right to access, correct, update, erase, restrict, or withdraw consent to the processing of your Personal Data, and to object. Requests may be submitted via the contact at the end of this document.</p>
+    </div>
+  </section>
+
+  <!-- 8 -->
+  <section class="lg-section" id="s8">
+    <h2><span class="lg-num">8.</span> <span class="lang-id">Penyimpanan, Lokasi &amp; Retensi Data</span><span class="lang-en">Data Storage, Location &amp; Retention</span></h2>
+    <div class="lang-id">
+      <p><strong>Penyimpanan:</strong> Data Klien disimpan pada basis data dan infrastruktur cloud tepercaya yang kami gunakan untuk mengoperasikan Layanan. Akses ke data produksi dibatasi pada personel yang berwenang berdasarkan prinsip kebutuhan (need-to-know).</p>
+      <p><strong>Lokasi pemrosesan:</strong> infrastruktur kami dapat memproses dan menyimpan data pada server yang berlokasi di dalam maupun di luar wilayah Indonesia (antara lain pada region pusat data di Asia, seperti Singapura). Dengan menggunakan Layanan, Anda memahami bahwa transfer data lintas negara dapat terjadi, dan kami menerapkan langkah pengamanan yang wajar untuk transfer tersebut sesuai UU PDP.</p>
+      <p><strong>Retensi:</strong> kami menyimpan Data Klien selama hubungan layanan berlangsung dan selama jangka waktu yang diperlukan untuk memenuhi kewajiban hukum, perpajakan, dan akuntansi, atau untuk penyelesaian sengketa. Setelah jangka waktu retensi berakhir, data akan dihapus atau dianonimkan secara aman.</p>
+    </div>
+    <div class="lang-en">
+      <p><strong>Storage:</strong> Client Data is stored on trusted cloud databases and infrastructure we use to operate the Services. Access to production data is limited to authorized personnel on a need-to-know basis.</p>
+      <p><strong>Processing location:</strong> our infrastructure may process and store data on servers located inside or outside Indonesia (including data-center regions in Asia, such as Singapore). By using the Services, you understand that cross-border data transfers may occur, and we apply reasonable safeguards to such transfers consistent with the PDP Law.</p>
+      <p><strong>Retention:</strong> we retain Client Data for the duration of the service relationship and for as long as necessary to meet legal, tax, and accounting obligations, or to resolve disputes. After the retention period ends, data is securely deleted or anonymized.</p>
+    </div>
+  </section>
+
+  <!-- 9 -->
+  <section class="lg-section" id="s9">
+    <h2><span class="lg-num">9.</span> <span class="lang-id">Keamanan</span><span class="lang-en">Security</span></h2>
+    <div class="lang-id">
+      <p>Kami menerapkan langkah pengamanan teknis dan organisasi yang wajar untuk melindungi data, antara lain:</p>
+      <ul>
+        <li>enkripsi data dalam transit melalui HTTPS/TLS dengan kebijakan HSTS;</li>
+        <li>kontrol akses berbasis peran dan pemisahan akses per entitas bisnis, sehingga pengguna hanya dapat mengakses data yang menjadi haknya;</li>
+        <li>penyimpanan kata sandi dalam bentuk hash, cookie sesi yang aman, serta perlindungan terhadap pemalsuan permintaan lintas situs (CSRF);</li>
+        <li>perlindungan terhadap upaya masuk paksa (brute-force) berupa penguncian akun dan pembatasan laju permintaan (rate limiting);</li>
+        <li>header keamanan peramban dan pemantauan log untuk mendeteksi aktivitas anomali.</li>
+      </ul>
+      <p>Walaupun demikian, tidak ada sistem yang sepenuhnya aman. Kami tidak dapat menjamin keamanan mutlak. Apabila terjadi pelanggaran data pribadi yang berdampak pada Anda, kami akan memberitahukan Anda dan otoritas yang berwenang sesuai jangka waktu dan ketentuan UU PDP.</p>
+    </div>
+    <div class="lang-en">
+      <p>We implement reasonable technical and organizational safeguards to protect data, including:</p>
+      <ul>
+        <li>encryption of data in transit via HTTPS/TLS with an HSTS policy;</li>
+        <li>role-based access control and per-business-entity access separation, so users can only access data they are entitled to;</li>
+        <li>passwords stored as hashes, secure session cookies, and cross-site request forgery (CSRF) protection;</li>
+        <li>protection against brute-force login attempts through account lockout and rate limiting;</li>
+        <li>browser security headers and log monitoring to detect anomalous activity.</li>
+      </ul>
+      <p>Nevertheless, no system is completely secure and we cannot guarantee absolute security. If a personal data breach affecting you occurs, we will notify you and the relevant authority within the timeframes and conditions required by the PDP Law.</p>
+    </div>
+  </section>
+
+  <!-- 10 -->
+  <section class="lg-section" id="s10">
+    <h2><span class="lg-num">10.</span> <span class="lang-id">Kerahasiaan</span><span class="lang-en">Confidentiality</span></h2>
+    <div class="lang-id">
+      <p>Kami memperlakukan Data Klien dan informasi bisnis Anda sebagai rahasia dan tidak mengungkapkannya kepada pihak ketiga selain sebagaimana diatur dalam Ketentuan ini atau diwajibkan oleh hukum. Untuk penugasan dengan Kantor Akuntan Publik (KAP) dan klien korporat, kami menyediakan Perjanjian Kerahasiaan (Non-Disclosure Agreement/NDA) formal apabila diperlukan.</p>
+    </div>
+    <div class="lang-en">
+      <p>We treat your Client Data and business information as confidential and do not disclose it to third parties except as set out in these Terms or as required by law. For engagements with public accounting firms (KAP) and corporate clients, we provide a formal Non-Disclosure Agreement (NDA) where required.</p>
+    </div>
+  </section>
+
+  <!-- 11 -->
+  <section class="lg-section" id="s11">
+    <h2><span class="lg-num">11.</span> <span class="lang-id">Kekayaan Intelektual</span><span class="lang-en">Intellectual Property</span></h2>
+    <div class="lang-id">
+      <p>Platform, perangkat lunak, desain, merek, dan seluruh materi yang kami sediakan adalah dan tetap menjadi milik Naveda dan/atau pemberi lisensinya. Anda diberikan hak terbatas, non-eksklusif, dan tidak dapat dialihkan untuk mengakses dan menggunakan Platform selama masa Layanan, semata-mata untuk keperluan bisnis internal Anda. Tidak ada hak kepemilikan yang beralih kepada Anda atas Platform. Hasil kerja (deliverables) yang dibuat khusus untuk Anda diatur dalam Perjanjian Layanan.</p>
+    </div>
+    <div class="lang-en">
+      <p>The Platform, software, designs, trademarks, and all materials we provide are and remain the property of Naveda and/or its licensors. You are granted a limited, non-exclusive, non-transferable right to access and use the Platform during the term of the Services, solely for your internal business purposes. No ownership of the Platform passes to you. Deliverables created specifically for you are governed by the Service Agreement.</p>
+    </div>
+  </section>
+
+  <!-- 12 -->
+  <section class="lg-section" id="s12">
+    <h2><span class="lg-num">12.</span> <span class="lang-id">Biaya &amp; Pembayaran</span><span class="lang-en">Fees &amp; Payment</span></h2>
+    <div class="lang-id">
+      <p>Biaya, jadwal, dan metode pembayaran diatur dalam Perjanjian Layanan Anda. Kecuali dinyatakan lain, biaya tidak termasuk pajak yang berlaku, yang menjadi tanggung jawab Anda. Keterlambatan pembayaran dapat mengakibatkan penangguhan Layanan setelah pemberitahuan yang wajar.</p>
+    </div>
+    <div class="lang-en">
+      <p>Fees, schedules, and payment methods are set out in your Service Agreement. Unless stated otherwise, fees exclude applicable taxes, which are your responsibility. Late payment may result in suspension of the Services after reasonable notice.</p>
+    </div>
+  </section>
+
+  <!-- 13 -->
+  <section class="lg-section" id="s13">
+    <h2><span class="lg-num">13.</span> <span class="lang-id">Penafian (Disclaimer)</span><span class="lang-en">Disclaimers</span></h2>
+    <div class="lang-id">
+      <p>Layanan dan Platform disediakan "<strong>sebagaimana adanya</strong>" dan "<strong>sebagaimana tersedia</strong>". Sepanjang diizinkan oleh hukum, kami tidak memberikan jaminan tersurat maupun tersirat mengenai ketersediaan tanpa gangguan, bebas kesalahan, atau kesesuaian untuk tujuan tertentu.</p>
+      <p>Keluaran, laporan, dan analitik yang dihasilkan bergantung pada keakuratan dan kelengkapan Data Klien yang Anda berikan. Layanan kami merupakan dukungan profesional dan teknologi; keputusan akhir di bidang keuangan, perpajakan, hukum, atau audit tetap menjadi tanggung jawab Anda dan, bila perlu, penasihat profesional Anda. Layanan kami bukan merupakan opini audit, nasihat hukum, atau nasihat investasi.</p>
+    </div>
+    <div class="lang-en">
+      <p>The Services and Platform are provided "<strong>as is</strong>" and "<strong>as available</strong>". To the extent permitted by law, we make no express or implied warranties of uninterrupted availability, error-free operation, or fitness for a particular purpose.</p>
+      <p>Outputs, reports, and analytics depend on the accuracy and completeness of the Client Data you provide. Our Services are professional and technology support; final financial, tax, legal, or audit decisions remain your responsibility and, where appropriate, that of your professional advisers. Our Services do not constitute an audit opinion, legal advice, or investment advice.</p>
+    </div>
+  </section>
+
+  <!-- 14 -->
+  <section class="lg-section" id="s14">
+    <h2><span class="lg-num">14.</span> <span class="lang-id">Batasan Tanggung Jawab</span><span class="lang-en">Limitation of Liability</span></h2>
+    <div class="lang-id">
+      <p>Sepanjang diizinkan oleh hukum yang berlaku, Naveda tidak bertanggung jawab atas kerugian tidak langsung, insidental, khusus, atau konsekuensial, termasuk kehilangan keuntungan, kehilangan data, atau gangguan usaha. Total tanggung jawab kami yang timbul dari atau berkaitan dengan Layanan dibatasi sebesar jumlah biaya yang Anda bayarkan kepada kami untuk Layanan terkait dalam jangka waktu tiga (3) bulan sebelum timbulnya peristiwa yang menjadi dasar tuntutan. Pembatasan ini tidak berlaku untuk tanggung jawab yang tidak dapat dikecualikan menurut hukum.</p>
+    </div>
+    <div class="lang-en">
+      <p>To the maximum extent permitted by applicable law, Naveda is not liable for any indirect, incidental, special, or consequential damages, including lost profits, lost data, or business interruption. Our total liability arising out of or relating to the Services is limited to the fees you paid us for the relevant Services in the three (3) months preceding the event giving rise to the claim. This limitation does not apply to liability that cannot be excluded by law.</p>
+    </div>
+  </section>
+
+  <!-- 15 -->
+  <section class="lg-section" id="s15">
+    <h2><span class="lg-num">15.</span> <span class="lang-id">Ganti Rugi</span><span class="lang-en">Indemnification</span></h2>
+    <div class="lang-id">
+      <p>Anda setuju untuk membebaskan dan mengganti rugi Naveda dari tuntutan, kerugian, atau biaya pihak ketiga yang timbul akibat pelanggaran Anda terhadap Ketentuan ini, penggunaan Layanan yang melanggar hukum, atau Data Klien yang Anda berikan secara tidak sah.</p>
+    </div>
+    <div class="lang-en">
+      <p>You agree to defend and indemnify Naveda against third-party claims, losses, or costs arising from your breach of these Terms, your unlawful use of the Services, or Client Data you unlawfully provide.</p>
+    </div>
+  </section>
+
+  <!-- 16 -->
+  <section class="lg-section" id="s16">
+    <h2><span class="lg-num">16.</span> <span class="lang-id">Penghentian Layanan</span><span class="lang-en">Termination</span></h2>
+    <div class="lang-id">
+      <p>Salah satu pihak dapat menghentikan Layanan sesuai ketentuan Perjanjian Layanan. Kami dapat menangguhkan atau menghentikan akses Anda apabila terdapat pelanggaran material atas Ketentuan ini, risiko keamanan, atau kewajiban hukum. Setelah penghentian, hak akses Anda ke Platform berakhir. Atas permintaan tertulis dalam jangka waktu yang wajar, kami akan menyediakan salinan Data Klien Anda dalam format yang lazim, kemudian menghapus atau menganonimkan data sesuai kebijakan retensi dan kewajiban hukum kami.</p>
+    </div>
+    <div class="lang-en">
+      <p>Either party may terminate the Services in accordance with the Service Agreement. We may suspend or terminate your access for a material breach of these Terms, a security risk, or a legal obligation. Upon termination, your access rights to the Platform end. Upon written request within a reasonable period, we will provide a copy of your Client Data in a commonly used format, then delete or anonymize the data in line with our retention policy and legal obligations.</p>
+    </div>
+  </section>
+
+  <!-- 17 -->
+  <section class="lg-section" id="s17">
+    <h2><span class="lg-num">17.</span> <span class="lang-id">Perubahan Ketentuan</span><span class="lang-en">Changes to These Terms</span></h2>
+    <div class="lang-id">
+      <p>Kami dapat memperbarui Ketentuan ini dari waktu ke waktu. Perubahan material akan kami beritahukan melalui Platform atau email. Tanggal "Terakhir diperbarui" di bagian atas menunjukkan versi terkini. Penggunaan Layanan yang berlanjut setelah perubahan berlaku menunjukkan persetujuan Anda terhadap Ketentuan yang diperbarui.</p>
+    </div>
+    <div class="lang-en">
+      <p>We may update these Terms from time to time. We will notify you of material changes via the Platform or email. The "Last updated" date at the top indicates the current version. Continued use of the Services after changes take effect constitutes your acceptance of the updated Terms.</p>
+    </div>
+  </section>
+
+  <!-- 18 -->
+  <section class="lg-section" id="s18">
+    <h2><span class="lg-num">18.</span> <span class="lang-id">Hukum yang Berlaku &amp; Penyelesaian Sengketa</span><span class="lang-en">Governing Law &amp; Disputes</span></h2>
+    <div class="lang-id">
+      <p>Ketentuan ini diatur oleh dan ditafsirkan berdasarkan hukum Republik Indonesia. Para pihak akan mengupayakan penyelesaian sengketa secara musyawarah terlebih dahulu. Apabila tidak tercapai kesepakatan, sengketa akan diselesaikan melalui Pengadilan Negeri Denpasar, Bali, tanpa mengurangi hak kami untuk menempuh upaya hukum di yurisdiksi lain yang berwenang.</p>
+    </div>
+    <div class="lang-en">
+      <p>These Terms are governed by and construed under the laws of the Republic of Indonesia. The parties will first seek to resolve disputes amicably. If no agreement is reached, disputes will be settled through the Denpasar District Court (Pengadilan Negeri Denpasar), Bali, without prejudice to our right to seek remedies in any other competent jurisdiction.</p>
+    </div>
+  </section>
+
+  <!-- 19 -->
+  <section class="lg-section" id="s19">
+    <h2><span class="lg-num">19.</span> <span class="lang-id">Kontak</span><span class="lang-en">Contact</span></h2>
+    <div class="lang-id">
+      <p>Untuk pertanyaan terkait Ketentuan ini, permohonan hak data pribadi, atau masalah privasi dan keamanan, hubungi kami:</p>
+      <ul class="lg-contact">
+        <li><i class="fas fa-envelope" aria-hidden="true"></i> <a href="mailto:dantadwipayanastan@gmail.com">dantadwipayanastan@gmail.com</a></li>
+        <li><i class="fab fa-whatsapp" aria-hidden="true"></i> <a href="https://wa.me/6285933570605" target="_blank" rel="noopener noreferrer">0859-3357-0605</a></li>
+        <li><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Bali, Indonesia</li>
+      </ul>
+    </div>
+    <div class="lang-en">
+      <p>For questions about these Terms, personal data rights requests, or privacy and security matters, contact us:</p>
+      <ul class="lg-contact">
+        <li><i class="fas fa-envelope" aria-hidden="true"></i> <a href="mailto:dantadwipayanastan@gmail.com">dantadwipayanastan@gmail.com</a></li>
+        <li><i class="fab fa-whatsapp" aria-hidden="true"></i> <a href="https://wa.me/6285933570605" target="_blank" rel="noopener noreferrer">+62 859-3357-0605</a></li>
+        <li><i class="fas fa-map-marker-alt" aria-hidden="true"></i> Bali, Indonesia</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<!-- ─────────────── FOOTER ─────────────── -->
+<footer class="lg-footer">
+  <div class="lg-container lg-footer__inner">
+    <span class="lg-footer__logo">Naveda Integra Finance</span>
+    <span class="lg-footer__copy">&copy; 2026 Naveda Integra Finance. Established in Bali, Indonesia.</span>
+  </div>
+</footer>
+
+<script src="{% static 'js/legal.js' %}" defer></script>
+</body>
+</html>

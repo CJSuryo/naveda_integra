@@ -892,8 +892,10 @@ a.l-contact__info-value:hover { color: var(--teal); }
   border-top: 1px solid rgba(255,255,255,0.05);
   padding: 2rem 0;
 }
-.l-footer__inner { display: flex; align-items: center; justify-content: space-between; }
+.l-footer__inner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .l-footer__logo { font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.40); letter-spacing: 0.05em; }
+.l-footer__links a { font-size: 0.82rem; color: rgba(255,255,255,0.45); text-decoration: none; letter-spacing: 0.03em; transition: color 0.15s; }
+.l-footer__links a:hover { color: rgba(255,255,255,0.85); }
 .l-footer__copy { font-size: 0.78rem; color: rgba(255,255,255,0.25); letter-spacing: 0.05em; }
 
 /* ─── RESPONSIVE ─────────────────────────────────────────────────────────── */

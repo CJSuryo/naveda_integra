@@ -74,6 +74,10 @@ def landing_view(request: HttpRequest) -> HttpResponse:
     return render(request, 'landing.html')
 
 
+def terms_view(request: HttpRequest) -> HttpResponse:
+    return render(request, 'legal/terms.html')
+
+
 def logout_view(request: HttpRequest) -> HttpResponse:
     logout(request)
     return redirect('login')
