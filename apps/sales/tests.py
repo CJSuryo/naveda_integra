@@ -8,7 +8,7 @@ from apps.accounts.models import Role, User
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.master_data.models import Akun, AsetLv1, AsetLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog, SalesTaxLine
 from .services import get_available_stock, consume_fifo
 
 
@@ -351,3 +351,71 @@ class CreditSalesCreatesPiutangTests(TestCase):
         header = self._make_credit_sales_header()
         piutang = create_piutang_from_sales(header)
         self.assertEqual(piutang.jumlah_pokok, Decimal('500000'))
+
+
+class SalesTaxLineModelTests(TestCase):
+    def setUp(self):
+        tipe = TipeEntitas.objects.create(nama='Retail')
+        eb = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=tipe)
+        akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', kode_akun='1.1.1')
+        akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP', kode_akun='5.1.1')
+        akun_rev = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan', kode_akun='4.1.1')
+        akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4')
+        item = ItemMasterPurchase.objects.create(nama='Barang A', tipe_item='FG', coa_account=akun_kas)
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan', module='sales', direction='outflow',
+            default_offset_account=akun_hpp,
+        )
+        header = SalesHeader.objects.create()
+        eb_group = SalesEntitasBisnis.objects.create(sales_header=header, entitas_bisnis=eb)
+        self.si = SalesItem.objects.create(
+            sales_eb=eb_group, item=item, sub_transaction_type=stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=akun_hpp, revenue_account=akun_rev,
+        )
+        self.akun_ppn = akun_ppn
+        self.akun_lawan = akun_lawan
+
+    def test_salestaxline_creation(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertEqual(tl.sales_item, self.si)
+        self.assertEqual(tl.tax_type, 'ppn_keluaran')
+        self.assertFalse(tl.is_manual)
+        self.assertIsNone(tl.tax)
+
+    def test_salestaxline_str(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='pph_23',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertIn('pph_23', str(tl))
+
+    def test_salestaxline_cascade_delete(self):
+        SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.si.delete()
+        self.assertEqual(SalesTaxLine.objects.count(), 0)
+
+    def test_salestaxline_is_manual(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax=Decimal('11000'),
+            is_manual=True,
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertTrue(tl.is_manual)
+        self.assertEqual(tl.tax, Decimal('11000'))
