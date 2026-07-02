@@ -419,3 +419,134 @@ class SalesTaxLineModelTests(TestCase):
         )
         self.assertTrue(tl.is_manual)
         self.assertEqual(tl.tax, Decimal('11000'))
+
+
+from datetime import date as dt_date
+from apps.pajak.models import PajakTransaksi, TarifPajak
+from .services import create_sales_automated_journals, _cancel_sales_pajak
+
+
+def _seed_tarif(jenis_pajak, tarif_persen, faktor_dpp='1.000000'):
+    TarifPajak.objects.get_or_create(
+        jenis_pajak=jenis_pajak,
+        berlaku_mulai=dt_date(2025, 1, 1),
+        defaults={
+            'nama': jenis_pajak,
+            'tarif_persen': Decimal(str(tarif_persen)),
+            'faktor_dpp': Decimal(faktor_dpp),
+        },
+    )
+
+
+class SalesTaxLineServiceTests(TestCase):
+    def setUp(self):
+        _seed_tarif('ppn_umum', '12.0000', '0.916667')
+        _seed_tarif('pph_23_jasa', '2.0000')
+
+        tipe = TipeEntitas.objects.create(nama='Retail')
+        self.eb = EntitasBisnis.objects.create(nama='PT Klien', tipe_entitas=tipe)
+        self.akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', kode_akun='1.1.1')
+        self.akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP', kode_akun='5.1.1')
+        self.akun_rev = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan', kode_akun='4.1.1')
+        self.akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3')
+        self.akun_pph = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Barang A', tipe_item='FG', coa_account=self.akun_kas,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan', module='sales', direction='outflow',
+            default_offset_account=self.akun_hpp,
+        )
+
+    def _make_sales_with_tax_line(self, tax_type='ppn_keluaran', tax=None, is_manual=False):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type=tax_type, tax=tax, is_manual=is_manual,
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        return header, si
+
+    def test_pajak_transaksi_created_on_journal(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.filter(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pt.count(), 1)
+        self.assertEqual(pt.first().jenis_pajak, 'ppn_umum')
+        self.assertEqual(pt.first().sifat_pajak, 'potong_pungut')
+        self.assertEqual(pt.first().status, 'final')
+
+    def test_no_inline_tax_in_main_journal(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        created = create_sales_automated_journals(header)
+        main_journal = created[0]
+        self.assertFalse(main_journal.nomor_transaksi.startswith('TRX-PAJ'))
+        detail_akun_ids = set(main_journal.details.values_list('akun_id', flat=True))
+        self.assertNotIn(self.akun_ppn.pk, detail_akun_ids)
+
+    def test_multiple_tax_lines_create_multiple_pajak_transaksi(self):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='pph_23',
+            tax_account=self.akun_pph, tax_payment_account=self.akun_kas,
+        )
+        create_sales_automated_journals(header)
+        pts = PajakTransaksi.objects.filter(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pts.count(), 2)
+        jenis = set(pts.values_list('jenis_pajak', flat=True))
+        self.assertIn('ppn_umum', jenis)
+        self.assertIn('pph_23_jasa', jenis)
+
+    def test_is_manual_override(self):
+        header, si = self._make_sales_with_tax_line(
+            tax_type='ppn_keluaran', tax=Decimal('5000'), is_manual=True,
+        )
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        self.assertTrue(pt.is_overridden)
+        self.assertEqual(pt.jumlah_pajak, Decimal('5000'))
+
+    def test_cancel_sales_pajak_sets_dibatalkan(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pt.status, 'final')
+
+        _cancel_sales_pajak(header)
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'dibatalkan')
+
+    def test_sales_item_without_tax_lines_no_pajak_transaksi(self):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        create_sales_automated_journals(header)
+        self.assertEqual(PajakTransaksi.objects.count(), 0)

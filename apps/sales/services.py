@@ -6,8 +6,29 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 from apps.purchase.models import FIFOBatch
 from apps.inventory.models import InventoryRecord
+from apps.pajak.models import PajakTransaksi
+from apps.pajak.services import (
+    sync_pajak,
+    confirm_pajak as confirm_pajak_trx,
+    batal_pajak as batal_pajak_trx,
+)
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation
+
+
+TAX_TYPE_MAP = {
+    'ppn_keluaran': 'ppn_umum',
+    'pph_23':       'pph_23_jasa',
+    'pph_21':       'pph_21_bukan_pegawai',
+    'pph_4_2':      'pph_4_2_sewa',
+}
+
+SIFAT_PAJAK_MAP = {
+    'ppn_keluaran': 'potong_pungut',
+    'pph_23':       'prepaid',
+    'pph_21':       'prepaid',
+    'pph_4_2':      'prepaid',
+}
 
 
 def get_available_stock(item_id: int) -> Decimal:
@@ -70,6 +91,46 @@ def consume_fifo(item_id: int, quantity: Decimal) -> tuple[Decimal, list[tuple[F
     return total_cogs, consumed
 
 
+def _sync_confirm_sales_tax_line(
+    si: SalesItem,
+    sales_header: SalesHeader,
+    tax_line: SalesTaxLine,
+    entitas_bisnis=None,
+) -> None:
+    jenis_pajak = TAX_TYPE_MAP.get(tax_line.tax_type)
+    if not jenis_pajak:
+        return
+    sifat_pajak = SIFAT_PAJAK_MAP.get(tax_line.tax_type, 'potong_pungut')
+    override_amount = tax_line.tax if tax_line.is_manual else None
+    pajak_trx = sync_pajak(
+        source_type='sales_item',
+        source_obj=si,
+        dpp=si.total_sales,
+        tanggal=sales_header.tanggal,
+        jenis_pajak=jenis_pajak,
+        akun_pajak=tax_line.tax_account,
+        akun_lawan=tax_line.tax_payment_account,
+        sifat_pajak=sifat_pajak,
+        override_amount=override_amount,
+        entitas_bisnis_override=entitas_bisnis,
+    )
+    confirm_pajak_trx(pajak_trx)
+
+
+def _cancel_sales_pajak(sales_header: SalesHeader) -> None:
+    si_ids = list(
+        SalesItem.objects
+        .filter(sales_eb__sales_header=sales_header)
+        .values_list('id', flat=True)
+    )
+    qs = PajakTransaksi.objects.filter(
+        source_type='sales_item',
+        source_id__in=si_ids,
+    ).exclude(status='dibatalkan')
+    for pajak_trx in qs:
+        batal_pajak_trx(pajak_trx)
+
+
 def create_sales_automated_journals(sales_header: SalesHeader, user=None) -> list[JurnalHeader]:
     """Generate automated journal entries for a sales transaction.
 
@@ -81,11 +142,11 @@ def create_sales_automated_journals(sales_header: SalesHeader, user=None) -> lis
         for eb_group in sales_header.entitas_groups.select_related(
             'entitas_bisnis', 'payment_account',
         ).all():
-            items = eb_group.items.select_related(
+            items = list(eb_group.items.select_related(
                 'item', 'offset_coa_account', 'revenue_account',
                 'inventory_account', 'tax_account', 'tax_payment_account',
                 'sub_transaction_type',
-            ).all()
+            ).all())
 
             if not items:
                 continue
@@ -134,25 +195,18 @@ def create_sales_automated_journals(sales_header: SalesHeader, user=None) -> lis
                         kredit=si.total_sales,
                     ))
 
-                # 3. Tax entry (if applicable)
-                if si.tax and si.tax > 0:
-                    tax_liability_account = si.tax_payment_account or si.tax_account
-                    if tax_liability_account:
-                        detail_lines.append(JurnalDetail(
-                            jurnal_header=header,
-                            akun=_payment_akun or eb_group.payment_account,
-                            debit=si.tax,
-                            kredit=Decimal('0'),
-                        ))
-                        detail_lines.append(JurnalDetail(
-                            jurnal_header=header,
-                            akun=tax_liability_account,
-                            debit=Decimal('0'),
-                            kredit=si.tax,
-                        ))
-
             JurnalDetail.objects.bulk_create(detail_lines)
             created_headers.append(header)
+
+            # Tax lines via pajak module (jurnal pajak terpisah)
+            for si in items:
+                for tax_line in si.tax_lines.select_related(
+                    'tax_account', 'tax_payment_account'
+                ).all():
+                    _sync_confirm_sales_tax_line(
+                        si, sales_header, tax_line,
+                        entitas_bisnis=eb_group.entitas_bisnis,
+                    )
 
         if sales_header.payment_type == 'credit':
             from apps.piutang.services import create_piutang_from_sales
