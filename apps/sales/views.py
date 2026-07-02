@@ -22,7 +22,7 @@ from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation, SalesEventLog
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
     get_available_stock,
     get_fifo_unit_cost,
@@ -30,6 +30,7 @@ from .services import (
     create_sales_automated_journals,
     reverse_sales_automated_journals,
     reverse_sales_fifo,
+    _cancel_sales_pajak,
 )
 
 
@@ -392,7 +393,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         for si in eg.items.select_related(
             'item', 'sub_transaction_type', 'offset_coa_account',
             'revenue_account', 'payment_account', 'tax_account', 'tax_payment_account',
-        ).all():
+        ).prefetch_related('tax_lines').all():
             items_data.append({
                 'item_id': si.item_id,
                 'item_name': f'{si.item.item_id} - {si.item.nama}',
@@ -409,6 +410,17 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'tax_account_id': si.tax_account_id or '',
                 'tax_payment': si.tax_payment or '',
                 'tax_payment_account_id': si.tax_payment_account_id or '',
+                # New: tax lines array
+                'tax_lines': [
+                    {
+                        'tax_type': tl.tax_type,
+                        'tax': str(tl.tax) if tl.tax else '',
+                        'is_manual': tl.is_manual,
+                        'tax_account_id': tl.tax_account_id,
+                        'tax_payment_account_id': tl.tax_payment_account_id,
+                    }
+                    for tl in si.tax_lines.all()
+                ],
             })
 
         eb_groups_data.append({
@@ -446,6 +458,7 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'items__offset_coa_account', 'items__revenue_account',
         'items__payment_account',
         'items__tax_account', 'items__tax_payment_account',
+        'items__tax_lines__tax_account', 'items__tax_lines__tax_payment_account',
     ).all()
 
     # Build inventory mutations from per-batch FIFO allocations
@@ -497,6 +510,7 @@ def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
         'items__offset_coa_account', 'items__revenue_account',
         'items__payment_account',
         'items__tax_account', 'items__tax_payment_account',
+        'items__tax_lines',
     ).all()
 
     company = EntitasBisnis.objects.filter(is_company_profile=True).first()
@@ -510,7 +524,12 @@ def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
         tax_total = Decimal('0')
         for si in eg.items.all():
             subtotal += si.total_sales or Decimal('0')
-            tax_total += si.tax or Decimal('0')
+            # Use tax_lines (new) or fallback to deprecated si.tax (old records)
+            tax_lines_list = list(si.tax_lines.all())
+            if tax_lines_list:
+                tax_total += sum(tl.tax or Decimal('0') for tl in tax_lines_list)
+            else:
+                tax_total += si.tax or Decimal('0')
         group_total = subtotal + tax_total
         grand_total += group_total
         grand_tax += tax_total
@@ -557,6 +576,7 @@ def sales_delete(request: HttpRequest, pk: int) -> HttpResponse:
         with transaction.atomic():
             for journal in related_journals:
                 log_jurnal_terhapus(journal, 'sales', request)
+            _cancel_sales_pajak(sales)
             reverse_sales_automated_journals(sales)
             reverse_sales_fifo(sales)
             SalesEventLog.objects.create(
@@ -823,6 +843,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     # Save
     with transaction.atomic():
         if existing:
+            _cancel_sales_pajak(existing)
             reverse_sales_automated_journals(existing)
             reverse_sales_fifo(existing)
             existing.entitas_groups.all().delete()
@@ -852,7 +873,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                 tax_amount = Decimal(str(tax_val)) if tax_val else None
                 is_bulk = item_data.get('is_bulk') == '1'
 
-                SalesItem.objects.create(
+                si = SalesItem.objects.create(
                     sales_eb=eb_group,
                     item_id=item_data['item_id'],
                     sub_transaction_type_id=item_data['sub_transaction_type_id'],
@@ -868,6 +889,27 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     tax_payment=item_data.get('tax_payment', ''),
                     tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
                 )
+
+                # Buat SalesTaxLine dari tax_lines array (format baru)
+                for tl_data in item_data.get('tax_lines', []):
+                    tl_tax_type = tl_data.get('tax_type', '')
+                    if not tl_tax_type:
+                        continue
+                    tl_tax_raw = tl_data.get('tax')
+                    tl_tax_val = Decimal(str(tl_tax_raw)) if tl_tax_raw else None
+                    tl_is_manual = bool(tl_data.get('is_manual', False)) or bool(tl_tax_val)
+                    tl_tax_account_id = tl_data.get('tax_account_id') or None
+                    tl_tax_payment_account_id = tl_data.get('tax_payment_account_id') or None
+                    if not tl_tax_account_id or not tl_tax_payment_account_id:
+                        continue
+                    SalesTaxLine.objects.create(
+                        sales_item=si,
+                        tax_type=tl_tax_type,
+                        tax=tl_tax_val,
+                        is_manual=tl_is_manual,
+                        tax_account_id=tl_tax_account_id,
+                        tax_payment_account_id=tl_tax_payment_account_id,
+                    )
 
         # Process FIFO outflow
         process_sales_fifo(sales)

@@ -573,3 +573,102 @@ class SalesTaxLineServiceTests(TestCase):
         # Must NOT be overridden — should be computed from TarifPajak, not si.tax
         self.assertFalse(pt.is_overridden)
         self.assertNotEqual(pt.jumlah_pajak, Decimal('99999'))
+
+
+class SalesTaxLineViewTests(TestCase):
+    def setUp(self):
+        _seed_tarif('ppn_umum', '12.0000', '0.916667')
+
+        self.role = Role.objects.create(kode='admin', nama='Admin')
+        self.user = User.objects.create_user(email='view@test.com', password='pass1234', role=self.role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB2')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe XYZ', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1a', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1a', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4a', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1a', nama='Pendapatan Usaha')
+        self.akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='3a', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1a', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3.v')
+        self.akun_lawan = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4.v')
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Produk X', tipe_item='FG', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan View', module='sales', direction='outflow',
+            default_offset_account=self.akun_persediaan,
+        )
+        FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01',
+            quantity_in=Decimal('100'), unit_price=Decimal('10000'),
+            remaining_qty=Decimal('100'),
+        )
+
+    def _payload_with_tax_lines(self, tax_type='ppn_keluaran'):
+        groups = [{
+            'eb_selection': f'lv1:{self.eb.pk}',
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'quantity': '5',
+                'selling_price': '20000',
+                'offset_coa_account_id': self.akun_persediaan.pk,
+                'revenue_account_id': self.akun_pendapatan.pk,
+                'payment_account_id': self.akun_modal.pk,
+                'tax_lines': [{
+                    'tax_type': tax_type,
+                    'tax': '',
+                    'is_manual': False,
+                    'tax_account_id': self.akun_ppn.pk,
+                    'tax_payment_account_id': self.akun_lawan.pk,
+                }],
+            }],
+        }]
+        return json.dumps(groups)
+
+    def test_create_sales_with_tax_lines_creates_salestaxline(self):
+        resp = self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(SalesTaxLine.objects.count(), 1)
+        tl = SalesTaxLine.objects.first()
+        self.assertEqual(tl.tax_type, 'ppn_keluaran')
+        self.assertFalse(tl.is_manual)
+
+    def test_create_sales_with_tax_lines_creates_pajak_transaksi(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        pts = PajakTransaksi.objects.filter(source_type='sales_item')
+        self.assertEqual(pts.count(), 1)
+        self.assertEqual(pts.first().status, 'final')
+
+    def test_delete_sales_cancels_pajak_transaksi(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        header = SalesHeader.objects.first()
+        pt = PajakTransaksi.objects.filter(source_type='sales_item').first()
+        self.assertEqual(pt.status, 'final')
+
+        self.client.post(reverse('sales:delete', args=[header.pk]))
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'dibatalkan')
