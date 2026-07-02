@@ -550,3 +550,26 @@ class SalesTaxLineServiceTests(TestCase):
         )
         create_sales_automated_journals(header)
         self.assertEqual(PajakTransaksi.objects.count(), 0)
+
+    def test_non_manual_tax_line_ignores_si_tax_field(self):
+        """Deprecated si.tax must not override tarif computation when is_manual=False."""
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+            tax=Decimal('99999'),  # stale inline tax — must be ignored
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='ppn_keluaran', is_manual=False,
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        # Must NOT be overridden — should be computed from TarifPajak, not si.tax
+        self.assertFalse(pt.is_overridden)
+        self.assertNotEqual(pt.jumlah_pajak, Decimal('99999'))

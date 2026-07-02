@@ -102,6 +102,11 @@ def _sync_confirm_sales_tax_line(
         return
     sifat_pajak = SIFAT_PAJAK_MAP.get(tax_line.tax_type, 'potong_pungut')
     override_amount = tax_line.tax if tax_line.is_manual else None
+    # Guard: sync_pajak falls back to source_obj.tax when override_amount is None.
+    # Clear si.tax in-memory so the deprecated field cannot silently override
+    # tarif computation on non-manual tax lines.
+    if not tax_line.is_manual and si.tax:
+        si.tax = None
     pajak_trx = sync_pajak(
         source_type='sales_item',
         source_obj=si,
