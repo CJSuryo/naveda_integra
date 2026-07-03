@@ -179,7 +179,17 @@
     #journalPreview { width: 100%; overflow-x: auto; }
     #journalPreview table { min-width: 500px; }
     .ni-journal-preview { padding: 12px; }
+
+    /* Tax lines on mobile */
+    .ni-tax-line-row { flex-direction: column; align-items: stretch; }
+    .ni-tax-line-row .ni-sales-input { min-width: unset; font-size: 16px; min-height: 40px; }
   }
+
+  /* ── Tax Lines ── */
+  .ni-tax-line-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; flex-wrap: wrap; }
+  .ni-tax-line-row .ni-sales-input { flex: 1; min-width: 100px; }
+  .ni-tax-lines-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .ni-tax-lines-header span { font-size: 0.78rem; color: var(--ni-text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.03em; }
 </style>
 {% endblock %}
 
@@ -500,64 +510,32 @@
         '</button>' +
       '</td>';
 
-    // Advanced tax row (hidden by default)
-    var hasTax = prefill && (prefill.tax || prefill.tax_type);
+    // Advanced tax lines container (hidden by default)
+    var hasTaxLines = prefill && prefill.tax_lines && prefill.tax_lines.length > 0;
     var trAdv = document.createElement('tr');
     trAdv.id = rid + '_adv';
     trAdv.className = 'advanced-row';
-    trAdv.style.display = hasTax ? '' : 'none';
-
-    // Tax account options
-    var taxAccountOptions = '<option value="">— Tax Account —</option>';
-    akunList.forEach(function (a) {
-      var sel = (prefill && prefill.tax_account_id == a.id) ? ' selected' : '';
-      taxAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
-    });
-
-    // Tax payment account options
-    var taxPaymentAccountOptions = '<option value="">— Tax Payment Account —</option>';
-    akunList.forEach(function (a) {
-      var sel = (prefill && prefill.tax_payment_account_id == a.id) ? ' selected' : '';
-      taxPaymentAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
-    });
-
+    trAdv.style.display = hasTaxLines ? '' : 'none';
     trAdv.innerHTML =
-      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
-        '<div style="display:flex;gap:8px;">' +
-          '<div style="flex:1;"><label style="color:var(--ni-text-muted);font-size:0.75rem;">Nominal Pajak</label>' +
-            '<input type="number" id="' + rid + '_tax" class="ni-sales-input" placeholder="0" value="' + (prefill && prefill.tax ? prefill.tax : '') + '" min="0" step="any">' +
-          '</div>' +
-          '<div style="flex:1;"><label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Type</label>' +
-            '<select id="' + rid + '_tax_type" class="ni-sales-input">' +
-              '<option value="">— Tax Type —</option>' +
-              '<option value="ppn_keluaran"' + (prefill && prefill.tax_type === 'ppn_keluaran' ? ' selected' : '') + '>PPN Keluaran</option>' +
-              '<option value="pph_23"' + (prefill && prefill.tax_type === 'pph_23' ? ' selected' : '') + '>PPh 23</option>' +
-              '<option value="pph_21"' + (prefill && prefill.tax_type === 'pph_21' ? ' selected' : '') + '>PPh 21</option>' +
-              '<option value="pph_4_2"' + (prefill && prefill.tax_type === 'pph_4_2' ? ' selected' : '') + '>PPh 4(2)</option>' +
-            '</select>' +
-          '</div>' +
+      '<td colspan="10" style="padding:8px 10px;background:var(--ni-bg);">' +
+        '<div class="ni-tax-lines-header">' +
+          '<span><i data-lucide="receipt" style="width:12px;height:12px;vertical-align:middle;"></i> Tax Lines</span>' +
+          '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addTaxLine(\'' + rid + '\')" style="padding:4px 10px;">' +
+            '<i data-lucide="plus" style="width:12px;height:12px"></i> Tambah Pajak' +
+          '</button>' +
         '</div>' +
-      '</td>' +
-      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
-        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Account</label>' +
-        '<select id="' + rid + '_tax_account" class="ni-sales-input">' + taxAccountOptions + '</select>' +
-      '</td>' +
-      '<td style="padding:8px 10px;background:var(--ni-bg);">' +
-        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Payment Status</label>' +
-        '<select id="' + rid + '_tax_payment" class="ni-sales-input">' +
-          '<option value="">— Status —</option>' +
-          '<option value="belum_transfer"' + (prefill && prefill.tax_payment === 'belum_transfer' ? ' selected' : '') + '>Belum Transfer</option>' +
-          '<option value="sudah_transfer"' + (prefill && prefill.tax_payment === 'sudah_transfer' ? ' selected' : '') + '>Sudah Transfer</option>' +
-        '</select>' +
-      '</td>' +
-      '<td colspan="2" style="padding:8px 10px;background:var(--ni-bg);">' +
-        '<label style="color:var(--ni-text-muted);font-size:0.75rem;">Tax Payment Account</label>' +
-        '<select id="' + rid + '_tax_payment_account" class="ni-sales-input">' + taxPaymentAccountOptions + '</select>' +
-      '</td>' +
-      '<td style="background:var(--ni-bg);"></td>';
+        '<div id="' + rid + '_tax_lines_list"></div>' +
+      '</td>';
 
     tbody.appendChild(tr);
     tbody.appendChild(trAdv);
+
+    // Prefill tax lines from server data (edit mode)
+    if (hasTaxLines) {
+      prefill.tax_lines.forEach(function (tl) {
+        addTaxLine(rid, tl);
+      });
+    }
 
     // Get the EB lv1 ID for filtering
     var card = document.getElementById(gid);
@@ -638,6 +616,66 @@
       row.style.display = row.style.display === 'none' ? '' : 'none';
     });
   };
+
+  // ── Tax Line Management ───────────────────────────────────────────────────
+  window.addTaxLine = function (rid, prefill) {
+    var list = document.getElementById(rid + '_tax_lines_list');
+    if (!list) return;
+
+    var taxTypeOptions =
+      '<option value="">— Tipe Pajak —</option>' +
+      '<option value="ppn_keluaran"' + (prefill && prefill.tax_type === 'ppn_keluaran' ? ' selected' : '') + '>PPN Keluaran</option>' +
+      '<option value="pph_23"' + (prefill && prefill.tax_type === 'pph_23' ? ' selected' : '') + '>PPh 23</option>' +
+      '<option value="pph_21"' + (prefill && prefill.tax_type === 'pph_21' ? ' selected' : '') + '>PPh 21</option>' +
+      '<option value="pph_4_2"' + (prefill && prefill.tax_type === 'pph_4_2' ? ' selected' : '') + '>PPh 4(2)</option>';
+
+    var taxAccountOptions = '<option value="">— Akun Pajak —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.tax_account_id == a.id) ? ' selected' : '';
+      taxAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    var taxPaymentAccountOptions = '<option value="">— Akun Lawan —</option>';
+    akunList.forEach(function (a) {
+      var sel = (prefill && prefill.tax_payment_account_id == a.id) ? ' selected' : '';
+      taxPaymentAccountOptions += '<option value="' + a.id + '"' + sel + '>' + esc(a.text) + '</option>';
+    });
+
+    var div = document.createElement('div');
+    div.className = 'ni-tax-line-row';
+    div.innerHTML =
+      '<select class="ni-sales-input tax-type-sel" style="flex:1.2;min-width:110px;">' + taxTypeOptions + '</select>' +
+      '<input type="number" class="ni-sales-input tax-nominal-inp" placeholder="Nominal (kosong=auto)" step="any" min="0" value="' + (prefill && prefill.tax ? esc(String(prefill.tax)) : '') + '" style="flex:1;min-width:90px;" title="Kosongkan agar dihitung otomatis dari tarif">' +
+      '<select class="ni-sales-input tax-account-sel" style="flex:2;min-width:130px;">' + taxAccountOptions + '</select>' +
+      '<select class="ni-sales-input tax-payment-account-sel" style="flex:2;min-width:130px;">' + taxPaymentAccountOptions + '</select>' +
+      '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="this.closest(\'.ni-tax-line-row\').remove()" style="padding:4px 8px;flex-shrink:0;" title="Hapus tax line">' +
+        '<i data-lucide="x" style="width:12px;height:12px"></i>' +
+      '</button>';
+
+    list.appendChild(div);
+    lucide.createIcons();
+  };
+
+  function collectTaxLines(rid) {
+    var list = document.getElementById(rid + '_tax_lines_list');
+    if (!list) return [];
+    var lines = [];
+    list.querySelectorAll('.ni-tax-line-row').forEach(function (row) {
+      var taxType = row.querySelector('.tax-type-sel') ? row.querySelector('.tax-type-sel').value : '';
+      if (!taxType) return;
+      var nominalVal = row.querySelector('.tax-nominal-inp') ? row.querySelector('.tax-nominal-inp').value.trim() : '';
+      var taxAccountId = row.querySelector('.tax-account-sel') ? row.querySelector('.tax-account-sel').value : '';
+      var taxPaymentAccountId = row.querySelector('.tax-payment-account-sel') ? row.querySelector('.tax-payment-account-sel').value : '';
+      lines.push({
+        tax_type: taxType,
+        tax: nominalVal || '',
+        is_manual: !!nominalVal,
+        tax_account_id: taxAccountId,
+        tax_payment_account_id: taxPaymentAccountId,
+      });
+    });
+    return lines;
+  }
 
   window.updateTotal = function (rid) {
     var qty = parseFloat(document.getElementById(rid + '_qty').value) || 0;
@@ -812,14 +850,19 @@
         if (revenueSel && data.revenue_account_id) revenueSel.value = data.revenue_account_id;
         var paymentSel = document.getElementById(rid + '_payment');
         if (paymentSel && data.payment_account_id) paymentSel.value = data.payment_account_id;
-        // Tax fields — show advanced row if tax_type is set
+        // If STT has a default tax_type, add a tax line (only if none exist yet)
         if (data.tax_type) {
           var advRow = document.getElementById(rid + '_adv');
           if (advRow) advRow.style.display = '';
-          var taxTypeSel = document.getElementById(rid + '_tax_type');
-          if (taxTypeSel) taxTypeSel.value = data.tax_type;
-          var taxAccountSel = document.getElementById(rid + '_tax_account');
-          if (taxAccountSel && data.tax_account_id) taxAccountSel.value = data.tax_account_id;
+          var list = document.getElementById(rid + '_tax_lines_list');
+          if (list && list.querySelectorAll('.ni-tax-line-row').length === 0) {
+            addTaxLine(rid, {
+              tax_type: data.tax_type,
+              tax_account_id: data.tax_account_id || '',
+              tax_payment_account_id: '',
+              tax: '',
+            });
+          }
         }
       });
   };
@@ -878,21 +921,27 @@
           tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td style="color:var(--ni-text-muted);">Persediaan (auto)</td><td></td><td style="text-align:right;">' + formatNum(hpp) + '</td></tr>';
         }
 
-        // Tax entries if present
-        var tax = parseFloat(item.tax || 0);
-        if (tax > 0 && item.tax_account_id) {
-          rowNum++;
-          var taxText = 'Tax Account';
-          var tMatch = akunList.find(function (a) { return a.id == item.tax_account_id; });
-          if (tMatch) taxText = tMatch.text;
-          tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(taxText) + '</td><td style="text-align:right;">' + formatNum(tax) + '</td><td></td></tr>';
-
-          if (item.tax_payment_account_id) {
+        // Tax lines preview
+        if (item.tax_lines && item.tax_lines.length > 0) {
+          item.tax_lines.forEach(function (tl) {
+            if (!tl.tax_type || !tl.tax_account_id) return;
+            var nominalRaw = parseFloat(tl.tax || 0);
+            var taxName = 'Tax Account';
+            var tMatch = akunList.find(function (a) { return a.id == tl.tax_account_id; });
+            if (tMatch) taxName = tMatch.text;
+            var nominalDisplay = nominalRaw > 0 ? formatNum(nominalRaw) : '<em style="color:var(--ni-text-muted);">auto</em>';
             rowNum++;
-            var tpMatch = akunList.find(function (a) { return a.id == item.tax_payment_account_id; });
-            var tpText = tpMatch ? tpMatch.text : 'Tax Payment Account';
-            tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td><td>' + esc(tpText) + '</td><td></td><td style="text-align:right;">' + formatNum(tax) + '</td></tr>';
-          }
+            tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td>' +
+              '<td>' + esc(taxName) + ' <span style="color:var(--ni-text-muted);font-size:0.8em;">(' + esc(tl.tax_type) + ')</span></td>' +
+              '<td style="text-align:right;">' + nominalDisplay + '</td><td></td></tr>';
+            if (tl.tax_payment_account_id && nominalRaw > 0) {
+              rowNum++;
+              var tpMatch = akunList.find(function (a) { return a.id == tl.tax_payment_account_id; });
+              var tpText = tpMatch ? tpMatch.text : 'Akun Lawan';
+              tbody.innerHTML += '<tr><td>' + rowNum + '</td><td>' + esc(ebLabel) + '</td>' +
+                '<td>' + esc(tpText) + '</td><td></td><td style="text-align:right;">' + formatNum(nominalRaw) + '</td></tr>';
+            }
+          });
         }
       });
     });
@@ -958,11 +1007,12 @@
           offset_coa_account_id: document.getElementById(rid + '_offset').value || '',
           revenue_account_id: document.getElementById(rid + '_revenue').value || '',
           payment_account_id: document.getElementById(rid + '_payment') ? document.getElementById(rid + '_payment').value : '',
-          tax: document.getElementById(rid + '_tax') ? document.getElementById(rid + '_tax').value : '',
-          tax_type: document.getElementById(rid + '_tax_type') ? document.getElementById(rid + '_tax_type').value : '',
-          tax_account_id: document.getElementById(rid + '_tax_account') ? document.getElementById(rid + '_tax_account').value : '',
-          tax_payment: document.getElementById(rid + '_tax_payment') ? document.getElementById(rid + '_tax_payment').value : '',
-          tax_payment_account_id: document.getElementById(rid + '_tax_payment_account') ? document.getElementById(rid + '_tax_payment_account').value : '',
+          tax_lines: collectTaxLines(rid),
+          tax: '',
+          tax_type: '',
+          tax_account_id: '',
+          tax_payment: '',
+          tax_payment_account_id: '',
         });
       });
 
