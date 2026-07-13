@@ -42,6 +42,6 @@ Copy-Item "$root\static\css\landing.css" "$root\landing\css\landing.css" -Force
 Copy-Item "$root\static\css\legal.css"   "$root\landing\css\legal.css"   -Force
 Copy-Item "$root\static\js\landing.js"   "$root\landing\js\landing.js"   -Force
 Copy-Item "$root\static\js\legal.js"     "$root\landing\js\legal.js"     -Force
-Copy-Item "$root\static\hero.png"        "$root\landing\hero.png"         -Force
+Copy-Item "$root\static\hero2.png"        "$root\landing\hero2.png"         -Force
 
 Write-Host "Done. Commit landing/ to trigger Render deploy."

@@ -225,7 +225,7 @@ button { font-family: inherit; cursor: pointer; }
       rgba(9, 26, 37, 0.72) 45%,
       rgba(9, 26, 37, 0.36) 100%
     ),
-    url('../hero.png');
+    url('../hero2.png');
   background-size: cover;
   background-position: center 30%;
   background-repeat: no-repeat;
