@@ -266,6 +266,9 @@
           <span class="inv-status inv-status--draft">Draft</span>
           {% endif %}
         </div>
+        <div style="margin-top:4px;">
+          <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;{% if lunas_status == 'Lunas' %}background:#dcfce7;color:#166534;{% else %}background:#fee2e2;color:#991b1b;{% endif %}">{{ lunas_status }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -308,7 +311,7 @@
     {% endif %}
     <div class="inv-meta__block">
       <div class="inv-meta__label">Metode Pembayaran</div>
-      <div class="inv-meta__value">{{ header.get_payment_type_display }}</div>
+      <div class="inv-meta__value">{{ gdata.payment_label }}</div>
     </div>
   </div>
 
@@ -323,6 +326,7 @@
           <th style="width:28px;">#</th>
           <th>Deskripsi Item</th>
           <th>Kategori</th>
+          <th>Pembayaran</th>
           <th class="r">Nilai (Rp)</th>
         </tr>
       </thead>
@@ -338,22 +342,23 @@
             {% endif %}
           </td>
           <td style="color:#64748b;font-size:0.78rem;">{{ kp.get_kategori_display }}</td>
+          <td style="font-size:0.78rem;">{{ idata.payment_label }}</td>
           <td class="r"><strong>{{ kp.nilai_kontrak|floatformat:0|intcomma }}</strong></td>
         </tr>
         {% for tl in kp.tax_lines.all %}
         <tr class="tax-row">
           <td></td>
-          <td colspan="2" style="padding-left:16px;">
+          <td colspan="3" style="padding-left:16px;">
             &#8627; {{ tl.get_tax_type_display }}
             {% if tl.is_dipotong %}&mdash; dipotong klien{% endif %}
-            {% if tl.is_manual %}&mdash; Override: Rp {{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash; Auto (tarif berlaku){% endif %}
+            {% if tl.is_manual %}&mdash; Override manual{% else %}&mdash; Auto (tarif berlaku){% endif %}
           </td>
-          <td class="r">{% if tl.tax %}{% if tl.is_dipotong %}(-){% endif %} {{ tl.tax|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+          <td class="r">{% if tl.amount %}{% if tl.is_dipotong %}(-){% endif %} {{ tl.amount|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
         </tr>
         {% endfor %}
         {% endwith %}
         {% empty %}
-        <tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:16px 8px;">Tidak ada item.</td></tr>
+        <tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:16px 8px;">Tidak ada item.</td></tr>
         {% endfor %}
       </tbody>
     </table>

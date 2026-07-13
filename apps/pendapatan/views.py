@@ -578,7 +578,9 @@ def pendapatan_hapus(request: HttpRequest, pk: int) -> HttpResponse:
 def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
     from decimal import Decimal
     from apps.entitas_bisnis.models import EntitasBisnis
-    from .services import SIFAT_PAJAK_MAP
+    from apps.pajak.models import PajakTransaksi
+    from apps.pajak.services import compute_pajak
+    from .services import SIFAT_PAJAK_MAP, TAX_TYPE_MAP, compute_alokasi_harga
     header = get_object_or_404(
         PendapatanHeader.objects
         .select_related('created_by')
@@ -589,10 +591,42 @@ def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
             'entitas_groups__payment_account',
             'entitas_groups__items__sub_transaction_type',
             'entitas_groups__items__tax_lines',
+            'entitas_groups__items__payment_account',
         ),
         pk=pk,
     )
     company = EntitasBisnis.objects.filter(is_company_profile=True).first()
+
+    # Nominal pajak untuk baris otomatis (is_manual=False) tidak disimpan di
+    # KPTaxLine.tax — hanya di PajakTransaksi yang dibuat saat konfirmasi.
+    kp_ids = [kp.pk for eg in header.entitas_groups.all() for kp in eg.items.all()]
+    pajak_by_key = {}
+    for pt in PajakTransaksi.objects.filter(
+        source_type='pendapatan_kp', source_id__in=kp_ids,
+    ).exclude(status='dibatalkan'):
+        pajak_by_key[(pt.source_id, pt.jenis_pajak)] = pt.jumlah_pajak
+    alokasi = compute_alokasi_harga(header)
+
+    def _tax_amount(kp, tl):
+        """Nominal pajak efektif: override manual → PajakTransaksi → hitung dari tarif."""
+        if tl.is_manual and tl.tax:
+            return tl.tax
+        jenis_pajak = TAX_TYPE_MAP.get(tl.tax_type)
+        if not jenis_pajak:
+            return tl.tax or Decimal('0')
+        amount = pajak_by_key.get((kp.pk, jenis_pajak))
+        if amount is not None:
+            return amount
+        if tl.tax:
+            return tl.tax
+        # Belum dikonfirmasi (belum ada PajakTransaksi) → hitung dari tarif berlaku
+        # atas harga alokasi, DPP yang sama dipakai saat konfirmasi.
+        dpp = alokasi.get(kp.pk, kp.nilai_kontrak or Decimal('0'))
+        try:
+            return compute_pajak(jenis_pajak, dpp, header.tanggal)['jumlah_pajak']
+        except Exception:
+            # Tarif belum tersedia untuk periode ini — jangan gagalkan invoice.
+            return Decimal('0')
 
     eb_groups_data = []
     grand_total = Decimal('0')
@@ -605,7 +639,8 @@ def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
             kp_pungut = Decimal('0')
             kp_potong = Decimal('0')
             for tl in kp.tax_lines.all():
-                amt = tl.tax or Decimal('0')
+                amt = _tax_amount(kp, tl) or Decimal('0')
+                tl.amount = amt
                 # Pajak ber-sifat 'prepaid' (PPh 23/21/4(2)) dipotong oleh klien dan
                 # disetor atas nama penjual → mengurangi kas yang dibayar klien.
                 tl.is_dipotong = SIFAT_PAJAK_MAP.get(tl.tax_type) == 'prepaid'
@@ -616,9 +651,29 @@ def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
             subtotal += kp.nilai_kontrak or Decimal('0')
             pungut_total += kp_pungut
             potong_total += kp_potong
-            items_data.append({'kp': kp, 'kp_pungut': kp_pungut, 'kp_potong': kp_potong})
+            if kp.payment_account_id is None:
+                payment_label = '-'
+            elif kp.payment_account.is_kas_setara:
+                payment_label = 'Kas'
+            else:
+                payment_label = 'Kredit'
+            items_data.append({
+                'kp': kp,
+                'kp_pungut': kp_pungut,
+                'kp_potong': kp_potong,
+                'payment_label': payment_label,
+            })
         group_total = subtotal + pungut_total - potong_total
         grand_total += group_total
+        group_payment_labels = {d['payment_label'] for d in items_data if d['payment_label'] != '-'}
+        if not group_payment_labels:
+            group_payment_label = '-'
+        elif group_payment_labels == {'Kas'}:
+            group_payment_label = 'Kas'
+        elif group_payment_labels == {'Kredit'}:
+            group_payment_label = 'Kredit'
+        else:
+            group_payment_label = 'Kas dan Kredit'
         eb_groups_data.append({
             'group': eg,
             'items_data': items_data,
@@ -626,13 +681,21 @@ def pendapatan_invoice(request: HttpRequest, pk: int) -> HttpResponse:
             'pungut_total': pungut_total,
             'potong_total': potong_total,
             'group_total': group_total,
+            'payment_label': group_payment_label,
         })
+
+    if header.payment_type == 'cash':
+        lunas_status = 'Lunas'
+    else:
+        piutang = header.piutang_headers.order_by('-tanggal', '-id').first()
+        lunas_status = 'Lunas' if piutang and piutang.status == 'paid' else 'Belum Lunas'
 
     return render(request, 'pendapatan/invoice.html', {
         'header': header,
         'company': company,
         'eb_groups_data': eb_groups_data,
         'grand_total': grand_total,
+        'lunas_status': lunas_status,
     })
 
 

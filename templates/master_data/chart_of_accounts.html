@@ -47,7 +47,7 @@
           <span class="ni-badge ni-badge--secondary" style="font-size:0.7rem;">{{ lv1.sorted_children|length }} akun</span>
           <div class="ni-btn-row" style="margin-left:auto;" onclick="event.stopPropagation();">
             <button type="button" class="ni-btn ni-btn--success ni-btn--sm ni-btn--icon" title="Tambah Akun Level 2"
-              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }})">
+              onclick="niCoa.openAddLv2('{% url category.lv2_create lv1.pk %}', '{{ category.name }}', {{ forloop.parentloop.counter0 }}, {{ forloop.counter0 }}, '{{ category.slug }}')">
               <i data-lucide="plus"></i>
             </button>
             <button type="button" class="ni-btn ni-btn--warning ni-btn--sm ni-btn--icon" title="Edit"
@@ -67,7 +67,7 @@
             <span style="font-size:0.8125rem;">{{ lv2.nama }}</span>
             <div class="ni-btn-row" style="margin-left:auto;">
               <button type="button" class="ni-btn ni-btn--warning ni-btn--sm ni-btn--icon" title="Edit"
-                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }})">
+                onclick="niCoa.openEditLv2('{% url category.lv2_update lv1.pk lv2.pk %}', '{{ lv2.kode }}', '{{ lv2.nama|escapejs }}', {{ forloop.parentloop.parentloop.counter0 }}, {{ forloop.parentloop.counter0 }}, '{{ category.slug }}', {{ lv2.is_kas_setara|yesno:'true,false' }})">
                 <i data-lucide="pencil"></i>
               </button>
               <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm ni-btn--icon" title="Hapus"
@@ -184,6 +184,12 @@
           <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
           <input type="text" name="nama" class="ni-input" required>
         </div>
+        <div class="ni-form-group" id="coaAddLv2KasSetaraWrap" style="display:none;">
+          <label class="ni-form-label" style="display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="is_kas_setara" id="coaAddLv2IsKasSetara">
+            Kas/Setara Kas
+          </label>
+        </div>
       </form>
     </div>
     <div class="ni-modal__footer">
@@ -211,6 +217,12 @@
         <div class="ni-form-group">
           <label class="ni-form-label">Nama <span style="color:var(--ni-danger)">*</span></label>
           <input type="text" name="nama" class="ni-input" id="coaEditLv2Nama" required>
+        </div>
+        <div class="ni-form-group" id="coaEditLv2KasSetaraWrap" style="display:none;">
+          <label class="ni-form-label" style="display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" name="is_kas_setara" id="coaEditLv2IsKasSetara">
+            Kas/Setara Kas
+          </label>
         </div>
       </form>
     </div>
@@ -370,21 +382,25 @@
       this._activeLv1 = null;
       this.open('coaModalDeleteLv1');
     },
-    openAddLv2: function (url, catName, catIdx, lv1Idx) {
+    openAddLv2: function (url, catName, catIdx, lv1Idx, catSlug) {
       var form = document.getElementById('coaFormAddLv2');
       form.action = url;
       form.reset();
       document.getElementById('coaAddLv2Title').textContent = 'Tambah Akun ' + catName + ' Level 2';
+      document.getElementById('coaAddLv2KasSetaraWrap').style.display = (catSlug === 'aset') ? 'block' : 'none';
       this.clearErr('coaErrAddLv2');
       this._activeCategory = catIdx;
       this._activeLv1 = lv1Idx;
       this.open('coaModalAddLv2');
     },
-    openEditLv2: function (url, kode, nama, catIdx, lv1Idx) {
+    openEditLv2: function (url, kode, nama, catIdx, lv1Idx, catSlug, isKasSetara) {
       var form = document.getElementById('coaFormEditLv2');
       form.action = url;
       document.getElementById('coaEditLv2Kode').value = kode;
       document.getElementById('coaEditLv2Nama').value = nama;
+      var isAset = (catSlug === 'aset');
+      document.getElementById('coaEditLv2KasSetaraWrap').style.display = isAset ? 'block' : 'none';
+      document.getElementById('coaEditLv2IsKasSetara').checked = isAset && !!isKasSetara;
       this.clearErr('coaErrEditLv2');
       this._activeCategory = catIdx;
       this._activeLv1 = lv1Idx;

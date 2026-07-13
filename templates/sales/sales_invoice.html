@@ -254,6 +254,9 @@
         <div class="inv-header__type">Invoice Penjualan</div>
         <div class="inv-header__id">{{ sales.transaction_id }}</div>
         <div class="inv-header__date">{{ sales.tanggal }}</div>
+        <div style="margin-top:4px;">
+          <span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;{% if lunas_status == 'Lunas' %}background:#dcfce7;color:#166534;{% else %}background:#fee2e2;color:#991b1b;{% endif %}">{{ lunas_status }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -296,7 +299,7 @@
     {% endif %}
     <div class="inv-meta__block">
       <div class="inv-meta__label">Metode Pembayaran</div>
-      <div class="inv-meta__value">{{ eg.payment_account|default:'—' }}</div>
+      <div class="inv-meta__value">{{ gdata.payment_label }}</div>
     </div>
   </div>
 
@@ -311,17 +314,20 @@
           <th>#</th>
           <th>Item</th>
           <th>Tipe</th>
+          <th>Pembayaran</th>
           <th class="r">Qty</th>
           <th class="r">Harga</th>
           <th class="r">Total</th>
         </tr>
       </thead>
       <tbody>
-        {% for si in eg.items.all %}
+        {% for idata in gdata.items_data %}
+        {% with si=idata.si %}
         <tr>
           <td>{{ forloop.counter }}</td>
           <td>{{ si.item }}</td>
           <td style="color:#64748b;font-size:0.75rem;">{{ si.sub_transaction_type.nama }}</td>
+          <td style="font-size:0.75rem;">{{ idata.payment_label }}</td>
           <td class="r">
             {% if si.item.tipe_item == 'RMB' or si.item.tipe_item == 'FGB' or si.item.tipe_item == 'ITMB' %}
             &mdash;
@@ -332,18 +338,31 @@
           <td class="r">{{ si.selling_price|floatformat:0|intcomma }}</td>
           <td class="r"><strong>{{ si.total_sales|floatformat:0|intcomma }}</strong></td>
         </tr>
-        {% if si.tax %}
+        {% if idata.tax_lines %}
+        {% for tl in idata.tax_lines %}
         <tr class="tax-row">
           <td></td>
-          <td colspan="4" style="padding-left:16px;">
+          <td colspan="5" style="padding-left:16px;">
+            &#8627; {{ tl.get_tax_type_display }}
+            {% if tl.is_dipotong %}&mdash; dipotong pelanggan{% endif %}
+            {% if tl.is_manual %}&mdash; Override manual{% else %}&mdash; Auto (tarif berlaku){% endif %}
+          </td>
+          <td class="r">{% if tl.amount %}{% if tl.is_dipotong %}(-){% endif %} {{ tl.amount|floatformat:0|intcomma }}{% else %}&mdash;{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% elif si.tax %}
+        <tr class="tax-row">
+          <td></td>
+          <td colspan="5" style="padding-left:16px;">
             &#8627; Pajak: {{ si.get_tax_type_display }}
             {% if si.tax_payment %}&mdash; {{ si.get_tax_payment_display }}{% endif %}
           </td>
           <td class="r">{{ si.tax|floatformat:0|intcomma }}</td>
         </tr>
         {% endif %}
+        {% endwith %}
         {% empty %}
-        <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:16px 8px;">Tidak ada item.</td></tr>
+        <tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:16px 8px;">Tidak ada item.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -356,10 +375,16 @@
         <span>Sub-total</span>
         <span class="inv-totals__val">Rp {{ gdata.subtotal|floatformat:0|intcomma }}</span>
       </div>
-      {% if gdata.tax_total %}
+      {% if gdata.pungut_total %}
       <div class="inv-totals__row">
-        <span>Pajak</span>
-        <span class="inv-totals__val">Rp {{ gdata.tax_total|floatformat:0|intcomma }}</span>
+        <span>PPN</span>
+        <span class="inv-totals__val">Rp {{ gdata.pungut_total|floatformat:0|intcomma }}</span>
+      </div>
+      {% endif %}
+      {% if gdata.potong_total %}
+      <div class="inv-totals__row">
+        <span>Dipotong (PPh)</span>
+        <span class="inv-totals__val">(Rp {{ gdata.potong_total|floatformat:0|intcomma }})</span>
       </div>
       {% endif %}
       <div class="inv-totals__row grand">

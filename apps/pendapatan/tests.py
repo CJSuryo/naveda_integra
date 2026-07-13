@@ -1,8 +1,10 @@
 from datetime import date
 from decimal import Decimal
 
-from django.test import TestCase
+from django.test import TestCase, Client
+from django.urls import reverse
 
+from apps.accounts.models import User
 from apps.entitas_bisnis.models import EntitasBisnis, TipeEntitas
 from apps.master_data.models import Akun
 from apps.purchase.models import SubTransactionType
@@ -300,3 +302,100 @@ class InvoiceTotalTaxSifatTests(TestCase):
         self.assertEqual(gdata['potong_total'], Decimal('70000'))
         # 3.500.000 + 385.000 (PPN) - 70.000 (PPh 23) = 3.815.000, BUKAN 3.955.000
         self.assertEqual(gdata['group_total'], Decimal('3815000'))
+
+
+class PendapatanInvoicePaymentLabelTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='pend-inv@test.com', password='pass', name='Invoice User')
+        self.client.force_login(self.user)
+        self.f = make_fixtures()
+        self.f['coa_kas'].is_kas_setara = True
+        self.f['coa_kas'].save()
+        # coa_piutang keeps the default is_kas_setara=False
+
+    def test_cash_header_shows_lunas(self):
+        header = make_header(self.f, payment_type='cash')
+        resp = self.client.get(reverse('pendapatan:invoice', args=[header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+    def test_credit_header_without_piutang_shows_belum_lunas(self):
+        header = make_header(self.f, payment_type='credit')
+        resp = self.client.get(reverse('pendapatan:invoice', args=[header.pk]))
+        self.assertContains(resp, 'Belum Lunas')
+
+    def test_credit_header_with_paid_piutang_shows_lunas(self):
+        from apps.piutang.models import PiutangHeader
+        header = make_header(self.f, payment_type='credit')
+        PiutangHeader.objects.create(
+            nomor_piutang='PTG-TEST-002',
+            source_type='from_pendapatan',
+            source_pendapatan=header,
+            coa_piutang_account=self.f['coa_piutang'],
+            jumlah_pokok=Decimal('5000000'),
+            jumlah_terbayar=Decimal('5000000'),
+            status='paid',
+        )
+        resp = self.client.get(reverse('pendapatan:invoice', args=[header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+    def test_all_cash_items_label_kas(self):
+        header = create_pendapatan_header(
+            tanggal=date(2026, 6, 1),
+            deskripsi='Sewa dua gedung, keduanya cash',
+            payment_type='cash',
+            entitas_bisnis=self.f['eb'],
+            payment_account=self.f['coa_kas'],
+            items=[
+                {
+                    'deskripsi_item': 'Sewa Gedung A',
+                    'kategori': 'sewa',
+                    'sub_transaction_type': self.f['stt'],
+                    'jumlah_bruto': Decimal('5000000'),
+                    'revenue_account': self.f['coa_revenue'],
+                    'payment_account': self.f['coa_kas'],
+                },
+                {
+                    'deskripsi_item': 'Sewa Gedung B',
+                    'kategori': 'sewa',
+                    'sub_transaction_type': self.f['stt'],
+                    'jumlah_bruto': Decimal('3000000'),
+                    'revenue_account': self.f['coa_revenue'],
+                    'payment_account': self.f['coa_kas'],
+                },
+            ],
+        )
+        resp = self.client.get(reverse('pendapatan:invoice', args=[header.pk]))
+        self.assertContains(resp, 'Kas')
+        self.assertNotContains(resp, 'Kas dan Kredit')
+
+    def test_mixed_items_label_kas_dan_kredit(self):
+        header = create_pendapatan_header(
+            tanggal=date(2026, 6, 1),
+            deskripsi='Sewa dua gedung, satu cash satu kredit',
+            payment_type='cash',
+            entitas_bisnis=self.f['eb'],
+            payment_account=self.f['coa_kas'],
+            items=[
+                {
+                    'deskripsi_item': 'Sewa Gedung A',
+                    'kategori': 'sewa',
+                    'sub_transaction_type': self.f['stt'],
+                    'jumlah_bruto': Decimal('5000000'),
+                    'revenue_account': self.f['coa_revenue'],
+                    'payment_account': self.f['coa_kas'],
+                },
+                {
+                    'deskripsi_item': 'Sewa Gedung B',
+                    'kategori': 'sewa',
+                    'sub_transaction_type': self.f['stt'],
+                    'jumlah_bruto': Decimal('3000000'),
+                    'revenue_account': self.f['coa_revenue'],
+                    'payment_account': self.f['coa_piutang'],
+                },
+            ],
+        )
+        resp = self.client.get(reverse('pendapatan:invoice', args=[header.pk]))
+        self.assertContains(resp, 'Kas dan Kredit')

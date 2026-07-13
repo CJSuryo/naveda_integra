@@ -9,6 +9,48 @@ from .models import TarifPajak, BracketPPhOP, MasaPajak, PajakTransaksi
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 
+def resolve_pajak_sources(trx_list: list[PajakTransaksi]) -> list[PajakTransaksi]:
+    """Attach source_label/source_url to each PajakTransaksi for display.
+
+    Resolves 'pendapatan_kp' and 'sales_item' source types back to their
+    parent transaction (PendapatanHeader / SalesHeader) with a link to its
+    detail page. Other source types fall back to a plain type+id label.
+    """
+    from django.urls import reverse
+
+    kp_ids = [pt.source_id for pt in trx_list if pt.source_type == 'pendapatan_kp']
+    kp_to_header = {}
+    if kp_ids:
+        from apps.pendapatan.models import KewajibabPelaksanaan
+        for kp in KewajibabPelaksanaan.objects.filter(pk__in=kp_ids).select_related(
+            'pendapatan_eb__pendapatan_header'
+        ):
+            kp_to_header[kp.pk] = kp.pendapatan_eb.pendapatan_header
+
+    si_ids = [pt.source_id for pt in trx_list if pt.source_type == 'sales_item']
+    si_to_header = {}
+    if si_ids:
+        from apps.sales.models import SalesItem
+        for si in SalesItem.objects.filter(pk__in=si_ids).select_related(
+            'sales_eb__sales_header'
+        ):
+            si_to_header[si.pk] = si.sales_eb.sales_header
+
+    for pt in trx_list:
+        if pt.source_type == 'pendapatan_kp' and pt.source_id in kp_to_header:
+            h = kp_to_header[pt.source_id]
+            pt.source_label = h.transaction_id
+            pt.source_url = reverse('pendapatan:detail', args=[h.pk])
+        elif pt.source_type == 'sales_item' and pt.source_id in si_to_header:
+            h = si_to_header[pt.source_id]
+            pt.source_label = h.transaction_id
+            pt.source_url = reverse('sales:detail', args=[h.pk])
+        else:
+            pt.source_label = f'{pt.get_source_type_display()} #{pt.source_id}'
+            pt.source_url = None
+    return trx_list
+
+
 def tarif_efektif(jumlah_pajak: Decimal, dpp: Decimal) -> Decimal:
     """
     Effective rate against full DPP, for display on overridden records.

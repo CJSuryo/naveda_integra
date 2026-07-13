@@ -81,6 +81,16 @@ class AkunModelTests(TestCase):
         self.assertEqual(a.kategori_id, 'aset')
 
 
+class AkunIsKasSetaraTests(TestCase):
+    def test_default_is_false(self):
+        a = Akun.objects.create(kategori_id='aset', nama='Piutang Dagang')
+        self.assertFalse(a.is_kas_setara)
+
+    def test_can_flag_as_kas(self):
+        a = Akun.objects.create(kategori_id='aset', nama='Kas Tunai', is_kas_setara=True)
+        self.assertTrue(a.is_kas_setara)
+
+
 class ComputeKodeAkunTests(TestCase):
     def test_aset_kode(self):
         lv1 = AsetLv1.objects.create(kode='1', nama='Aset Lancar')
@@ -426,3 +436,77 @@ class ChartOfAccountsViewTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse('master_data:chart_of_accounts'))
         self.assertEqual(response.status_code, 302)
+
+
+class AsetLv2IsKasSetaraSyncTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = create_user()
+        self.client.force_login(self.user)
+        self.lv1 = AsetLv1.objects.create(kode='1.1', nama='Aset Lancar')
+
+    def test_create_with_checkbox_checked_sets_akun_true(self):
+        self.client.post(
+            reverse('master_data:aset_lv2_create', args=[self.lv1.pk]),
+            {'nama': 'Kas Tunai', 'is_kas_setara': 'on'},
+        )
+        lv2 = AsetLv2.objects.get(nama='Kas Tunai')
+        akun = Akun.objects.get(kategori_id='aset', kategori_akun=lv2.pk)
+        self.assertTrue(akun.is_kas_setara)
+
+    def test_create_without_checkbox_leaves_akun_false(self):
+        self.client.post(
+            reverse('master_data:aset_lv2_create', args=[self.lv1.pk]),
+            {'nama': 'Piutang Dagang'},
+        )
+        lv2 = AsetLv2.objects.get(nama='Piutang Dagang')
+        akun = Akun.objects.get(kategori_id='aset', kategori_akun=lv2.pk)
+        self.assertFalse(akun.is_kas_setara)
+
+    def test_update_toggling_checkbox_on_updates_akun(self):
+        lv2 = AsetLv2.objects.create(kode='1.1.1', nama='Bank BCA', aset=self.lv1)
+        self.client.post(
+            reverse('master_data:aset_lv2_update', args=[self.lv1.pk, lv2.pk]),
+            {'nama': 'Bank BCA', 'is_kas_setara': 'on'},
+        )
+        akun = Akun.objects.get(kategori_id='aset', kategori_akun=lv2.pk)
+        self.assertTrue(akun.is_kas_setara)
+
+    def test_update_toggling_checkbox_off_updates_akun(self):
+        lv2 = AsetLv2.objects.create(kode='1.1.1', nama='Bank BCA', aset=self.lv1)
+        Akun.objects.filter(kategori_id='aset', kategori_akun=lv2.pk).update(is_kas_setara=True)
+        self.client.post(
+            reverse('master_data:aset_lv2_update', args=[self.lv1.pk, lv2.pk]),
+            {'nama': 'Bank BCA'},
+        )
+        akun = Akun.objects.get(kategori_id='aset', kategori_akun=lv2.pk)
+        self.assertFalse(akun.is_kas_setara)
+
+
+class ChartOfAccountsIsKasSetaraContextTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = create_user()
+        self.client.force_login(self.user)
+        self.lv1 = AsetLv1.objects.create(kode='1.1', nama='Aset Lancar')
+        self.lv2 = AsetLv2.objects.create(kode='1.1.1', nama='Kas Tunai', aset=self.lv1)
+        Akun.objects.filter(kategori_id='aset', kategori_akun=self.lv2.pk).update(is_kas_setara=True)
+
+    def test_aset_lv2_items_carry_is_kas_setara(self):
+        resp = self.client.get(reverse('master_data:chart_of_accounts'))
+        aset_category = next(c for c in resp.context['categories'] if c['name'] == 'Aset')
+        lv1 = next(l for l in aset_category['items'] if l.pk == self.lv1.pk)
+        lv2 = next(l for l in lv1.sorted_children if l.pk == self.lv2.pk)
+        self.assertTrue(lv2.is_kas_setara)
+
+    def test_aset_lv2_without_akun_flag_defaults_false(self):
+        lv2b = AsetLv2.objects.create(kode='1.1.2', nama='Piutang Dagang', aset=self.lv1)
+        resp = self.client.get(reverse('master_data:chart_of_accounts'))
+        aset_category = next(c for c in resp.context['categories'] if c['name'] == 'Aset')
+        lv1 = next(l for l in aset_category['items'] if l.pk == self.lv1.pk)
+        lv2 = next(l for l in lv1.sorted_children if l.pk == lv2b.pk)
+        self.assertFalse(lv2.is_kas_setara)
+
+    def test_edit_lv2_onclick_passes_category_slug_and_flag(self):
+        resp = self.client.get(reverse('master_data:chart_of_accounts'))
+        self.assertContains(resp, "'aset', true)")

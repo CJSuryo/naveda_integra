@@ -672,3 +672,173 @@ class SalesTaxLineViewTests(TestCase):
         self.client.post(reverse('sales:delete', args=[header.pk]))
         pt.refresh_from_db()
         self.assertEqual(pt.status, 'dibatalkan')
+
+
+class SalesInvoicePaymentLabelTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='inv@test.com', password='pass', name='Invoice User')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', is_kas_setara=True)
+        self.akun_piutang = Akun.objects.create(kategori_id='aset', nama='Piutang', is_kas_setara=False)
+        self.akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP')
+        self.akun_pendapatan = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Beras', tipe_item='RM', coa_account=self.akun_kas,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan FnB', module='sales', direction='outflow',
+            default_offset_account=self.akun_hpp,
+        )
+        self.header = SalesHeader.objects.create(payment_type='cash')
+        self.eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=self.header,
+            entitas_bisnis=self.entitas,
+        )
+
+    def _make_item(self, payment_account):
+        return SalesItem.objects.create(
+            sales_eb=self.eb_group,
+            item=self.item,
+            sub_transaction_type=self.stt,
+            quantity=Decimal('10'),
+            selling_price=Decimal('50000'),
+            offset_coa_account=self.akun_hpp,
+            revenue_account=self.akun_pendapatan,
+            payment_account=payment_account,
+        )
+
+    def test_all_cash_items_label_kas(self):
+        self._make_item(self.akun_kas)
+        self._make_item(self.akun_kas)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Kas')
+        self.assertNotContains(resp, 'Kas dan Kredit')
+
+    def test_mixed_items_label_kas_dan_kredit(self):
+        self._make_item(self.akun_kas)
+        self._make_item(self.akun_piutang)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Kas dan Kredit')
+
+    def test_cash_header_shows_lunas(self):
+        self._make_item(self.akun_kas)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+    def test_credit_header_without_piutang_shows_belum_lunas(self):
+        self.header.payment_type = 'credit'
+        self.header.save()
+        self._make_item(self.akun_piutang)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Belum Lunas')
+
+    def test_credit_header_with_paid_piutang_shows_lunas(self):
+        from apps.piutang.models import PiutangHeader
+        self.header.payment_type = 'credit'
+        self.header.save()
+        self._make_item(self.akun_piutang)
+        PiutangHeader.objects.create(
+            nomor_piutang='PTG-TEST-001',
+            source_type='from_sales',
+            source_sales=self.header,
+            coa_piutang_account=self.akun_piutang,
+            jumlah_pokok=Decimal('500000'),
+            jumlah_terbayar=Decimal('500000'),
+            status='paid',
+        )
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+
+class SalesDetailJournalHistoryTests(TestCase):
+    def setUp(self):
+        # kode must be 'admin' (Role.ADMIN) — User.is_admin checks
+        # role.kode == Role.ADMIN, which _resolve_eb_selection relies on to
+        # grant unrestricted entitas-bisnis access. A non-admin role with no
+        # UserEntitasBisnis link makes eb resolution fail and sales:create
+        # silently no-op (form re-render with validation errors).
+        self.role = Role.objects.create(kode='admin', nama='Admin2')
+        self.user = User.objects.create_user(email='jrn@test.com', password='pass1234', role=self.role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe Jurnal', tipe_entitas=self.tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        self.akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='3', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan Tunai', module='sales', direction='outflow',
+            default_offset_account=self.akun_persediaan,
+        )
+        FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01',
+            quantity_in=Decimal('100'), unit_price=Decimal('10000'),
+            remaining_qty=Decimal('100'),
+        )
+
+    def _eb_groups_payload(self, quantity='5', selling_price='20000'):
+        groups = [{
+            'eb_selection': f'lv1:{self.eb.pk}',
+            'payment_account_id': self.akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'quantity': quantity,
+                'selling_price': selling_price,
+                'offset_coa_account_id': self.akun_persediaan.pk,
+                'revenue_account_id': self.akun_pendapatan.pk,
+                'payment_account_id': self.akun_modal.pk,
+            }],
+        }]
+        return json.dumps(groups)
+
+    def test_detail_page_shows_created_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test jurnal di detail',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        header = SalesHeader.objects.first()
+        journal = JurnalHeader.objects.get(
+            uraian_transaksi__startswith=f'Penjualan {header.transaction_id} —',
+        )
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(journal, resp.context['journals'])
+        self.assertContains(resp, journal.nomor_transaksi)
+
+    def test_detail_page_journal_shows_debit_credit_lines(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test debit kredit',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        header = SalesHeader.objects.first()
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertContains(resp, self.akun_pendapatan.nama)
+
+    def test_detail_page_with_no_journals_shows_empty_state(self):
+        header = SalesHeader.objects.create()
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertEqual(resp.context['journals'], [])
+        self.assertContains(resp, 'Belum ada jurnal')
