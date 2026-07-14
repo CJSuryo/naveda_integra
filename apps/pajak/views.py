@@ -56,8 +56,7 @@ def hitung_pajak(request):
 
 @login_required
 def transaksi_list(request):
-    from apps.purchase.views import _get_eb_tree, _resolve_eb_selection
-    from django.urls import reverse
+    from apps.purchase.views import _get_eb_tree, _resolve_eb_selection, accessible_eb_lv1_ids
 
     status = request.GET.get('status', '')
     eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
@@ -68,6 +67,7 @@ def transaksi_list(request):
 
     if status:
         qs = qs.filter(status=status)
+    allowed_eb_ids = accessible_eb_lv1_ids(request.user)
     if eb_filter_list:
         lv1_ids = set()
         for sel in eb_filter_list:
@@ -76,27 +76,13 @@ def transaksi_list(request):
                 lv1_ids.add(resolved['lv1_id'])
         if lv1_ids:
             qs = qs.filter(entitas_bisnis_id__in=lv1_ids)
+    elif allowed_eb_ids is not None:
+        # No explicit filter selected — default-restrict non-admin users to
+        # their own EBs rather than showing every entity's data.
+        qs = qs.filter(entitas_bisnis_id__in=allowed_eb_ids)
 
-    trx_list = list(qs)
-
-    # Resolve source transaction label and URL for display
-    kp_ids = [pt.source_id for pt in trx_list if pt.source_type == 'pendapatan_kp']
-    kp_to_header = {}
-    if kp_ids:
-        from apps.pendapatan.models import KewajibabPelaksanaan
-        for kp in KewajibabPelaksanaan.objects.filter(pk__in=kp_ids).select_related(
-            'pendapatan_eb__pendapatan_header'
-        ):
-            kp_to_header[kp.pk] = kp.pendapatan_eb.pendapatan_header
-
-    for pt in trx_list:
-        if pt.source_type == 'pendapatan_kp' and pt.source_id in kp_to_header:
-            h = kp_to_header[pt.source_id]
-            pt.source_label = h.transaction_id
-            pt.source_url = reverse('pendapatan:detail', args=[h.pk])
-        else:
-            pt.source_label = f'{pt.get_source_type_display()} #{pt.source_id}'
-            pt.source_url = None
+    from .services import resolve_pajak_sources
+    trx_list = resolve_pajak_sources(list(qs))
 
     return render(request, 'pajak/transaksi_list.html', {
         'transaksi_list': trx_list,
@@ -188,16 +174,36 @@ def masa_list(request):
 
 @login_required
 def masa_detail(request, pk):
+    from apps.purchase.views import _get_eb_tree, _resolve_eb_selection, accessible_eb_lv1_ids
     masa = get_object_or_404(MasaPajak, pk=pk)
-    transaksi = PajakTransaksi.objects.select_related(
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    qs = PajakTransaksi.objects.select_related(
         'akun_pajak', 'akun_lawan', 'entitas_bisnis',
     ).filter(
         masa_pajak__year=masa.tahun,
         masa_pajak__month=masa.bulan,
     ).order_by('-created_at')
+
+    allowed_eb_ids = accessible_eb_lv1_ids(request.user)
+    if eb_filter_list:
+        lv1_ids = set()
+        for sel in eb_filter_list:
+            resolved = _resolve_eb_selection(sel, request.user)
+            if resolved:
+                lv1_ids.add(resolved['lv1_id'])
+        if lv1_ids:
+            qs = qs.filter(entitas_bisnis_id__in=lv1_ids)
+    elif allowed_eb_ids is not None:
+        qs = qs.filter(entitas_bisnis_id__in=allowed_eb_ids)
+
+    transaksi = list(qs)
+    from .services import resolve_pajak_sources
+    transaksi = resolve_pajak_sources(transaksi)
     return render(request, 'pajak/masa_detail.html', {
         'masa': masa,
         'transaksi_list': transaksi,
+        'eb_tree': _get_eb_tree(request.user),
+        'eb_filter_list': eb_filter_list,
     })
 
 

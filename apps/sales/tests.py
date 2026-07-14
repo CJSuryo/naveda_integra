@@ -8,7 +8,7 @@ from apps.accounts.models import Role, User
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.master_data.models import Akun, AsetLv1, AsetLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog, SalesTaxLine
 from .services import get_available_stock, consume_fifo
 
 
@@ -351,3 +351,494 @@ class CreditSalesCreatesPiutangTests(TestCase):
         header = self._make_credit_sales_header()
         piutang = create_piutang_from_sales(header)
         self.assertEqual(piutang.jumlah_pokok, Decimal('500000'))
+
+
+class SalesTaxLineModelTests(TestCase):
+    def setUp(self):
+        tipe = TipeEntitas.objects.create(nama='Retail')
+        eb = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=tipe)
+        akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', kode_akun='1.1.1')
+        akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP', kode_akun='5.1.1')
+        akun_rev = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan', kode_akun='4.1.1')
+        akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3')
+        akun_lawan = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4')
+        item = ItemMasterPurchase.objects.create(nama='Barang A', tipe_item='FG', coa_account=akun_kas)
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan', module='sales', direction='outflow',
+            default_offset_account=akun_hpp,
+        )
+        header = SalesHeader.objects.create()
+        eb_group = SalesEntitasBisnis.objects.create(sales_header=header, entitas_bisnis=eb)
+        self.si = SalesItem.objects.create(
+            sales_eb=eb_group, item=item, sub_transaction_type=stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=akun_hpp, revenue_account=akun_rev,
+        )
+        self.akun_ppn = akun_ppn
+        self.akun_lawan = akun_lawan
+
+    def test_salestaxline_creation(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertEqual(tl.sales_item, self.si)
+        self.assertEqual(tl.tax_type, 'ppn_keluaran')
+        self.assertFalse(tl.is_manual)
+        self.assertIsNone(tl.tax)
+
+    def test_salestaxline_str(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='pph_23',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertIn('pph_23', str(tl))
+
+    def test_salestaxline_cascade_delete(self):
+        SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.si.delete()
+        self.assertEqual(SalesTaxLine.objects.count(), 0)
+
+    def test_salestaxline_is_manual(self):
+        tl = SalesTaxLine.objects.create(
+            sales_item=self.si,
+            tax_type='ppn_keluaran',
+            tax=Decimal('11000'),
+            is_manual=True,
+            tax_account=self.akun_ppn,
+            tax_payment_account=self.akun_lawan,
+        )
+        self.assertTrue(tl.is_manual)
+        self.assertEqual(tl.tax, Decimal('11000'))
+
+
+from datetime import date as dt_date
+from apps.pajak.models import PajakTransaksi, TarifPajak
+from .services import create_sales_automated_journals, _cancel_sales_pajak
+
+
+def _seed_tarif(jenis_pajak, tarif_persen, faktor_dpp='1.000000'):
+    TarifPajak.objects.get_or_create(
+        jenis_pajak=jenis_pajak,
+        berlaku_mulai=dt_date(2025, 1, 1),
+        defaults={
+            'nama': jenis_pajak,
+            'tarif_persen': Decimal(str(tarif_persen)),
+            'faktor_dpp': Decimal(faktor_dpp),
+        },
+    )
+
+
+class SalesTaxLineServiceTests(TestCase):
+    def setUp(self):
+        _seed_tarif('ppn_umum', '12.0000', '0.916667')
+        _seed_tarif('pph_23_jasa', '2.0000')
+
+        tipe = TipeEntitas.objects.create(nama='Retail')
+        self.eb = EntitasBisnis.objects.create(nama='PT Klien', tipe_entitas=tipe)
+        self.akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', kode_akun='1.1.1')
+        self.akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP', kode_akun='5.1.1')
+        self.akun_rev = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan', kode_akun='4.1.1')
+        self.akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3')
+        self.akun_pph = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Barang A', tipe_item='FG', coa_account=self.akun_kas,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan', module='sales', direction='outflow',
+            default_offset_account=self.akun_hpp,
+        )
+
+    def _make_sales_with_tax_line(self, tax_type='ppn_keluaran', tax=None, is_manual=False):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type=tax_type, tax=tax, is_manual=is_manual,
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        return header, si
+
+    def test_pajak_transaksi_created_on_journal(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.filter(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pt.count(), 1)
+        self.assertEqual(pt.first().jenis_pajak, 'ppn_umum')
+        self.assertEqual(pt.first().sifat_pajak, 'potong_pungut')
+        self.assertEqual(pt.first().status, 'final')
+
+    def test_no_inline_tax_in_main_journal(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        created = create_sales_automated_journals(header)
+        main_journal = created[0]
+        self.assertFalse(main_journal.nomor_transaksi.startswith('TRX-PAJ'))
+        detail_akun_ids = set(main_journal.details.values_list('akun_id', flat=True))
+        self.assertNotIn(self.akun_ppn.pk, detail_akun_ids)
+
+    def test_multiple_tax_lines_create_multiple_pajak_transaksi(self):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='ppn_keluaran',
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='pph_23',
+            tax_account=self.akun_pph, tax_payment_account=self.akun_kas,
+        )
+        create_sales_automated_journals(header)
+        pts = PajakTransaksi.objects.filter(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pts.count(), 2)
+        jenis = set(pts.values_list('jenis_pajak', flat=True))
+        self.assertIn('ppn_umum', jenis)
+        self.assertIn('pph_23_jasa', jenis)
+
+    def test_is_manual_override(self):
+        header, si = self._make_sales_with_tax_line(
+            tax_type='ppn_keluaran', tax=Decimal('5000'), is_manual=True,
+        )
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        self.assertTrue(pt.is_overridden)
+        self.assertEqual(pt.jumlah_pajak, Decimal('5000'))
+
+    def test_cancel_sales_pajak_sets_dibatalkan(self):
+        header, si = self._make_sales_with_tax_line(tax_type='ppn_keluaran')
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        self.assertEqual(pt.status, 'final')
+
+        _cancel_sales_pajak(header)
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'dibatalkan')
+
+    def test_sales_item_without_tax_lines_no_pajak_transaksi(self):
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+        )
+        create_sales_automated_journals(header)
+        self.assertEqual(PajakTransaksi.objects.count(), 0)
+
+    def test_non_manual_tax_line_ignores_si_tax_field(self):
+        """Deprecated si.tax must not override tarif computation when is_manual=False."""
+        header = SalesHeader.objects.create(tanggal=dt_date(2026, 1, 15))
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+        )
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('1'), selling_price=Decimal('100000'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            payment_account=self.akun_kas,
+            tax=Decimal('99999'),  # stale inline tax — must be ignored
+        )
+        SalesTaxLine.objects.create(
+            sales_item=si, tax_type='ppn_keluaran', is_manual=False,
+            tax_account=self.akun_ppn, tax_payment_account=self.akun_pph,
+        )
+        create_sales_automated_journals(header)
+        pt = PajakTransaksi.objects.get(source_type='sales_item', source_id=si.pk)
+        # Must NOT be overridden — should be computed from TarifPajak, not si.tax
+        self.assertFalse(pt.is_overridden)
+        self.assertNotEqual(pt.jumlah_pajak, Decimal('99999'))
+
+
+class SalesTaxLineViewTests(TestCase):
+    def setUp(self):
+        _seed_tarif('ppn_umum', '12.0000', '0.916667')
+
+        self.role = Role.objects.create(kode='admin', nama='Admin')
+        self.user = User.objects.create_user(email='view@test.com', password='pass1234', role=self.role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB2')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe XYZ', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1a', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1a', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4a', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1a', nama='Pendapatan Usaha')
+        self.akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='3a', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1a', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.akun_ppn = Akun.objects.create(kategori_id='kewajiban', nama='Utang PPN', kode_akun='2.1.3.v')
+        self.akun_lawan = Akun.objects.create(kategori_id='aset', nama='Uang Muka PPh', kode_akun='1.1.4.v')
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Produk X', tipe_item='FG', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan View', module='sales', direction='outflow',
+            default_offset_account=self.akun_persediaan,
+        )
+        FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01',
+            quantity_in=Decimal('100'), unit_price=Decimal('10000'),
+            remaining_qty=Decimal('100'),
+        )
+
+    def _payload_with_tax_lines(self, tax_type='ppn_keluaran'):
+        groups = [{
+            'eb_selection': f'lv1:{self.eb.pk}',
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'quantity': '5',
+                'selling_price': '20000',
+                'offset_coa_account_id': self.akun_persediaan.pk,
+                'revenue_account_id': self.akun_pendapatan.pk,
+                'payment_account_id': self.akun_modal.pk,
+                'tax_lines': [{
+                    'tax_type': tax_type,
+                    'tax': '',
+                    'is_manual': False,
+                    'tax_account_id': self.akun_ppn.pk,
+                    'tax_payment_account_id': self.akun_lawan.pk,
+                }],
+            }],
+        }]
+        return json.dumps(groups)
+
+    def test_create_sales_with_tax_lines_creates_salestaxline(self):
+        resp = self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(SalesTaxLine.objects.count(), 1)
+        tl = SalesTaxLine.objects.first()
+        self.assertEqual(tl.tax_type, 'ppn_keluaran')
+        self.assertFalse(tl.is_manual)
+
+    def test_create_sales_with_tax_lines_creates_pajak_transaksi(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        pts = PajakTransaksi.objects.filter(source_type='sales_item')
+        self.assertEqual(pts.count(), 1)
+        self.assertEqual(pts.first().status, 'final')
+
+    def test_delete_sales_cancels_pajak_transaksi(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Penjualan dengan pajak',
+            'eb_groups_data': self._payload_with_tax_lines(),
+        })
+        header = SalesHeader.objects.first()
+        pt = PajakTransaksi.objects.filter(source_type='sales_item').first()
+        self.assertEqual(pt.status, 'final')
+
+        self.client.post(reverse('sales:delete', args=[header.pk]))
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'dibatalkan')
+
+
+class SalesInvoicePaymentLabelTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='inv@test.com', password='pass', name='Invoice User')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun_kas = Akun.objects.create(kategori_id='aset', nama='Kas', is_kas_setara=True)
+        self.akun_piutang = Akun.objects.create(kategori_id='aset', nama='Piutang', is_kas_setara=False)
+        self.akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP')
+        self.akun_pendapatan = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Beras', tipe_item='RM', coa_account=self.akun_kas,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan FnB', module='sales', direction='outflow',
+            default_offset_account=self.akun_hpp,
+        )
+        self.header = SalesHeader.objects.create(payment_type='cash')
+        self.eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=self.header,
+            entitas_bisnis=self.entitas,
+        )
+
+    def _make_item(self, payment_account):
+        return SalesItem.objects.create(
+            sales_eb=self.eb_group,
+            item=self.item,
+            sub_transaction_type=self.stt,
+            quantity=Decimal('10'),
+            selling_price=Decimal('50000'),
+            offset_coa_account=self.akun_hpp,
+            revenue_account=self.akun_pendapatan,
+            payment_account=payment_account,
+        )
+
+    def test_all_cash_items_label_kas(self):
+        self._make_item(self.akun_kas)
+        self._make_item(self.akun_kas)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Kas')
+        self.assertNotContains(resp, 'Kas dan Kredit')
+
+    def test_mixed_items_label_kas_dan_kredit(self):
+        self._make_item(self.akun_kas)
+        self._make_item(self.akun_piutang)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Kas dan Kredit')
+
+    def test_cash_header_shows_lunas(self):
+        self._make_item(self.akun_kas)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+    def test_credit_header_without_piutang_shows_belum_lunas(self):
+        self.header.payment_type = 'credit'
+        self.header.save()
+        self._make_item(self.akun_piutang)
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Belum Lunas')
+
+    def test_credit_header_with_paid_piutang_shows_lunas(self):
+        from apps.piutang.models import PiutangHeader
+        self.header.payment_type = 'credit'
+        self.header.save()
+        self._make_item(self.akun_piutang)
+        PiutangHeader.objects.create(
+            nomor_piutang='PTG-TEST-001',
+            source_type='from_sales',
+            source_sales=self.header,
+            coa_piutang_account=self.akun_piutang,
+            jumlah_pokok=Decimal('500000'),
+            jumlah_terbayar=Decimal('500000'),
+            status='paid',
+        )
+        resp = self.client.get(reverse('sales:invoice', args=[self.header.pk]))
+        self.assertContains(resp, 'Lunas')
+        self.assertNotContains(resp, 'Belum Lunas')
+
+
+class SalesDetailJournalHistoryTests(TestCase):
+    def setUp(self):
+        # kode must be 'admin' (Role.ADMIN) — User.is_admin checks
+        # role.kode == Role.ADMIN, which _resolve_eb_selection relies on to
+        # grant unrestricted entitas-bisnis access. A non-admin role with no
+        # UserEntitasBisnis link makes eb resolution fail and sales:create
+        # silently no-op (form re-render with validation errors).
+        self.role = Role.objects.create(kode='admin', nama='Admin2')
+        self.user = User.objects.create_user(email='jrn@test.com', password='pass1234', role=self.role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe Jurnal', tipe_entitas=self.tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        self.akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='3', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan Tunai', module='sales', direction='outflow',
+            default_offset_account=self.akun_persediaan,
+        )
+        FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01',
+            quantity_in=Decimal('100'), unit_price=Decimal('10000'),
+            remaining_qty=Decimal('100'),
+        )
+
+    def _eb_groups_payload(self, quantity='5', selling_price='20000'):
+        groups = [{
+            'eb_selection': f'lv1:{self.eb.pk}',
+            'payment_account_id': self.akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': self.stt.pk,
+                'quantity': quantity,
+                'selling_price': selling_price,
+                'offset_coa_account_id': self.akun_persediaan.pk,
+                'revenue_account_id': self.akun_pendapatan.pk,
+                'payment_account_id': self.akun_modal.pk,
+            }],
+        }]
+        return json.dumps(groups)
+
+    def test_detail_page_shows_created_journal(self):
+        from apps.jurnal.models import JurnalHeader
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test jurnal di detail',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        header = SalesHeader.objects.first()
+        journal = JurnalHeader.objects.get(
+            uraian_transaksi__startswith=f'Penjualan {header.transaction_id} —',
+        )
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(journal, resp.context['journals'])
+        self.assertContains(resp, journal.nomor_transaksi)
+
+    def test_detail_page_journal_shows_debit_credit_lines(self):
+        self.client.post(reverse('sales:create'), {
+            'tanggal': '2026-04-16',
+            'deskripsi': 'Test debit kredit',
+            'eb_groups_data': self._eb_groups_payload(),
+        })
+        header = SalesHeader.objects.first()
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertContains(resp, self.akun_pendapatan.nama)
+
+    def test_detail_page_with_no_journals_shows_empty_state(self):
+        header = SalesHeader.objects.create()
+        resp = self.client.get(reverse('sales:detail', args=[header.pk]))
+        self.assertEqual(resp.context['journals'], [])
+        self.assertContains(resp, 'Belum ada jurnal')

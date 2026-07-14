@@ -31,6 +31,7 @@ from .models import (
     BebanLv1, BebanLv2,
     TipeTransaksi,
     Bukti,
+    Akun,
 )
 
 
@@ -266,6 +267,9 @@ def aset_lv2_create(request: HttpRequest, lv1_pk: int) -> HttpResponse:
         if not obj.kode:
             obj.kode = _next_lv2_kode(AsetLv2, parent.kode)
         obj.save()
+        Akun.objects.filter(kategori_id='aset', kategori_akun=obj.pk).update(
+            is_kas_setara=request.POST.get('is_kas_setara') == 'on'
+        )
         if _is_ajax(request):
             return _ajax_success()
         return redirect('master_data:chart_of_accounts')
@@ -286,6 +290,9 @@ def aset_lv2_update(request: HttpRequest, lv1_pk: int, pk: int) -> HttpResponse:
             _renumber_lv2_kode(AsetLv2, 'aset', obj, old_kode, new_kode)
         else:
             form.save()
+        Akun.objects.filter(kategori_id='aset', kategori_akun=obj.pk).update(
+            is_kas_setara=request.POST.get('is_kas_setara') == 'on'
+        )
         if _is_ajax(request):
             return _ajax_success()
         return redirect('master_data:chart_of_accounts')
@@ -737,10 +744,18 @@ def chart_of_accounts(request: HttpRequest) -> HttpResponse:
             item.sorted_children = sorted(list(item.children.all()), key=lambda c: natural_sort_key(c.kode))
         return items
 
+    aset_items = _sorted_items(AsetLv1.objects.all())
+    kas_setara_map = dict(
+        Akun.objects.filter(kategori_id='aset').values_list('kategori_akun', 'is_kas_setara')
+    )
+    for lv1 in aset_items:
+        for lv2 in lv1.sorted_children:
+            lv2.is_kas_setara = kas_setara_map.get(lv2.pk, False)
+
     categories = [
         {
             'name': 'Aset', 'prefix': '1', 'slug': 'aset',
-            'items': _sorted_items(AsetLv1.objects.all()),
+            'items': aset_items,
             'lv1_create': 'master_data:aset_lv1_create',
             'lv1_update': 'master_data:aset_lv1_update',
             'lv1_delete': 'master_data:aset_lv1_delete',

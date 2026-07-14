@@ -106,8 +106,9 @@ class BebanLv2Admin(admin.ModelAdmin):
 
 @admin.register(Akun)
 class AkunAdmin(admin.ModelAdmin):
-    list_display = ('id', 'kategori_id', 'kategori_akun', 'nama')
-    list_filter = ('kategori_id',)
+    list_display = ('id', 'kategori_id', 'kategori_akun', 'nama', 'is_kas_setara')
+    list_filter = ('kategori_id', 'is_kas_setara')
+    list_editable = ('is_kas_setara',)
     search_fields = ('nama',)
 
 

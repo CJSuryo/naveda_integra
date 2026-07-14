@@ -1,6 +1,6 @@
 """Sales admin."""
 from django.contrib import admin
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine
 
 
 class SalesEntitasBisnisInline(admin.TabularInline):
@@ -8,6 +8,12 @@ class SalesEntitasBisnisInline(admin.TabularInline):
     extra = 0
     raw_id_fields = ('entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
                      'payment_account')
+
+
+class SalesTaxLineInline(admin.TabularInline):
+    model = SalesTaxLine
+    extra = 0
+    raw_id_fields = ('tax_account', 'tax_payment_account')
 
 
 class SalesItemInline(admin.TabularInline):
@@ -46,3 +52,4 @@ class SalesItemAdmin(admin.ModelAdmin):
     raw_id_fields = ('sales_eb', 'item', 'sub_transaction_type',
                      'offset_coa_account', 'revenue_account', 'inventory_account',
                      'tax_account', 'tax_payment_account')
+    inlines = (SalesTaxLineInline,)

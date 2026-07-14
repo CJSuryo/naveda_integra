@@ -32,6 +32,20 @@
   </div>
 </div>
 
+<div class="ni-card ni-filter-card ni-animate-fade-in ni-mb-4">
+  <div class="ni-card__body">
+    <form id="masaPajakFilterForm" method="get" class="ni-filter-bar">
+      <div class="ni-filter-bar__row">
+        {% include 'components/eb_filter_modal.html' with filter_form_id="masaPajakFilterForm" %}
+      </div>
+      <div class="ni-filter-bar__actions">
+        <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+        <a href="{% url 'pajak:masa_detail' masa.pk %}" class="ni-btn ni-btn--secondary">Reset</a>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__header"><h2 class="ni-card__title">Transaksi Pajak</h2></div>
   <div class="ni-table-wrapper">
@@ -39,6 +53,7 @@
       <thead>
         <tr>
           <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
           <th>Sumber</th>
           <th>Jenis Pajak</th>
           <th class="ni-text-right">DPP</th>
@@ -52,9 +67,14 @@
         {% for pajak_trx in transaksi_list %}
         <tr>
           <td>{{ pajak_trx.created_at|date:"d M Y" }}</td>
+          <td>{{ pajak_trx.entitas_bisnis.nama|default:'—' }}</td>
           <td>
             <span class="ni-text-muted" style="font-size:.85em;">{{ pajak_trx.get_source_type_display }}</span><br>
-            <span>{{ pajak_trx.source_id }}</span>
+            {% if pajak_trx.source_url %}
+            <a href="{{ pajak_trx.source_url }}" class="ni-link">{{ pajak_trx.source_label }}</a>
+            {% else %}
+            <span>{{ pajak_trx.source_label }}</span>
+            {% endif %}
           </td>
           <td>{{ pajak_trx.get_jenis_pajak_display }}</td>
           <td class="ni-text-right">Rp {{ pajak_trx.dpp|floatformat:0|intcomma }}</td>
@@ -71,7 +91,7 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="8" class="ni-text-center ni-text-muted">Belum ada transaksi pajak untuk masa ini.</td>
+          <td colspan="9" class="ni-text-center ni-text-muted">Belum ada transaksi pajak untuk masa ini.</td>
         </tr>
         {% endfor %}
       </tbody>

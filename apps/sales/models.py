@@ -283,6 +283,51 @@ class SalesItem(models.Model):
         super().save(*args, **kwargs)
 
 
+# ── Tax Lines ─────────────────────────────────────────────────────────────────
+
+TAX_TYPE_CHOICES_SALES = [
+    ('ppn_keluaran', 'PPN Keluaran'),
+    ('pph_23', 'PPh 23'),
+    ('pph_21', 'PPh 21'),
+    ('pph_4_2', 'PPh 4(2)'),
+]
+
+
+class SalesTaxLine(models.Model):
+    sales_item = models.ForeignKey(
+        SalesItem, on_delete=models.CASCADE, related_name='tax_lines',
+        verbose_name='Sales Item',
+    )
+    tax_type = models.CharField(
+        max_length=30, choices=TAX_TYPE_CHOICES_SALES, verbose_name='Tipe Pajak',
+    )
+    tax = models.DecimalField(
+        max_digits=19, decimal_places=4, null=True, blank=True,
+        verbose_name='Pajak (Nominal)',
+        help_text='Nominal pajak. Hasil hitung otomatis atau override manual (lihat is_manual).',
+    )
+    is_manual = models.BooleanField(
+        default=False, verbose_name='Override Manual',
+        help_text='True jika nominal pajak diisi/diubah manual. False = dihitung ulang dari tarif.',
+    )
+    tax_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='sales_tax_lines_pajak', verbose_name='Akun Pajak',
+    )
+    tax_payment_account = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='sales_tax_lines_lawan', verbose_name='Akun Lawan Pajak',
+    )
+
+    class Meta:
+        verbose_name = 'Sales Tax Line'
+        verbose_name_plural = 'Sales Tax Lines'
+        ordering = ['id']
+
+    def __str__(self) -> str:
+        return f'SI-{self.sales_item_id} — {self.tax_type}'
+
+
 class SalesItemFIFOAllocation(models.Model):
     """Per-batch FIFO allocation — records exactly which InventoryRecord batch
     was consumed by a SalesItem and in what quantity.

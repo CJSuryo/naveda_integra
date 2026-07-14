@@ -248,7 +248,47 @@
   .ni-psak-steps    { grid-template-columns: 1fr; }
   .ni-option-cards  { flex-direction: column; }
   .ni-option-card   { min-width: unset; }
+  .ni-jrn-entry__uraian { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ni-option-card, .ni-option-card__icon, .ni-psak-guide__arrow { transition: none; }
 }
+
+/* ── Journal entry accordion ─────────────────────────────────────── */
+.ni-jrn-entry {
+  border: 1px solid var(--ni-border);
+  border-radius: var(--ni-radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+.ni-jrn-entry:last-child { margin-bottom: 0; }
+.ni-jrn-entry summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: var(--ni-bg);
+  font-size: 0.8125rem;
+  user-select: none;
+}
+.ni-jrn-entry summary::-webkit-details-marker { display: none; }
+.ni-jrn-entry[open] summary { background: color-mix(in srgb, var(--ni-primary) 4%, var(--ni-bg)); }
+.ni-jrn-entry__nomor { font-weight: 600; color: var(--ni-primary); min-width: 140px; font-size: 0.8rem; }
+.ni-jrn-entry__date  { color: var(--ni-text-muted); white-space: nowrap; }
+.ni-jrn-entry__uraian { flex: 1; color: var(--ni-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ni-jrn-entry__caret { margin-left: auto; color: var(--ni-text-muted); transition: transform 200ms ease; flex-shrink: 0; }
+.ni-jrn-entry[open] .ni-jrn-entry__caret { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .ni-jrn-entry__caret { transition: none; }
+}
+.ni-jrn-entry__body { padding: 0 14px 12px; }
+.ni-jrn-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; margin-top: 8px; }
+.ni-jrn-table th { padding: 5px 8px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ni-text-muted); border-bottom: 1px solid var(--ni-border); }
+.ni-jrn-table td { padding: 6px 8px; border-bottom: 1px solid var(--ni-border); color: var(--ni-text); }
+.ni-jrn-table tr:last-child td { border-bottom: none; }
+.ni-jrn-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.ni-jrn-table .dr  { color: var(--ni-primary); }
+.ni-jrn-table .cr  { color: var(--ni-text-muted); }
+.ni-jrn-table tfoot td { font-weight: 600; border-top: 1px solid var(--ni-border); border-bottom: none; }

@@ -22,7 +22,7 @@ from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesItemFIFOAllocation, SalesEventLog
+from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
     get_available_stock,
     get_fifo_unit_cost,
@@ -30,6 +30,7 @@ from .services import (
     create_sales_automated_journals,
     reverse_sales_automated_journals,
     reverse_sales_fifo,
+    _cancel_sales_pajak,
 )
 
 
@@ -392,7 +393,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         for si in eg.items.select_related(
             'item', 'sub_transaction_type', 'offset_coa_account',
             'revenue_account', 'payment_account', 'tax_account', 'tax_payment_account',
-        ).all():
+        ).prefetch_related('tax_lines').all():
             items_data.append({
                 'item_id': si.item_id,
                 'item_name': f'{si.item.item_id} - {si.item.nama}',
@@ -409,6 +410,17 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'tax_account_id': si.tax_account_id or '',
                 'tax_payment': si.tax_payment or '',
                 'tax_payment_account_id': si.tax_payment_account_id or '',
+                # New: tax lines array
+                'tax_lines': [
+                    {
+                        'tax_type': tl.tax_type,
+                        'tax': str(tl.tax) if tl.tax else '',
+                        'is_manual': tl.is_manual,
+                        'tax_account_id': tl.tax_account_id,
+                        'tax_payment_account_id': tl.tax_payment_account_id,
+                    }
+                    for tl in si.tax_lines.all()
+                ],
             })
 
         eb_groups_data.append({
@@ -446,6 +458,7 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'items__offset_coa_account', 'items__revenue_account',
         'items__payment_account',
         'items__tax_account', 'items__tax_payment_account',
+        'items__tax_lines__tax_account', 'items__tax_lines__tax_payment_account',
     ).all()
 
     # Build inventory mutations from per-batch FIFO allocations
@@ -476,11 +489,42 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
 
     event_logs = sales.event_logs.select_related('actor').order_by('timestamp')
 
+    from apps.jurnal.models import JurnalHeader
+    uraian_match = f'Penjualan {sales.transaction_id} —'
+    journals = list(
+        JurnalHeader.objects
+        .filter(uraian_transaksi__startswith=uraian_match, is_penyesuaian=False)
+        .prefetch_related('details__akun')
+        .order_by('tanggal', 'id')
+    )
+    for jh in journals:
+        jh.source_label = 'sales'
+
+    from apps.pajak.models import PajakTransaksi
+    si_ids = [si.pk for eg in eb_groups for si in eg.items.all()]
+    pajak_jurnal_ids = []
+    if si_ids:
+        pajak_jurnal_ids = list(
+            PajakTransaksi.objects
+            .filter(source_type='sales_item', source_id__in=si_ids, jurnal_header__isnull=False)
+            .values_list('jurnal_header_id', flat=True)
+        )
+    if pajak_jurnal_ids:
+        pajak_journals = list(
+            JurnalHeader.objects
+            .filter(pk__in=pajak_jurnal_ids)
+            .prefetch_related('details__akun')
+        )
+        for jh in pajak_journals:
+            jh.source_label = 'pajak'
+        journals = sorted(journals + pajak_journals, key=lambda j: (j.tanggal, j.id))
+
     return render(request, 'sales/sales_detail.html', {
         'sales': sales,
         'eb_groups': eb_groups,
         'inventory_mutations': inventory_mutations,
         'event_logs': event_logs,
+        'journals': journals,
     })
 
 
@@ -489,6 +533,9 @@ def sales_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
     """Render a printable invoice/receipt for a sales transaction."""
+    from apps.pajak.models import PajakTransaksi
+    from apps.pajak.services import compute_pajak
+    from .services import SIFAT_PAJAK_MAP, TAX_TYPE_MAP
     sales = get_object_or_404(SalesHeader, pk=pk)
     eb_groups = sales.entitas_groups.select_related(
         'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3', 'payment_account',
@@ -497,9 +544,40 @@ def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
         'items__offset_coa_account', 'items__revenue_account',
         'items__payment_account',
         'items__tax_account', 'items__tax_payment_account',
+        'items__tax_lines',
     ).all()
 
     company = EntitasBisnis.objects.filter(is_company_profile=True).first()
+
+    # Nominal pajak untuk baris otomatis (is_manual=False) tidak disimpan di
+    # SalesTaxLine.tax — hanya di PajakTransaksi yang dibuat saat konfirmasi.
+    si_ids = [si.pk for eg in eb_groups for si in eg.items.all()]
+    pajak_by_key = {}
+    for pt in PajakTransaksi.objects.filter(
+        source_type='sales_item', source_id__in=si_ids,
+    ).exclude(status='dibatalkan'):
+        pajak_by_key[(pt.source_id, pt.jenis_pajak)] = pt.jumlah_pajak
+
+    def _tax_amount(si, tl):
+        """Nominal pajak efektif: override manual → PajakTransaksi → hitung dari tarif."""
+        if tl.is_manual and tl.tax:
+            return tl.tax
+        jenis_pajak = TAX_TYPE_MAP.get(tl.tax_type)
+        if not jenis_pajak:
+            return tl.tax or Decimal('0')
+        amount = pajak_by_key.get((si.pk, jenis_pajak))
+        if amount is not None:
+            return amount
+        if tl.tax:
+            return tl.tax
+        # Belum dikonfirmasi (belum ada PajakTransaksi) → hitung dari tarif berlaku.
+        try:
+            return compute_pajak(
+                jenis_pajak, si.total_sales or Decimal('0'), sales.tanggal,
+            )['jumlah_pajak']
+        except Exception:
+            # Tarif belum tersedia untuk periode ini — jangan gagalkan invoice.
+            return Decimal('0')
 
     # Pre-compute per-group totals for the template
     eb_groups_with_totals = []
@@ -507,19 +585,73 @@ def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
     grand_tax = Decimal('0')
     for eg in eb_groups:
         subtotal = Decimal('0')
-        tax_total = Decimal('0')
+        pungut_total = Decimal('0')   # PPN keluaran — ditambahkan ke tagihan pelanggan
+        potong_total = Decimal('0')   # PPh dipotong pelanggan — pengurang kas yang dibayar
+        items_data = []
         for si in eg.items.all():
             subtotal += si.total_sales or Decimal('0')
-            tax_total += si.tax or Decimal('0')
+            si_pungut = Decimal('0')
+            si_potong = Decimal('0')
+            # Use tax_lines (new) or fallback to deprecated si.tax (old records)
+            tax_lines_list = list(si.tax_lines.all())
+            if tax_lines_list:
+                for tl in tax_lines_list:
+                    amt = _tax_amount(si, tl) or Decimal('0')
+                    tl.amount = amt
+                    tl.is_dipotong = SIFAT_PAJAK_MAP.get(tl.tax_type) == 'prepaid'
+                    if tl.is_dipotong:
+                        si_potong += amt
+                    else:
+                        si_pungut += amt
+            elif si.tax:
+                if SIFAT_PAJAK_MAP.get(si.tax_type) == 'prepaid':
+                    si_potong += si.tax
+                else:
+                    si_pungut += si.tax
+            pungut_total += si_pungut
+            potong_total += si_potong
+            if si.payment_account_id is None:
+                payment_label = '-'
+            elif si.payment_account.is_kas_setara:
+                payment_label = 'Kas'
+            else:
+                payment_label = 'Kredit'
+            items_data.append({
+                'si': si,
+                'tax_lines': tax_lines_list,
+                'si_pungut': si_pungut,
+                'si_potong': si_potong,
+                'payment_label': payment_label,
+            })
+        tax_total = pungut_total - potong_total
         group_total = subtotal + tax_total
         grand_total += group_total
         grand_tax += tax_total
+        group_payment_labels = {d['payment_label'] for d in items_data if d['payment_label'] != '-'}
+        if not group_payment_labels:
+            group_payment_label = '-'
+        elif group_payment_labels == {'Kas'}:
+            group_payment_label = 'Kas'
+        elif group_payment_labels == {'Kredit'}:
+            group_payment_label = 'Kredit'
+        else:
+            group_payment_label = 'Kas dan Kredit'
         eb_groups_with_totals.append({
             'group': eg,
+            'items_data': items_data,
             'subtotal': subtotal,
+            'pungut_total': pungut_total,
+            'potong_total': potong_total,
             'tax_total': tax_total,
             'group_total': group_total,
+            'payment_label': group_payment_label,
         })
+
+    if sales.payment_type == 'cash':
+        lunas_status = 'Lunas'
+    else:
+        piutang = sales.piutang_headers.order_by('-tanggal', '-id').first()
+        lunas_status = 'Lunas' if piutang and piutang.status == 'paid' else 'Belum Lunas'
 
     return render(request, 'sales/sales_invoice.html', {
         'sales': sales,
@@ -527,6 +659,7 @@ def sales_invoice(request: HttpRequest, pk: int) -> HttpResponse:
         'company': company,
         'grand_total': grand_total,
         'grand_tax': grand_tax,
+        'lunas_status': lunas_status,
     })
 
 
@@ -557,6 +690,7 @@ def sales_delete(request: HttpRequest, pk: int) -> HttpResponse:
         with transaction.atomic():
             for journal in related_journals:
                 log_jurnal_terhapus(journal, 'sales', request)
+            _cancel_sales_pajak(sales)
             reverse_sales_automated_journals(sales)
             reverse_sales_fifo(sales)
             SalesEventLog.objects.create(
@@ -823,6 +957,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     # Save
     with transaction.atomic():
         if existing:
+            _cancel_sales_pajak(existing)
             reverse_sales_automated_journals(existing)
             reverse_sales_fifo(existing)
             existing.entitas_groups.all().delete()
@@ -852,7 +987,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                 tax_amount = Decimal(str(tax_val)) if tax_val else None
                 is_bulk = item_data.get('is_bulk') == '1'
 
-                SalesItem.objects.create(
+                si = SalesItem.objects.create(
                     sales_eb=eb_group,
                     item_id=item_data['item_id'],
                     sub_transaction_type_id=item_data['sub_transaction_type_id'],
@@ -868,6 +1003,27 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     tax_payment=item_data.get('tax_payment', ''),
                     tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
                 )
+
+                # Buat SalesTaxLine dari tax_lines array (format baru)
+                for tl_data in item_data.get('tax_lines', []):
+                    tl_tax_type = tl_data.get('tax_type', '')
+                    if not tl_tax_type:
+                        continue
+                    tl_tax_raw = tl_data.get('tax')
+                    tl_tax_val = Decimal(str(tl_tax_raw)) if tl_tax_raw else None
+                    tl_is_manual = bool(tl_data.get('is_manual', False)) or bool(tl_tax_val)
+                    tl_tax_account_id = tl_data.get('tax_account_id') or None
+                    tl_tax_payment_account_id = tl_data.get('tax_payment_account_id') or None
+                    if not tl_tax_account_id or not tl_tax_payment_account_id:
+                        continue
+                    SalesTaxLine.objects.create(
+                        sales_item=si,
+                        tax_type=tl_tax_type,
+                        tax=tl_tax_val,
+                        is_manual=tl_is_manual,
+                        tax_account_id=tl_tax_account_id,
+                        tax_payment_account_id=tl_tax_payment_account_id,
+                    )
 
         # Process FIFO outflow
         process_sales_fifo(sales)

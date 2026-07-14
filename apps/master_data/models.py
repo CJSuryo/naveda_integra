@@ -189,6 +189,11 @@ class Akun(models.Model):
     kategori_akun = models.BigIntegerField(null=True, blank=True, db_index=True)
     nama = models.CharField(max_length=255, blank=True, default='')
     kode_akun = models.CharField(max_length=50, blank=True, default='', db_index=True)
+    is_kas_setara = models.BooleanField(
+        default=False,
+        verbose_name='Kas/Setara Kas',
+        help_text='Centang jika akun ini kas/bank (dibayar tunai). Biarkan kosong untuk akun piutang/kredit.',
+    )
 
     class Meta:
         verbose_name = 'Akun'
