@@ -1,0 +1,38 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Queue pushes that land close together; never cancel a deploy mid-migration.
+# This group is per-repository — it does NOT serialize against potumsite's deploy
+# on the same box. The flock in deploy.sh does that.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Requires a "production" environment in repo Settings -> Environments, or the
+    # job never starts. Gives a deploy history and a place to add reviewers later.
+    environment: production
+    steps:
+      - name: Run deploy.sh on the box
+        uses: appleboy/ssh-action@v1
+        with:
+          # Must be the IP, not the hostname: navedafinance.com is orange-clouded
+          # in Cloudflare, which proxies HTTP(S) only — nothing answers on :22.
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # Without the pin, the action trusts whatever host answers on that IP.
+          # This must be the box's ECDSA host key, NOT its ed25519 one: the action
+          # is drone-ssh (Go's x/crypto/ssh), whose host-key preference puts
+          # ecdsa-sha2-nistp256 first, so ed25519 never gets negotiated and the
+          # handshake fails with "host key fingerprint mismatch".
+          fingerprint: ${{ secrets.DEPLOY_SSH_FINGERPRINT }}
+          # A cold `docker compose build` on 2 vCPUs blows the 10m default.
+          command_timeout: 20m
+          script: cd apps/projects/naveda_integra && ./deploy.sh
