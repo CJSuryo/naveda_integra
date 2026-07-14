@@ -47,25 +47,6 @@ services:
       - key: GLOBAL_THROTTLE_ENABLE
         value: "True"
 
-  # ── Static Site — Landing Page (never spins down) ───────────────────────────
-  - type: web
-    name: naveda-landing
-    runtime: static
-    rootDir: landing
-    buildCommand: ""
-    staticPublishPath: .
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=3600
-    routes:
-      - type: rewrite
-        source: /terms
-        destination: /terms.html
-      - type: rewrite
-        source: /
-        destination: /index.html
-
   # ── Nightly Backup Cron Job (1 AM WIB = 18:00 UTC) ─────────────────────────
   # - type: cron
   #   name: naveda-nightly-backup
