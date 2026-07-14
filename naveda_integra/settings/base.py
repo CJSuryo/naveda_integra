@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'apps.manufacturing',
     'apps.dashboard',
     'apps.customers',
+    'apps.posting',
     'pos_config',
     'pos_catalog',
     'pos_orders',

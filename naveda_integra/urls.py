@@ -29,6 +29,7 @@ urlpatterns = [
     path('pajak/', include('apps.pajak.urls', namespace='pajak')),
     path('dashboard/', include('apps.dashboard.urls', namespace='dashboard')),
     path('customers/', include('apps.customers.urls', namespace='customers')),
+    path('posting/', include('apps.posting.urls', namespace='posting')),
     path('', include('apps.accounts.urls_home')),
 ]
 
