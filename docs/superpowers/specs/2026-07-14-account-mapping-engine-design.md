@@ -24,7 +24,12 @@ Menyediakan **satu rumah tunggal** untuk memetakan akun secara otomatis **per mo
 
 ## Keputusan desain yang sudah dikunci
 
-- **Status sistem: campuran.** Modul panas (data riil): Purchase & Inventory, Sales & Pendapatan/Piutang, Aset Tetap & Aset Lainnya. Modul dingin: Ekuitas, POS/Kasir. Migrasi dimulai dari modul dingin.
+- **Status sistem: campuran.** Modul panas (data riil): Purchase & Inventory, Sales & Pendapatan/Piutang, Aset Tetap & Aset Lainnya. Modul rendah-risiko untuk pilot: Ekuitas. Migrasi dimulai dari Ekuitas.
+  - **Catatan hasil audit kode (2026-07-14):** karakterisasi awal "modul dingin = tanpa otomatisasi akun" tidak akurat untuk semua modul yang disebut di atas — sudah diverifikasi langsung ke kode:
+    - **Ekuitas bukan 100% manual.** Sisi kredit "Modal Disetor" pakai magic-string (`Akun.objects.filter(kode_akun__startswith='3.1.1').first()`, `apps/ekuitas/services.py:112`) — pola yang sama persis dengan masalah Aset Tetap, hanya beda modul. Sisi debit (`ModalDisetorDebit.akun`) genuinely per-record (dipilih bebas via autocomplete tiap transaksi) — ini **tidak** dipindah ke mapping, tetap FK manual sesuai Non-goals.
+    - **Piutang bukan murni "FK bertebaran".** `PiutangDetail.sub_transaction_type` (`apps/piutang/models.py:358`) juga FK ke `SubTransactionType` — Piutang adalah hybrid STT + 17 kolom `_account` manual per-record, bukan murni pola 3.
+    - **Inventory tidak punya logika akun sendiri sama sekali** (nol referensi `Akun`/`kode_akun` di seluruh `apps/inventory/`) — 100% numpang `SubTransactionType.default_inventory_account` milik Purchase. Pemasangan "Purchase & Inventory" sebagai satu modul panas tetap benar, tapi otomatisasinya murni milik Purchase.
+    - **POS/Kasir BUKAN modul dingin.** `MerchantPOSConfig` (`apps/pos_config/models.py:7-40`) sudah punya sistem cascading override 3-tingkat (Lv3→Lv2→Lv1, lewat `resolve_pos_config()` di `apps/pos_config/utils.py:4-34`) untuk `revenue_account`, `offset_coa_account`, `default_payment_account`, dan `sub_transaction_type` — arsitekturnya mirip resolver mapping engine ini sendiri (scope-cascade + fallback). Migrasi POS berarti **merekonsiliasi sistem cascade yang sudah berjalan**, bukan mulai dari kosong seperti Ekuitas — risikonya lebih tinggi dari asumsi awal. POS karena itu dikeluarkan dari kandidat pilot tahap awal (lihat Tahap 3, bukan Tahap 1).
 - **Cakupan per-EB:** mapping bisa berbeda per Entitas Bisnis, dengan default global. Kunci: `(module, transaction_type, role, entitas_bisnis-nullable)`; `entitas_bisnis=NULL` = default global, EB terisi = override.
 - **Pendekatan A (registry deklaratif di kode)**, bukan B (role didefinisikan user via UI). Daftar modul/jenis transaksi/peran ditulis programmer di registry; UI hanya mengisi akun ke slot yang sudah pasti benar. Ini mencegah "beda persepsi" role antara kode dan UI, dan memungkinkan validasi kelengkapan.
 - **Target mesin baru:** mengambil alih bagian jelek non-STT (magic string aset tetap/lainnya; FK config bertebaran piutang/ekuitas/pos) secara bertahap dengan fallback, **dan** menjadi standar wajib untuk semua modul baru. STT dibiarkan legacy.
@@ -132,9 +137,11 @@ Perilaku:
 Prinsip: satu modul selesai-tuntas sebelum lanjut; modul dingin dulu; fallback dulu, strict belakangan.
 
 - **Tahap 0 — Fondasi.** Model `AccountMapping`, sistem registry (`register_mapping`, `Role`), `resolve_account`, halaman Transaction Settings (admin-gated). Belum ada modul yang memanggil resolver → nol risiko. Tes unit resolver.
-- **Tahap 1 — Pilot dingin: Ekuitas.** Registry Ekuitas, pindahkan pemilihan akun `ekuitas/services.py` ke resolver dengan fallback lama. Isi mapping via UI, tes end-to-end, lalu cabut fallback (strict).
+- **Tahap 1 — Pilot: Ekuitas (sisi kredit Modal Disetor saja).** Registry Ekuitas dengan satu role (mis. `akun_modal_disetor`), pindahkan lookup `Akun.objects.filter(kode_akun__startswith='3.1.1')` di `ekuitas/services.py:112` ke resolver dengan fallback lama. Isi mapping via UI, tes end-to-end, lalu cabut fallback (strict). Sisi debit (`ModalDisetorDebit.akun`) **tidak** disentuh — tetap FK manual per-record.
 - **Tahap 2 — Aset Tetap & Aset Lainnya.** Registry + resolver dengan fallback = magic string lama. Setelah admin isi mapping & hasil jurnal cocok dengan sebelumnya → cabut fallback.
-- **Tahap 3 — Piutang/Ekuitas FK bertebaran & modul panas lain (opsional, paling akhir).** Kasus per kasus: yang murni config akun default pindah ke mapping; yang per-record tetap FK di record.
+- **Tahap 3 — Piutang (FK bertebaran), POS/Kasir (rekonsiliasi cascade existing), & modul panas lain (opsional, paling akhir).** Kasus per kasus:
+  - **Piutang:** dari 17 kolom `_account`, yang murni "config akun default per jenis transaksi" pindah ke mapping; yang genuinely per-record (mis. hasil input user per transaksi) tetap FK di record.
+  - **POS/Kasir:** **bukan migrasi dari nol.** `MerchantPOSConfig`/`resolve_pos_config()` sudah berfungsi dengan cascade Lv3→Lv2→Lv1. Rencana migrasi perlu memetakan cascade itu ke skema `AccountMapping` (kemungkinan `entitas_bisnis` sebagai satu-satunya scope alih-alih 3 level) tanpa memutus alur kasir yang aktif — butuh sub-plan tersendiri, dievaluasi terpisah dari Piutang.
 - **Tahap 4 — Kebijakan modul baru.** Dokumentasikan: modul baru wajib lewat registry + resolver; dilarang magic string / FK config baru.
 
 Aturan yang berlaku di semua tahap: STT tidak disentuh; tidak pernah ada momen modul rusak; tiap tahap punya gerbang tes sendiri; bila meragukan, berhenti dan diskusi.
