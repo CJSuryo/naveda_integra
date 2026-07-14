@@ -4,7 +4,10 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 
+from naveda_integra.health import healthz
+
 urlpatterns = [
+    path('healthz', healthz),
     path('admin/', admin.site.urls),
     path('accounts/', include('apps.accounts.urls')),
     path('entitas-bisnis/', include('apps.entitas_bisnis.urls')),

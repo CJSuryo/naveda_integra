@@ -1,0 +1,5 @@
+# deploy.sh is executed by bash on the Linux box. A CRLF checkout makes the
+# shebang fail with: /usr/bin/env: 'bash\r': No such file or directory
+*.sh text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf

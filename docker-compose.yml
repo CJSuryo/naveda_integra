@@ -1,6 +1,9 @@
 services:
   db:
-    image: postgres:16
+    # postgres:17 — MUST match the major version of the existing postgres_data
+    # volume on the box. Pinning 16 here would start a PG16 binary against a PG17
+    # data directory, and Postgres refuses to start.
+    image: postgres:17
     container_name: naveda_db
     restart: always
     environment:
@@ -15,7 +18,10 @@ services:
     container_name: naveda_web
     restart: always
     ports:
-      - "8080:8000"
+      # Bound to loopback on purpose: the host's Nginx reverse-proxies this and
+      # terminates TLS. Publishing on 0.0.0.0 would serve the app over plain HTTP
+      # on :8080, bypassing Cloudflare and the certificate.
+      - "127.0.0.1:8080:8000"
     env_file:
       - .env
     volumes:
