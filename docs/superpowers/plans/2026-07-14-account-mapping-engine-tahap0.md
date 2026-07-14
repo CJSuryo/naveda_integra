@@ -1,5 +1,26 @@
 # Account Mapping Engine — Tahap 0 (Fondasi) Implementation Plan
 
+> ## ⚠️ SUPERSEDED — JANGAN DIEKSEKUSI
+>
+> Spec yang mendasari plan ini (`specs/2026-07-14-account-mapping-engine-design.md`) telah
+> digantikan oleh `specs/2026-07-15-posting-engine-design.md`. Plan ini **belum punya satu pun
+> pemanggil produksi**, sehingga membatalkannya sekarang **tidak berbiaya**.
+>
+> Yang **masih dapat dipakai ulang** saat plan Tahap 0 ditulis ulang: scaffold app Django,
+> pola permission (`has_ni_perm` + `_check_perm`, **tapi diperketat ke superuser**), pola simpan
+> AJAX ala modal CoA, konvensi tes `TestCase` di paket `tests/`, dan catatan **partial unique
+> index** untuk baris scope global (SQL memperlakukan `NULL != NULL`).
+>
+> Yang **berubah** dan tidak boleh disalin apa adanya:
+> - `AccountMapping` (satu FK `entitas_bisnis`) → `PemetaanAkun` dengan **rantai scope** +
+>   **effective-dated**.
+> - `Role` → `BarisJurnal`: bukan hanya akun, tetapi **arah (D/K/bertanda) + sumber angka +
+>   sumber akun**. Baris bertanda punya **dua** slot akun (laba vs rugi = akun berbeda).
+> - Registry jenis transaksi **di kode** → `JenisTransaksi` **di tabel**, disusun superuser
+>   lewat UI. Yang tetap di kode hanyalah **katalog angka** yang diumumkan tiap modul.
+> - Komponen baru yang belum ada di plan ini: **preview jurnal** di UI, dan **cek balance**
+>   saat `JurnalHeader` di-post.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the foundation of the Account Mapping Engine described in `docs/superpowers/specs/2026-07-14-account-mapping-engine-design.md`: the `AccountMapping` model, the code-level registry (`register_mapping`, `Role`), the `resolve_account` resolver, and an admin-only "Transaction Settings" matrix page — with **zero production callers**, so this stage carries zero risk to any running module.

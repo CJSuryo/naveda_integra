@@ -1,5 +1,28 @@
 # Account Mapping Engine — Transaction Settings per Modul per Jenis Transaksi
 
+> ## ⚠️ SUPERSEDED — jangan dikerjakan
+>
+> Digantikan oleh **`2026-07-15-posting-engine-design.md`** setelah design review
+> (`2026-07-15-mapping-engine-design-review.md`).
+>
+> Ringkas alasannya: spec ini menjawab *"akun mana yang dipakai"*, padahal kendala
+> sesungguhnya adalah *"baris jurnal apa saja yang lahir dari sebuah kejadian bisnis,
+> di sisi mana, senilai berapa"*. Ia tidak dapat menjurnal Service Charge, Tips,
+> Pembulatan, Diskon, Retur, atau Refund — dan tidak akan pernah bisa, karena arah
+> debit/kredit dan sumber angka tetap terkunci di kode.
+>
+> Tiga keputusan di dokumen ini dibatalkan secara eksplisit:
+> - **Pendekatan A** (jenis transaksi hanya di kode) → menjadi **Pendekatan C**: superuser
+>   (vendor) menyusun jenis transaksi lewat UI; kode hanya menyediakan angkanya.
+> - **Scope = satu FK `entitas_bisnis`** → menjadi **rantai scope** (global → EB → Lv2/Lv3 →
+>   metode bayar → alasan). Scope tunggal adalah **regresi** bagi POS, yang cascade-nya sudah
+>   lebih kaya hari ini.
+> - **`module` sebagai bagian kunci** → `module` hanya label UI. Event tidak dimiliki oleh
+>   modul pemegang master datanya (perolehan aset tetap dipancarkan alur *purchase*).
+>
+> Yang **dipertahankan** dan diteruskan ke spec baru: resolver sebagai satu-satunya pintu baca,
+> strangler + fallback, STT tidak disentuh, FK genuinely per-record tidak dipindah.
+
 Date: 2026-07-14
 
 ## Background
