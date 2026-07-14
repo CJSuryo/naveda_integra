@@ -1,4 +1,4 @@
-"""Production settings — Render.com + Neon.tech cloud deployment."""
+"""Production settings — Hetzner VPS deployment."""
 import os
 
 import dj_database_url
@@ -10,11 +10,6 @@ DEBUG = False
 SECRET_KEY = os.environ['SECRET_KEY']
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split(',')
 
-# Render sets RENDER_EXTERNAL_HOSTNAME automatically.
-RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-
 # Custom domain
 ALLOWED_HOSTS += ['navedafinance.com', 'www.navedafinance.com']
 
@@ -24,7 +19,6 @@ DATABASES = {
         default=os.environ.get('DATABASE_URL', ''),
         conn_max_age=600,
         conn_health_checks=True,
-        ssl_require=True,
     )
 }
 
@@ -43,8 +37,9 @@ CSRF_TRUSTED_ORIGINS = [
 ] + ['https://navedafinance.com', 'https://www.navedafinance.com']
 
 # ── Static + media files ─────────────────────────────────────────────────────
-# Render filesystem is ephemeral — media uploads survive only until next deploy.
-# For persistent uploads, replace the 'default' backend with S3/Cloudinary.
+# Hetzner filesystem is persistent — media uploads survive across deploys.
+MEDIA_ROOT = os.environ.get('MEDIA_ROOT', '/home/deploy/apps/media')
+
 STORAGES = {
     'default': {
         'BACKEND': 'django.core.files.storage.FileSystemStorage',
