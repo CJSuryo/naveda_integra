@@ -9,6 +9,47 @@ from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecor
 User = get_user_model()
 
 
+from decimal import Decimal
+from django.contrib.contenttypes.models import ContentType
+from django.test import TestCase as DjangoTestCase
+
+from apps.inventory.models import StockMovement, StockConsumption
+
+
+class StockMovementModelTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_inflow_layer(self):
+        mv = StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-01-01',
+            movement_type='purchase_in', qty=Decimal('10'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('10'),
+        )
+        self.assertEqual(mv.remaining_qty, Decimal('10'))
+        self.assertIn('purchase_in', str(mv))
+
+    def test_stock_consumption_links_out_and_in(self):
+        inflow = StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-01-01',
+            movement_type='purchase_in', qty=Decimal('10'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('4'),
+        )
+        outflow = StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-01-02',
+            movement_type='sale_out', qty=Decimal('-6'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('0'),
+        )
+        alloc = StockConsumption.objects.create(
+            out_movement=outflow, in_movement=inflow,
+            qty=Decimal('6'), unit_cost=Decimal('5'),
+        )
+        self.assertEqual(alloc.in_movement, inflow)
+        self.assertEqual(alloc.out_movement, outflow)
+
+
 class InventoryModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='FnB')
