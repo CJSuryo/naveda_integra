@@ -59,12 +59,13 @@ class ItemMasterUOMFieldsTests(TestCase):
             kode='pcs', nama='Pieces', dimension='count',
             factor_to_base=Decimal('1'), is_base=True,
         )
-        item = ItemMasterPurchase.objects.create(nama='Gula', tipe_item='RM')
-        item.stock_uom = pcs
-        item.purchase_uom = pcs
-        item.sales_uom = pcs
-        item.save()
-        item.refresh_from_db()
-        self.assertEqual(item.stock_uom, pcs)
-        self.assertEqual(item.purchase_uom, pcs)
-        self.assertEqual(item.sales_uom, pcs)
+        item = ItemMasterPurchase.objects.create(
+            nama='Gula', tipe_item='RM',
+            stock_uom=pcs, purchase_uom=pcs, sales_uom=pcs,
+        )
+
+        reloaded = ItemMasterPurchase.objects.get(pk=item.pk)
+
+        self.assertEqual(reloaded.stock_uom, pcs)
+        self.assertEqual(reloaded.purchase_uom, pcs)
+        self.assertEqual(reloaded.sales_uom, pcs)
