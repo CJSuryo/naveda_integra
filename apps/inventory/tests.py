@@ -123,6 +123,73 @@ class RecordInflowTests(DjangoTestCase):
         )
 
 
+class ConsumeStockNonBulkTests(DjangoTestCase):
+    def setUp(self):
+        from apps.entitas_bisnis.models import (
+            EntitasBisnis as EB, EntitasBisnisLv2, EntitasBisnisLv3,
+        )
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EB.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Div')
+        self.lv3a = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet A')
+        self.lv3b = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet B')
+        self.item = ItemMasterPurchase.objects.create(nama='Gula', tipe_item='RM')
+
+    def _inflow(self, qty, cost, tanggal, lv2=None, lv3=None):
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.eb, lv2, lv3, Decimal(qty),
+                             Decimal(cost), tanggal, 'purchase_in')
+
+    def test_fifo_order_and_cogs(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '5', '2026-01-01')
+        self._inflow('10', '8', '2026-01-02')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('12'),
+                               '2026-01-03', 'sale_out')
+        # 10@5 + 2@8 = 66
+        self.assertEqual(result.total_cost, Decimal('66'))
+        self.assertFalse(result.report.used_fallback)
+
+    def test_insufficient_raises(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError
+        self._inflow('5', '5', '2026-01-01')
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.eb, None, None, Decimal('9'),
+                          '2026-01-03', 'sale_out')
+
+    def test_cross_branch_leak_prevented(self):
+        """Regresi bug §A-4: jual di Outlet A tak boleh makan stok Outlet B."""
+        from apps.inventory.ledger import consume_stock, InsufficientStockError, get_available_stock
+        self._inflow('10', '5', '2026-01-01', lv2=self.lv2, lv3=self.lv3b)  # stok B
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.eb, self.lv2, self.lv3a, Decimal('1'),
+                          '2026-01-03', 'sale_out')
+        # Stok B tetap utuh
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, self.lv3b),
+            Decimal('10'),
+        )
+
+    def test_hierarchical_fallback_to_parent(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('3', '5', '2026-01-01', lv2=self.lv2, lv3=self.lv3a)  # 3 di lv3
+        self._inflow('10', '5', '2026-01-02')                              # 10 di lv1
+        result = consume_stock(self.item, self.eb, self.lv2, self.lv3a, Decimal('8'),
+                               '2026-01-03', 'sale_out')
+        self.assertTrue(result.report.used_fallback)
+        levels = {row['level']: row['qty'] for row in result.report.by_level}
+        self.assertEqual(levels['lv3'], Decimal('3'))
+        self.assertEqual(levels['lv1'], Decimal('5'))
+
+    def test_remaining_qty_decremented(self):
+        from apps.inventory.ledger import consume_stock
+        layer = self._inflow('10', '5', '2026-01-01')
+        consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                      '2026-01-03', 'sale_out')
+        layer.refresh_from_db()
+        self.assertEqual(layer.remaining_qty, Decimal('6'))
+
+
 class InventoryModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='FnB')
