@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">{% if is_edit %}Edit data satuan{% else %}Tambah satuan baru{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'uom:list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    {% if is_edit and unit.is_system %}
+    <p style="font-size:0.8125rem;color:var(--ni-text-muted);margin:0 0 16px;">
+      <em>Satuan bawaan sistem — kode tidak dapat diubah.</em>
+    </p>
+    {% endif %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.kode.label }}</label>
+          {{ form.kode }}
+          {% if form.kode.errors %}<div class="ni-form-error">{{ form.kode.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.nama.label }}</label>
+          {{ form.nama }}
+          {% if form.nama.errors %}<div class="ni-form-error">{{ form.nama.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.dimension.label }}</label>
+          {{ form.dimension }}
+          {% if form.dimension.errors %}<div class="ni-form-error">{{ form.dimension.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.factor_to_base.label }}</label>
+          {{ form.factor_to_base }}
+          {% if form.factor_to_base.errors %}<div class="ni-form-error">{{ form.factor_to_base.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.is_base.label }}</label>
+          {{ form.is_base }}
+          {% if form.is_base.errors %}<div class="ni-form-error">{{ form.is_base.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.is_active.label }}</label>
+          {{ form.is_active }}
+          {% if form.is_active.errors %}<div class="ni-form-error">{{ form.is_active.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'uom:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

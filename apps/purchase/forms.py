@@ -24,7 +24,8 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         model = ItemMasterPurchase
         fields = (
             'nama', 'tipe_item', 'kategori', 'velocity_category',
-            'coa_account', 'lama_kadaluarsa', 'threshold_days_outstanding',
+            'coa_account', 'stock_uom', 'purchase_uom', 'sales_uom',
+            'lama_kadaluarsa', 'threshold_days_outstanding',
             'masa_manfaat', 'metode_penyusutan', 'metode_amortisasi',
             'metode_biaya_persediaan',
             'entitas_bisnis',
@@ -35,6 +36,9 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'kategori': forms.Select(attrs={'class': 'ni-input'}),
             'velocity_category': forms.Select(attrs={'class': 'ni-input'}),
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
+            'stock_uom': forms.Select(attrs={'class': 'ni-input'}),
+            'purchase_uom': forms.Select(attrs={'class': 'ni-input'}),
+            'sales_uom': forms.Select(attrs={'class': 'ni-input'}),
             'lama_kadaluarsa': forms.NumberInput(attrs={'class': 'ni-input'}),
             'threshold_days_outstanding': forms.NumberInput(attrs={'class': 'ni-input'}),
             'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
@@ -61,11 +65,13 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         )
         if tipe_val == 'ATP' or (tipe_item_choices and tipe_item_choices == ['ATP']):
             for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
-                      'metode_amortisasi', 'metode_biaya_persediaan'):
+                      'metode_amortisasi', 'metode_biaya_persediaan',
+                      'stock_uom', 'purchase_uom', 'sales_uom'):
                 self.fields.pop(f, None)
         elif tipe_val == 'ALL' or (tipe_item_choices and tipe_item_choices == ['ALL']):
             for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
-                      'metode_penyusutan', 'metode_biaya_persediaan'):
+                      'metode_penyusutan', 'metode_biaya_persediaan',
+                      'stock_uom', 'purchase_uom', 'sales_uom'):
                 self.fields.pop(f, None)
         else:
             # Inventory items: hide asset-specific fields

@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'apps.accounts',
     'apps.entitas_bisnis',
     'apps.master_data',
+    'apps.uom',
     'apps.jurnal',
     'apps.sales',
     'apps.piutang',
@@ -57,10 +58,6 @@ INSTALLED_APPS = [
     'apps.posting',
     'pos_config',
     'pos_catalog',
-    'pos_orders',
-    'apps.pos_crm',
-    'apps.pos_promotions',
-    'apps.pos_reports',
     'axes',
 ]
 

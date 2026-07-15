@@ -166,6 +166,28 @@ class ItemMasterPurchase(models.Model):
         default=0,
         verbose_name='Harga Satuan Default',
     )
+    stock_uom = models.ForeignKey(
+        'uom.UnitOfMeasure',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='items_stock',
+        verbose_name='Satuan Stok',
+        help_text='Satuan penyimpanan/penilaian (kanonik item).',
+    )
+    purchase_uom = models.ForeignKey(
+        'uom.UnitOfMeasure',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='items_purchase',
+        verbose_name='Satuan Pembelian',
+    )
+    sales_uom = models.ForeignKey(
+        'uom.UnitOfMeasure',
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name='items_sales',
+        verbose_name='Satuan Penjualan',
+    )
     entitas_bisnis = models.ManyToManyField(
         'entitas_bisnis.EntitasBisnis',
         blank=True,

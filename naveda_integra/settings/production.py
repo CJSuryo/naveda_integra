@@ -24,6 +24,10 @@ DATABASES = {
 
 # ── Security hardening ───────────────────────────────────────────────────────
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'True').lower() in ('true', '1')
+# deploy.sh probes /healthz over plain HTTP from inside the container, where there
+# is no TLS. Without this exemption Django answers 301 -> https, which `curl -f`
+# reports as success — a healthcheck that passes even when the app is broken.
+SECURE_REDIRECT_EXEMPT = [r'^healthz$']
 SECURE_HSTS_SECONDS = 31_536_000       # 1 year
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
