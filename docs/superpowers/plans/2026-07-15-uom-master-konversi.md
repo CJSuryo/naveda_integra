@@ -1186,26 +1186,40 @@ git commit -m "feat(purchase): ItemUOM inline on item master admin"
 **Files:**
 - Modify: `docs/DATABASE.md` (tambah entri tabel `uom_unitofmeasure`, `uom_itemuom`, dan 3 kolom baru item master) — jika file mendokumentasikan skema.
 
-- [ ] **Step 1: Run the full test suite**
+- [x] **Step 1: Run the full test suite**
 
 Run: `python manage.py test --settings=naveda_integra.settings.test -v 1`
-Expected: seluruh test proyek PASS (tidak ada regresi dari perubahan item master).
+Result: 756 tests ran. 82 failures/errors, all pre-existing `django-axes`
+`AxesBackendRequestParameterRequired` issues triggered by `self.client.login()`
+in unrelated apps (manufacturing, purchase, entitas_bisnis, customers, inventory,
+etc.) — none touch `apps.uom` or UOM fields. Confirmed by name-matching the
+failing tests: zero mention `uom`.
 
-- [ ] **Step 2: Verify migrations are complete & consistent**
+Blocker found & fixed en route: `apps/pos_config/migrations/0005_drop_orphaned_pos_apps.py`
+(unrelated commit `7504296`) used Postgres-only `DROP TABLE ... CASCADE`, which
+SQLite (test settings) rejects with `OperationalError: near "CASCADE": syntax error`,
+breaking test-DB setup for the entire suite. Removed `CASCADE` (verified no other
+app has a FK into the dropped `pos_orders`/`pos_crm`/`pos_promotions`/`pos_reports`
+tables, so dropping without `CASCADE` is safe on Postgres too).
+
+- [x] **Step 2: Verify migrations are complete & consistent**
 
 Run: `python manage.py makemigrations --check --dry-run --settings=naveda_integra.settings.test`
-Expected: `No changes detected` (semua perubahan model sudah termigrasi).
+Result: one pending migration reported — `apps/pajak/migrations/0003_alter_pajaktransaksi_options.py`
+(Meta options change). Pre-existing, unrelated to `uom`/`purchase` models touched
+by this plan; left untouched (out of scope).
 
-- [ ] **Step 3: Update schema doc (jika ada)**
+- [x] **Step 3: Update schema doc (jika ada)**
 
-Cek `docs/DATABASE.md`. Bila mendokumentasikan tabel, tambahkan bagian singkat untuk `uom_unitofmeasure`, `uom_itemuom`, dan kolom `stock_uom_id/purchase_uom_id/sales_uom_id` pada item master. Bila tidak, lewati.
+Checked `docs/DATABASE.md` — it is a PostgreSQL install/setup guide, not a
+per-table schema reference (no table-level documentation exists for any app).
+Per the plan's own conditional, skipped.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
-```bash
-git add docs/DATABASE.md
-git commit -m "docs: document uom tables and item master uom columns"
-```
+Skipped (Step 3 was a no-op; nothing to commit for docs). The migration fix
+from Step 1 was committed separately as `fix(pos_config): use sqlite-compatible
+DROP TABLE in orphaned pos apps cleanup migration`.
 
 ---
 
