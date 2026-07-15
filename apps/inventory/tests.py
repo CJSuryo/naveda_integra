@@ -213,6 +213,35 @@ class ConsumeStockNonBulkTests(DjangoTestCase):
         self.assertEqual(result.out_movement.source_object_id, self.item.pk)
 
 
+class ConsumeStockBulkTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Pasir', tipe_item='RMB')
+
+    def _bulk_inflow(self, total_value, tanggal):
+        # Bulk: qty=1, unit_cost=total_value
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.eb, None, None, Decimal('1'),
+                             Decimal(total_value), tanggal, 'purchase_in')
+
+    def test_bulk_value_deduction(self):
+        from apps.inventory.ledger import consume_stock
+        self._bulk_inflow('1000', '2026-01-01')
+        self._bulk_inflow('500', '2026-01-02')
+        # Konsumsi nilai 1200 → habiskan layer 1000, sisakan 300 dari layer 500
+        result = consume_stock(self.item, self.eb, None, None, Decimal('1200'),
+                               '2026-01-03', 'sale_out')
+        self.assertEqual(result.total_cost, Decimal('1200'))
+
+    def test_bulk_insufficient_value_raises(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError
+        self._bulk_inflow('300', '2026-01-01')
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.eb, None, None, Decimal('900'),
+                          '2026-01-03', 'sale_out')
+
+
 class InventoryModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='FnB')

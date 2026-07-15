@@ -180,7 +180,72 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     )
 
 
+@transaction.atomic
 def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
                         movement_type, source, req_level, req_rank):
-    """Bulk value-based consumption. Implemented in a later task (Task 5)."""
-    raise NotImplementedError('Bulk consumption is implemented in Task 5.')
+    """Bulk value-based consumption. Layer value = remaining_qty * unit_cost.
+
+    `value` is the amount of stock VALUE to deduct (not a physical quantity).
+    Deduct proportionally by reducing remaining_qty so remaining value drops
+    by the taken amount, walking the same hierarchical tiers as non-bulk.
+    """
+    remaining_value = value
+    total_cost = Decimal('0')
+    per_level = {}
+    picked = []  # (layer, value_taken)
+
+    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
+        if remaining_value <= 0:
+            break
+        for layer in qs.select_for_update():
+            if remaining_value <= 0:
+                break
+            layer_value = layer.remaining_qty * layer.unit_cost
+            take_value = min(layer_value, remaining_value)
+            if take_value <= 0:
+                continue
+            layer.remaining_qty = ((layer_value - take_value) / layer.unit_cost
+                                   if layer.unit_cost else Decimal('0'))
+            layer.save(update_fields=['remaining_qty'])
+            total_cost += take_value
+            picked.append((layer, take_value))
+            slot = per_level.setdefault(level, {'eb_name': eb_name, 'qty': Decimal('0')})
+            slot['qty'] += take_value
+            remaining_value -= take_value
+
+    if remaining_value > 0:
+        raise InsufficientStockError(
+            f'Nilai stok bulk tidak mencukupi untuk {item.item_id}. '
+            f'Diminta {value}, tersedia {value - remaining_value}.'
+        )
+
+    ct = obj_id = None
+    if source is not None:
+        ct = ContentType.objects.get_for_model(type(source))
+        obj_id = source.pk
+    out_movement = StockMovement.objects.create(
+        item=item, entitas_bisnis=eb_lv1,
+        entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3=eb_lv3,
+        tanggal=tanggal, movement_type=movement_type,
+        qty=Decimal('0'), unit_cost=total_cost, remaining_qty=Decimal('0'),
+        source_content_type=ct, source_object_id=obj_id,
+    )
+    allocations = [
+        StockConsumption.objects.create(
+            out_movement=out_movement, in_movement=layer,
+            qty=Decimal('0'), unit_cost=layer.unit_cost,
+        )
+        for layer, _tv in picked
+    ]
+    used_fallback = any(_LEVEL_RANK[lvl] < req_rank for lvl in per_level)
+    by_level = [
+        {'level': lvl, 'eb_name': per_level[lvl]['eb_name'], 'qty': per_level[lvl]['qty']}
+        for lvl in sorted(per_level, key=lambda l: -_LEVEL_RANK[l])
+    ]
+    report = ConsumptionReport(
+        requested_level=req_level, used_fallback=used_fallback, by_level=by_level,
+    )
+    return ConsumptionResult(
+        total_cost=total_cost, allocations=allocations,
+        out_movement=out_movement, report=report,
+    )
