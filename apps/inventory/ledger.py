@@ -11,6 +11,8 @@ from django.db import transaction
 
 from .models import StockMovement, StockConsumption
 
+OUTFLOW_MOVEMENT_TYPES = {'sale_out', 'production_out'}
+
 
 class InsufficientStockError(ValueError):
     """Raised when consumption cannot be satisfied within the EB hierarchy."""
@@ -318,8 +320,8 @@ def reverse_movements(source):
     ct = ContentType.objects.get_for_model(type(source))
     outflows = StockMovement.objects.filter(
         source_content_type=ct, source_object_id=source.pk,
-        qty__lte=0,
-    ).exclude(movement_type__in=('purchase_in', 'production_in', 'saldo_awal'))
+        movement_type__in=OUTFLOW_MOVEMENT_TYPES,
+    )
     for out in outflows.select_for_update():
         for alloc in out.consumptions_out.select_related('in_movement').all():
             layer = alloc.in_movement
