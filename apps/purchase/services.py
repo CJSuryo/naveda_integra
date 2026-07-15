@@ -194,6 +194,15 @@ def create_stock_movements(purchase_header: PurchaseHeader) -> list:
     return movements
 
 
+def reverse_stock_movements(purchase_header: PurchaseHeader) -> None:
+    """Delete StockMovement inflow layers linked to items in this purchase."""
+    from apps.inventory.ledger import reverse_inflow_movements
+
+    for eb_group in purchase_header.entitas_groups.all():
+        for pi in eb_group.items.all():
+            reverse_inflow_movements(pi)
+
+
 def reverse_inventory_records(purchase_header: PurchaseHeader) -> None:
     """Delete inventory records created by this purchase."""
     InventoryRecord.objects.filter(

@@ -657,3 +657,17 @@ class CreateStockMovementsTests(TestCase):
         self.assertEqual(mv_for_pi2.legacy_inventory_record.purchase_item_id, pi2.id)
         self.assertEqual(mv_for_pi1.qty, Decimal('10'))
         self.assertEqual(mv_for_pi2.qty, Decimal('99'))
+
+    def test_reverse_stock_movements_deletes_layers(self):
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+            reverse_stock_movements,
+        )
+        from apps.inventory.models import StockMovement
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        create_stock_movements(self.header)
+        self.assertTrue(StockMovement.objects.filter(source_object_id=self.pi.id).exists())
+        reverse_stock_movements(self.header)
+        self.assertFalse(StockMovement.objects.filter(
+            item=self.item, movement_type='purchase_in').exists())

@@ -28,7 +28,7 @@ from .models import (
 )
 from .services import (
     create_automated_journals, create_fifo_batches, create_stock_movements,
-    reverse_automated_journals, reverse_fifo_batches,
+    reverse_automated_journals, reverse_fifo_batches, reverse_stock_movements,
     create_inventory_records, reverse_inventory_records,
     reverse_aset_tetap_records, reverse_aset_lainnya_records,
     create_aset_tetap_records, create_aset_lainnya_records,
@@ -716,6 +716,7 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
             reverse_aset_lainnya_records(purchase)
             reverse_inventory_records(purchase)
             reverse_fifo_batches(purchase)
+            reverse_stock_movements(purchase)
             reverse_utang_for_purchase(purchase)
             reverse_automated_journals(purchase)
             purchase.delete()
@@ -1372,6 +1373,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             reverse_aset_tetap_records(existing)
             reverse_aset_lainnya_records(existing)
             reverse_fifo_batches(existing)
+            reverse_stock_movements(existing)
             reverse_utang_for_purchase(existing)
             reverse_automated_journals(existing)
             existing.entitas_groups.all().delete()

@@ -339,3 +339,22 @@ def reverse_movements(source):
                 _mirror_restore(layer, alloc.qty, Decimal('0'))
         out.consumptions_out.all().delete()
     outflows.delete()
+
+
+INFLOW_MOVEMENT_TYPES = {'purchase_in', 'production_in', 'saldo_awal'}
+
+
+@transaction.atomic
+def reverse_inflow_movements(source):
+    """Delete inflow StockMovement rows produced by `source`.
+
+    Unconditional delete, matching the legacy FIFOBatch/InventoryRecord reversal
+    convention. Raises ProtectedError (via StockConsumption.in_movement PROTECT)
+    if any layer was already consumed — this is intentional fail-loud behavior,
+    not a bug to work around here.
+    """
+    ct = ContentType.objects.get_for_model(type(source))
+    StockMovement.objects.filter(
+        source_content_type=ct, source_object_id=source.pk,
+        movement_type__in=INFLOW_MOVEMENT_TYPES,
+    ).delete()

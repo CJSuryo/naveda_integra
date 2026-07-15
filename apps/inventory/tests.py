@@ -426,3 +426,28 @@ class InventoryViewTests(TestCase):
         self.client.logout()
         resp = self.client.get(reverse('inventory:list'))
         self.assertEqual(resp.status_code, 302)
+
+
+class ReverseInflowMovementsTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_reverse_inflow_deletes_unconsumed_layer(self):
+        from apps.inventory.ledger import record_inflow, reverse_inflow_movements
+        from apps.inventory.models import StockMovement
+        mv = record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                           Decimal('5'), '2026-01-01', 'purchase_in', source=self.item)
+        reverse_inflow_movements(self.item)
+        self.assertFalse(StockMovement.objects.filter(pk=mv.pk).exists())
+
+    def test_reverse_inflow_raises_if_already_consumed(self):
+        from django.db.models import ProtectedError
+        from apps.inventory.ledger import record_inflow, consume_stock, reverse_inflow_movements
+        record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                      Decimal('5'), '2026-01-01', 'purchase_in', source=self.item)
+        consume_stock(self.item, self.eb, None, None, Decimal('3'),
+                      '2026-01-02', 'sale_out')
+        with self.assertRaises(ProtectedError):
+            reverse_inflow_movements(self.item)
