@@ -95,3 +95,27 @@ class SeedUnitsTests(TestCase):
     def test_lusin_factor(self):
         self.assertEqual(UnitOfMeasure.objects.get(kode='lusin').factor_to_base,
                          Decimal('12'))
+
+
+class BackfillItemUOMTests(TestCase):
+    def test_backfill_sets_pcs_for_null_items(self):
+        from apps.uom.backfill import backfill_default_uom
+        item = ItemMasterPurchase.objects.create(nama='Teh', tipe_item='RM')
+        self.assertIsNone(item.stock_uom)
+
+        backfill_default_uom(ItemMasterPurchase, UnitOfMeasure)
+
+        item.refresh_from_db()
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.assertEqual(item.stock_uom, pcs)
+        self.assertEqual(item.purchase_uom, pcs)
+        self.assertEqual(item.sales_uom, pcs)
+
+    def test_backfill_does_not_override_existing(self):
+        from apps.uom.backfill import backfill_default_uom
+        kg = UnitOfMeasure.objects.get(kode='kg')
+        item = ItemMasterPurchase.objects.create(nama='Tepung', tipe_item='RM',
+                                                 stock_uom=kg)
+        backfill_default_uom(ItemMasterPurchase, UnitOfMeasure)
+        item.refresh_from_db()
+        self.assertEqual(item.stock_uom, kg)  # unchanged
