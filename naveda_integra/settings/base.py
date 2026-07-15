@@ -56,10 +56,6 @@ INSTALLED_APPS = [
     'apps.customers',
     'pos_config',
     'pos_catalog',
-    'pos_orders',
-    'apps.pos_crm',
-    'apps.pos_promotions',
-    'apps.pos_reports',
     'axes',
 ]
 
