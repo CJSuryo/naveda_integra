@@ -4,6 +4,7 @@ from .models import (
     KategoriItem, ItemMasterPurchase, SubTransactionType,
     PurchaseHeader, PurchaseEntitasBisnis, PurchaseItem, FIFOBatch,
 )
+from apps.uom.models import ItemUOM
 
 
 class PurchaseItemInline(admin.TabularInline):
@@ -16,6 +17,12 @@ class PurchaseEntitasBisnisInline(admin.TabularInline):
     model = PurchaseEntitasBisnis
     extra = 0
     raw_id_fields = ('entitas_bisnis',)
+
+
+class ItemUOMInline(admin.TabularInline):
+    model = ItemUOM
+    extra = 1
+    autocomplete_fields = ('uom',)
 
 
 @admin.register(KategoriItem)
@@ -31,6 +38,7 @@ class ItemMasterPurchaseAdmin(admin.ModelAdmin):
     search_fields = ('item_id', 'nama')
     list_select_related = ('kategori', 'coa_account')
     raw_id_fields = ('coa_account',)
+    inlines = [ItemUOMInline]
 
 
 @admin.register(SubTransactionType)

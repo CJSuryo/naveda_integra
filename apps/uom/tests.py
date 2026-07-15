@@ -228,3 +228,13 @@ class UnitViewTests(TestCase):
         })
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(UnitOfMeasure.objects.filter(kode='sak').exists())
+
+
+class ItemMasterAdminInlineTests(TestCase):
+    def test_itemuom_inline_registered(self):
+        from django.contrib import admin as dj_admin
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.uom.models import ItemUOM
+        model_admin = dj_admin.site._registry[ItemMasterPurchase]
+        inline_models = [inline.model for inline in model_admin.inlines]
+        self.assertIn(ItemUOM, inline_models)
