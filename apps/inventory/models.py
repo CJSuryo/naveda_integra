@@ -252,6 +252,10 @@ class StockMovement(models.Model):
         indexes = [
             models.Index(fields=['item', 'entitas_bisnis', 'remaining_qty'],
                          name='idx_sm_item_eb_remaining'),
+            models.Index(fields=['item', 'entitas_bisnis_lv2', 'remaining_qty'],
+                         name='idx_sm_item_lv2_remaining'),
+            models.Index(fields=['item', 'entitas_bisnis_lv3', 'remaining_qty'],
+                         name='idx_sm_item_lv3_remaining'),
             models.Index(fields=['item', 'tanggal'], name='idx_sm_item_tanggal'),
             models.Index(fields=['source_content_type', 'source_object_id'],
                          name='idx_sm_source'),
