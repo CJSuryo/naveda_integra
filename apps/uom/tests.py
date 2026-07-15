@@ -51,3 +51,20 @@ class ItemUOMModelTests(TestCase):
         with self.assertRaises(Exception):
             ItemUOM.objects.create(item=self.item, uom=self.carton,
                                    qty_in_stock_uom=Decimal('12'))
+
+
+class ItemMasterUOMFieldsTests(TestCase):
+    def test_item_has_uom_fields(self):
+        pcs = UnitOfMeasure.objects.create(
+            kode='pcs', nama='Pieces', dimension='count',
+            factor_to_base=Decimal('1'), is_base=True,
+        )
+        item = ItemMasterPurchase.objects.create(nama='Gula', tipe_item='RM')
+        item.stock_uom = pcs
+        item.purchase_uom = pcs
+        item.sales_uom = pcs
+        item.save()
+        item.refresh_from_db()
+        self.assertEqual(item.stock_uom, pcs)
+        self.assertEqual(item.purchase_uom, pcs)
+        self.assertEqual(item.sales_uom, pcs)
