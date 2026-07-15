@@ -160,6 +160,40 @@ def create_inventory_records(purchase_header: PurchaseHeader) -> list[InventoryR
     return records
 
 
+def create_stock_movements(purchase_header: PurchaseHeader) -> list:
+    """Create StockMovement inflow layers linked to the FIFOBatch + InventoryRecord
+    that create_fifo_batches / create_inventory_records already made for this purchase.
+    """
+    from apps.inventory.ledger import record_inflow
+
+    movements = []
+    for eb_group in purchase_header.entitas_groups.select_related(
+        'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
+    ).all():
+        items = eb_group.items.select_related('item', 'sub_transaction_type').all()
+        for pi in items:
+            if pi.item.tipe_item not in ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'):
+                continue
+            if pi.sub_transaction_type.direction != 'inflow':
+                continue
+
+            is_bulk = pi.item.tipe_item in ('RMB', 'FGB', 'ITMB')
+            batch = pi.fifo_batches.order_by('-created_at').first()
+            rec = InventoryRecord.objects.filter(purchase_item=pi).order_by('-created_at').first()
+            qty = Decimal('1') if is_bulk else pi.quantity
+            unit_cost = pi.total_value if is_bulk else pi.unit_price
+
+            mv = record_inflow(
+                pi.item, eb_group.entitas_bisnis,
+                eb_group.entitas_bisnis_lv2, eb_group.entitas_bisnis_lv3,
+                qty, unit_cost, purchase_header.tanggal, 'purchase_in',
+                source=pi, legacy_fifo_batch=batch, legacy_inventory_record=rec,
+            )
+            movements.append(mv)
+
+    return movements
+
+
 def reverse_inventory_records(purchase_header: PurchaseHeader) -> None:
     """Delete inventory records created by this purchase."""
     InventoryRecord.objects.filter(

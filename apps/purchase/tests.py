@@ -587,3 +587,47 @@ class PurchaseViewTests(TestCase):
         self.assertEqual(data['entries'][0]['kredit'], '')
         self.assertEqual(data['entries'][1]['debit'], '')
         self.assertEqual(data['entries'][1]['kredit'], '50000')
+
+
+class CreateStockMovementsTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='Cafe ABC', tipe_entitas=self.tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        self.akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi Arabica', tipe_item='RM', coa_account=self.akun_persediaan,
+        )
+        self.stt = SubTransactionType.objects.create(
+            nama='Stok Awal', direction='inflow', default_offset_account=self.akun_modal,
+        )
+
+        self.header = PurchaseHeader.objects.create(tanggal='2026-01-01')
+        self.peb = PurchaseEntitasBisnis.objects.create(
+            purchase_header=self.header, entitas_bisnis=self.eb)
+        self.pi = PurchaseItem.objects.create(
+            purchase_eb=self.peb, item=self.item, sub_transaction_type=self.stt,
+            coa_account=self.akun_persediaan, offset_coa_account=self.akun_modal,
+            quantity=Decimal('10'), unit_price=Decimal('5'))
+
+    def test_creates_linked_stock_movement(self):
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+        )
+        from apps.inventory.models import StockMovement
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        movements = create_stock_movements(self.header)
+        self.assertEqual(len(movements), 1)
+        mv = movements[0]
+        self.assertEqual(mv.qty, Decimal('10'))
+        self.assertIsNotNone(mv.legacy_fifo_batch)
+        self.assertIsNotNone(mv.legacy_inventory_record)
+        self.assertEqual(mv.entitas_bisnis, self.eb)

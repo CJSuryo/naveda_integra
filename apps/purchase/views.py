@@ -27,7 +27,7 @@ from .models import (
     PurchaseHeader, PurchaseEntitasBisnis, PurchaseItem, FIFOBatch,
 )
 from .services import (
-    create_automated_journals, create_fifo_batches,
+    create_automated_journals, create_fifo_batches, create_stock_movements,
     reverse_automated_journals, reverse_fifo_batches,
     create_inventory_records, reverse_inventory_records,
     reverse_aset_tetap_records, reverse_aset_lainnya_records,
@@ -1425,6 +1425,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             create_automated_journals(purchase)
             create_fifo_batches(purchase)
             create_inventory_records(purchase)
+            create_stock_movements(purchase)
             create_aset_tetap_records(purchase)
             create_aset_lainnya_records(purchase)
             create_utang_for_purchase(purchase)
@@ -1467,6 +1468,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                 create_automated_journals(purchase)
                 create_fifo_batches(purchase)
                 create_inventory_records(purchase)
+                create_stock_movements(purchase)
                 create_aset_tetap_records(purchase)
                 create_aset_lainnya_records(purchase)
                 create_utang_for_purchase(purchase)
