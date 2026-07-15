@@ -716,6 +716,9 @@ def purchase_delete(request: HttpRequest, pk: int) -> HttpResponse:
             reverse_aset_lainnya_records(purchase)
             reverse_inventory_records(purchase)
             reverse_fifo_batches(purchase)
+            # NOTE: raises ProtectedError (uncaught) if stock already consumed by a
+            # sale/production — surfaces as a raw 500 for now; friendly messaging is
+            # future UX work (see Task 7b in the stock ledger plan).
             reverse_stock_movements(purchase)
             reverse_utang_for_purchase(purchase)
             reverse_automated_journals(purchase)
@@ -1373,6 +1376,9 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             reverse_aset_tetap_records(existing)
             reverse_aset_lainnya_records(existing)
             reverse_fifo_batches(existing)
+            # NOTE: raises ProtectedError (uncaught) if stock already consumed by a
+            # sale/production — surfaces as a raw 500 for now; friendly messaging is
+            # future UX work (see Task 7b in the stock ledger plan).
             reverse_stock_movements(existing)
             reverse_utang_for_purchase(existing)
             reverse_automated_journals(existing)

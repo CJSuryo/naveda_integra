@@ -671,3 +671,39 @@ class CreateStockMovementsTests(TestCase):
         reverse_stock_movements(self.header)
         self.assertFalse(StockMovement.objects.filter(
             item=self.item, movement_type='purchase_in').exists())
+
+    def test_reverse_stock_movements_does_not_touch_other_purchase(self):
+        """Cross-purchase isolation: reversing purchase A must not affect purchase B's layers."""
+        from apps.purchase.models import PurchaseHeader, PurchaseEntitasBisnis, PurchaseItem
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+            reverse_stock_movements,
+        )
+        from apps.inventory.models import StockMovement
+
+        # Purchase A: the existing self.header/self.pi from setUp.
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        create_stock_movements(self.header)
+
+        # Purchase B: a separate purchase, same item.
+        header_b = PurchaseHeader.objects.create(tanggal='2026-01-02')
+        peb_b = PurchaseEntitasBisnis.objects.create(
+            purchase_header=header_b, entitas_bisnis=self.eb)
+        pi_b = PurchaseItem.objects.create(
+            purchase_eb=peb_b, item=self.item, sub_transaction_type=self.stt,
+            coa_account=self.akun_persediaan, offset_coa_account=self.akun_modal,
+            quantity=Decimal('20'), unit_price=Decimal('6'))
+        create_fifo_batches(header_b)
+        create_inventory_records(header_b)
+        create_stock_movements(header_b)
+
+        # Reverse purchase A only.
+        reverse_stock_movements(self.header)
+
+        # Purchase A's layer is gone.
+        self.assertFalse(StockMovement.objects.filter(
+            source_object_id=self.pi.id, movement_type='purchase_in').exists())
+        # Purchase B's layer survives, untouched.
+        mv_b = StockMovement.objects.get(source_object_id=pi_b.id, movement_type='purchase_in')
+        self.assertEqual(mv_b.qty, Decimal('20'))
