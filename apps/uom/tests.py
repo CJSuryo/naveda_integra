@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 from django.test import TestCase
+from django.contrib.admin.sites import AdminSite
 
 from apps.purchase.models import ItemMasterPurchase
 from .models import UnitOfMeasure, ItemUOM
@@ -171,3 +172,35 @@ class ConvertTests(TestCase):
         from apps.uom.conversion import convert, ConversionError
         with self.assertRaises(ConversionError):
             convert(Decimal('1'), self.kg, self.pcs, item=self.item_a)
+
+
+class AdminGuardTests(TestCase):
+    def test_system_unit_delete_blocked(self):
+        from apps.uom.admin import UnitOfMeasureAdmin
+        admin = UnitOfMeasureAdmin(UnitOfMeasure, AdminSite())
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
+
+        class MockUser:
+            def has_perm(self, perm):
+                return True
+
+        class Req:  # minimal request stub
+            user = MockUser()
+
+        self.assertFalse(admin.has_delete_permission(Req(), obj=pcs))
+
+    def test_custom_unit_delete_allowed(self):
+        from apps.uom.admin import UnitOfMeasureAdmin
+        admin = UnitOfMeasureAdmin(UnitOfMeasure, AdminSite())
+        custom = UnitOfMeasure.objects.create(
+            kode='sak', nama='Sak', dimension='count', factor_to_base=None,
+            is_system=False)
+
+        class MockUser:
+            def has_perm(self, perm):
+                return True
+
+        class Req:
+            user = MockUser()
+
+        self.assertTrue(admin.has_delete_permission(Req(), obj=custom))
