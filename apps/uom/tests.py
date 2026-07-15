@@ -3,7 +3,8 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from .models import UnitOfMeasure
+from apps.purchase.models import ItemMasterPurchase
+from .models import UnitOfMeasure, ItemUOM
 
 
 class UnitOfMeasureModelTests(TestCase):
@@ -28,3 +29,25 @@ class UnitOfMeasureModelTests(TestCase):
         with self.assertRaises(Exception):
             UnitOfMeasure.objects.create(kode='pcs', nama='Dup', dimension='count',
                                          factor_to_base=Decimal('1'))
+
+
+class ItemUOMModelTests(TestCase):
+    def setUp(self):
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi Sachet', tipe_item='RM')
+        self.carton = UnitOfMeasure.objects.create(
+            kode='carton', nama='Karton', dimension='count', factor_to_base=None,
+        )
+
+    def test_create_item_uom(self):
+        iu = ItemUOM.objects.create(
+            item=self.item, uom=self.carton, qty_in_stock_uom=Decimal('24'),
+        )
+        self.assertEqual(iu.qty_in_stock_uom, Decimal('24'))
+        self.assertIn('carton', str(iu))
+
+    def test_unique_item_uom(self):
+        ItemUOM.objects.create(item=self.item, uom=self.carton,
+                               qty_in_stock_uom=Decimal('24'))
+        with self.assertRaises(Exception):
+            ItemUOM.objects.create(item=self.item, uom=self.carton,
+                                   qty_in_stock_uom=Decimal('12'))

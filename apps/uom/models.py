@@ -34,3 +34,35 @@ class UnitOfMeasure(models.Model):
 
     def __str__(self) -> str:
         return f'{self.kode} - {self.nama}'
+
+
+class ItemUOM(models.Model):
+    """Per-item packaging conversion: 1 <uom> = qty_in_stock_uom <item.stock_uom>."""
+    item = models.ForeignKey(
+        'purchase.ItemMasterPurchase',
+        on_delete=models.CASCADE,
+        related_name='item_uoms',
+        verbose_name='Item',
+    )
+    uom = models.ForeignKey(
+        UnitOfMeasure,
+        on_delete=models.PROTECT,
+        related_name='item_uoms',
+        verbose_name='Satuan',
+    )
+    qty_in_stock_uom = models.DecimalField(
+        max_digits=24, decimal_places=8,
+        verbose_name='Jumlah dalam Stock UOM',
+        help_text='Berapa banyak satuan stok dalam 1 satuan ini. Contoh: 1 carton = 24 pcs → 24.',
+    )
+
+    class Meta:
+        verbose_name = 'Item UOM'
+        verbose_name_plural = 'Item UOMs'
+        unique_together = [('item', 'uom')]
+        indexes = [
+            models.Index(fields=['item', 'uom'], name='idx_itemuom_item_uom'),
+        ]
+
+    def __str__(self) -> str:
+        return f'{self.item.nama}: 1 {self.uom.kode} = {self.qty_in_stock_uom}'
