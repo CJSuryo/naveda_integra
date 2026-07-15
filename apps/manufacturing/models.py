@@ -108,6 +108,16 @@ class ProductionOrder(models.Model):
         related_name='production_orders',
         verbose_name='Entitas Bisnis',
     )
+    entitas_bisnis_lv2 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='production_orders_lv2',
+        verbose_name='Entitas Bisnis Lv2',
+    )
+    entitas_bisnis_lv3 = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='production_orders_lv3',
+        verbose_name='Entitas Bisnis Lv3',
+    )
     bom = models.ForeignKey(
         BillOfMaterials,
         on_delete=models.PROTECT,

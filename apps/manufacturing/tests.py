@@ -54,6 +54,25 @@ def _make_bom_with_line(eb, fg, rm, qty_per_unit=Decimal('2')):
     return bom
 
 
+class ProductionOrderEBLevelTests(TestCase):
+    def test_production_order_has_lv2_lv3(self):
+        from apps.entitas_bisnis.models import (
+            TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3,
+        )
+        from apps.manufacturing.models import ProductionOrder
+        tipe = TipeEntitas.objects.create(nama='PT')
+        eb = EntitasBisnis.objects.create(nama='PT X', tipe_entitas=tipe)
+        lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=eb, nama='Divisi')
+        lv3 = EntitasBisnisLv3.objects.create(parent_lv2=lv2, nama='Outlet')
+        # Field wajib lain di-skip dgn hanya cek atribut model, bukan create penuh:
+        self.assertTrue(hasattr(ProductionOrder, 'entitas_bisnis_lv2'))
+        self.assertTrue(hasattr(ProductionOrder, 'entitas_bisnis_lv3'))
+        field2 = ProductionOrder._meta.get_field('entitas_bisnis_lv2')
+        field3 = ProductionOrder._meta.get_field('entitas_bisnis_lv3')
+        self.assertTrue(field2.null)
+        self.assertTrue(field3.null)
+
+
 def _seed_fifo(rm, batches: list[tuple]):
     """batches = [(tanggal, qty, unit_price), ...]"""
     for tanggal, qty, price in batches:
