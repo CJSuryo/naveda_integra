@@ -227,12 +227,24 @@ class ConsumeStockBulkTests(DjangoTestCase):
 
     def test_bulk_value_deduction(self):
         from apps.inventory.ledger import consume_stock
-        self._bulk_inflow('1000', '2026-01-01')
-        self._bulk_inflow('500', '2026-01-02')
+        layer1 = self._bulk_inflow('1000', '2026-01-01')
+        layer2 = self._bulk_inflow('500', '2026-01-02')
         # Konsumsi nilai 1200 → habiskan layer 1000, sisakan 300 dari layer 500
         result = consume_stock(self.item, self.eb, None, None, Decimal('1200'),
                                '2026-01-03', 'sale_out')
         self.assertEqual(result.total_cost, Decimal('1200'))
+
+        layer1.refresh_from_db()
+        layer2.refresh_from_db()
+        # Layer 1 (value 1000) fully consumed
+        self.assertEqual(layer1.remaining_qty, Decimal('0'))
+        # Layer 2 (value 500) has 300 left: remaining_qty = 300/500 = 0.6
+        self.assertEqual(layer2.remaining_qty, Decimal('0.6'))
+
+        # Per-layer StockConsumption.unit_cost is the LAYER's own original cost,
+        # not the value taken from it in this consumption.
+        unit_costs = sorted(a.unit_cost for a in result.allocations)
+        self.assertEqual(unit_costs, [Decimal('500'), Decimal('1000')])
 
     def test_bulk_insufficient_value_raises(self):
         from apps.inventory.ledger import consume_stock, InsufficientStockError

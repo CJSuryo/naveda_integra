@@ -204,6 +204,9 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
             take_value = min(layer_value, remaining_value)
             if take_value <= 0:
                 continue
+            # Guard is defensive/unreachable by construction: unit_cost == 0
+            # forces layer_value == 0, so take_value <= 0 and the `continue`
+            # above already skips this layer before the division would run.
             layer.remaining_qty = ((layer_value - take_value) / layer.unit_cost
                                    if layer.unit_cost else Decimal('0'))
             layer.save(update_fields=['remaining_qty'])
@@ -230,6 +233,10 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
         qty=Decimal('0'), unit_cost=total_cost, remaining_qty=Decimal('0'),
         source_content_type=ct, source_object_id=obj_id,
     )
+    # NOTE: unit_cost here is the layer's own original cost (bulk layers
+    # have qty~=1 so this is effectively the layer's original total value),
+    # not the value taken from it in this consumption. See out_movement.unit_cost
+    # for the total value actually deducted across all layers.
     allocations = [
         StockConsumption.objects.create(
             out_movement=out_movement, in_movement=layer,
