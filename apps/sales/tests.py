@@ -842,3 +842,48 @@ class SalesDetailJournalHistoryTests(TestCase):
         resp = self.client.get(reverse('sales:detail', args=[header.pk]))
         self.assertEqual(resp.context['journals'], [])
         self.assertContains(resp, 'Belum ada jurnal')
+
+
+class SalesEBIsolationTests(TestCase):
+    def setUp(self):
+        from apps.entitas_bisnis.models import (
+            TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3,
+        )
+        from apps.purchase.models import ItemMasterPurchase, SubTransactionType
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Div')
+        self.lv3a = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet A')
+        self.lv3b = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet B')
+        self.akun_hpp = Akun.objects.create(kategori_id='beban', nama='HPP EB')
+        self.akun_rev = Akun.objects.create(kategori_id='pendapatan', nama='Pendapatan EB')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Gula', tipe_item='RM', coa_account=None)
+        self.stt = SubTransactionType.objects.create(
+            nama='Penjualan EB Isolasi', module='sales', direction='outflow',
+            default_offset_account=self.akun_hpp,
+        )
+
+    def _sales_with_item(self, lv2, lv3, qty):
+        header = SalesHeader.objects.create(tanggal='2026-01-03')
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+            entitas_bisnis_lv2=lv2, entitas_bisnis_lv3=lv3)
+        SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal(qty), selling_price=Decimal('10'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev)
+        return header
+
+    def test_sale_does_not_consume_sibling_stock(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.sales.services import process_sales_fifo
+        # stok hanya di Outlet B
+        record_inflow(self.item, self.eb, self.lv2, self.lv3b, Decimal('10'),
+                      Decimal('5'), '2026-01-01', 'purchase_in')
+        header = self._sales_with_item(self.lv2, self.lv3a, '1')
+        with self.assertRaises(Exception):
+            process_sales_fifo(header)
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, self.lv3b),
+            Decimal('10'))

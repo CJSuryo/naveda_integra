@@ -1026,7 +1026,16 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     )
 
         # Process FIFO outflow
-        process_sales_fifo(sales)
+        reports = process_sales_fifo(sales)
+        for rep in reports:
+            if rep.used_fallback:
+                sumber = ', '.join(
+                    f"{row['qty']} dari {row['eb_name']} ({row['level']})"
+                    for row in rep.by_level if row['level'] != rep.requested_level)
+                dj_messages.warning(
+                    request,
+                    f'Stok di level {rep.requested_level} tidak mencukupi; '
+                    f'sebagian diambil dari induk: {sumber}.')
 
         # Generate automated journals
         create_sales_automated_journals(sales, user=request.user)
