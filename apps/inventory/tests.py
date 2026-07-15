@@ -50,6 +50,58 @@ class StockMovementModelTests(DjangoTestCase):
         self.assertEqual(alloc.out_movement, outflow)
 
 
+class RecordInflowTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Div')
+        self.lv3 = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet A')
+        self.item = ItemMasterPurchase.objects.create(nama='Teh', tipe_item='RM')
+
+    def test_record_inflow_creates_layer(self):
+        from apps.inventory.ledger import record_inflow
+        mv = record_inflow(
+            self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+            '2026-01-01', 'purchase_in',
+        )
+        self.assertEqual(mv.qty, Decimal('10'))
+        self.assertEqual(mv.remaining_qty, Decimal('10'))
+        self.assertEqual(mv.movement_type, 'purchase_in')
+
+    def test_available_stock_lv1_only(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in')
+        record_inflow(self.item, self.eb, None, None, Decimal('4'), Decimal('5'),
+                      '2026-01-02', 'purchase_in')
+        self.assertEqual(get_available_stock(self.item, self.eb), Decimal('14'))
+
+    def test_available_stock_hierarchical_sums_parent(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        # 6 di lv3, 10 di lv1 → dari sudut pandang lv3 tersedia 16 (naik ke induk)
+        record_inflow(self.item, self.eb, self.lv2, self.lv3, Decimal('6'),
+                      Decimal('5'), '2026-01-01', 'purchase_in')
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in')
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, self.lv3),
+            Decimal('16'),
+        )
+
+    def test_available_stock_sibling_isolated(self):
+        from apps.entitas_bisnis.models import EntitasBisnisLv3
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        sibling = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet B')
+        record_inflow(self.item, self.eb, self.lv2, self.lv3, Decimal('6'),
+                      Decimal('5'), '2026-01-01', 'purchase_in')
+        # Dari sudut pandang sibling (Outlet B), stok Outlet A tak terlihat (0)
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, sibling),
+            Decimal('0'),
+        )
+
+
 class InventoryModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='FnB')
