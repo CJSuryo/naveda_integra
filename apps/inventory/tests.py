@@ -101,6 +101,27 @@ class RecordInflowTests(DjangoTestCase):
             Decimal('0'),
         )
 
+    def test_available_stock_sibling_sees_shared_but_not_private(self):
+        from apps.entitas_bisnis.models import EntitasBisnisLv3
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        sibling = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Outlet B')
+        # Private stock at Outlet A only
+        record_inflow(self.item, self.eb, self.lv2, self.lv3, Decimal('6'),
+                      Decimal('5'), '2026-01-01', 'purchase_in')
+        # Shared stock at pure lv1 (visible to both branches via hierarchical fallback)
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in')
+        # Outlet A sees its own private 6 + the shared 10 = 16
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, self.lv3),
+            Decimal('16'),
+        )
+        # Outlet B (sibling) sees ONLY the shared 10 — never Outlet A's private 6
+        self.assertEqual(
+            get_available_stock(self.item, self.eb, self.lv2, sibling),
+            Decimal('10'),
+        )
+
 
 class InventoryModelTests(TestCase):
     def setUp(self):
