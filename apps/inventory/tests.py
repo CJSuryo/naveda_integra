@@ -317,6 +317,28 @@ class MirrorAndReverseTests(DjangoTestCase):
         layer.refresh_from_db()
         self.assertEqual(layer.remaining_qty, Decimal('1'))
 
+    def test_consume_mirrors_batch_value(self):
+        """Regression test: FIFOBatch.batch_value must stay in sync, not go stale."""
+        from apps.inventory.ledger import consume_stock
+        mv, batch, rec = self._inflow_with_legacy('10', '5', '2026-01-01')
+        consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                      '2026-01-03', 'sale_out')
+        batch.refresh_from_db()
+        # 6 remaining @ unit_price 5 = 30
+        self.assertEqual(batch.batch_value, Decimal('30'))
+
+    def test_consume_without_legacy_links_does_not_error(self):
+        """Layers with no legacy_fifo_batch/legacy_inventory_record must be handled gracefully."""
+        from apps.inventory.ledger import record_inflow, consume_stock
+        layer = record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                              Decimal('5'), '2026-01-01', 'purchase_in')
+        # No legacy_fifo_batch/legacy_inventory_record passed — both None.
+        result = consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                               '2026-01-03', 'sale_out')
+        self.assertEqual(result.total_cost, Decimal('20'))
+        layer.refresh_from_db()
+        self.assertEqual(layer.remaining_qty, Decimal('6'))
+
 
 class InventoryModelTests(TestCase):
     def setUp(self):

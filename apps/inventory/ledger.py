@@ -196,7 +196,7 @@ def _mirror_decrement(layer, take_qty, take_value):
                                    if batch.unit_price else Decimal('0'))
         else:
             batch.remaining_qty -= take_qty
-        batch.save(update_fields=['remaining_qty'])
+        batch.save(update_fields=['remaining_qty', 'batch_value'])
     if rec is not None:
         if is_bulk:
             rec.total_value = (rec.total_value or Decimal('0')) - take_value
@@ -220,7 +220,7 @@ def _mirror_restore(layer, take_qty, take_value):
                                    if batch.unit_price else Decimal('0'))
         else:
             batch.remaining_qty += take_qty
-        batch.save(update_fields=['remaining_qty'])
+        batch.save(update_fields=['remaining_qty', 'batch_value'])
     if rec is not None:
         if is_bulk:
             rec.total_value = (rec.total_value or Decimal('0')) + take_value
