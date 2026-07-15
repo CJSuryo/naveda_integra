@@ -189,6 +189,29 @@ class ConsumeStockNonBulkTests(DjangoTestCase):
         layer.refresh_from_db()
         self.assertEqual(layer.remaining_qty, Decimal('6'))
 
+    def test_atomicity_no_partial_commit_on_shortfall(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError
+        from apps.inventory.models import StockMovement, StockConsumption
+        layer = self._inflow('5', '5', '2026-01-01')
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.eb, None, None, Decimal('9'),
+                          '2026-01-03', 'sale_out')
+        layer.refresh_from_db()
+        self.assertEqual(layer.remaining_qty, Decimal('5'))
+        self.assertFalse(StockMovement.objects.filter(movement_type='sale_out').exists())
+        self.assertFalse(StockConsumption.objects.exists())
+
+    def test_source_attached_to_outflow(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '5', '2026-01-01')
+        # Use self.item itself as a stand-in "source" object — any saved model instance works.
+        result = consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                               '2026-01-03', 'sale_out', source=self.item)
+        from django.contrib.contenttypes.models import ContentType
+        expected_ct = ContentType.objects.get_for_model(type(self.item))
+        self.assertEqual(result.out_movement.source_content_type, expected_ct)
+        self.assertEqual(result.out_movement.source_object_id, self.item.pk)
+
 
 class InventoryModelTests(TestCase):
     def setUp(self):
