@@ -57,7 +57,7 @@ class ItemMasterUOMFieldsTests(TestCase):
     def test_item_has_uom_fields(self):
         pcs = UnitOfMeasure.objects.create(
             kode='test_uom_pcs', nama='Test Pieces', dimension='count',
-            factor_to_base=Decimal('1'), is_base=False,
+            factor_to_base=Decimal('1'), is_base=True,
         )
         item = ItemMasterPurchase.objects.create(
             nama='Gula', tipe_item='RM',
