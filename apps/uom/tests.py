@@ -119,3 +119,55 @@ class BackfillItemUOMTests(TestCase):
         backfill_default_uom(ItemMasterPurchase, UnitOfMeasure)
         item.refresh_from_db()
         self.assertEqual(item.stock_uom, kg)  # unchanged
+
+
+class ConvertTests(TestCase):
+    def setUp(self):
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.kg = UnitOfMeasure.objects.get(kode='kg')
+        self.g = UnitOfMeasure.objects.get(kode='g')
+        self.L = UnitOfMeasure.objects.get(kode='L')
+        self.mL = UnitOfMeasure.objects.get(kode='mL')
+        self.carton = UnitOfMeasure.objects.get(kode='carton')
+        self.item_a = ItemMasterPurchase.objects.create(
+            nama='Kopi A', tipe_item='RM', stock_uom=self.pcs)
+        self.item_b = ItemMasterPurchase.objects.create(
+            nama='Kopi B', tipe_item='RM', stock_uom=self.pcs)
+        ItemUOM.objects.create(item=self.item_a, uom=self.carton,
+                               qty_in_stock_uom=Decimal('24'))
+        ItemUOM.objects.create(item=self.item_b, uom=self.carton,
+                               qty_in_stock_uom=Decimal('12'))
+
+    def test_identity(self):
+        from apps.uom.conversion import convert
+        self.assertEqual(convert(Decimal('5'), self.pcs, self.pcs), Decimal('5'))
+
+    def test_physical_universal_kg_to_g(self):
+        from apps.uom.conversion import convert
+        self.assertEqual(convert(Decimal('2'), self.kg, self.g), Decimal('2000'))
+
+    def test_physical_universal_L_to_mL(self):
+        from apps.uom.conversion import convert
+        self.assertEqual(convert(Decimal('1.5'), self.L, self.mL), Decimal('1500'))
+
+    def test_packaging_carton_to_pcs_per_item(self):
+        from apps.uom.conversion import convert
+        self.assertEqual(convert(Decimal('1'), self.carton, self.pcs, item=self.item_a),
+                         Decimal('24'))
+        self.assertEqual(convert(Decimal('1'), self.carton, self.pcs, item=self.item_b),
+                         Decimal('12'))
+
+    def test_packaging_pcs_to_carton(self):
+        from apps.uom.conversion import convert
+        self.assertEqual(convert(Decimal('48'), self.pcs, self.carton, item=self.item_a),
+                         Decimal('2'))
+
+    def test_packaging_without_item_raises(self):
+        from apps.uom.conversion import convert, ConversionError
+        with self.assertRaises(ConversionError):
+            convert(Decimal('1'), self.carton, self.pcs)
+
+    def test_incompatible_raises(self):
+        from apps.uom.conversion import convert, ConversionError
+        with self.assertRaises(ConversionError):
+            convert(Decimal('1'), self.kg, self.pcs, item=self.item_a)
