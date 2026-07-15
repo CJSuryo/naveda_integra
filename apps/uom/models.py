@@ -1,4 +1,7 @@
 """Unit of Measure master + per-item packaging conversion."""
+from decimal import Decimal
+
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -19,6 +22,7 @@ class UnitOfMeasure(models.Model):
     )
     factor_to_base = models.DecimalField(
         max_digits=24, decimal_places=8, null=True, blank=True,
+        validators=[MinValueValidator(Decimal('0.00000001'))],
         verbose_name='Faktor ke Base',
         help_text='Faktor universal ke satuan dasar dimensi. Kosongkan untuk '
                   'satuan kemasan yang berbeda tiap produk (carton, box, dus, dll).',
@@ -52,6 +56,7 @@ class ItemUOM(models.Model):
     )
     qty_in_stock_uom = models.DecimalField(
         max_digits=24, decimal_places=8,
+        validators=[MinValueValidator(Decimal('0.00000001'))],
         verbose_name='Jumlah dalam Stock UOM',
         help_text='Berapa banyak satuan stok dalam 1 satuan ini. Contoh: 1 carton = 24 pcs → 24.',
     )
