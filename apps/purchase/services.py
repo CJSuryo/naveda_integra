@@ -178,8 +178,8 @@ def create_stock_movements(purchase_header: PurchaseHeader) -> list:
                 continue
 
             is_bulk = pi.item.tipe_item in ('RMB', 'FGB', 'ITMB')
-            batch = pi.fifo_batches.order_by('-created_at').first()
-            rec = InventoryRecord.objects.filter(purchase_item=pi).order_by('-created_at').first()
+            batch = pi.fifo_batches.get()
+            rec = InventoryRecord.objects.get(purchase_item=pi)
             qty = Decimal('1') if is_bulk else pi.quantity
             unit_cost = pi.total_value if is_bulk else pi.unit_price
 

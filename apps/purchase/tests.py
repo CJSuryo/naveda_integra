@@ -631,3 +631,29 @@ class CreateStockMovementsTests(TestCase):
         self.assertIsNotNone(mv.legacy_fifo_batch)
         self.assertIsNotNone(mv.legacy_inventory_record)
         self.assertEqual(mv.entitas_bisnis, self.eb)
+
+    def test_multiple_purchase_items_link_to_own_batch_and_record(self):
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+        )
+        from apps.purchase.models import PurchaseItem
+
+        pi2 = PurchaseItem.objects.create(
+            purchase_eb=self.peb, item=self.item, sub_transaction_type=self.stt,
+            coa_account=self.akun_persediaan, offset_coa_account=self.akun_modal,
+            quantity=Decimal('99'), unit_price=Decimal('7'))
+
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        movements = create_stock_movements(self.header)
+
+        self.assertEqual(len(movements), 2)
+        mv_for_pi1 = next(m for m in movements if m.legacy_fifo_batch.purchase_item_id == self.pi.id)
+        mv_for_pi2 = next(m for m in movements if m.legacy_fifo_batch.purchase_item_id == pi2.id)
+
+        self.assertNotEqual(mv_for_pi1.legacy_fifo_batch_id, mv_for_pi2.legacy_fifo_batch_id)
+        self.assertNotEqual(mv_for_pi1.legacy_inventory_record_id, mv_for_pi2.legacy_inventory_record_id)
+        self.assertEqual(mv_for_pi1.legacy_inventory_record.purchase_item_id, self.pi.id)
+        self.assertEqual(mv_for_pi2.legacy_inventory_record.purchase_item_id, pi2.id)
+        self.assertEqual(mv_for_pi1.qty, Decimal('10'))
+        self.assertEqual(mv_for_pi2.qty, Decimal('99'))
