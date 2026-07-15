@@ -254,6 +254,70 @@ class ConsumeStockBulkTests(DjangoTestCase):
                           '2026-01-03', 'sale_out')
 
 
+class MirrorAndReverseTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def _inflow_with_legacy(self, qty, cost, tanggal):
+        from apps.purchase.models import FIFOBatch
+        from apps.inventory.models import InventoryRecord
+        from apps.inventory.ledger import record_inflow
+        batch = FIFOBatch.objects.create(
+            item=self.item, tanggal=tanggal, quantity_in=Decimal(qty),
+            unit_price=Decimal(cost), remaining_qty=Decimal(qty),
+        )
+        rec = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, quantity=Decimal(qty),
+            unit_price=Decimal(cost), tanggal=tanggal,
+        )
+        mv = record_inflow(self.item, self.eb, None, None, Decimal(qty), Decimal(cost),
+                          tanggal, 'purchase_in',
+                          legacy_fifo_batch=batch, legacy_inventory_record=rec)
+        return mv, batch, rec
+
+    def test_consume_mirrors_legacy(self):
+        from apps.inventory.ledger import consume_stock
+        mv, batch, rec = self._inflow_with_legacy('10', '5', '2026-01-01')
+        consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                      '2026-01-03', 'sale_out')
+        batch.refresh_from_db(); rec.refresh_from_db()
+        self.assertEqual(batch.remaining_qty, Decimal('6'))
+        self.assertEqual(rec.quantity, Decimal('6'))
+
+    def test_reverse_restores_everything(self):
+        from apps.inventory.ledger import consume_stock, reverse_movements
+        from apps.inventory.models import StockMovement, StockConsumption
+        mv, batch, rec = self._inflow_with_legacy('10', '5', '2026-01-01')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('4'),
+                               '2026-01-03', 'sale_out', source=rec)
+        reverse_movements(rec)
+        mv.refresh_from_db(); batch.refresh_from_db(); rec.refresh_from_db()
+        self.assertEqual(mv.remaining_qty, Decimal('10'))
+        self.assertEqual(batch.remaining_qty, Decimal('10'))
+        self.assertEqual(rec.quantity, Decimal('10'))
+        self.assertFalse(
+            StockMovement.objects.filter(movement_type='sale_out').exists())
+        self.assertFalse(StockConsumption.objects.exists())
+
+    def test_reverse_restores_bulk_value(self):
+        """Bulk item variant: reversal must restore layer VALUE, not qty."""
+        from apps.purchase.models import ItemMasterPurchase as IMP
+        from apps.inventory.ledger import record_inflow, consume_stock, reverse_movements
+        bulk_item = IMP.objects.create(nama='Pasir', tipe_item='RMB')
+        layer = record_inflow(bulk_item, self.eb, None, None, Decimal('1'),
+                              Decimal('1000'), '2026-01-01', 'purchase_in')
+        result = consume_stock(bulk_item, self.eb, None, None, Decimal('400'),
+                               '2026-01-03', 'sale_out', source=self.item)
+        layer.refresh_from_db()
+        # 1000 - 400 = 600 value left; remaining_qty = 600/1000 = 0.6
+        self.assertEqual(layer.remaining_qty, Decimal('0.6'))
+        reverse_movements(self.item)
+        layer.refresh_from_db()
+        self.assertEqual(layer.remaining_qty, Decimal('1'))
+
+
 class InventoryModelTests(TestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='FnB')

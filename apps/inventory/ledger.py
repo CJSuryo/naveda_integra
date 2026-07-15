@@ -134,6 +134,7 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
                 continue
             layer.remaining_qty -= take
             layer.save(update_fields=['remaining_qty'])
+            _mirror_decrement(layer, take, take * layer.unit_cost)
             total_cost += take * layer.unit_cost
             picked.append((layer, take))
             slot = per_level.setdefault(level, {'eb_name': eb_name, 'qty': Decimal('0')})
@@ -180,6 +181,57 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     )
 
 
+def _mirror_decrement(layer, take_qty, take_value):
+    """Mirror a consumption decrement onto linked legacy rows.
+
+    Non-bulk uses take_qty; bulk uses take_value (reduces InventoryRecord.total_value
+    and FIFOBatch remaining value)."""
+    batch = layer.legacy_fifo_batch
+    rec = layer.legacy_inventory_record
+    is_bulk = layer.item.tipe_item in ('RMB', 'FGB', 'ITMB')
+    if batch is not None:
+        if is_bulk:
+            cur = batch.remaining_qty * batch.unit_price
+            batch.remaining_qty = ((cur - take_value) / batch.unit_price
+                                   if batch.unit_price else Decimal('0'))
+        else:
+            batch.remaining_qty -= take_qty
+        batch.save(update_fields=['remaining_qty'])
+    if rec is not None:
+        if is_bulk:
+            rec.total_value = (rec.total_value or Decimal('0')) - take_value
+            rec.unit_price = rec.total_value
+            rec.save(update_fields=['total_value', 'unit_price'])
+        else:
+            rec.quantity -= take_qty
+            rec.total_value = rec.quantity * rec.unit_price
+            rec.save(update_fields=['quantity', 'total_value'])
+
+
+def _mirror_restore(layer, take_qty, take_value):
+    """Inverse of _mirror_decrement — restores legacy rows on reversal."""
+    batch = layer.legacy_fifo_batch
+    rec = layer.legacy_inventory_record
+    is_bulk = layer.item.tipe_item in ('RMB', 'FGB', 'ITMB')
+    if batch is not None:
+        if is_bulk:
+            cur = batch.remaining_qty * batch.unit_price
+            batch.remaining_qty = ((cur + take_value) / batch.unit_price
+                                   if batch.unit_price else Decimal('0'))
+        else:
+            batch.remaining_qty += take_qty
+        batch.save(update_fields=['remaining_qty'])
+    if rec is not None:
+        if is_bulk:
+            rec.total_value = (rec.total_value or Decimal('0')) + take_value
+            rec.unit_price = rec.total_value
+            rec.save(update_fields=['total_value', 'unit_price'])
+        else:
+            rec.quantity += take_qty
+            rec.total_value = rec.quantity * rec.unit_price
+            rec.save(update_fields=['quantity', 'total_value'])
+
+
 @transaction.atomic
 def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
                         movement_type, source, req_level, req_rank):
@@ -210,6 +262,7 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
             layer.remaining_qty = ((layer_value - take_value) / layer.unit_cost
                                    if layer.unit_cost else Decimal('0'))
             layer.save(update_fields=['remaining_qty'])
+            _mirror_decrement(layer, Decimal('0'), take_value)
             total_cost += take_value
             picked.append((layer, take_value))
             slot = per_level.setdefault(level, {'eb_name': eb_name, 'qty': Decimal('0')})
@@ -240,9 +293,9 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
     allocations = [
         StockConsumption.objects.create(
             out_movement=out_movement, in_movement=layer,
-            qty=Decimal('0'), unit_cost=layer.unit_cost,
+            qty=take_value, unit_cost=layer.unit_cost,
         )
-        for layer, _tv in picked
+        for layer, take_value in picked
     ]
     used_fallback = any(_LEVEL_RANK[lvl] < req_rank for lvl in per_level)
     by_level = [
@@ -256,3 +309,31 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
         total_cost=total_cost, allocations=allocations,
         out_movement=out_movement, report=report,
     )
+
+
+@transaction.atomic
+def reverse_movements(source):
+    """Reverse all outflow movements produced by `source`: restore inflow layers
+    (and legacy mirrors), delete allocations and outflow rows."""
+    ct = ContentType.objects.get_for_model(type(source))
+    outflows = StockMovement.objects.filter(
+        source_content_type=ct, source_object_id=source.pk,
+        qty__lte=0,
+    ).exclude(movement_type__in=('purchase_in', 'production_in', 'saldo_awal'))
+    for out in outflows.select_for_update():
+        for alloc in out.consumptions_out.select_related('in_movement').all():
+            layer = alloc.in_movement
+            is_bulk = layer.item.tipe_item in ('RMB', 'FGB', 'ITMB')
+            if is_bulk:
+                take_value = alloc.qty  # bulk: qty column stores value taken
+                cur = layer.remaining_qty * layer.unit_cost
+                layer.remaining_qty = ((cur + take_value) / layer.unit_cost
+                                       if layer.unit_cost else Decimal('0'))
+                layer.save(update_fields=['remaining_qty'])
+                _mirror_restore(layer, Decimal('0'), take_value)
+            else:
+                layer.remaining_qty += alloc.qty
+                layer.save(update_fields=['remaining_qty'])
+                _mirror_restore(layer, alloc.qty, Decimal('0'))
+        out.consumptions_out.all().delete()
+    outflows.delete()
