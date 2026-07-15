@@ -3,9 +3,13 @@ from decimal import Decimal
 
 from django.test import TestCase
 from django.contrib.admin.sites import AdminSite
+from django.urls import reverse
+from django.contrib.auth import get_user_model
 
 from apps.purchase.models import ItemMasterPurchase
 from .models import UnitOfMeasure, ItemUOM
+
+User = get_user_model()
 
 
 class UnitOfMeasureModelTests(TestCase):
@@ -204,3 +208,23 @@ class AdminGuardTests(TestCase):
             user = MockUser()
 
         self.assertTrue(admin.has_delete_permission(Req(), obj=custom))
+
+
+class UnitViewTests(TestCase):
+    def setUp(self):
+        self.client_user = User.objects.create_user(
+            email='u1@example.com', password='pw123456', name='U1')
+        self.client.force_login(self.client_user)
+
+    def test_list_renders(self):
+        resp = self.client.get(reverse('uom:list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'pcs')  # seeded unit visible
+
+    def test_create_custom_unit(self):
+        resp = self.client.post(reverse('uom:create'), {
+            'kode': 'sak', 'nama': 'Sak', 'dimension': 'count',
+            'factor_to_base': '', 'is_active': 'on',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(UnitOfMeasure.objects.filter(kode='sak').exists())

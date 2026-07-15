@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Master Satuan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Master Satuan</h1>
+    <p class="ni-page-header__subtitle">Daftar satuan unit-of-measure (UOM) beserta faktor konversinya</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'uom:create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Satuan Baru
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama</th>
+          <th>Dimensi</th>
+          <th class="ni-text-right">Faktor</th>
+          <th>Base</th>
+          <th>Sistem</th>
+          <th>Aktif</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in units %}
+        <tr>
+          <td>{{ u.kode }}</td>
+          <td>{{ u.nama }}</td>
+          <td>{{ u.get_dimension_display }}</td>
+          <td class="ni-text-right">{{ u.factor_to_base|default:'-' }}</td>
+          <td>{{ u.is_base|yesno:'Ya,-' }}</td>
+          <td>{{ u.is_system|yesno:'Ya,-' }}</td>
+          <td>{{ u.is_active|yesno:'Ya,-' }}</td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'uom:update' u.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data satuan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

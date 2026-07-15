@@ -12,6 +12,7 @@ urlpatterns = [
     path('accounts/', include('apps.accounts.urls')),
     path('entitas-bisnis/', include('apps.entitas_bisnis.urls')),
     path('master-data/', include('apps.master_data.urls')),
+    path('uom/', include('apps.uom.urls')),
     path('jurnal/', include('apps.jurnal.urls')),
     path('purchase/', include('apps.purchase.urls')),
     path('utang/', include('apps.utang.urls')),
