@@ -11,7 +11,7 @@ class UnitOfMeasureModelTests(TestCase):
     def test_create_physical_unit(self):
         oz = UnitOfMeasure.objects.create(
             kode='oz', nama='Ounce', dimension='weight',
-            factor_to_base=Decimal('28.35'), is_base=False, is_system=False,
+            factor_to_base=Decimal('28.35'), is_base=False, is_system=True,
         )
         self.assertEqual(str(oz), 'oz - Ounce')
         self.assertEqual(oz.factor_to_base, Decimal('28.35'))
@@ -19,13 +19,13 @@ class UnitOfMeasureModelTests(TestCase):
     def test_packaging_unit_allows_null_factor(self):
         bag = UnitOfMeasure.objects.create(
             kode='bag', nama='Bag', dimension='count',
-            factor_to_base=None, is_base=False, is_system=False,
+            factor_to_base=None, is_base=False, is_system=True,
         )
         self.assertIsNone(bag.factor_to_base)
 
     def test_kode_unique(self):
         UnitOfMeasure.objects.create(kode='custom_unit', nama='Custom Unit', dimension='count',
-                                     factor_to_base=Decimal('1'), is_base=False)
+                                     factor_to_base=Decimal('1'), is_base=True)
         with self.assertRaises(Exception):
             UnitOfMeasure.objects.create(kode='custom_unit', nama='Dup', dimension='count',
                                          factor_to_base=Decimal('1'))
@@ -55,8 +55,10 @@ class ItemUOMModelTests(TestCase):
 
 class ItemMasterUOMFieldsTests(TestCase):
     def test_item_has_uom_fields(self):
-        # Use seeded 'pcs' unit from migration
-        pcs = UnitOfMeasure.objects.get(kode='pcs')
+        pcs = UnitOfMeasure.objects.create(
+            kode='test_uom_pcs', nama='Test Pieces', dimension='count',
+            factor_to_base=Decimal('1'), is_base=False,
+        )
         item = ItemMasterPurchase.objects.create(
             nama='Gula', tipe_item='RM',
             stock_uom=pcs, purchase_uom=pcs, sales_uom=pcs,
