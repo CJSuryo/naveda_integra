@@ -1192,6 +1192,172 @@ git commit -m "feat(purchase): dual-write StockMovement inflow linked to legacy 
 
 ---
 
+### Task 7b: Reverse StockMovement inflow saat purchase diedit/dihapus (gap ditemukan saat code review Task 7)
+
+**Latar belakang:** Code review Task 7 menemukan gap: `apps/purchase/views.py` sudah memanggil `reverse_fifo_batches`/`reverse_inventory_records` saat purchase diedit atau dihapus (baris ~717-718 untuk delete, ~1370-1374 untuk edit), tapi `StockMovement` (ledger baru) tidak ikut dibersihkan — FK `legacy_fifo_batch`/`legacy_inventory_record` di `StockMovement` pakai `on_delete=SET_NULL`, jadi movement-nya sendiri (dengan `qty`/`remaining_qty` utuh) tetap bertahan setelah legacy row dihapus. Ini menyebabkan `StockMovement`-based stock queries meng-overcount setelah purchase diedit/dihapus. Task 6's `reverse_movements(source)` sengaja mengecualikan tipe inflow (`purchase_in`), jadi tidak menutup kasus ini.
+
+**Files:**
+- Modify: `apps/inventory/ledger.py` (tambah `reverse_inflow_movements`)
+- Modify: `apps/purchase/services.py` (tambah `reverse_stock_movements`)
+- Modify: `apps/purchase/views.py` (panggil di 2 titik reverse yang sudah ada)
+- Modify: `apps/inventory/tests.py`, `apps/purchase/tests.py`
+
+**Interfaces:**
+- `apps.inventory.ledger.reverse_inflow_movements(source) -> None` — hapus semua `StockMovement` inflow (`movement_type` bukan outflow) milik `source` (via `source_content_type`/`source_object_id`). Konsisten dengan perilaku legacy (`reverse_fifo_batches`/`reverse_inventory_records` menghapus tanpa syarat) — TAPI `StockConsumption.in_movement` memakai `on_delete=PROTECT`, jadi bila layer sudah pernah dikonsumsi, `.delete()` akan raise `ProtectedError` alih-alih diam-diam korup. Ini perilaku yang diinginkan (fail loud), bukan bug — jangan tangkap/redam exception ini di fungsi ini.
+- `apps.purchase.services.reverse_stock_movements(purchase_header) -> None` — untuk tiap `PurchaseItem` di purchase ini, panggil `reverse_inflow_movements(pi)`.
+
+- [ ] **Step 1: Tulis test yang gagal**
+
+Append ke `apps/inventory/tests.py`:
+
+```python
+class ReverseInflowMovementsTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_reverse_inflow_deletes_unconsumed_layer(self):
+        from apps.inventory.ledger import record_inflow, reverse_inflow_movements
+        from apps.inventory.models import StockMovement
+        mv = record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                           Decimal('5'), '2026-01-01', 'purchase_in', source=self.item)
+        reverse_inflow_movements(self.item)
+        self.assertFalse(StockMovement.objects.filter(pk=mv.pk).exists())
+
+    def test_reverse_inflow_raises_if_already_consumed(self):
+        from django.db.models import ProtectedError
+        from apps.inventory.ledger import record_inflow, consume_stock, reverse_inflow_movements
+        record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                      Decimal('5'), '2026-01-01', 'purchase_in', source=self.item)
+        consume_stock(self.item, self.eb, None, None, Decimal('3'),
+                      '2026-01-02', 'sale_out')
+        with self.assertRaises(ProtectedError):
+            reverse_inflow_movements(self.item)
+```
+
+Catatan: `django.db.models.ProtectedError` — pastikan import path benar (di Django modern ini ada di `django.db.models.deletion.ProtectedError`, biasanya juga diekspor lewat `django.db.models.ProtectedError`; cek versi Django proyek ini bila import gagal dan sesuaikan).
+
+- [ ] **Step 2: Jalankan test — harus gagal**
+
+Run: `python manage.py test apps.inventory.tests.ReverseInflowMovementsTests --settings=naveda_integra.settings.test -v 2`
+Expected: FAIL — `cannot import name 'reverse_inflow_movements'`.
+
+- [ ] **Step 3: Implementasi `reverse_inflow_movements`**
+
+Append ke `apps/inventory/ledger.py`:
+
+```python
+INFLOW_MOVEMENT_TYPES = {'purchase_in', 'production_in', 'saldo_awal'}
+
+
+@transaction.atomic
+def reverse_inflow_movements(source):
+    """Delete inflow StockMovement rows produced by `source`.
+
+    Unconditional delete, matching the legacy FIFOBatch/InventoryRecord reversal
+    convention. Raises ProtectedError (via StockConsumption.in_movement PROTECT)
+    if any layer was already consumed — this is intentional fail-loud behavior,
+    not a bug to work around here.
+    """
+    ct = ContentType.objects.get_for_model(type(source))
+    StockMovement.objects.filter(
+        source_content_type=ct, source_object_id=source.pk,
+        movement_type__in=INFLOW_MOVEMENT_TYPES,
+    ).delete()
+```
+
+- [ ] **Step 4: Jalankan test — harus lulus**
+
+Run: `python manage.py test apps.inventory.tests.ReverseInflowMovementsTests --settings=naveda_integra.settings.test -v 2`
+Expected: PASS (2 test).
+
+- [ ] **Step 5: Tulis test integrasi Purchase yang gagal**
+
+Append ke `apps/purchase/tests.py`, di dalam/ dekat `CreateStockMovementsTests` (pakai fixture setUp yang sama):
+
+```python
+    def test_reverse_stock_movements_deletes_layers(self):
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+            reverse_stock_movements,
+        )
+        from apps.inventory.models import StockMovement
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        create_stock_movements(self.header)
+        self.assertTrue(StockMovement.objects.filter(source_object_id=self.pi.id).exists())
+        reverse_stock_movements(self.header)
+        self.assertFalse(StockMovement.objects.filter(
+            item=self.item, movement_type='purchase_in').exists())
+```
+
+Tambahkan method ini ke class `CreateStockMovementsTests` yang sudah ada (reuse `setUp`).
+
+- [ ] **Step 6: Jalankan test — harus gagal**
+
+Run: `python manage.py test apps.purchase.tests.CreateStockMovementsTests.test_reverse_stock_movements_deletes_layers --settings=naveda_integra.settings.test -v 2`
+Expected: FAIL — `cannot import name 'reverse_stock_movements'`.
+
+- [ ] **Step 7: Implementasi `reverse_stock_movements`**
+
+Append ke `apps/purchase/services.py`:
+
+```python
+def reverse_stock_movements(purchase_header: PurchaseHeader) -> None:
+    """Delete StockMovement inflow layers linked to items in this purchase."""
+    from apps.inventory.ledger import reverse_inflow_movements
+
+    for eb_group in purchase_header.entitas_groups.all():
+        for pi in eb_group.items.all():
+            reverse_inflow_movements(pi)
+```
+
+- [ ] **Step 8: Wire ke view (2 titik)**
+
+Di `apps/purchase/views.py`, tambahkan `reverse_stock_movements` ke import block `.services` (sejajar `reverse_fifo_batches`, `reverse_inventory_records`).
+
+Titik pertama (delete, ~baris 717-718):
+```python
+            reverse_inventory_records(purchase)
+            reverse_fifo_batches(purchase)
+```
+Tambahkan setelahnya:
+```python
+            reverse_stock_movements(purchase)
+```
+
+Titik kedua (edit, ~baris 1370-1374):
+```python
+            reverse_inventory_records(existing)
+            reverse_fifo_batches(existing)
+```
+Tambahkan setelahnya:
+```python
+            reverse_stock_movements(existing)
+```
+
+Cocokkan indentasi persis dengan konteks di masing-masing titik (verifikasi baris aktual, nomor baris bisa sedikit bergeser dari referensi ini setelah Task 7 commit).
+
+- [ ] **Step 9: Jalankan test — harus lulus**
+
+Run: `python manage.py test apps.purchase.tests.CreateStockMovementsTests --settings=naveda_integra.settings.test -v 2`
+Expected: PASS (semua test di class, termasuk yang baru).
+
+- [ ] **Step 10: Regresi purchase penuh**
+
+Run: `python manage.py test apps.purchase apps.inventory --settings=naveda_integra.settings.test -v 1`
+Expected: tidak ada kegagalan baru di luar `django-axes` yang sudah dikenal pra-eksis.
+
+- [ ] **Step 11: Commit**
+
+```bash
+git add apps/inventory/ledger.py apps/inventory/tests.py apps/purchase/services.py apps/purchase/views.py apps/purchase/tests.py
+git commit -m "fix(purchase): reverse StockMovement inflow on purchase edit/delete"
+```
+
+---
+
 ### Task 8: Integrasi Sales outflow (ganti isi `process_sales_fifo` + `reverse_sales_fifo`)
 
 **Files:**
