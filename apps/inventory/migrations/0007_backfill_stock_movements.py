@@ -11,8 +11,13 @@ def forwards(apps, schema_editor):
 
 
 def backwards(apps, schema_editor):
+    from apps.inventory.backfill import backfilled_movements_queryset
     StockMovement = apps.get_model('inventory', 'StockMovement')
-    StockMovement.objects.filter(legacy_fifo_batch__isnull=False).delete()
+    # Scoped to rows this migration's forwards() actually created (no source
+    # object set) — NOT every StockMovement with legacy_fifo_batch set, since
+    # normal Purchase/Sales/Manufacturing dual-write also sets that field.
+    # See backfilled_movements_queryset() for the distinguishing signal.
+    backfilled_movements_queryset(StockMovement).delete()
 
 
 class Migration(migrations.Migration):

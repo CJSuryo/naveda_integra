@@ -478,6 +478,49 @@ class BackfillStockMovementsTests(DjangoTestCase):
         self.assertEqual(mv.legacy_fifo_batch_id, batch.id)
         self.assertEqual(mv.legacy_inventory_record_id, rec.id)
 
+    def test_backwards_scoped_to_backfilled_rows_only(self):
+        """Migration 0007's backwards() must not delete StockMovement rows created
+        by normal dual-write (Task 7/8/9), even though those rows also carry
+        legacy_fifo_batch. Only rows backfill_stock_movements itself created
+        (no source object) should be removed.
+        """
+        from apps.purchase.models import FIFOBatch, PurchaseItem
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.inventory.backfill import backfill_stock_movements, backfilled_movements_queryset
+        from apps.inventory.ledger import record_inflow
+
+        # A historical batch that gets backfilled (simulates the migration's forwards()).
+        batch = FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01', quantity_in=Decimal('10'),
+            unit_price=Decimal('5'), remaining_qty=Decimal('6'))
+        rec = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, quantity=Decimal('6'),
+            unit_price=Decimal('5'), tanggal='2026-01-01')
+        backfill_stock_movements(FIFOBatch, InventoryRecord, StockMovement, PurchaseItem)
+        backfilled_mv = StockMovement.objects.get()
+        self.assertIsNone(backfilled_mv.source_content_type_id)
+
+        # A real, post-backfill purchase going through the normal dual-write path
+        # (apps.purchase.services.create_stock_movements calls record_inflow with
+        # both legacy_fifo_batch AND source set).
+        batch2 = FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-02-01', quantity_in=Decimal('4'),
+            unit_price=Decimal('7'), remaining_qty=Decimal('4'))
+        real_mv = record_inflow(
+            self.item, self.eb, None, None, Decimal('4'), Decimal('7'), '2026-02-01',
+            'purchase_in', source=batch2, legacy_fifo_batch=batch2, legacy_inventory_record=None,
+        )
+        self.assertIsNotNone(real_mv.source_content_type_id)
+
+        # Sanity: the naive filter this migration used to use would wrongly catch both.
+        self.assertEqual(
+            StockMovement.objects.filter(legacy_fifo_batch__isnull=False).count(), 2)
+
+        backfilled_movements_queryset(StockMovement).delete()
+
+        remaining = list(StockMovement.objects.all())
+        self.assertEqual(remaining, [real_mv])
+
 
 class ReconcileCommandTests(DjangoTestCase):
     def test_reconcile_runs_clean(self):
