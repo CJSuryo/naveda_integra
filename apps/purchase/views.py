@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
+from apps.inventory.models import Warehouse
 from apps.master_data.models import Akun, EntitasBisnisAkun
 from apps.master_data.utils import get_akun_sorted
 
@@ -87,6 +88,17 @@ def _get_eb_dropdown_options(user) -> list[dict[str, str]]:
             for lv3 in lv3_by_lv2.get(lv2.pk, []):
                 options.append({'value': f'lv3:{lv3.pk}', 'label': f'\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0↳ {lv3.nama}'})
     return options
+
+
+def _get_warehouses_data() -> list[dict]:
+    """Active warehouses for the purchase form's per-line gudang selector,
+    keyed to their owning lv1 EntitasBisnis so the template/JS can filter
+    the option list per row's group."""
+    return list(
+        Warehouse.objects.filter(is_active=True)
+        .values('id', 'kode', 'nama', 'entitas_bisnis_id')
+        .order_by('entitas_bisnis_id', 'kode')
+    )
 
 
 def _get_eb_tree(user) -> list[dict]:
@@ -545,6 +557,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'sub_transaction_types': SubTransactionType.objects.filter(module='purchase').order_by('nama'),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
+        'warehouses_json': safe_json(_get_warehouses_data()),
     })
 
 
@@ -603,6 +616,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'holding_cost_pct': str(pi.holding_cost_pct) if pi.holding_cost_pct else '',
                 'moq': str(pi.moq) if pi.moq else '',
                 'target_turnover': str(pi.target_turnover) if pi.target_turnover else '',
+                'warehouse_id': pi.warehouse_id or '',
             })
         eb_groups_data.append({
             'entitas_bisnis_id': eb_selection,
@@ -621,6 +635,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_groups_json': safe_json(eb_groups_data),
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
+        'warehouses_json': safe_json(_get_warehouses_data()),
     })
 
 
@@ -1334,6 +1349,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'eb_groups_json': safe_json(groups),
             'kategori_items': KategoriItem.objects.all().order_by('nama'),
             'akun_list': get_akun_sorted(),
+            'warehouses_json': safe_json(_get_warehouses_data()),
         })
 
     # Determine the dominant tipe_item prefix for all items to decide the transaction ID prefix.
@@ -1415,6 +1431,10 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                     entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
                 )
                 for item_data in items_list:
+                    wh_id = item_data.get('warehouse_id') or None
+                    if wh_id and not Warehouse.objects.filter(
+                            pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
+                        raise ValueError('Gudang tidak valid untuk bisnis ini.')
                     PurchaseItem.objects.create(
                         purchase_eb=eb_group,
                         item_id=item_data['item_id'],
@@ -1429,6 +1449,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
                         moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
                         target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
+                        warehouse_id=wh_id,
                     )
             create_automated_journals(purchase)
             create_fifo_batches(purchase)
@@ -1458,6 +1479,10 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         entitas_bisnis_lv3_id=eb_resolved['lv3_id'],
                     )
                     for item_data in items_list:
+                        wh_id = item_data.get('warehouse_id') or None
+                        if wh_id and not Warehouse.objects.filter(
+                                pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
+                            raise ValueError('Gudang tidak valid untuk bisnis ini.')
                         PurchaseItem.objects.create(
                             purchase_eb=eb_group,
                             item_id=item_data['item_id'],
@@ -1472,6 +1497,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                             holding_cost_pct=Decimal(str(item_data['holding_cost_pct'])) if item_data.get('holding_cost_pct') else None,
                             moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
                             target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
+                            warehouse_id=wh_id,
                         )
                 create_automated_journals(purchase)
                 create_fifo_batches(purchase)

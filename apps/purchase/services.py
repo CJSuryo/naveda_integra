@@ -188,6 +188,7 @@ def create_stock_movements(purchase_header: PurchaseHeader) -> list:
                 eb_group.entitas_bisnis_lv2, eb_group.entitas_bisnis_lv3,
                 qty, unit_cost, purchase_header.tanggal, 'purchase_in',
                 source=pi, legacy_fifo_batch=batch, legacy_inventory_record=rec,
+                warehouse=pi.warehouse,
             )
             movements.append(mv)
 

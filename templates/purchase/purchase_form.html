@@ -464,6 +464,7 @@
 
   var existingGroups  = {{ eb_groups_json|default:"[]"|safe }};
   var ebOptions       = {{ eb_options_json|default:"[]"|safe }};
+  var WAREHOUSES      = {{ warehouses_json|default:"[]"|safe }};
   var sttOptions      = [
     {% for stt in sub_transaction_types %}
     { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
@@ -499,6 +500,54 @@
     var idx = rid.lastIndexOf('_item_');
     return idx !== -1 ? rid.substring(0, idx) : '';
   }
+
+  // ── Warehouse (gudang) helpers ──────────────────────────────────────
+
+  function warehouseOptions(lv1Id, selected) {
+    var opts = ['<option value="">— (opsional)</option>'];
+    WAREHOUSES.filter(function (w) { return String(w.entitas_bisnis_id) === String(lv1Id); })
+      .forEach(function (w) {
+        var sel = String(w.id) === String(selected) ? ' selected' : '';
+        opts.push('<option value="' + w.id + '"' + sel + '>' + w.kode + ' — ' + w.nama + '</option>');
+      });
+    return opts.join('');
+  }
+
+  function refreshGroupWarehouseOptions(gid) {
+    var card = document.getElementById(gid);
+    if (!card) return;
+    var ebSelect = card.querySelector('.eb-select');
+    var lv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+    var uniformSel = document.getElementById(gid + '_wh_uniform');
+    if (uniformSel) uniformSel.innerHTML = warehouseOptions(lv1Id, uniformSel.value);
+    var tbody = document.getElementById(gid + '_items');
+    if (tbody) {
+      tbody.querySelectorAll('.wh-select').forEach(function (sel) {
+        sel.innerHTML = warehouseOptions(lv1Id, sel.value);
+      });
+    }
+  }
+
+  window.toggleUniformWarehouse = function (gid) {
+    var checkbox = document.getElementById(gid + '_wh_uniform_toggle');
+    var wrap     = document.getElementById(gid + '_wh_uniform_wrap');
+    var tbody    = document.getElementById(gid + '_items');
+    var active   = !!(checkbox && checkbox.checked);
+    if (wrap) wrap.style.display = active ? '' : 'none';
+    if (tbody) {
+      tbody.querySelectorAll('.wh-select').forEach(function (sel) { sel.disabled = active; });
+    }
+    if (active) {
+      var uniformSel = document.getElementById(gid + '_wh_uniform');
+      applyUniformWarehouse(gid, uniformSel ? uniformSel.value : '');
+    }
+  };
+
+  window.applyUniformWarehouse = function (gid, whId) {
+    var tbody = document.getElementById(gid + '_items');
+    if (!tbody) return;
+    tbody.querySelectorAll('.wh-select').forEach(function (sel) { sel.value = whId; });
+  };
 
   // ── Currency mask ─────────────────────────────────────────────────
 
@@ -664,6 +713,12 @@
         '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="toggleAdvanced(\'' + gid + '\')" title="Advanced fields untuk semua item" style="white-space:nowrap;">' +
           '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced' +
         '</button>' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--ni-text-muted);white-space:nowrap;">' +
+          '<input type="checkbox" id="' + gid + '_wh_uniform_toggle" onchange="toggleUniformWarehouse(\'' + gid + '\')"> Gudang seragam' +
+        '</label>' +
+        '<span id="' + gid + '_wh_uniform_wrap" style="display:none;">' +
+          '<select id="' + gid + '_wh_uniform" class="ni-input ni-input--sm" onchange="applyUniformWarehouse(\'' + gid + '\', this.value)">' + warehouseOptions('', '') + '</select>' +
+        '</span>' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeEBGroup(\'' + gid + '\')" title="Hapus Group">' +
           '<i data-lucide="trash-2" style="width:14px;height:14px"></i>' +
         '</button>' +
@@ -696,6 +751,7 @@
       '</div>';
 
     container.appendChild(card);
+    refreshGroupWarehouseOptions(gid);
     lucide.createIcons();
     checkEmptyState();
 
@@ -733,6 +789,7 @@
     card.querySelectorAll('.item-select').forEach(function (sel) {
       if (sel.tomselect) { sel.tomselect.clearOptions(); sel.tomselect.clear(); }
     });
+    refreshGroupWarehouseOptions(gid);
   };
 
   // ── Item Row ──────────────────────────────────────────────────────
@@ -752,6 +809,10 @@
     var prefillCoaTxt  = prefill ? (prefill.coa_account_text || '') : '';
     var prefillOffId   = prefill ? (prefill.offset_coa_account_id || '') : '';
     var prefillOffTxt  = prefill ? (prefill.offset_coa_account_text || '') : '';
+
+    var rowCard  = document.getElementById(gid);
+    var rowEbSel = rowCard ? rowCard.querySelector('.eb-select') : null;
+    var rowLv1Id = rowEbSel ? getEBLv1Id(rowEbSel.value) : '';
 
     var tr = document.createElement('tr');
     tr.id = rid;
@@ -802,11 +863,23 @@
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Holding Cost %</label><input type="number" id="' + rid + '_holdcost" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.holding_cost_pct || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">MOQ<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Minimum Order Quantity — jumlah minimum per pesanan.</span></span></label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">Target Turnover<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Target perputaran persediaan dalam satu periode.</span></span></label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Gudang</label><select id="' + rid + '_gudang" class="ni-purchase-input wh-select">' + warehouseOptions(rowLv1Id, prefill ? (prefill.warehouse_id || '') : '') + '</select></div>' +
         '</div>' +
       '</td>';
 
     tbody.appendChild(tr);
     tbody.appendChild(trAdv);
+
+    // If "Gudang seragam" is active for this group, lock the new row's select too.
+    var uniformToggle = document.getElementById(gid + '_wh_uniform_toggle');
+    if (uniformToggle && uniformToggle.checked) {
+      var uniformSel  = document.getElementById(gid + '_wh_uniform');
+      var whSel       = document.getElementById(rid + '_gudang');
+      if (whSel) {
+        whSel.value    = uniformSel ? uniformSel.value : '';
+        whSel.disabled = true;
+      }
+    }
 
     // Currency mask + event listener for price
     var priceInput = document.getElementById(rid + '_price');
@@ -1388,6 +1461,7 @@
           holding_cost_pct:         (document.getElementById(rid + '_holdcost') || {}).value || '',
           moq:                      (document.getElementById(rid + '_moq') || {}).value || '',
           target_turnover:          (document.getElementById(rid + '_turnover') || {}).value || '',
+          warehouse_id:             (document.getElementById(rid + '_gudang') || {}).value || '',
         });
       });
       groups.push({ entitas_bisnis_id: ebId, entitas_bisnis_name: ebName, items: items });

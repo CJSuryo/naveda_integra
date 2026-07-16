@@ -544,6 +544,11 @@ class PurchaseItem(models.Model):
         default='',
         verbose_name='Metode Alokasi Biaya',
     )
+    warehouse = models.ForeignKey(
+        'inventory.Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='purchase_items',
+        verbose_name='Gudang',
+    )
 
     class Meta:
         verbose_name = 'Purchase Item'

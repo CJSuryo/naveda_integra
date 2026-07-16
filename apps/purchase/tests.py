@@ -707,3 +707,20 @@ class CreateStockMovementsTests(TestCase):
         # Purchase B's layer survives, untouched.
         mv_b = StockMovement.objects.get(source_object_id=pi_b.id, movement_type='purchase_in')
         self.assertEqual(mv_b.qty, Decimal('20'))
+
+    def test_purchase_stock_movement_carries_warehouse(self):
+        from apps.inventory.models import Warehouse, StockMovement
+        from apps.purchase.services import (
+            create_fifo_batches, create_inventory_records, create_stock_movements,
+        )
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, kode='PGD', nama='Gudang Beli')
+        self.pi.warehouse = wh
+        self.pi.save(update_fields=['warehouse'])
+
+        create_fifo_batches(self.header)
+        create_inventory_records(self.header)
+        create_stock_movements(self.header)
+
+        mv = StockMovement.objects.get(
+            source_object_id=self.pi.pk, source_content_type__model='purchaseitem')
+        self.assertEqual(mv.warehouse_id, wh.pk)
