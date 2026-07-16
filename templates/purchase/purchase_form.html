@@ -465,6 +465,7 @@
   var existingGroups  = {{ eb_groups_json|default:"[]"|safe }};
   var ebOptions       = {{ eb_options_json|default:"[]"|safe }};
   var WAREHOUSES      = {{ warehouses_json|default:"[]"|safe }};
+  var ITEM_UOMS       = {{ item_uoms_json|default:"{}"|safe }};
   var sttOptions      = [
     {% for stt in sub_transaction_types %}
     { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
@@ -526,6 +527,16 @@
         sel.innerHTML = warehouseOptions(lv1Id, sel.value);
       });
     }
+  }
+
+  // ── Satuan (UOM) helpers ─────────────────────────────────────────────
+
+  function uomOptions(itemId, selected) {
+    var info = ITEM_UOMS[itemId]; if (!info) return '';
+    var sel = selected || info.default_id;
+    return info.options.map(function (o) {
+      return '<option value="' + o.id + '"' + (String(o.id) === String(sel) ? ' selected' : '') + '>' + o.kode + '</option>';
+    }).join('');
   }
 
   window.toggleUniformWarehouse = function (gid) {
@@ -864,6 +875,7 @@
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">MOQ<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Minimum Order Quantity — jumlah minimum per pesanan.</span></span></label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">Target Turnover<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Target perputaran persediaan dalam satu periode.</span></span></label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Gudang</label><select id="' + rid + '_gudang" class="ni-purchase-input wh-select">' + warehouseOptions(rowLv1Id, prefill ? (prefill.warehouse_id || '') : '') + '</select></div>' +
+          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Satuan</label><select id="' + rid + '_uom" class="ni-purchase-input uom-select">' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></div>' +
         '</div>' +
       '</td>';
 
@@ -932,6 +944,8 @@
         var metodeEl = document.getElementById(rid + '_metode');
         if (metodeEl && opt && opt.metode_biaya_persediaan) metodeEl.value = opt.metode_biaya_persediaan;
         toggleBulkFields(rid, opt ? opt.tipe_item : '');
+        var uomSel = document.getElementById(rid + '_uom');
+        if (uomSel) uomSel.innerHTML = uomOptions(val, '');
       },
       create: function (input, callback) {
         _modalCallbackRid = rid;
@@ -1462,6 +1476,7 @@
           moq:                      (document.getElementById(rid + '_moq') || {}).value || '',
           target_turnover:          (document.getElementById(rid + '_turnover') || {}).value || '',
           warehouse_id:             (document.getElementById(rid + '_gudang') || {}).value || '',
+          input_uom_id:             (document.getElementById(rid + '_uom') || {}).value || '',
         });
       });
       groups.push({ entitas_bisnis_id: ebId, entitas_bisnis_name: ebName, items: items });

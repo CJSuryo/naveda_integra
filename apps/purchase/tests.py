@@ -724,3 +724,21 @@ class CreateStockMovementsTests(TestCase):
         mv = StockMovement.objects.get(
             source_object_id=self.pi.pk, source_content_type__model='purchaseitem')
         self.assertEqual(mv.warehouse_id, wh.pk)
+
+
+class PurchaseUomConversionTests(TestCase):
+    """Konversi diterapkan lewat helper; ledger tetap dalam base."""
+    def setUp(self):
+        from apps.uom.models import UnitOfMeasure, ItemUOM
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Beli', tipe_item='ITM', stock_uom=self.pcs)
+        self.ctn = UnitOfMeasure.objects.create(
+            kode='ctn-p', nama='Carton', dimension='count', factor_to_base=None)
+        ItemUOM.objects.create(item=self.item, uom=self.ctn, qty_in_stock_uom=Decimal('24'))
+
+    def test_helper_carton_purchase(self):
+        from apps.uom.conversion import convert_input_to_base
+        qty, price = convert_input_to_base(self.item, self.ctn, Decimal('10'), Decimal('24000'))
+        self.assertEqual(qty, Decimal('240'))
+        self.assertEqual(price, Decimal('1000'))
