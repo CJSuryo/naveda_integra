@@ -54,12 +54,22 @@ def bom_list(request):
 
 
 def _uom_catalogue():
-    """All UOMs as {id: {kode, nama}}, for the row-builder input_uom select."""
+    """All UOMs as an ordered list, grouped and sorted by dimension, for the
+    row-builder input_uom select. Must stay a list (not a dict keyed by id) —
+    JS iterates numeric-string object keys in ascending numeric order
+    regardless of insertion order, which would silently undo the backend's
+    dimension/factor ordering."""
     from apps.uom.models import UnitOfMeasure
-    return {
-        str(u.pk): {'kode': u.kode, 'nama': u.nama}
-        for u in UnitOfMeasure.objects.order_by('dimension', 'kode')
-    }
+    return [
+        {
+            'id': str(u.pk),
+            'kode': u.kode,
+            'nama': u.nama,
+            'dimension': u.dimension,
+            'dimension_label': u.get_dimension_display(),
+        }
+        for u in UnitOfMeasure.objects.for_dropdown()
+    ]
 
 
 @login_required

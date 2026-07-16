@@ -1499,6 +1499,22 @@ class ManufacturingUomTests(TestCase):
         self.assertIn('UOM_DATA', content)
         self.assertIn(self.ctn.kode, content)
 
+    def test_bom_create_get_uom_data_is_ordered_list_not_dict(self):
+        """UOM_DATA must be a JSON array (order-preserving), not an object
+        keyed by numeric id — JS sorts numeric-string object keys ascending
+        regardless of insertion order, which silently discarded the
+        backend's dimension/kode ordering."""
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:bom_create'))
+        content = response.content.decode()
+        uom_data_start = content.index('var UOM_DATA = ') + len('var UOM_DATA = ')
+        uom_data_json = content[uom_data_start:content.index(';', uom_data_start)]
+        import json
+        data = json.loads(uom_data_json)
+        self.assertIsInstance(data, list)
+        self.assertIn('dimension_label', data[0])
+
     def test_production_create_get_renders_input_uom_optgroups_in_order(self):
         user = _make_user()
         self.client.force_login(user)

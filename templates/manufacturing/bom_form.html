@@ -149,7 +149,9 @@
 
   // RM_DATA: { "id": { item_id, nama, stock, fifo_cost } } — pre-loaded from view
   var RM_DATA = {{ rm_data_json|safe }};
-  // UOM_DATA: { "id": { kode, nama } } — full UOM catalogue for the "Satuan Input" select
+  // UOM_DATA: [{ id, kode, nama, dimension, dimension_label }, ...] — full UOM
+  // catalogue for the "Satuan Input" select, pre-sorted and grouped by
+  // dimension (kept as an array, not a dict, so JS preserves that order)
   var UOM_DATA = {{ uom_data_json|safe }};
   var lineIndex = 0;
   var _tomSelects = {};  // row-uid → TomSelect instance
@@ -162,11 +164,17 @@
 
   function buildUomOptionsHtml(selectedUomId) {
     var html = '<option value="">Base (default)</option>';
-    Object.keys(UOM_DATA).forEach(function (id) {
-      var u = UOM_DATA[id];
-      var selected = (selectedUomId && String(selectedUomId) === String(id)) ? ' selected' : '';
-      html += '<option value="' + id + '"' + selected + '>' + escapeHtml(u.kode) + ' — ' + escapeHtml(u.nama) + '</option>';
+    var currentLabel = null;
+    UOM_DATA.forEach(function (u) {
+      if (u.dimension_label !== currentLabel) {
+        if (currentLabel !== null) html += '</optgroup>';
+        currentLabel = u.dimension_label;
+        html += '<optgroup label="' + escapeHtml(currentLabel) + '">';
+      }
+      var selected = (selectedUomId && String(selectedUomId) === String(u.id)) ? ' selected' : '';
+      html += '<option value="' + u.id + '"' + selected + '>' + escapeHtml(u.kode) + ' — ' + escapeHtml(u.nama) + '</option>';
     });
+    if (currentLabel !== null) html += '</optgroup>';
     return html;
   }
 
