@@ -36,6 +36,31 @@ class UnitOfMeasureModelTests(TestCase):
                                          factor_to_base=Decimal('1'))
 
 
+class ForDropdownOrderingTests(TestCase):
+    def setUp(self):
+        # Deliberately created out of the expected output order, and with
+        # unique kodes so this test doesn't depend on the seeded system units.
+        self.w_kg = UnitOfMeasure.objects.create(
+            kode='t_kg', nama='Test Kg', dimension='weight', factor_to_base=Decimal('1'))
+        self.c_box = UnitOfMeasure.objects.create(
+            kode='t_box', nama='Test Box', dimension='count', factor_to_base=None)
+        self.w_gram = UnitOfMeasure.objects.create(
+            kode='t_gram', nama='Test Gram', dimension='weight', factor_to_base=Decimal('0.001'))
+        self.c_pcs = UnitOfMeasure.objects.create(
+            kode='t_pcs', nama='Test Pcs', dimension='count', factor_to_base=Decimal('1'))
+
+    def test_orders_by_dimension_then_factor_then_kode(self):
+        kodes = list(
+            UnitOfMeasure.objects
+            .filter(kode__in=['t_kg', 't_box', 't_gram', 't_pcs'])
+            .for_dropdown()
+            .values_list('kode', flat=True)
+        )
+        # count (DIMENSION_CHOICES[0]) before weight (DIMENSION_CHOICES[1]);
+        # within count: factor=1 before null; within weight: 0.001 before 1.
+        self.assertEqual(kodes, ['t_pcs', 't_box', 't_gram', 't_kg'])
+
+
 class ItemUOMModelTests(TestCase):
     def setUp(self):
         self.item = ItemMasterPurchase.objects.create(nama='Kopi Sachet', tipe_item='RM')

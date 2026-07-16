@@ -14,7 +14,32 @@ DIMENSION_CHOICES = [
 ]
 
 
+class UnitOfMeasureQuerySet(models.QuerySet):
+    def for_dropdown(self):
+        """Order for dropdown display: grouped by dimension (following
+        DIMENSION_CHOICES order), then by factor_to_base ascending within
+        each dimension (custom packaging units with no factor sort last)."""
+        dimension_rank = models.Case(
+            *[
+                models.When(dimension=code, then=models.Value(i))
+                for i, (code, _label) in enumerate(DIMENSION_CHOICES)
+            ],
+            output_field=models.IntegerField(),
+        )
+        factor_null_rank = models.Case(
+            models.When(factor_to_base__isnull=True, then=models.Value(1)),
+            default=models.Value(0),
+            output_field=models.IntegerField(),
+        )
+        return self.annotate(
+            _dim_rank=dimension_rank,
+            _factor_null=factor_null_rank,
+        ).order_by('_dim_rank', '_factor_null', 'factor_to_base', 'kode')
+
+
 class UnitOfMeasure(models.Model):
+    objects = UnitOfMeasureQuerySet.as_manager()
+
     kode = models.CharField(max_length=20, unique=True, verbose_name='Kode')
     nama = models.CharField(max_length=100, verbose_name='Nama')
     dimension = models.CharField(
