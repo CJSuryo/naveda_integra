@@ -63,6 +63,15 @@
             {% if form.qty_produced.errors %}<div class="ni-form-error">{{ form.qty_produced.errors }}</div>{% endif %}
           </div>
           <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.input_uom.id_for_label }}">{{ form.input_uom.label }}</label>
+            {{ form.input_uom }}
+            {% if form.input_uom.errors %}<div class="ni-form-error">{{ form.input_uom.errors }}</div>{% endif %}
+            <div style="font-size:0.75rem;color:var(--ni-text-muted);margin-top:4px">{{ form.input_uom.help_text }} Preview biaya di kanan tetap memakai qty di atas sebagai satuan dasar sampai disimpan.</div>
+          </div>
+        </div>
+
+        <div class="ni-form-row">
+          <div class="ni-form-group" style="flex:1">
             <label class="ni-form-label" for="id_status_produksi">Status Produksi <span style="color:var(--ni-danger)">*</span></label>
             {{ form.status }}
             {% if form.status.errors %}<div class="ni-form-error">{{ form.status.errors }}</div>{% endif %}

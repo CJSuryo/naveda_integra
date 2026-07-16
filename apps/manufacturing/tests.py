@@ -1,4 +1,5 @@
 ﻿"""Manufacturing tests."""
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -1486,4 +1487,50 @@ class ManufacturingUomTests(TestCase):
             kode=kode, defaults={'nama': nama, 'dimension': dimension, 'factor_to_base': None},
         )
         return obj
+
+    def test_bom_create_get_renders_input_uom_select_markup(self):
+        """The row-builder JS must emit an input_uom_<i> select per BOM line
+        and expose the UOM catalogue as data for it to populate from."""
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:bom_create'))
+        content = response.content.decode()
+        self.assertIn("name=\"input_uom_'", content)
+        self.assertIn('UOM_DATA', content)
+        self.assertIn(self.ctn.kode, content)
+
+    def test_bom_update_get_prefills_existing_line_input_uom(self):
+        """Editing a BOM line saved with a packaging input_uom must show the
+        original input_qty/input_uom, not the converted base qty_required."""
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        fg = _make_item('FG-UOM-0005', 'FG-E', 'FG')
+        bom = BillOfMaterials.objects.create(
+            finished_good=fg, entitas_bisnis=eb, tanggal_dibuat='2025-01-01',
+        )
+        BOMLine.objects.create(
+            bom=bom, raw_material=self.rm, qty_required=Decimal('48'),
+            input_uom=self.ctn, input_qty=Decimal('2'),
+        )
+
+        response = self.client.get(reverse('manufacturing:bom_update', args=[bom.pk]))
+        content = response.content.decode()
+        match = re.search(
+            r"addRow\('%s',\s*'([^']*)',\s*'([^']*)'\)" % re.escape(str(self.rm.pk)),
+            content,
+        )
+        self.assertIsNotNone(match, 'addRow(...) call for existing line not found in rendered page')
+        # Must be plain-numeric (unlocalized) — a comma decimal separator (id
+        # locale default) would make the <input type="number"> silently blank.
+        self.assertEqual(Decimal(match.group(1)), Decimal('2'))
+        self.assertEqual(match.group(2), str(self.ctn.pk))
+
+    def test_production_create_get_renders_input_uom_field(self):
+        """The production order form's optional input_uom field must actually
+        be rendered on the create page, not just exist on the ModelForm."""
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:production_create'))
+        self.assertContains(response, 'id_input_uom')
 

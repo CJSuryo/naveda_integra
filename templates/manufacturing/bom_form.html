@@ -2,7 +2,7 @@
 {% block title %}{% if is_create %}Buat BOM{% else %}Edit BOM — {{ bom.bom_id }}{% endif %}{% endblock %}
 
 {% block content %}
-{% load static %}
+{% load static l10n %}
 
 <div class="ni-page-header">
   <div>
@@ -85,6 +85,7 @@
               <tr>
                 <th>Item Bahan Baku</th>
                 <th style="width:140px">Qty per Unit FG</th>
+                <th style="width:150px">Satuan Input</th>
                 <th style="width:130px">Stok Tersedia</th>
                 <th style="width:150px">Harga FIFO (Rp)</th>
                 <th style="width:40px"></th>
@@ -148,8 +149,26 @@
 
   // RM_DATA: { "id": { item_id, nama, stock, fifo_cost } } — pre-loaded from view
   var RM_DATA = {{ rm_data_json|safe }};
+  // UOM_DATA: { "id": { kode, nama } } — full UOM catalogue for the "Satuan Input" select
+  var UOM_DATA = {{ uom_data_json|safe }};
   var lineIndex = 0;
   var _tomSelects = {};  // row-uid → TomSelect instance
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function buildUomOptionsHtml(selectedUomId) {
+    var html = '<option value="">Base (default)</option>';
+    Object.keys(UOM_DATA).forEach(function (id) {
+      var u = UOM_DATA[id];
+      var selected = (selectedUomId && String(selectedUomId) === String(id)) ? ' selected' : '';
+      html += '<option value="' + id + '"' + selected + '>' + escapeHtml(u.kode) + ' — ' + escapeHtml(u.nama) + '</option>';
+    });
+    return html;
+  }
 
   // ── Finished Good TomSelect (create mode only) ────────────────────────────
   {% if is_create %}
@@ -237,7 +256,7 @@
     }
   }
 
-  function addRow(selectedId, qtyVal) {
+  function addRow(selectedId, qtyVal, inputUomId) {
     var uid = lineIndex++;
     var tr = document.createElement('tr');
     tr.className = 'bom-line-row';
@@ -245,6 +264,7 @@
     tr.innerHTML =
       '<td><select id="rm_ts_' + uid + '" name="rm_' + uid + '" placeholder="Ketik kode/nama bahan baku..."></select></td>' +
       '<td><input type="number" name="qty_' + uid + '" class="ni-input qty-input" value="' + (qtyVal || '') + '" step="0.0001" min="0.0001" required></td>' +
+      '<td><select name="input_uom_' + uid + '" class="ni-input input-uom-select">' + buildUomOptionsHtml(inputUomId) + '</select></td>' +
       '<td class="stock-cell">\u2014</td>' +
       '<td class="fifo-cell">\u2014</td>' +
       '<td><button type="button" class="ni-btn ni-btn--ghost ni-btn--sm remove-line-btn" title="Hapus baris"><i data-lucide="trash-2" style="width:14px;height:14px;color:var(--ni-danger)"></i></button></td>';
@@ -321,21 +341,24 @@
   }
 
   function reindexRows() {
-    // Renumber rm_N and qty_N names sequentially so parse_bom_lines works correctly.
+    // Renumber rm_N, qty_N and input_uom_N names sequentially so parse_bom_lines works correctly.
     var rows = document.querySelectorAll('#bom-lines-body .bom-line-row');
     rows.forEach(function (row, i) {
-      var sel = row.querySelector('select');
+      var sel = row.querySelector('select[id^="rm_ts_"]');
       var qty = row.querySelector('.qty-input');
+      var uomSel = row.querySelector('.input-uom-select');
       if (sel) sel.name = 'rm_' + i;
       if (qty) qty.name = 'qty_' + i;
+      if (uomSel) uomSel.name = 'input_uom_' + i;
     });
     document.getElementById('no-lines-msg').style.display = rows.length === 0 ? '' : 'none';
   }
 
-  // Pre-populate existing lines on edit
+  // Pre-populate existing lines on edit — show the original input_qty/input_uom
+  // (not the converted base qty_required) so the user sees what they entered.
   {% if not is_create and existing_lines %}
   {% for line in existing_lines %}
-  addRow('{{ line.raw_material.id }}', '{{ line.qty_required }}');
+  addRow('{{ line.raw_material.id }}', '{{ line.input_qty|default:line.qty_required|unlocalize }}', '{{ line.input_uom_id|default:"" }}');
   {% endfor %}
   {% endif %}
 
