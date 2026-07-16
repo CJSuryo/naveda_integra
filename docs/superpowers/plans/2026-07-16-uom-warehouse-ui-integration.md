@@ -6,7 +6,11 @@
 
 **Architecture:** Django (apps: `uom`, `inventory`, `purchase`, `sales`, `manufacturing`). Prinsip: ledger & costing selalu dalam base/stock_uom; konversi hanya di batas input. Tiap transaksi menyimpan field base otoritatif (tak berubah) + `input_uom`/`input_qty` (audit). Semua view `@login_required`, gaya `ni-*`, akses EB via `_resolve_eb_lv1_ids`.
 
-**Tech Stack:** Django 4.x, Django ORM/ModelForm, template DTL, `django.test.TestCase`. Test dijalankan `python manage.py test <label>`.
+**Tech Stack:** Django 6.x, Django ORM/ModelForm, template DTL, `django.test.TestCase`.
+
+> **PENTING — cara menjalankan test:** selalu pakai settings test (SQLite in-memory, per-proses, aman untuk 2 sesi paralel):
+> `python manage.py test <label> --settings=naveda_integra.settings.test`
+> Tanpa flag ini, test memakai DB Neon cloud bersama (`test_neondb`) dan akan bentrok antar-sesi. Semua perintah `python manage.py test ...` di bawah harus ditambah `--settings=naveda_integra.settings.test`.
 
 **Spec:** [../specs/2026-07-16-uom-warehouse-ui-integration-design.md](../specs/2026-07-16-uom-warehouse-ui-integration-design.md)
 
