@@ -282,3 +282,35 @@ class MasterSatuanMenuTests(TestCase):
         resp = self.client.get(reverse('inventory:list'))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, reverse('uom:list'))
+
+
+class ItemUOMCrudTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='iu@example.com', password='pw123456', name='I')
+        self.client.force_login(self.user)
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.carton = UnitOfMeasure.objects.create(
+            kode='ctn-t', nama='Carton Test', dimension='count', factor_to_base=None)
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Item A', tipe_item='ITM', stock_uom=self.pcs)
+
+    def test_list_renders(self):
+        ItemUOM.objects.create(item=self.item, uom=self.carton, qty_in_stock_uom=Decimal('24'))
+        resp = self.client.get(reverse('uom:conversion_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '24')
+
+    def test_create(self):
+        resp = self.client.post(reverse('uom:conversion_create'), {
+            'item': self.item.pk, 'uom': self.carton.pk, 'qty_in_stock_uom': '24',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(ItemUOM.objects.filter(item=self.item, uom=self.carton).exists())
+
+    def test_reject_uom_equal_stock_uom(self):
+        resp = self.client.post(reverse('uom:conversion_create'), {
+            'item': self.item.pk, 'uom': self.pcs.pk, 'qty_in_stock_uom': '1',
+        })
+        self.assertEqual(resp.status_code, 200)  # form invalid, re-render
+        self.assertFalse(ItemUOM.objects.filter(item=self.item, uom=self.pcs).exists())

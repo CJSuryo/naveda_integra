@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">
+      {% if delete_obj %}Konfirmasi penghapusan konversi satuan{% elif is_edit %}Edit konversi satuan item{% else %}Tambah konversi satuan item baru{% endif %}
+    </p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'uom:conversion_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    {% if delete_obj %}
+    <p>Yakin ingin menghapus konversi <strong>{{ delete_obj }}</strong>?</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--danger">Hapus</button>
+        <a href="{% url 'uom:conversion_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+    {% else %}
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.item.label }}</label>
+          {{ form.item }}
+          {% if form.item.errors %}<div class="ni-form-error">{{ form.item.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.uom.label }}</label>
+          {{ form.uom }}
+          {% if form.uom.errors %}<div class="ni-form-error">{{ form.uom.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.qty_in_stock_uom.label }}</label>
+          {{ form.qty_in_stock_uom }}
+          {% if form.qty_in_stock_uom.errors %}<div class="ni-form-error">{{ form.qty_in_stock_uom.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'uom:conversion_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,8 +1,8 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .forms import UnitOfMeasureForm
-from .models import UnitOfMeasure
+from .forms import ItemUOMForm, UnitOfMeasureForm
+from .models import ItemUOM, UnitOfMeasure
 
 
 @login_required
@@ -36,3 +36,55 @@ def unit_update(request, pk):
         form = UnitOfMeasureForm(instance=unit)
     return render(request, 'uom/unit_form.html',
                   {'form': form, 'is_edit': True, 'unit': unit, 'title': 'Edit Satuan'})
+
+
+@login_required
+def conversion_list(request):
+    item_filter = request.GET.get('item', '')
+    qs = ItemUOM.objects.select_related('item', 'uom').order_by('item__nama', 'uom__kode')
+    if item_filter:
+        qs = qs.filter(item_id=item_filter)
+    from apps.purchase.models import ItemMasterPurchase
+    items = ItemMasterPurchase.objects.filter(
+        tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id')
+    return render(request, 'uom/item_conversion_list.html', {
+        'conversions': qs, 'items': items, 'item_filter': item_filter,
+        'title': 'Konversi Satuan Item',
+    })
+
+
+@login_required
+def conversion_create(request):
+    if request.method == 'POST':
+        form = ItemUOMForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect('uom:conversion_list')
+    else:
+        form = ItemUOMForm()
+    return render(request, 'uom/item_conversion_form.html',
+                  {'form': form, 'title': 'Konversi Baru', 'is_edit': False})
+
+
+@login_required
+def conversion_update(request, pk):
+    obj = get_object_or_404(ItemUOM, pk=pk)
+    if request.method == 'POST':
+        form = ItemUOMForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            return redirect('uom:conversion_list')
+    else:
+        form = ItemUOMForm(instance=obj)
+    return render(request, 'uom/item_conversion_form.html',
+                  {'form': form, 'title': 'Edit Konversi', 'is_edit': True})
+
+
+@login_required
+def conversion_delete(request, pk):
+    obj = get_object_or_404(ItemUOM, pk=pk)
+    if request.method == 'POST':
+        obj.delete()
+        return redirect('uom:conversion_list')
+    return render(request, 'uom/item_conversion_form.html',
+                  {'delete_obj': obj, 'title': 'Hapus Konversi'})
