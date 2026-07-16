@@ -129,6 +129,14 @@ def _get_item_uoms_data(kind: str = 'purchase') -> dict:
     return result
 
 
+def _get_uom_list_data() -> list[dict]:
+    """Return active UnitOfMeasure options for the item-master quick-add modal."""
+    return [
+        {'id': u.pk, 'kode': u.kode, 'nama': u.nama, 'dimension': u.dimension}
+        for u in UnitOfMeasure.objects.filter(is_active=True).order_by('dimension', 'kode')
+    ]
+
+
 def _get_eb_tree(user) -> list[dict]:
     """Return nested EntitasBisnis hierarchy for the filter modal component,
     scoped to the entities ``user`` may access."""
@@ -587,6 +595,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
         'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+        'uom_list_json': safe_json(_get_uom_list_data()),
     })
 
 
@@ -670,6 +679,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
         'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+        'uom_list_json': safe_json(_get_uom_list_data()),
     })
 
 
@@ -1212,6 +1222,9 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         create_kwargs['lama_kadaluarsa'] = data.get('lama_kadaluarsa') or None
         create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None
         create_kwargs['metode_biaya_persediaan'] = data.get('metode_biaya_persediaan', '')
+        create_kwargs['stock_uom_id'] = data.get('stock_uom_id') or None
+        create_kwargs['purchase_uom_id'] = data.get('purchase_uom_id') or None
+        create_kwargs['sales_uom_id'] = data.get('sales_uom_id') or None
     # Fields for Aset Tetap (ATP)
     elif tipe_item == 'ATP':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
@@ -1385,6 +1398,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'akun_list': get_akun_sorted(),
             'warehouses_json': safe_json(_get_warehouses_data()),
             'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+            'uom_list_json': safe_json(_get_uom_list_data()),
         })
 
     # Determine the dominant tipe_item prefix for all items to decide the transaction ID prefix.

@@ -339,6 +339,31 @@
               <option value="weighted_moving_average">Weighted Moving Average</option>
             </select>
           </div>
+          <div class="ni-form-row">
+            <div class="ni-form-group">
+              <label class="ni-form-label">
+                <span class="ni-tip">Satuan Stok
+                  <svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                  <span class="ni-tip__box">Satuan dasar yang dipakai untuk mencatat stok item ini di gudang.</span>
+                </span>
+              </label>
+              <select id="modal_stock_uom" class="ni-input">
+                <option value="">— Pilih —</option>
+              </select>
+            </div>
+            <div class="ni-form-group">
+              <label class="ni-form-label">Satuan Pembelian</label>
+              <select id="modal_purchase_uom" class="ni-input">
+                <option value="">— Pilih —</option>
+              </select>
+            </div>
+          </div>
+          <div class="ni-form-group">
+            <label class="ni-form-label">Satuan Penjualan</label>
+            <select id="modal_sales_uom" class="ni-input">
+              <option value="">— Pilih —</option>
+            </select>
+          </div>
         </div>
         <!-- Aset Tetap fields (ATP) -->
         <div id="modal_atp_fields" style="display:none;">
@@ -466,6 +491,7 @@
   var ebOptions       = {{ eb_options_json|default:"[]"|safe }};
   var WAREHOUSES      = {{ warehouses_json|default:"[]"|safe }};
   var ITEM_UOMS       = {{ item_uoms_json|default:"{}"|safe }};
+  var UOM_LIST        = {{ uom_list_json|default:"[]"|safe }};
   var sttOptions      = [
     {% for stt in sub_transaction_types %}
     { id: {{ stt.pk }}, nama: '{{ stt.nama|escapejs }}' },
@@ -1078,6 +1104,21 @@
     if (!_modalCoaAllTomSelect) _modalCoaAllTomSelect = new TomSelect('#modal_coa_account_all', Object.assign({}, tsConfig));
   }
 
+  var _modalUomSelectsPopulated = false;
+
+  function populateModalUomSelects() {
+    if (_modalUomSelectsPopulated) return;
+    ['modal_stock_uom', 'modal_purchase_uom', 'modal_sales_uom'].forEach(function (id) {
+      var sel = document.getElementById(id);
+      UOM_LIST.forEach(function (u) {
+        var opt = document.createElement('option');
+        opt.value = u.id; opt.textContent = u.kode + ' - ' + u.nama;
+        sel.appendChild(opt);
+      });
+    });
+    _modalUomSelectsPopulated = true;
+  }
+
   function loadModalKategori(tipeItem, ebLv1Id) {
     var sel = document.getElementById('modal_kategori');
     sel.innerHTML = '<option value="">Memuat...</option>';
@@ -1172,6 +1213,10 @@
     document.getElementById('modal_lama_kadaluarsa').value = '';
     document.getElementById('modal_threshold').value     = '';
     document.getElementById('modal_metode_biaya').value  = '';
+    populateModalUomSelects();
+    document.getElementById('modal_stock_uom').value    = '';
+    document.getElementById('modal_purchase_uom').value = '';
+    document.getElementById('modal_sales_uom').value    = '';
     document.getElementById('modal_masa_manfaat_atp').value = '';
     document.getElementById('modal_metode_penyusutan').value = '';
     document.getElementById('modal_masa_manfaat_all').value  = '';
@@ -1278,6 +1323,9 @@
       payload.lama_kadaluarsa           = document.getElementById('modal_lama_kadaluarsa').value || null;
       payload.threshold_days_outstanding = document.getElementById('modal_threshold').value || null;
       payload.metode_biaya_persediaan   = document.getElementById('modal_metode_biaya').value || '';
+      payload.stock_uom_id    = document.getElementById('modal_stock_uom').value || null;
+      payload.purchase_uom_id = document.getElementById('modal_purchase_uom').value || null;
+      payload.sales_uom_id    = document.getElementById('modal_sales_uom').value || null;
     } else if (tipe === 'ATP') {
       payload.coa_account_id   = _modalCoaAtpTomSelect ? _modalCoaAtpTomSelect.getValue() : null;
       payload.masa_manfaat     = document.getElementById('modal_masa_manfaat_atp').value || null;
