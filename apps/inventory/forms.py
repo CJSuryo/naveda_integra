@@ -4,7 +4,7 @@ from django import forms
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 
-from .models import InventoryRecord
+from .models import InventoryRecord, Warehouse
 
 
 class InventoryRecordForm(forms.ModelForm):
@@ -44,3 +44,16 @@ class InventoryRecordForm(forms.ModelForm):
         self.fields['holding_cost_pct'].required = False
         self.fields['moq'].required = False
         self.fields['tanggal_kadaluarsa'].required = False
+
+
+class WarehouseForm(forms.ModelForm):
+    class Meta:
+        model = Warehouse
+        fields = ('entitas_bisnis', 'kode', 'nama', 'alamat', 'is_active')
+        widgets = {
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'kode': forms.TextInput(attrs={'class': 'ni-input'}),
+            'nama': forms.TextInput(attrs={'class': 'ni-input'}),
+            'alamat': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+            'is_active': forms.CheckboxInput(),
+        }

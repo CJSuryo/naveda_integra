@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="ni-page">
+  <div class="ni-page__header">
+    <h1 class="ni-page__title">{{ title }}</h1>
+    <a href="{% url 'inventory:warehouse_create' %}" class="ni-btn ni-btn--primary">+ Gudang</a>
+  </div>
+  <table class="ni-table">
+    <thead><tr><th>Bisnis</th><th>Kode</th><th>Nama</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for w in warehouses %}
+      <tr>
+        <td>{{ w.entitas_bisnis.nama }}</td>
+        <td>{{ w.kode }}</td>
+        <td>{{ w.nama }}</td>
+        <td>{{ w.alamat|default:'—' }}</td>
+        <td>{% if w.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
+        <td>
+          <a href="{% url 'inventory:warehouse_update' w.pk %}" class="ni-link">Edit</a>
+          <form method="post" action="{% url 'inventory:warehouse_toggle' w.pk %}" style="display:inline">
+            {% csrf_token %}
+            <button type="submit" class="ni-link">{% if w.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %}</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6">Belum ada gudang.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

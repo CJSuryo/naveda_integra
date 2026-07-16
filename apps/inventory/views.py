@@ -19,8 +19,8 @@ from django.utils import timezone
 
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import InventoryRecordForm
-from .models import InventoryRecord
+from .forms import InventoryRecordForm, WarehouseForm
+from .models import InventoryRecord, Warehouse
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -221,6 +221,69 @@ def inventory_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, f'Inventory record {number} berhasil dihapus.')
         return redirect('inventory:list')
     return render(request, 'inventory/inventory_delete.html', {'record': record})
+
+
+@login_required
+def warehouse_list(request: HttpRequest) -> HttpResponse:
+    """List all warehouses.
+
+    Note: unlike ``inventory_list``, this does not scope by
+    ``_resolve_eb_lv1_ids`` — that helper resolves a list of lv1:/lv2:/lv3:
+    selections coming from a filter widget and returns an EMPTY set when
+    given an empty list (it has no "return everything" sentinel meaning for
+    an empty input). Passing ``[]`` would therefore always filter the
+    queryset down to zero rows rather than "all accessible businesses".
+    Warehouse master data has no such filter UI yet, so we simply list all
+    warehouses.
+    """
+    qs = Warehouse.objects.select_related('entitas_bisnis').order_by(
+        'entitas_bisnis', 'kode')
+    return render(request, 'inventory/warehouse_list.html', {
+        'warehouses': qs, 'title': 'Master Gudang',
+    })
+
+
+@login_required
+def warehouse_create(request: HttpRequest) -> HttpResponse:
+    if request.method == 'POST':
+        form = WarehouseForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Gudang berhasil dibuat.')
+            return redirect('inventory:warehouse_list')
+    else:
+        form = WarehouseForm()
+    return render(request, 'inventory/warehouse_form.html',
+                  {'form': form, 'title': 'Gudang Baru', 'is_edit': False})
+
+
+@login_required
+def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
+    wh = get_object_or_404(Warehouse, pk=pk)
+    if request.method == 'POST':
+        form = WarehouseForm(request.POST, instance=wh)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Gudang berhasil diperbarui.')
+            return redirect('inventory:warehouse_list')
+    else:
+        form = WarehouseForm(instance=wh)
+    return render(request, 'inventory/warehouse_form.html', {
+        'form': form, 'title': 'Edit Gudang', 'is_edit': True, 'warehouse': wh,
+    })
+
+
+@login_required
+def warehouse_toggle(request: HttpRequest, pk: int) -> HttpResponse:
+    wh = get_object_or_404(Warehouse, pk=pk)
+    if request.method == 'POST':
+        wh.is_active = not wh.is_active
+        wh.save(update_fields=['is_active'])
+        messages.success(
+            request,
+            f'Gudang {wh.kode} {"diaktifkan" if wh.is_active else "dinonaktifkan"}.',
+        )
+    return redirect('inventory:warehouse_list')
 
 
 @login_required

@@ -14,4 +14,8 @@ urlpatterns = [
     path('<int:pk>/convert-to-satuan/', views.convert_bulk_to_satuan, name='convert_to_satuan'),
     path('<int:pk>/edit/', views.inventory_update, name='update'),
     path('<int:pk>/delete/', views.inventory_delete, name='delete'),
+    path('warehouse/', views.warehouse_list, name='warehouse_list'),
+    path('warehouse/create/', views.warehouse_create, name='warehouse_create'),
+    path('warehouse/<int:pk>/edit/', views.warehouse_update, name='warehouse_update'),
+    path('warehouse/<int:pk>/toggle/', views.warehouse_toggle, name='warehouse_toggle'),
 ]

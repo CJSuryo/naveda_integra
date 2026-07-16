@@ -13,7 +13,7 @@ from decimal import Decimal
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase as DjangoTestCase
 
-from apps.inventory.models import StockMovement, StockConsumption
+from apps.inventory.models import StockMovement, StockConsumption, Warehouse
 
 
 class StockMovementModelTests(DjangoTestCase):
@@ -642,3 +642,33 @@ class LedgerWarehouseTest(DjangoTestCase):
         self.assertEqual(get_available_stock(self.item, self.biz, warehouse=self.wh_a), self.D('10'))
         self.assertEqual(get_available_stock(self.item, self.biz, warehouse=self.wh_b), self.D('3'))
         self.assertEqual(get_available_stock(self.item, self.biz), self.D('13'))
+
+
+class WarehouseCrudTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='wh@example.com', password='pw123456', name='W')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='Retail-WHCrud')
+        self.eb = EntitasBisnis.objects.create(nama='Bisnis A', tipe_entitas=self.tipe, status_aktif=True)
+
+    def test_list_renders(self):
+        Warehouse.objects.create(entitas_bisnis=self.eb, kode='WH1', nama='Gudang Utama')
+        resp = self.client.get(reverse('inventory:warehouse_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'Gudang Utama')
+
+    def test_create(self):
+        resp = self.client.post(reverse('inventory:warehouse_create'), {
+            'entitas_bisnis': self.eb.pk, 'kode': 'WH2',
+            'nama': 'Gudang Cabang', 'alamat': 'Jl. X', 'is_active': 'on',
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(Warehouse.objects.filter(kode='WH2').exists())
+
+    def test_toggle_active_soft(self):
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, kode='WH3', nama='G3')
+        resp = self.client.post(reverse('inventory:warehouse_toggle', args=[wh.pk]))
+        self.assertEqual(resp.status_code, 302)
+        wh.refresh_from_db()
+        self.assertFalse(wh.is_active)

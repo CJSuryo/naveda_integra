@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="ni-page">
+  <h1 class="ni-page__title">{{ title }}</h1>
+  <form method="post" class="ni-form">
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">{{ field.label }}</label>
+        {{ field }}
+        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      </div>
+    {% endfor %}
+    <div class="ni-form-actions">
+      <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+      <a href="{% url 'inventory:warehouse_list' %}" class="ni-btn">Batal</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
