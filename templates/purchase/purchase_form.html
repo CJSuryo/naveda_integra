@@ -1110,10 +1110,18 @@
     if (_modalUomSelectsPopulated) return;
     ['modal_stock_uom', 'modal_purchase_uom', 'modal_sales_uom'].forEach(function (id) {
       var sel = document.getElementById(id);
+      var currentLabel = null;
+      var currentGroupEl = null;
       UOM_LIST.forEach(function (u) {
+        if (u.dimension_label !== currentLabel) {
+          currentLabel = u.dimension_label;
+          currentGroupEl = document.createElement('optgroup');
+          currentGroupEl.label = currentLabel;
+          sel.appendChild(currentGroupEl);
+        }
         var opt = document.createElement('option');
         opt.value = u.id; opt.textContent = u.kode + ' - ' + u.nama;
-        sel.appendChild(opt);
+        currentGroupEl.appendChild(opt);
       });
     });
     _modalUomSelectsPopulated = true;

@@ -900,3 +900,19 @@ class PurchaseUomConversionTests(TestCase):
         pi = PurchaseItem.objects.get(item=self.item, purchase_eb__purchase_header=purchase)
         self.assertEqual(pi.quantity, Decimal('240'))
         self.assertEqual(pi.unit_price, Decimal('1000'))
+
+
+class PurchaseCreateUomModalGroupingTests(TestCase):
+    def setUp(self):
+        role = Role.objects.create(kode='admin-puom', nama='Admin PUOM')
+        self.user = User.objects.create_user(email='puom@test.com', password='pass1234', role=role)
+        self.client.force_login(self.user)
+
+    def test_purchase_create_get_includes_dimension_labels_for_modal_uom_js(self):
+        resp = self.client.get(reverse('purchase:create'))
+        content = resp.content.decode()
+        self.assertEqual(resp.status_code, 200)
+        # dimension_label must be present in the JSON fed to UOM_LIST so the
+        # populateModalUomSelects() JS can build <optgroup> boundaries.
+        self.assertIn('dimension_label', content)
+        self.assertIn('Count / Jumlah', content)

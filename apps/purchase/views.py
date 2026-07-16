@@ -130,10 +130,14 @@ def _get_item_uoms_data(kind: str = 'purchase') -> dict:
 
 
 def _get_uom_list_data() -> list[dict]:
-    """Return active UnitOfMeasure options for the item-master quick-add modal."""
+    """Return active UnitOfMeasure options for the item-master quick-add modal,
+    pre-sorted and grouped by dimension for the populateModalUomSelects() JS."""
     return [
-        {'id': u.pk, 'kode': u.kode, 'nama': u.nama, 'dimension': u.dimension}
-        for u in UnitOfMeasure.objects.filter(is_active=True).order_by('dimension', 'kode')
+        {
+            'id': u.pk, 'kode': u.kode, 'nama': u.nama,
+            'dimension': u.dimension, 'dimension_label': u.get_dimension_display(),
+        }
+        for u in UnitOfMeasure.objects.filter(is_active=True).for_dropdown()
     ]
 
 
