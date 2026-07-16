@@ -339,3 +339,24 @@ class ItemUOMCrudTests(TestCase):
         })
         self.assertEqual(resp.status_code, 200)  # form invalid, re-render
         self.assertFalse(ItemUOM.objects.filter(item=self.item, uom=self.pcs).exists())
+
+
+class ItemUOMFormGroupedDropdownTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='grp@example.com', password='pw123456', name='G')
+        self.client.force_login(self.user)
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Grouped Item', tipe_item='ITM', stock_uom=self.pcs)
+
+    def test_conversion_create_form_renders_optgroups_in_dimension_order(self):
+        resp = self.client.get(reverse('uom:conversion_create'))
+        content = resp.content.decode()
+        self.assertEqual(resp.status_code, 200)
+        count_pos = content.index('<optgroup label="Count / Jumlah">')
+        weight_pos = content.index('<optgroup label="Berat">')
+        volume_pos = content.index('<optgroup label="Volume">')
+        length_pos = content.index('<optgroup label="Panjang">')
+        area_pos = content.index('<optgroup label="Luas">')
+        self.assertTrue(count_pos < weight_pos < volume_pos < length_pos < area_pos)

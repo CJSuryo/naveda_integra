@@ -1,5 +1,6 @@
 from django import forms
 
+from .fields import GroupedModelChoiceField
 from .models import ItemUOM, UnitOfMeasure
 
 
@@ -17,6 +18,12 @@ class UnitOfMeasureForm(forms.ModelForm):
 
 
 class ItemUOMForm(forms.ModelForm):
+    uom = GroupedModelChoiceField(
+        queryset=UnitOfMeasure.objects.for_dropdown(),
+        choices_groupby=lambda u: u.get_dimension_display(),
+        label='Satuan',
+    )
+
     class Meta:
         model = ItemUOM
         fields = ('item', 'uom', 'qty_in_stock_uom')
