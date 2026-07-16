@@ -269,3 +269,16 @@ class ConvertInputToBaseTests(TestCase):
         qty, price = convert_input_to_base(self.item, self.carton, Decimal('10'), Decimal('24000'))
         self.assertEqual(qty, Decimal('240'))          # 10 * 24
         self.assertEqual(price, Decimal('1000'))        # total 240.000 / 240 pcs
+
+
+class MasterSatuanMenuTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='menu@example.com', password='pw123456', name='M')
+        self.client.force_login(self.user)
+
+    def test_sidebar_links_master_satuan(self):
+        # Halaman inventory memuat base.html dengan submenu Inventory
+        resp = self.client.get(reverse('inventory:list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, reverse('uom:list'))
