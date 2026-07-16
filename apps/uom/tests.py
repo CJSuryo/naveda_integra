@@ -238,3 +238,34 @@ class ItemMasterAdminInlineTests(TestCase):
         model_admin = dj_admin.site._registry[ItemMasterPurchase]
         inline_models = [inline.model for inline in model_admin.inlines]
         self.assertIn(ItemUOM, inline_models)
+
+
+class ConvertInputToBaseTests(TestCase):
+    def setUp(self):
+        from apps.uom.conversion import convert_input_to_base
+        self._convert = staticmethod(convert_input_to_base)
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.carton = UnitOfMeasure.objects.create(
+            kode='ctn-x', nama='Carton', dimension='count', factor_to_base=None)
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Konv', tipe_item='ITM', stock_uom=self.pcs)
+        ItemUOM.objects.create(item=self.item, uom=self.carton, qty_in_stock_uom=Decimal('24'))
+
+    def test_none_uom_passthrough(self):
+        from apps.uom.conversion import convert_input_to_base
+        qty, price = convert_input_to_base(self.item, None, Decimal('5'), Decimal('1000'))
+        self.assertEqual(qty, Decimal('5'))
+        self.assertEqual(price, Decimal('1000'))
+
+    def test_stock_uom_passthrough(self):
+        from apps.uom.conversion import convert_input_to_base
+        qty, price = convert_input_to_base(self.item, self.pcs, Decimal('5'), Decimal('1000'))
+        self.assertEqual(qty, Decimal('5'))
+        self.assertEqual(price, Decimal('1000'))
+
+    def test_carton_to_pcs_converts_qty_and_price(self):
+        from apps.uom.conversion import convert_input_to_base
+        # 10 carton @ Rp 24.000/carton, 1 carton = 24 pcs
+        qty, price = convert_input_to_base(self.item, self.carton, Decimal('10'), Decimal('24000'))
+        self.assertEqual(qty, Decimal('240'))          # 10 * 24
+        self.assertEqual(price, Decimal('1000'))        # total 240.000 / 240 pcs

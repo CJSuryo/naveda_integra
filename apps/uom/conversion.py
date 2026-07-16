@@ -63,6 +63,23 @@ def from_stock_uom(qty: Decimal, to_uom, item) -> Decimal:
     )
 
 
+def convert_input_to_base(item, input_uom, input_qty, input_price):
+    """Konversi (qty, harga) dalam input_uom ke base/stock_uom item.
+
+    Return (qty_base, unit_price_base). Bila input_uom None -> passthrough.
+    total_value (input_qty * input_price) dipertahankan sebagai sumber kebenaran;
+    unit_price_base diturunkan dari total / qty_base.
+    """
+    input_qty = Decimal(str(input_qty))
+    input_price = Decimal(str(input_price))
+    if input_uom is None:
+        return input_qty, input_price
+    qty_base = to_stock_uom(input_qty, input_uom, item)
+    total = input_qty * input_price
+    unit_price_base = (total / qty_base) if qty_base else Decimal('0')
+    return qty_base, unit_price_base
+
+
 def convert(qty: Decimal, from_uom, to_uom, item=None) -> Decimal:
     """Convert qty from one UOM to another.
 
