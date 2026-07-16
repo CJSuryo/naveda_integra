@@ -18,6 +18,15 @@ class InsufficientStockError(ValueError):
     """Raised when consumption cannot be satisfied within the EB hierarchy."""
 
 
+def _validate_warehouse_tenant(warehouse, eb_lv1):
+    """Fail-loud jika gudang bukan milik bisnis (lv1) movement ini."""
+    if warehouse is not None and warehouse.entitas_bisnis_id != eb_lv1.pk:
+        raise ValueError(
+            f'Gudang {warehouse.kode} milik bisnis lain, '
+            f'bukan {eb_lv1} — stok tak boleh lintas bisnis.'
+        )
+
+
 def requested_level(eb_lv2, eb_lv3) -> str:
     if eb_lv3 is not None:
         return 'lv3'
@@ -26,13 +35,20 @@ def requested_level(eb_lv2, eb_lv3) -> str:
     return 'lv1'
 
 
-def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
+def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse=None):
     """Return [(level_label, eb_name, queryset), ...] closest EB node first.
 
     Each queryset selects inflow layers (remaining_qty > 0) at that tier,
     FIFO-ordered. Sibling branches are never included.
+
+    When `warehouse` is given, layers are restricted to that exact warehouse
+    (NULL-warehouse layers are excluded — no cross-warehouse fallback). When
+    `warehouse` is None (default), no warehouse filter is applied — matches
+    the pre-warehouse (Fase 2) behavior exactly.
     """
     base = StockMovement.objects.filter(item=item, remaining_qty__gt=0)
+    if warehouse is not None:
+        base = base.filter(warehouse=warehouse)
     tiers = []
     if eb_lv3 is not None:
         tiers.append((
@@ -54,19 +70,20 @@ def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
     return tiers
 
 
-def get_available_stock(item, eb_lv1, eb_lv2=None, eb_lv3=None) -> Decimal:
+def get_available_stock(item, eb_lv1, eb_lv2=None, eb_lv3=None, *, warehouse=None) -> Decimal:
     from django.db.models import Sum
     total = Decimal('0')
-    for _level, _name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
+    for _level, _name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse):
         agg = qs.aggregate(s=Sum('remaining_qty'))['s'] or Decimal('0')
         total += agg
     return total
 
 
 def record_inflow(item, eb_lv1, eb_lv2, eb_lv3, qty, unit_cost, tanggal,
-                  movement_type, source=None, *,
+                  movement_type, source=None, *, warehouse=None,
                   legacy_fifo_batch=None, legacy_inventory_record=None):
     """Create one inflow StockMovement layer (remaining_qty = qty)."""
+    _validate_warehouse_tenant(warehouse, eb_lv1)
     ct = obj_id = None
     if source is not None:
         ct = ContentType.objects.get_for_model(type(source))
@@ -74,6 +91,7 @@ def record_inflow(item, eb_lv1, eb_lv2, eb_lv3, qty, unit_cost, tanggal,
     return StockMovement.objects.create(
         item=item, entitas_bisnis=eb_lv1,
         entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3=eb_lv3,
+        warehouse=warehouse,
         tanggal=tanggal, movement_type=movement_type,
         qty=qty, unit_cost=unit_cost, remaining_qty=qty,
         source_content_type=ct, source_object_id=obj_id,
@@ -102,13 +120,19 @@ _LEVEL_RANK = {'lv1': 1, 'lv2': 2, 'lv3': 3}
 
 @transaction.atomic
 def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
-                  source=None, metode='fifo'):
+                  source=None, metode='fifo', *, warehouse=None):
     """Consume `qty` (base uom) of `item` within the EB hierarchy, FIFO.
 
     Non-bulk path (tipe_item in RM/FG/ITM). Raises InsufficientStockError if
     the hierarchy cannot cover qty. Bulk items (RMB/FGB/ITMB) are routed to
     a value-based branch (implemented in a later task).
+
+    When `warehouse` is given, consumption is locked to that exact warehouse
+    (no fallback to other warehouses or to NULL-warehouse layers). When
+    `warehouse` is None (default), behavior is unchanged from before
+    warehouse-awareness (Fase 2).
     """
+    _validate_warehouse_tenant(warehouse, eb_lv1)
     req_level = requested_level(eb_lv2, eb_lv3)
     req_rank = _LEVEL_RANK[req_level]
 
@@ -116,7 +140,7 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     if is_bulk:
         return _consume_stock_bulk(
             item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
-            source, req_level, req_rank,
+            source, req_level, req_rank, warehouse=warehouse,
         )
 
     remaining = qty
@@ -124,7 +148,7 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     per_level = {}          # level -> {'eb_name': str, 'qty': Decimal}
     picked = []              # (in_layer, take)
 
-    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
+    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse):
         if remaining <= 0:
             break
         layers = qs.select_for_update()
@@ -157,6 +181,7 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     out_movement = StockMovement.objects.create(
         item=item, entitas_bisnis=eb_lv1,
         entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3=eb_lv3,
+        warehouse=warehouse,
         tanggal=tanggal, movement_type=movement_type,
         qty=-qty, unit_cost=avg_cost, remaining_qty=Decimal('0'),
         source_content_type=ct, source_object_id=obj_id,
@@ -236,7 +261,8 @@ def _mirror_restore(layer, take_qty, take_value):
 
 @transaction.atomic
 def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
-                        movement_type, source, req_level, req_rank):
+                        movement_type, source, req_level, req_rank, *,
+                        warehouse=None):
     """Bulk value-based consumption. Layer value = remaining_qty * unit_cost.
 
     `value` is the amount of stock VALUE to deduct (not a physical quantity).
@@ -248,7 +274,7 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
     per_level = {}
     picked = []  # (layer, value_taken)
 
-    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3):
+    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse):
         if remaining_value <= 0:
             break
         for layer in qs.select_for_update():
@@ -284,6 +310,7 @@ def _consume_stock_bulk(item, eb_lv1, eb_lv2, eb_lv3, value, tanggal,
     out_movement = StockMovement.objects.create(
         item=item, entitas_bisnis=eb_lv1,
         entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3=eb_lv3,
+        warehouse=warehouse,
         tanggal=tanggal, movement_type=movement_type,
         qty=Decimal('0'), unit_cost=total_cost, remaining_qty=Decimal('0'),
         source_content_type=ct, source_object_id=obj_id,

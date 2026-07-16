@@ -574,3 +574,71 @@ class StockMovementWarehouseFieldTest(DjangoTestCase):
             movement_type='purchase_in', qty=Decimal('5'), unit_cost=Decimal('10'),
             remaining_qty=Decimal('5'))
         self.assertEqual(m_wh.warehouse_id, wh.pk)
+
+
+class LedgerWarehouseTest(DjangoTestCase):
+    def setUp(self):
+        from decimal import Decimal
+        from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.models import Warehouse
+        self.D = Decimal
+        tipe = TipeEntitas.objects.create(nama='T-LWH')
+        self.biz = EntitasBisnis.objects.create(nama='Biz-LWH', tipe_entitas=tipe)
+        self.biz_other = EntitasBisnis.objects.create(nama='Biz-Other-LWH', tipe_entitas=tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='X-LWH', tipe_item='RM')
+        self.wh_a = Warehouse.objects.create(entitas_bisnis=self.biz, kode='A', nama='Gudang A')
+        self.wh_b = Warehouse.objects.create(entitas_bisnis=self.biz, kode='B', nama='Gudang B')
+        self.wh_foreign = Warehouse.objects.create(entitas_bisnis=self.biz_other, kode='X', nama='Asing')
+
+    def _inflow(self, qty, cost, wh, tanggal='2026-07-16'):
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.biz, None, None, self.D(qty), self.D(cost),
+                             tanggal, 'purchase_in', warehouse=wh)
+
+    def test_consume_locked_to_warehouse_ignores_other(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '100', self.wh_a)
+        self._inflow('10', '999', self.wh_b)
+        res = consume_stock(self.item, self.biz, None, None, self.D('6'),
+                            '2026-07-17', 'sale_out', warehouse=self.wh_a)
+        # hanya layer A (cost 100) terpakai
+        self.assertEqual(res.total_cost, self.D('600'))
+
+    def test_insufficient_in_warehouse_even_if_other_has_stock(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError
+        self._inflow('5', '100', self.wh_a)
+        self._inflow('100', '100', self.wh_b)
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.biz, None, None, self.D('20'),
+                          '2026-07-17', 'sale_out', warehouse=self.wh_a)
+
+    def test_warehouse_given_does_not_touch_null_layers(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError
+        self._inflow('10', '100', None)   # layer NULL
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.item, self.biz, None, None, self.D('3'),
+                          '2026-07-17', 'sale_out', warehouse=self.wh_a)
+
+    def test_warehouse_none_is_fase2_behavior_consumes_any(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('4', '100', self.wh_a)
+        self._inflow('4', '100', None)
+        # tanpa warehouse → boleh melintasi gudang & NULL (perilaku Fase 2)
+        res = consume_stock(self.item, self.biz, None, None, self.D('8'),
+                            '2026-07-17', 'sale_out')
+        self.assertEqual(res.total_cost, self.D('800'))
+
+    def test_tenant_validation_rejects_foreign_warehouse(self):
+        from apps.inventory.ledger import record_inflow
+        with self.assertRaises(ValueError):
+            record_inflow(self.item, self.biz, None, None, self.D('1'), self.D('1'),
+                          '2026-07-16', 'purchase_in', warehouse=self.wh_foreign)
+
+    def test_available_stock_per_warehouse(self):
+        from apps.inventory.ledger import get_available_stock
+        self._inflow('10', '100', self.wh_a)
+        self._inflow('3', '100', self.wh_b)
+        self.assertEqual(get_available_stock(self.item, self.biz, warehouse=self.wh_a), self.D('10'))
+        self.assertEqual(get_available_stock(self.item, self.biz, warehouse=self.wh_b), self.D('3'))
+        self.assertEqual(get_available_stock(self.item, self.biz), self.D('13'))
