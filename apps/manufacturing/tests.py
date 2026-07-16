@@ -1499,6 +1499,18 @@ class ManufacturingUomTests(TestCase):
         self.assertIn('UOM_DATA', content)
         self.assertIn(self.ctn.kode, content)
 
+    def test_production_create_get_renders_input_uom_optgroups_in_order(self):
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:production_create'))
+        content = response.content.decode()
+        count_pos = content.index('<optgroup label="Count / Jumlah">')
+        weight_pos = content.index('<optgroup label="Berat">')
+        volume_pos = content.index('<optgroup label="Volume">')
+        length_pos = content.index('<optgroup label="Panjang">')
+        area_pos = content.index('<optgroup label="Luas">')
+        self.assertTrue(count_pos < weight_pos < volume_pos < length_pos < area_pos)
+
     def test_bom_update_get_prefills_existing_line_input_uom(self):
         """Editing a BOM line saved with a packaging input_uom must show the
         original input_qty/input_uom, not the converted base qty_required."""

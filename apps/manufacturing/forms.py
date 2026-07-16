@@ -5,6 +5,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 
 from apps.purchase.models import ItemMasterPurchase
+from apps.uom.fields import GroupedModelChoiceField
 
 from .models import BillOfMaterials, BOMLine, OverheadCategory, OverheadRate, ProductionOrder
 
@@ -48,8 +49,9 @@ class ProductionOrderForm(forms.ModelForm):
         ('in_progress', 'Work In Progress'),
     ]
 
-    input_uom = forms.ModelChoiceField(
+    input_uom = GroupedModelChoiceField(
         queryset=None,
+        choices_groupby=lambda u: u.get_dimension_display(),
         required=False,
         widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_input_uom'}),
         label='Satuan Input Qty Produksi',
@@ -116,7 +118,7 @@ class ProductionOrderForm(forms.ModelForm):
         from apps.master_data.utils import akun_sorted_queryset
         self.fields['coa_produksi'].queryset = akun_sorted_queryset()
         from apps.uom.models import UnitOfMeasure
-        self.fields['input_uom'].queryset = UnitOfMeasure.objects.order_by('dimension', 'kode')
+        self.fields['input_uom'].queryset = UnitOfMeasure.objects.for_dropdown()
 
     def clean_tanggal(self):
         tanggal = self.cleaned_data.get('tanggal')
