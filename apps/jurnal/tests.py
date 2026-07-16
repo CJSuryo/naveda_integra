@@ -306,3 +306,226 @@ class NeracaSaldoViewTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse('jurnal:neraca_saldo'))
         self.assertEqual(response.status_code, 302)
+
+
+class SaldoAwalPersediaanLedgerTests(TestCase):
+    """Task 7: Saldo Awal persediaan rows must mirror into StockMovement,
+    carry a per-row warehouse, and stay in sync across create/edit/delete."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = _create_user()
+        self.client.force_login(self.user)
+
+        self.tipe_eb = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe_eb)
+
+        from apps.inventory.models import Warehouse
+        self.wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, kode='GD1', nama='Gudang Utama')
+        self.wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, kode='GD2', nama='Gudang Cadangan')
+
+        # Akun with kode_akun '1.1.8' (persediaan prefix per AKUN_DETAIL_PREFIXES)
+        aset_lv1 = AsetLv1.objects.create(kode='1.1', nama='Aset Lancar')
+        aset_lv2 = AsetLv2.objects.create(kode='1.1.8', nama='Persediaan Barang', aset=aset_lv1)
+        self.akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        # A second (offsetting) akun for the balancing credit line.
+        ekuitas_lv1 = self._make_ekuitas_lv1()
+        self.akun_modal = self._make_modal_akun(ekuitas_lv1)
+
+        from apps.purchase.models import ItemMasterPurchase
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi Arabica', tipe_item='RM', coa_account=self.akun_persediaan,
+        )
+
+    @staticmethod
+    def _make_ekuitas_lv1():
+        from apps.master_data.models import EkuitasLv1
+        return EkuitasLv1.objects.create(kode='3', nama='Ekuitas')
+
+    @staticmethod
+    def _make_modal_akun(ekuitas_lv1):
+        from apps.master_data.models import EkuitasLv2
+        lv2 = EkuitasLv2.objects.create(kode='3.1', nama='Modal', ekuitas=ekuitas_lv1)
+        return Akun.objects.get(kategori_id='ekuitas', kategori_akun=lv2.pk)
+
+    def _rows_json(self, qty, unit_price, warehouse_id):
+        return json.dumps([
+            {
+                'akun_id': self.akun_persediaan.pk,
+                'debit': qty * unit_price,
+                'kredit': 0,
+                'detail_type': 'persediaan',
+                'detail_rows': [{
+                    'item_id': str(self.item.pk),
+                    'item_text': 'RM — Kopi Arabica',
+                    'qty': qty,
+                    'unit_price': unit_price,
+                    'warehouse_id': str(warehouse_id) if warehouse_id else '',
+                    'total': qty * unit_price,
+                }],
+            },
+            {
+                'akun_id': self.akun_modal.pk,
+                'debit': 0,
+                'kredit': qty * unit_price,
+            },
+        ])
+
+    def _post_create(self, qty, unit_price, warehouse_id):
+        return self.client.post(reverse('jurnal:saldo_awal'), {
+            'tanggal': '2026-01-01',
+            'entitas_bisnis': f'lv1:{self.eb.pk}',
+            'rows_data': self._rows_json(qty, unit_price, warehouse_id),
+        })
+
+    # -- (a) create ----------------------------------------------------------
+
+    def test_create_writes_inventory_record_fifo_batch_and_stock_movement(self):
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.purchase.models import FIFOBatch
+
+        response = self._post_create(10, 5000, self.wh1.pk)
+        self.assertEqual(response.status_code, 302)
+
+        inv = InventoryRecord.objects.get(item=self.item, entitas_bisnis=self.eb)
+        self.assertEqual(inv.quantity, Decimal('10'))
+        batch = FIFOBatch.objects.get(item=self.item, purchase_item=None)
+        self.assertEqual(batch.quantity_in, Decimal('10'))
+
+        mv = StockMovement.objects.get(movement_type='saldo_awal', item=self.item)
+        self.assertEqual(mv.qty, Decimal('10'))
+        self.assertEqual(mv.warehouse_id, self.wh1.pk)
+        self.assertEqual(mv.legacy_fifo_batch_id, batch.pk)
+        self.assertEqual(mv.legacy_inventory_record_id, inv.pk)
+        self.assertEqual(mv.entitas_bisnis_id, self.eb.pk)
+
+    def test_create_rejects_warehouse_from_other_tenant(self):
+        from apps.inventory.models import Warehouse, StockMovement
+
+        other_tipe = TipeEntitas.objects.create(nama='Retail')
+        other_eb = EntitasBisnis.objects.create(nama='PT Other', tipe_entitas=other_tipe)
+        foreign_wh = Warehouse.objects.create(entitas_bisnis=other_eb, kode='FGN', nama='Gudang Asing')
+
+        with self.assertRaises(ValueError):
+            self._post_create(10, 5000, foreign_wh.pk)
+        self.assertFalse(StockMovement.objects.filter(movement_type='saldo_awal').exists())
+
+    # -- (b) edit: critical regression test for the reversal gap -------------
+
+    def test_edit_reverses_old_stock_movement_and_creates_new_one(self):
+        from apps.inventory.models import StockMovement
+        from .models import JurnalHeader
+
+        self._post_create(10, 5000, self.wh1.pk)
+        header = JurnalHeader.objects.get(is_saldo_awal=True)
+        old_mv = StockMovement.objects.get(movement_type='saldo_awal', item=self.item)
+        old_mv_id = old_mv.pk
+
+        response = self.client.post(
+            reverse('jurnal:saldo_awal_edit', args=[header.pk]),
+            {
+                'tanggal': '2026-01-01',
+                'entitas_bisnis': f'lv1:{self.eb.pk}',
+                'rows_data': self._rows_json(25, 7000, self.wh2.pk),
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+
+        # Old StockMovement is gone (reversed), not left dangling.
+        self.assertFalse(StockMovement.objects.filter(pk=old_mv_id).exists())
+
+        # Exactly one fresh StockMovement matching the new data.
+        movements = StockMovement.objects.filter(movement_type='saldo_awal', item=self.item)
+        self.assertEqual(movements.count(), 1)
+        new_mv = movements.first()
+        self.assertEqual(new_mv.qty, Decimal('25'))
+        self.assertEqual(new_mv.warehouse_id, self.wh2.pk)
+
+    # -- (c) delete: no orphaned StockMovement --------------------------------
+
+    def test_delete_removes_stock_movement(self):
+        from apps.inventory.models import StockMovement, InventoryRecord
+        from apps.purchase.models import FIFOBatch
+        from .models import JurnalHeader
+
+        self._post_create(10, 5000, self.wh1.pk)
+        header = JurnalHeader.objects.get(is_saldo_awal=True)
+        self.assertTrue(StockMovement.objects.filter(movement_type='saldo_awal').exists())
+
+        response = self.client.post(reverse('jurnal:saldo_awal_delete', args=[header.pk]))
+        self.assertEqual(response.status_code, 302)
+
+        self.assertFalse(StockMovement.objects.filter(movement_type='saldo_awal').exists())
+        self.assertFalse(InventoryRecord.objects.filter(item=self.item).exists())
+        self.assertFalse(FIFOBatch.objects.filter(item=self.item).exists())
+
+
+class CreateSaldoAwalPersediaanFunctionTests(TestCase):
+    """Direct unit tests for the extracted pure function, per the plan's
+    preferred fallback (more reliable than exercising the full Client flow)."""
+
+    def setUp(self):
+        self.tipe_eb = TipeEntitas.objects.create(nama='FnB')
+        self.eb = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe_eb)
+
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, kode='GD1', nama='Gudang Utama')
+
+        from apps.purchase.models import ItemMasterPurchase
+        self.item = ItemMasterPurchase.objects.create(nama='Gula', tipe_item='RM')
+
+    def test_creates_linked_records_with_warehouse(self):
+        from .views import create_saldo_awal_persediaan
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.purchase.models import FIFOBatch
+
+        rows = [{
+            'detail_type': 'persediaan',
+            'detail_rows': [{
+                'item_id': str(self.item.pk), 'qty': 3, 'unit_price': 1000,
+                'warehouse_id': str(self.wh.pk),
+            }],
+        }]
+        create_saldo_awal_persediaan(rows, self.eb.pk, '2026-01-01')
+
+        inv = InventoryRecord.objects.get(item=self.item)
+        batch = FIFOBatch.objects.get(item=self.item)
+        mv = StockMovement.objects.get(item=self.item, movement_type='saldo_awal')
+        self.assertEqual(mv.legacy_inventory_record_id, inv.pk)
+        self.assertEqual(mv.legacy_fifo_batch_id, batch.pk)
+        self.assertEqual(mv.warehouse_id, self.wh.pk)
+        self.assertEqual(mv.qty, Decimal('3'))
+        self.assertEqual(mv.unit_cost, Decimal('1000'))
+
+    def test_cross_tenant_warehouse_raises(self):
+        from .views import create_saldo_awal_persediaan
+        from apps.inventory.models import Warehouse
+
+        other_tipe = TipeEntitas.objects.create(nama='Retail')
+        other_eb = EntitasBisnis.objects.create(nama='PT Other', tipe_entitas=other_tipe)
+        foreign_wh = Warehouse.objects.create(entitas_bisnis=other_eb, kode='FGN', nama='Gudang Asing')
+
+        rows = [{
+            'detail_type': 'persediaan',
+            'detail_rows': [{
+                'item_id': str(self.item.pk), 'qty': 3, 'unit_price': 1000,
+                'warehouse_id': str(foreign_wh.pk),
+            }],
+        }]
+        with self.assertRaises(ValueError):
+            create_saldo_awal_persediaan(rows, self.eb.pk, '2026-01-01')
+
+    def test_no_warehouse_is_allowed(self):
+        from .views import create_saldo_awal_persediaan
+        from apps.inventory.models import StockMovement
+
+        rows = [{
+            'detail_type': 'persediaan',
+            'detail_rows': [{
+                'item_id': str(self.item.pk), 'qty': 3, 'unit_price': 1000,
+            }],
+        }]
+        create_saldo_awal_persediaan(rows, self.eb.pk, '2026-01-01')
+        mv = StockMovement.objects.get(item=self.item, movement_type='saldo_awal')
+        self.assertIsNone(mv.warehouse_id)

@@ -19,7 +19,7 @@ from django.utils import timezone
 from apps.entitas_bisnis.models import EntitasBisnis as EBModel
 from apps.master_data.models import Akun, AsetLv2, KewajibanLv2, EkuitasLv2
 from apps.master_data.utils import natural_sort_key
-from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data
 from apps.aset_tetap.models import AsetTetapRecord
 from apps.aset_lainnya.models import AsetLainnyaRecord
 
@@ -1171,13 +1171,83 @@ def laporan_laba_rugi(request: HttpRequest) -> HttpResponse:
 
 # ── Saldo Awal (Opening Balance) ────────────────────────────────────────────
 
+def create_saldo_awal_persediaan(persediaan_rows, eb_id, tanggal) -> None:
+    """Create InventoryRecord + FIFOBatch + a mirrored StockMovement per persediaan row.
+
+    Shared by both the saldo-awal create view and the edit view's recreate
+    step, so the stock ledger (StockMovement) is always kept in sync with the
+    legacy InventoryRecord/FIFOBatch rows it mirrors. Saldo Awal keeps
+    qty/unit_price as entered (no bulk qty=1/unit_cost=total_value convention)
+    so the StockMovement stays consistent with the FIFOBatch/InventoryRecord
+    it is linked to.
+
+    Raises ``ValueError`` if a row references a warehouse that does not
+    belong to ``eb_id`` (tenant guard, mirrors ``_validate_warehouse_tenant``).
+    """
+    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
+    from apps.inventory.models import InventoryRecord, Warehouse
+    from apps.inventory.ledger import record_inflow
+    from apps.entitas_bisnis.models import EntitasBisnis
+
+    all_item_ids = {
+        int(d['item_id'])
+        for r in persediaan_rows
+        for d in r.get('detail_rows', [])
+        if str(d.get('item_id', '')).isdigit()
+    }
+    items_map = {
+        item.pk: item
+        for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
+    }
+    eb = EntitasBisnis.objects.get(pk=eb_id)
+    for row in persediaan_rows:
+        for d in row.get('detail_rows', []):
+            try:
+                item_pk = int(str(d.get('item_id', '')))
+                qty = Decimal(str(d.get('qty') or 0))
+                unit_price = Decimal(str(d.get('unit_price') or 0))
+            except (ValueError, TypeError):
+                continue
+            if qty <= 0 or unit_price < 0:
+                continue
+            item = items_map.get(item_pk)
+            if not item:
+                continue
+            wh = None
+            wh_id = d.get('warehouse_id') or None
+            if wh_id:
+                wh = Warehouse.objects.filter(pk=wh_id, entitas_bisnis_id=eb_id).first()
+                if wh is None:
+                    raise ValueError('Gudang tidak valid untuk bisnis ini.')
+            rec = InventoryRecord.objects.create(
+                item=item,
+                purchase_item=None,
+                entitas_bisnis_id=eb_id,
+                quantity=qty,
+                unit_price=unit_price,
+                tanggal=tanggal,
+            )
+            batch = FIFOBatch.objects.create(
+                purchase_item=None,
+                item=item,
+                tanggal=tanggal,
+                quantity_in=qty,
+                unit_price=unit_price,
+                remaining_qty=qty,
+            )
+            record_inflow(
+                item, eb, None, None, qty, unit_price, tanggal, 'saldo_awal',
+                warehouse=wh, legacy_fifo_batch=batch, legacy_inventory_record=rec,
+            )
+
+
 def _reverse_saldo_awal_records(header) -> None:
     """Reverse all sub-records created by a saldo awal journal (excluding JurnalDetails).
 
     Matches records by purchase_item=None + entitas_bisnis + tanggal, which is
     the identifying footprint of saldo-awal-created sub-records.
     """
-    from apps.inventory.models import InventoryRecord
+    from apps.inventory.models import InventoryRecord, StockMovement
     from apps.aset_tetap.models import AsetTetapRecord
     from apps.aset_lainnya.models import AsetLainnyaRecord
     from apps.ekuitas.models import ModalDisetor
@@ -1188,6 +1258,17 @@ def _reverse_saldo_awal_records(header) -> None:
 
     # ModalDisetor — exact FK match
     ModalDisetor.objects.filter(jurnal_header=header).delete()
+
+    # StockMovement — matched by movement_type + entity + date (same footprint
+    # convention as the legacy records below). Deleted before FIFOBatch/
+    # InventoryRecord so a PROTECT error from a downstream StockConsumption
+    # (if this layer was ever consumed) surfaces before those legacy rows are
+    # touched — fail loud, matching apps.inventory.ledger.reverse_inflow_movements.
+    StockMovement.objects.filter(
+        movement_type='saldo_awal',
+        entitas_bisnis_id=eb_id,
+        tanggal=tanggal,
+    ).delete()
 
     # InventoryRecord + FIFOBatch — matched by purchase_item=None + entity + date
     inv_qs = InventoryRecord.objects.filter(
@@ -1286,14 +1367,14 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
     """Spreadsheet-style opening balance form.
 
     Rows can carry per-akun detail records.  Currently supported:
-    - ``detail_type='persediaan'``: creates InventoryRecord + FIFOBatch per item.
+    - ``detail_type='persediaan'``: creates InventoryRecord + FIFOBatch + a
+      mirrored StockMovement per item (via ``create_saldo_awal_persediaan``).
 
     Extend by adding a new prefix to AKUN_DETAIL_PREFIXES and a matching
     creation block in the POST handler below.
     """
     from django.db import transaction as db_transaction
-    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
-    from apps.inventory.models import InventoryRecord
+    from apps.purchase.models import ItemMasterPurchase
 
     # Registry: kode_akun prefix → detail type.  Extendable without touching the core flow.
     AKUN_DETAIL_PREFIXES: dict[str, str] = {
@@ -1347,6 +1428,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
                 'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
+                'warehouses_json': safe_json(_get_warehouses_data()),
             })
 
         with db_transaction.atomic():
@@ -1369,51 +1451,13 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
                 for row in rows
             ])
 
-            # ── Persediaan detail: InventoryRecord + FIFOBatch ─────────────
+            # ── Persediaan detail: InventoryRecord + FIFOBatch + StockMovement ──
             persediaan_rows = [
                 r for r in rows
                 if r.get('detail_type') == 'persediaan' and r.get('detail_rows')
             ]
             if persediaan_rows:
-                all_item_ids = {
-                    int(d['item_id'])
-                    for r in persediaan_rows
-                    for d in r.get('detail_rows', [])
-                    if str(d.get('item_id', '')).isdigit()
-                }
-                items_map = {
-                    item.pk: item
-                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
-                }
-                for row in persediaan_rows:
-                    for d in row.get('detail_rows', []):
-                        try:
-                            item_pk = int(str(d.get('item_id', '')))
-                            qty = Decimal(str(d.get('qty') or 0))
-                            unit_price = Decimal(str(d.get('unit_price') or 0))
-                        except (ValueError, TypeError):
-                            continue
-                        if qty <= 0 or unit_price < 0:
-                            continue
-                        item = items_map.get(item_pk)
-                        if not item:
-                            continue
-                        InventoryRecord.objects.create(
-                            item=item,
-                            purchase_item=None,
-                            entitas_bisnis_id=eb_id,
-                            quantity=qty,
-                            unit_price=unit_price,
-                            tanggal=tanggal,
-                        )
-                        FIFOBatch.objects.create(
-                            purchase_item=None,
-                            item=item,
-                            tanggal=tanggal,
-                            quantity_in=qty,
-                            unit_price=unit_price,
-                            remaining_qty=qty,
-                        )
+                create_saldo_awal_persediaan(persediaan_rows, eb_id, tanggal)
 
             # ── Aset Tetap detail: AsetTetapRecord ─────────────
             aset_tetap_rows = [
@@ -1532,6 +1576,7 @@ def saldo_awal(request: HttpRequest) -> HttpResponse:
         'eb_list': eb_list,
         'errors': {},
         'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
+        'warehouses_json': safe_json(_get_warehouses_data()),
         'initial_rows_json': '[]',
     })
 
@@ -1547,8 +1592,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
     reconstructed in the form, so the user must re-enter them if applicable.
     """
     from django.db import transaction as db_transaction
-    from apps.purchase.models import FIFOBatch, ItemMasterPurchase
-    from apps.inventory.models import InventoryRecord
+    from apps.purchase.models import ItemMasterPurchase
 
     header = get_object_or_404(JurnalHeader, pk=pk, is_saldo_awal=True)
 
@@ -1604,6 +1648,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 'posted': True,
                 'selected_entitas_bisnis': eb_selection,
                 'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
+                'warehouses_json': safe_json(_get_warehouses_data()),
                 'edit_header': header,
                 'initial_rows_json': initial_rows,
             })
@@ -1633,45 +1678,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
                 if r.get('detail_type') == 'persediaan' and r.get('detail_rows')
             ]
             if persediaan_rows:
-                all_item_ids = {
-                    int(d['item_id'])
-                    for r in persediaan_rows
-                    for d in r.get('detail_rows', [])
-                    if str(d.get('item_id', '')).isdigit()
-                }
-                items_map = {
-                    item.pk: item
-                    for item in ItemMasterPurchase.objects.filter(pk__in=all_item_ids)
-                }
-                for row in persediaan_rows:
-                    for d in row.get('detail_rows', []):
-                        try:
-                            item_pk = int(str(d.get('item_id', '')))
-                            qty = Decimal(str(d.get('qty') or 0))
-                            unit_price = Decimal(str(d.get('unit_price') or 0))
-                        except (ValueError, TypeError):
-                            continue
-                        if qty <= 0 or unit_price < 0:
-                            continue
-                        item = items_map.get(item_pk)
-                        if not item:
-                            continue
-                        InventoryRecord.objects.create(
-                            item=item,
-                            purchase_item=None,
-                            entitas_bisnis_id=eb_id,
-                            quantity=qty,
-                            unit_price=unit_price,
-                            tanggal=tanggal,
-                        )
-                        FIFOBatch.objects.create(
-                            purchase_item=None,
-                            item=item,
-                            tanggal=tanggal,
-                            quantity_in=qty,
-                            unit_price=unit_price,
-                            remaining_qty=qty,
-                        )
+                create_saldo_awal_persediaan(persediaan_rows, eb_id, tanggal)
 
             # ── Aset Tetap ─────────────────────────────────────────────────
             aset_tetap_rows = [
@@ -1799,6 +1806,7 @@ def saldo_awal_edit(request: HttpRequest, pk: int) -> HttpResponse:
         'errors': {},
         'selected_entitas_bisnis': selected_eb,
         'akun_detail_prefixes_json': safe_json(AKUN_DETAIL_PREFIXES),
+        'warehouses_json': safe_json(_get_warehouses_data()),
         'edit_header': header,
         'initial_rows_json': initial_rows,
     })

@@ -135,11 +135,12 @@
         <table class="ni-jm-table" style="min-width:520px;">
           <thead>
             <tr>
-              <th style="width:42%">Item Persediaan</th>
-              <th style="width:14%">Qty</th>
-              <th style="width:20%">HPP/Unit (Rp)</th>
-              <th style="width:16%">Total</th>
-              <th style="width:8%"></th>
+              <th style="width:32%">Item Persediaan</th>
+              <th style="width:12%">Qty</th>
+              <th style="width:16%">HPP/Unit (Rp)</th>
+              <th style="width:20%">Gudang</th>
+              <th style="width:14%">Total</th>
+              <th style="width:6%"></th>
             </tr>
           </thead>
           <tbody id="saModalRows"></tbody>
@@ -490,7 +491,8 @@
   var itemCreateUrl = '{% url "purchase:api_item_create" %}';
   var kategoriFilterUrl = '{% url "purchase:api_kategori_filter" %}';
   var kategoriCreateUrl = '{% url "purchase:api_kategori_create" %}';
-  var csrfToken = '{{ csrf_token }}';  
+  var csrfToken = '{{ csrf_token }}';
+  var WAREHOUSES = {{ warehouses_json|default:"[]"|safe }};
   var _tomSelectInstances = [];
   // rid → {type, detail_rows[]}
   var _rowDetailMap = {};
@@ -524,6 +526,19 @@
   }
 
   function isEBSelected() { return !!getEBId(); }
+
+  // ── Warehouse (gudang) helper — Saldo Awal has a single EB for the whole
+  // form, so the option list is just filtered by that one lv1 id. ─────────
+  function warehouseOptions(selected) {
+    var lv1Id = getEBLv1Id();
+    var opts = ['<option value="">— (opsional)</option>'];
+    WAREHOUSES.filter(function (w) { return String(w.entitas_bisnis_id) === String(lv1Id); })
+      .forEach(function (w) {
+        var sel = String(w.id) === String(selected) ? ' selected' : '';
+        opts.push('<option value="' + w.id + '"' + sel + '>' + w.kode + ' — ' + w.nama + '</option>');
+      });
+    return opts.join('');
+  }
 
   function _getDetailTypeForAkun(kode) {
     for (var prefix in AKUN_DETAIL_MAP) {
@@ -746,6 +761,7 @@
       '<td><select id="modal_item_' + mrid + '" placeholder="Ketik item…"></select></td>' +
       '<td><input type="number" id="modal_qty_' + mrid + '" class="ni-jm-input" min="0.0001" step="0.0001" value="0" oninput="saModalUpdateRow(' + mrid + ')"></td>' +
       '<td><input type="number" id="modal_hpp_' + mrid + '" class="ni-jm-input" min="0" step="1" value="0" oninput="saModalUpdateRow(' + mrid + ')"></td>' +
+      '<td><select id="modal_gudang_' + mrid + '" class="ni-jm-input wh-select">' + warehouseOptions('') + '</select></td>' +
       '<td><input type="text" id="modal_total_' + mrid + '" class="ni-jm-input" readonly value="0" style="background:var(--ni-bg);text-align:right;"></td>' +
       '<td><button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="saModalRemoveRow(' + mrid + ')" style="padding:4px 8px;"><i data-lucide="trash-2" style="width:12px;height:12px"></i></button></td>';
     tbody.appendChild(tr);
@@ -799,6 +815,10 @@
       }
       if (prefillData.qty) { document.getElementById('modal_qty_' + mrid).value = prefillData.qty; }
       if (prefillData.unit_price) { document.getElementById('modal_hpp_' + mrid).value = prefillData.unit_price; }
+      if (prefillData.warehouse_id) {
+        var whSel = document.getElementById('modal_gudang_' + mrid);
+        if (whSel) whSel.value = String(prefillData.warehouse_id);
+      }
       saModalUpdateRow(mrid);
     }
 
@@ -847,11 +867,13 @@
       if (!selEl || !selEl.value || qty <= 0) return;
       var ts = selEl.tomselect;
       var opt = ts ? ts.options[selEl.value] : null;
+      var whEl = document.getElementById('modal_gudang_' + mrid);
       results.push({
         item_id: selEl.value,
         item_text: opt ? opt.text : String(selEl.value),
         qty: qty,
         unit_price: hpp,
+        warehouse_id: whEl ? whEl.value : '',
         total: qty * hpp,
       });
     });
