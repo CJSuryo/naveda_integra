@@ -43,10 +43,16 @@ class StockMovementAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(StockConsumption)
 class StockConsumptionAdmin(admin.ModelAdmin):
     list_display = ('out_movement', 'in_movement', 'qty', 'unit_cost')
 
     def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False
