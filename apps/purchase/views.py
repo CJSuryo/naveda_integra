@@ -19,6 +19,8 @@ from apps.entitas_bisnis.models import EntitasBisnis
 from apps.inventory.models import Warehouse
 from apps.master_data.models import Akun, EntitasBisnisAkun
 from apps.master_data.utils import get_akun_sorted
+from apps.uom.conversion import convert_input_to_base
+from apps.uom.models import UnitOfMeasure
 
 from .forms import (
     ItemMasterPurchaseForm, KategoriItemForm, SubTransactionTypeForm,
@@ -99,6 +101,32 @@ def _get_warehouses_data() -> list[dict]:
         .values('id', 'kode', 'nama', 'entitas_bisnis_id')
         .order_by('entitas_bisnis_id', 'kode')
     )
+
+
+def _get_item_uoms_data(kind: str = 'purchase') -> dict:
+    """Map item_id -> daftar satuan valid untuk selector di form transaksi.
+
+    kind='purchase' → default purchase_uom; kind='sales' → default sales_uom.
+    Tiap item: stock_uom + (purchase/sales)_uom + semua ItemUOM.uom.
+    """
+    from apps.uom.models import ItemUOM
+    result: dict = {}
+    items = ItemMasterPurchase.objects.filter(
+        tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
+    ).select_related('stock_uom', 'purchase_uom', 'sales_uom')
+    iu_map: dict = {}
+    for iu in ItemUOM.objects.select_related('uom'):
+        iu_map.setdefault(iu.item_id, []).append(iu.uom)
+    for it in items:
+        seen, opts = set(), []
+        default = it.purchase_uom if kind == 'purchase' else it.sales_uom
+        for u in [it.stock_uom, default, *iu_map.get(it.pk, [])]:
+            if u is not None and u.pk not in seen:
+                seen.add(u.pk)
+                opts.append({'id': u.pk, 'kode': u.kode, 'nama': u.nama})
+        default_id = default.pk if default else (it.stock_uom_id or '')
+        result[it.pk] = {'options': opts, 'default_id': default_id}
+    return result
 
 
 def _get_eb_tree(user) -> list[dict]:
@@ -558,6 +586,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
+        'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
     })
 
 
@@ -607,8 +636,11 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'coa_account_text': str(pi.coa_account),
                 'offset_coa_account_id': pi.offset_coa_account_id,
                 'offset_coa_account_text': str(pi.offset_coa_account),
-                'quantity': str(pi.quantity),
-                'unit_price': str(pi.unit_price),
+                'quantity': str(pi.input_qty) if pi.input_qty is not None else str(pi.quantity),
+                'unit_price': (
+                    str((pi.unit_price * pi.quantity) / pi.input_qty)
+                    if pi.input_qty else str(pi.unit_price)
+                ),
                 'metode_alokasi_biaya': pi.metode_alokasi_biaya or '',
                 'tanggal_kadaluarsa': '',
                 'lead_time_days': pi.lead_time_days or '',
@@ -617,6 +649,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'moq': str(pi.moq) if pi.moq else '',
                 'target_turnover': str(pi.target_turnover) if pi.target_turnover else '',
                 'warehouse_id': pi.warehouse_id or '',
+                'input_uom_id': pi.input_uom_id or '',
             })
         eb_groups_data.append({
             'entitas_bisnis_id': eb_selection,
@@ -636,6 +669,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
+        'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
     })
 
 
@@ -1350,6 +1384,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'kategori_items': KategoriItem.objects.all().order_by('nama'),
             'akun_list': get_akun_sorted(),
             'warehouses_json': safe_json(_get_warehouses_data()),
+            'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
         })
 
     # Determine the dominant tipe_item prefix for all items to decide the transaction ID prefix.
@@ -1435,14 +1470,22 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                     if wh_id and not Warehouse.objects.filter(
                             pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
                         raise ValueError('Gudang tidak valid untuk bisnis ini.')
+                    input_uom_id = item_data.get('input_uom_id') or None
+                    if input_uom_id and not UnitOfMeasure.objects.filter(pk=input_uom_id).exists():
+                        raise ValueError('Satuan input tidak valid.')
+                    input_uom = UnitOfMeasure.objects.filter(pk=input_uom_id).first() if input_uom_id else None
+                    item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
+                    input_qty_raw = Decimal(str(item_data['quantity']))
+                    qty_base, unit_price_base = convert_input_to_base(
+                        item_obj, input_uom, input_qty_raw, Decimal(str(item_data['unit_price'])))
                     PurchaseItem.objects.create(
                         purchase_eb=eb_group,
                         item_id=item_data['item_id'],
                         sub_transaction_type_id=item_data['sub_transaction_type_id'],
                         coa_account_id=item_data['coa_account_id'],
                         offset_coa_account_id=item_data['offset_coa_account_id'],
-                        quantity=Decimal(str(item_data['quantity'])),
-                        unit_price=Decimal(str(item_data['unit_price'])),
+                        quantity=qty_base,
+                        unit_price=unit_price_base,
                         metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                         lead_time_days=item_data.get('lead_time_days') or None,
                         ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
@@ -1450,6 +1493,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
                         target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
                         warehouse_id=wh_id,
+                        input_uom=input_uom,
+                        input_qty=input_qty_raw,
                     )
             create_automated_journals(purchase)
             create_fifo_batches(purchase)
@@ -1483,14 +1528,22 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                         if wh_id and not Warehouse.objects.filter(
                                 pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
                             raise ValueError('Gudang tidak valid untuk bisnis ini.')
+                        input_uom_id = item_data.get('input_uom_id') or None
+                        if input_uom_id and not UnitOfMeasure.objects.filter(pk=input_uom_id).exists():
+                            raise ValueError('Satuan input tidak valid.')
+                        input_uom = UnitOfMeasure.objects.filter(pk=input_uom_id).first() if input_uom_id else None
+                        item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
+                        input_qty_raw = Decimal(str(item_data['quantity']))
+                        qty_base, unit_price_base = convert_input_to_base(
+                            item_obj, input_uom, input_qty_raw, Decimal(str(item_data['unit_price'])))
                         PurchaseItem.objects.create(
                             purchase_eb=eb_group,
                             item_id=item_data['item_id'],
                             sub_transaction_type_id=item_data['sub_transaction_type_id'],
                             coa_account_id=item_data['coa_account_id'],
                             offset_coa_account_id=item_data['offset_coa_account_id'],
-                            quantity=Decimal(str(item_data['quantity'])),
-                            unit_price=Decimal(str(item_data['unit_price'])),
+                            quantity=qty_base,
+                            unit_price=unit_price_base,
                             metode_alokasi_biaya=item_data.get('metode_alokasi_biaya', ''),
                             lead_time_days=item_data.get('lead_time_days') or None,
                             ordering_cost=Decimal(str(item_data['ordering_cost'])) if item_data.get('ordering_cost') else None,
@@ -1498,6 +1551,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                             moq=Decimal(str(item_data['moq'])) if item_data.get('moq') else None,
                             target_turnover=Decimal(str(item_data['target_turnover'])) if item_data.get('target_turnover') else None,
                             warehouse_id=wh_id,
+                            input_uom=input_uom,
+                            input_qty=input_qty_raw,
                         )
                 create_automated_journals(purchase)
                 create_fifo_batches(purchase)

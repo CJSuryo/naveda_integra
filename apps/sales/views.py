@@ -20,7 +20,9 @@ from apps.inventory.models import InventoryRecord, Warehouse
 from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
-from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data, _get_item_uoms_data
+from apps.uom.conversion import ConversionError, convert_input_to_base, to_stock_uom
+from apps.uom.models import UnitOfMeasure
 
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
@@ -361,6 +363,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'akun_list': get_akun_sorted(),
         'eb_options': _get_eb_dropdown_options(request.user),
         'warehouses_json': safe_json(_get_warehouses_data()),
+        'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
     })
 
 
@@ -400,8 +403,11 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'item_name': f'{si.item.item_id} - {si.item.nama}',
                 'tipe_item': si.item.tipe_item,
                 'sub_transaction_type_id': si.sub_transaction_type_id,
-                'quantity': str(si.quantity),
-                'selling_price': str(si.selling_price),
+                'quantity': str(si.input_qty) if si.input_qty is not None else str(si.quantity),
+                'selling_price': (
+                    str((si.selling_price * si.quantity) / si.input_qty)
+                    if si.input_qty else str(si.selling_price)
+                ),
                 'hpp_terpakai': str(si.hpp_terpakai) if si.hpp_terpakai else str(si.cogs_amount or ''),
                 'offset_coa_account_id': si.offset_coa_account_id,
                 'revenue_account_id': si.revenue_account_id,
@@ -412,6 +418,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'tax_payment': si.tax_payment or '',
                 'tax_payment_account_id': si.tax_payment_account_id or '',
                 'warehouse_id': si.warehouse_id or '',
+                'input_uom_id': si.input_uom_id or '',
                 # New: tax lines array
                 'tax_lines': [
                     {
@@ -445,6 +452,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_options': _get_eb_dropdown_options(request.user),
         'eb_groups_json': safe_json(eb_groups_data),
         'warehouses_json': safe_json(_get_warehouses_data()),
+        'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
     })
 
 
@@ -889,7 +897,22 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     iid, eb_resolved['lv1_id'],
                     eb_resolved.get('lv2_id'), eb_resolved.get('lv3_id'),
                 )
-                item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + qty
+                # Convert to the item's stock UOM before accumulating demand —
+                # the raw input-unit qty understates demand whenever the row
+                # uses a packaging UOM (conversion factor >= 1), which would
+                # silently weaken this pre-validation check.
+                demand_qty = qty
+                demand_input_uom_id = item_data.get('input_uom_id') or None
+                if demand_input_uom_id:
+                    demand_input_uom = UnitOfMeasure.objects.filter(pk=demand_input_uom_id).first()
+                    if demand_input_uom is not None:
+                        demand_item_obj = ItemMasterPurchase.objects.filter(pk=iid).first()
+                        if demand_item_obj is not None:
+                            try:
+                                demand_qty = to_stock_uom(qty, demand_input_uom, demand_item_obj)
+                            except ConversionError:
+                                pass
+                item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + demand_qty
 
             # Bulk inventory value validation
             if is_bulk:
@@ -1005,6 +1028,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'errors': errors,
             'eb_groups_json': safe_json(eb_groups_list),
             'warehouses_json': safe_json(_get_warehouses_data()),
+            'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
         })
 
     # Save
@@ -1047,12 +1071,32 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                             pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
                         raise ValueError('Gudang tidak valid untuk bisnis ini.')
 
+                    input_uom_id = item_data.get('input_uom_id') or None
+                    if input_uom_id and not UnitOfMeasure.objects.filter(pk=input_uom_id).exists():
+                        raise ValueError('Satuan input tidak valid.')
+                    input_uom = UnitOfMeasure.objects.filter(pk=input_uom_id).first() if input_uom_id else None
+                    if is_bulk:
+                        qty_base = Decimal('0')
+                        input_qty_raw = None
+                        selling_base = Decimal(str(item_data.get('selling_price') or '0'))
+                        # Bulk items are value-based (not unit-based) and must
+                        # never persist a UOM, regardless of what the client
+                        # submitted — a real UOM with input_qty=None would be
+                        # a misleading audit record.
+                        input_uom = None
+                    else:
+                        item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
+                        input_qty_raw = Decimal(str(item_data['quantity']))
+                        qty_base, selling_base = convert_input_to_base(
+                            item_obj, input_uom, input_qty_raw,
+                            Decimal(str(item_data.get('selling_price') or '0')))
+
                     si = SalesItem.objects.create(
                         sales_eb=eb_group,
                         item_id=item_data['item_id'],
                         sub_transaction_type_id=item_data['sub_transaction_type_id'],
-                        quantity=Decimal('0') if is_bulk else Decimal(str(item_data['quantity'])),
-                        selling_price=Decimal(str(item_data.get('selling_price') or '0')),
+                        quantity=qty_base,
+                        selling_price=selling_base,
                         hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
                         offset_coa_account_id=item_data['offset_coa_account_id'],
                         revenue_account_id=item_data['revenue_account_id'],
@@ -1063,6 +1107,8 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                         tax_payment=item_data.get('tax_payment', ''),
                         tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
                         warehouse_id=wh_id,
+                        input_uom=input_uom,
+                        input_qty=input_qty_raw,
                     )
 
                     # Buat SalesTaxLine dari tax_lines array (format baru)
@@ -1134,6 +1180,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'errors': {'stock': str(exc)},
             'eb_groups_json': safe_json(eb_groups_list),
             'warehouses_json': safe_json(_get_warehouses_data()),
+            'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
         })
 
     action = 'diperbarui' if existing else 'dibuat'
