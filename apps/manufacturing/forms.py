@@ -118,6 +118,24 @@ class ProductionOrderForm(forms.ModelForm):
                 )
         return tanggal
 
+    def clean(self):
+        cleaned = super().clean()
+        eb_lv1 = cleaned.get('entitas_bisnis')
+        if eb_lv1 is not None:
+            warehouse_rm = cleaned.get('warehouse_rm')
+            if warehouse_rm is not None and warehouse_rm.entitas_bisnis_id != eb_lv1.pk:
+                self.add_error(
+                    'warehouse_rm',
+                    'Gudang bahan baku tidak sesuai bisnis yang dipilih.',
+                )
+            warehouse_fg = cleaned.get('warehouse_fg')
+            if warehouse_fg is not None and warehouse_fg.entitas_bisnis_id != eb_lv1.pk:
+                self.add_error(
+                    'warehouse_fg',
+                    'Gudang hasil produksi tidak sesuai bisnis yang dipilih.',
+                )
+        return cleaned
+
 
 # Bulk item types have no defined "value" semantics for BOMLine.qty_required
 # (unlike PurchaseItem.total_value/SalesItem.hpp_terpakai). Allowing them as a

@@ -825,6 +825,74 @@ class ProductionWarehouseTests(TestCase):
         self.assertEqual(fg_in.warehouse_id, self.wh_fg.pk)
 
 
+class ProductionOrderFormWarehouseTenantTests(TestCase):
+    """ProductionOrderForm.clean() must reject a warehouse_rm/warehouse_fg
+    that belongs to a different business (entitas_bisnis) than the one
+    selected on the form, with a clean field error — not an unhandled
+    ValueError from apps.inventory.ledger._validate_warehouse_tenant at
+    ledger-call time."""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.eb = _make_entitas()
+        self.other_eb = EntitasBisnis.objects.create(
+            nama='Bisnis Lain',
+            tipe_entitas=self.eb.tipe_entitas,
+            status_aktif=True,
+        )
+        self.wh_rm_same = Warehouse.objects.create(
+            entitas_bisnis=self.eb, kode='WH-RM-A', nama='Gudang RM Bisnis A',
+        )
+        self.wh_fg_same = Warehouse.objects.create(
+            entitas_bisnis=self.eb, kode='WH-FG-A', nama='Gudang FG Bisnis A',
+        )
+        self.wh_rm_other = Warehouse.objects.create(
+            entitas_bisnis=self.other_eb, kode='WH-RM-B', nama='Gudang RM Bisnis B',
+        )
+        self.akun_wip = _make_akun('1301', 'WIP')
+        self.akun_rm = _make_akun('1201', 'Persediaan RM')
+        self.akun_fg = _make_akun('1401', 'Persediaan FG')
+        self.fg = _make_item('FG-0003', 'Kopi Sachet Form', 'FG', self.akun_fg)
+        self.rm = _make_item('RM-0003', 'Biji Kopi Form', 'RM', self.akun_rm)
+        self.bom = _make_bom_with_line(self.eb, self.fg, self.rm)
+
+    def _base_data(self):
+        return {
+            'tanggal': '2025-01-10',
+            'entitas_bisnis': self.eb.pk,
+            'bom': self.bom.pk,
+            'qty_produced': '10',
+            'status': 'completed',
+            'coa_produksi': self.akun_wip.pk,
+        }
+
+    def test_warehouse_rm_from_other_business_is_rejected(self):
+        from .forms import ProductionOrderForm
+        data = self._base_data()
+        data['warehouse_rm'] = self.wh_rm_other.pk
+        data['warehouse_fg'] = self.wh_fg_same.pk
+        form = ProductionOrderForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('warehouse_rm', form.errors)
+
+    def test_warehouse_fg_from_other_business_is_rejected(self):
+        from .forms import ProductionOrderForm
+        data = self._base_data()
+        data['warehouse_rm'] = self.wh_rm_same.pk
+        data['warehouse_fg'] = self.wh_rm_other.pk
+        form = ProductionOrderForm(data=data)
+        self.assertFalse(form.is_valid())
+        self.assertIn('warehouse_fg', form.errors)
+
+    def test_warehouses_matching_business_are_accepted(self):
+        from .forms import ProductionOrderForm
+        data = self._base_data()
+        data['warehouse_rm'] = self.wh_rm_same.pk
+        data['warehouse_fg'] = self.wh_fg_same.pk
+        form = ProductionOrderForm(data=data)
+        self.assertTrue(form.is_valid(), form.errors)
+
+
 # ---------------------------------------------------------------------------
 # Bulk FG (FGB) production tests — value-based ledger convention
 # ---------------------------------------------------------------------------
