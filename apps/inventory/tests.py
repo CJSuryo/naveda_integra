@@ -451,3 +451,38 @@ class ReverseInflowMovementsTests(DjangoTestCase):
                       '2026-01-02', 'sale_out')
         with self.assertRaises(ProtectedError):
             reverse_inflow_movements(self.item)
+
+
+class BackfillStockMovementsTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_backfill_creates_layers_with_eb_and_links(self):
+        from apps.purchase.models import FIFOBatch, PurchaseItem
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.inventory.backfill import backfill_stock_movements
+        batch = FIFOBatch.objects.create(
+            item=self.item, tanggal='2026-01-01', quantity_in=Decimal('10'),
+            unit_price=Decimal('5'), remaining_qty=Decimal('6'))
+        rec = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, quantity=Decimal('6'),
+            unit_price=Decimal('5'), tanggal='2026-01-01')
+        n = backfill_stock_movements(FIFOBatch, InventoryRecord, StockMovement, PurchaseItem)
+        self.assertEqual(n, 1)
+        mv = StockMovement.objects.get()
+        self.assertEqual(mv.qty, Decimal('10'))
+        self.assertEqual(mv.remaining_qty, Decimal('6'))
+        self.assertEqual(mv.entitas_bisnis, self.eb)
+        self.assertEqual(mv.legacy_fifo_batch_id, batch.id)
+        self.assertEqual(mv.legacy_inventory_record_id, rec.id)
+
+
+class ReconcileCommandTests(DjangoTestCase):
+    def test_reconcile_runs_clean(self):
+        from io import StringIO
+        from django.core.management import call_command
+        out = StringIO()
+        call_command('reconcile_stock_ledger', stdout=out)
+        self.assertIn('Rekonsiliasi cocok', out.getvalue())
