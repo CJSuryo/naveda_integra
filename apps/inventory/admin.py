@@ -1,6 +1,7 @@
 """Inventory admin."""
 from django.contrib import admin
 from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecord
+from apps.inventory.models import StockMovement, StockConsumption
 
 
 class MutasiInventoryDetailInline(admin.TabularInline):
@@ -29,3 +30,23 @@ class InventoryRecordAdmin(admin.ModelAdmin):
     list_filter = ('tanggal', 'metode_alokasi')
     search_fields = ('inventory_number', 'item__nama', 'item__item_id')
     raw_id_fields = ('item', 'purchase_item', 'entitas_bisnis')
+
+
+@admin.register(StockMovement)
+class StockMovementAdmin(admin.ModelAdmin):
+    list_display = ('item', 'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
+                    'tanggal', 'movement_type', 'qty', 'unit_cost', 'remaining_qty')
+    list_filter = ('movement_type', 'tanggal')
+    search_fields = ('item__nama', 'item__item_id')
+    readonly_fields = [f.name for f in StockMovement._meta.fields]
+
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(StockConsumption)
+class StockConsumptionAdmin(admin.ModelAdmin):
+    list_display = ('out_movement', 'in_movement', 'qty', 'unit_cost')
+
+    def has_add_permission(self, request):
+        return False
