@@ -337,20 +337,26 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
     entitas_bisnis = production_order.entitas_bisnis
 
     with transaction.atomic():
-        # 1. Consume RM FIFO batches and record consumption
+        # 1. Consume RM stock via the authoritative stock ledger, EB-isolated
+        from apps.inventory.ledger import consume_stock
         total_rm_cost = Decimal('0')
         for line in bom.lines.select_related('raw_material').all():
             qty_needed = line.qty_required * qty_produced
-            rm_cost, consumed_batches = _consume_fifo(line.raw_material_id, qty_needed)
-            total_rm_cost += rm_cost
-            for batch, qty in consumed_batches:
-                ProductionRMConsumption.objects.create(
-                    production_order=production_order,
-                    bom_line=line,
-                    fifo_batch=batch,
-                    qty_consumed=qty,
-                    unit_cost=batch.unit_price,
-                )
+            _rm_result = consume_stock(
+                line.raw_material, production_order.entitas_bisnis,
+                production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
+                qty_needed, production_order.tanggal, 'production_out',
+                source=production_order)
+            total_rm_cost += _rm_result.total_cost
+            for alloc in _rm_result.allocations:
+                if alloc.in_movement.legacy_fifo_batch_id:
+                    ProductionRMConsumption.objects.create(
+                        production_order=production_order,
+                        bom_line=line,
+                        fifo_batch=alloc.in_movement.legacy_fifo_batch,
+                        qty_consumed=alloc.qty,
+                        unit_cost=alloc.unit_cost,
+                    )
 
         # 2. Compute final costs — read applied overhead from DB
         production_overhead = (
@@ -374,7 +380,7 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
 
         if not as_wip:
             # 3. Create FG FIFO inflow batch (completed mode only)
-            FIFOBatch.objects.create(
+            fg_batch = FIFOBatch.objects.create(
                 purchase_item=None,
                 item=fg_item,
                 tanggal=production_order.tanggal,
@@ -396,6 +402,14 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                 holding_cost_pct=production_order.holding_cost_pct,
                 moq=production_order.moq,
             )
+
+            from apps.inventory.ledger import record_inflow
+            record_inflow(
+                fg_item, entitas_bisnis,
+                production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
+                qty_produced, unit_cost, production_order.tanggal, 'production_in',
+                source=production_order,
+                legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
 
         # 5. Generate journal entries
         # WIP: post RM consumption + overhead only (no FG completion entry yet)
@@ -655,11 +669,13 @@ def reverse_production(production_order: ProductionOrder) -> None:
     fg_item = production_order.bom.finished_good
 
     with transaction.atomic():
-        # Restore RM FIFO batches
-        for consumption in production_order.rm_consumptions.select_related('fifo_batch').all():
-            batch = consumption.fifo_batch
-            batch.remaining_qty += consumption.qty_consumed
-            batch.save()
+        # Restore RM stock via the authoritative stock ledger (reverses
+        # production_out movements + legacy FIFOBatch/InventoryRecord mirrors
+        # tied to this production order). Does NOT touch the FG production_in
+        # layer — that legacy mirror is cleaned up manually below to avoid
+        # double-delete (reverse_movements excludes production_in by design).
+        from apps.inventory.ledger import reverse_movements
+        reverse_movements(production_order)
 
         # Delete FG InventoryRecord created by this production
         if production_order.fg_inventory_record_id:

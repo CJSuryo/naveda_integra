@@ -74,13 +74,15 @@ class ProductionOrderEBLevelTests(TestCase):
 
 
 def _seed_fifo(rm, batches: list[tuple]):
-    """batches = [(tanggal, qty, unit_price), ...]"""
+    """batches = [(tanggal, qty, unit_price), ...]. Returns the created FIFOBatch list."""
+    created = []
     for tanggal, qty, price in batches:
-        FIFOBatch.objects.create(
+        created.append(FIFOBatch.objects.create(
             item=rm, tanggal=tanggal,
             quantity_in=Decimal(str(qty)), unit_price=Decimal(str(price)),
             remaining_qty=Decimal(str(qty)),
-        )
+        ))
+    return created
 
 
 # ---------------------------------------------------------------------------
@@ -442,7 +444,16 @@ class ProductionServiceTests(TestCase):
         self.fg = _make_item('FG-0001', 'Kopi Sachet', 'FG', self.akun_fg)
         self.rm = _make_item('RM-0001', 'Biji Kopi', 'RM', self.akun_rm)
         self.bom = _make_bom_with_line(self.eb, self.fg, self.rm)
-        _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])
+        rm_batch = _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])[0]
+        # Also seed the authoritative stock ledger (apps.inventory.ledger),
+        # mirrored to the legacy FIFOBatch — process_production consumes RM
+        # via StockMovement layers, not FIFOBatch directly, since Task 9.
+        # Purchase always dual-writes with this mirror link (see Task 3), so
+        # tests must too, to keep ProductionRMConsumption/journal tracing intact.
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.rm, self.eb, None, None, Decimal('100'),
+                      Decimal('5000'), '2025-01-01', 'purchase_in',
+                      legacy_fifo_batch=rm_batch)
 
         self.oh_cat = OverheadCategory.objects.create(
             name='Listrik Mesin', overhead_type='PRODUCTION',
@@ -772,7 +783,14 @@ class ProductionOrderViewTests(TestCase):
         self.fg = _make_item('FG-0001', 'Kopi Sachet', 'FG', self.akun_fg)
         self.rm = _make_item('RM-0001', 'Biji Kopi', 'RM', self.akun_rm)
         self.bom = _make_bom_with_line(self.eb, self.fg, self.rm)
-        _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])
+        rm_batch = _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])[0]
+        # Also seed the authoritative stock ledger, mirrored to the legacy
+        # FIFOBatch — process_production consumes RM via StockMovement
+        # layers, not FIFOBatch directly (see ProductionServiceTests.setUp).
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.rm, self.eb, None, None, Decimal('100'),
+                      Decimal('5000'), '2025-01-01', 'purchase_in',
+                      legacy_fifo_batch=rm_batch)
 
     def test_production_list(self):
         response = self.client.get(reverse('manufacturing:production_list'))
@@ -856,6 +874,34 @@ class ProductionOrderViewTests(TestCase):
         data = response.json()
         self.assertEqual(len(data['boms']), 1)
         self.assertEqual(data['boms'][0]['bom_id'], self.bom.bom_id)
+
+
+# ---------------------------------------------------------------------------
+# Production EB isolation tests (authoritative stock ledger)
+# ---------------------------------------------------------------------------
+
+class ProductionEBIsolationTests(TestCase):
+    def setUp(self):
+        from apps.entitas_bisnis.models import (
+            TipeEntitas, EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3,
+        )
+        from apps.purchase.models import ItemMasterPurchase
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=self.eb, nama='Div')
+        self.lv3a = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Pabrik A')
+        self.lv3b = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Pabrik B')
+        self.rm = ItemMasterPurchase.objects.create(nama='Tepung', tipe_item='RM')
+
+    def test_production_consume_isolated_by_eb(self):
+        from apps.inventory.ledger import consume_stock, InsufficientStockError, record_inflow
+        # stok RM hanya di Pabrik B
+        record_inflow(self.rm, self.eb, self.lv2, self.lv3b, Decimal('100'),
+                      Decimal('2'), '2026-01-01', 'purchase_in')
+        # produksi di Pabrik A minta 10 → harus gagal (tak lihat stok B)
+        with self.assertRaises(InsufficientStockError):
+            consume_stock(self.rm, self.eb, self.lv2, self.lv3a, Decimal('10'),
+                          '2026-01-03', 'production_out')
 
 
 # ---------------------------------------------------------------------------

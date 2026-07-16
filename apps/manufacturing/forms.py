@@ -53,6 +53,8 @@ class ProductionOrderForm(forms.ModelForm):
         fields = [
             'tanggal',
             'entitas_bisnis',
+            'entitas_bisnis_lv2',
+            'entitas_bisnis_lv3',
             'bom',
             'qty_produced',
             'status',
