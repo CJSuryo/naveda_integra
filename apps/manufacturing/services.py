@@ -616,7 +616,7 @@ def approve_production(production_order: ProductionOrder) -> None:
 
     with transaction.atomic():
         # Create FG FIFO inflow batch
-        FIFOBatch.objects.create(
+        fg_batch = FIFOBatch.objects.create(
             purchase_item=None,
             item=fg_item,
             tanggal=production_order.tanggal,
@@ -638,6 +638,18 @@ def approve_production(production_order: ProductionOrder) -> None:
             holding_cost_pct=production_order.holding_cost_pct,
             moq=production_order.moq,
         )
+
+        # Mirror the FG completion into the authoritative stock ledger (same
+        # pattern as process_production's completed-mode FG inflow), so
+        # WIP-approved FG is visible to apps.inventory.ledger.get_available_stock
+        # (which is what sales consumes against exclusively).
+        from apps.inventory.ledger import record_inflow
+        record_inflow(
+            fg_item, production_order.entitas_bisnis,
+            production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
+            qty_produced, production_order.unit_cost, production_order.tanggal, 'production_in',
+            source=production_order,
+            legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
 
         # Create completion journal (DR fg_coa / CR wip_coa)
         _create_fg_completion_journal(production_order)
@@ -672,10 +684,21 @@ def reverse_production(production_order: ProductionOrder) -> None:
         # Restore RM stock via the authoritative stock ledger (reverses
         # production_out movements + legacy FIFOBatch/InventoryRecord mirrors
         # tied to this production order). Does NOT touch the FG production_in
-        # layer — that legacy mirror is cleaned up manually below to avoid
-        # double-delete (reverse_movements excludes production_in by design).
-        from apps.inventory.ledger import reverse_movements
+        # layer — that inflow layer is reversed separately below via
+        # reverse_inflow_movements (reverse_movements excludes production_in
+        # by design).
+        from apps.inventory.ledger import reverse_movements, reverse_inflow_movements
         reverse_movements(production_order)
+
+        # Delete the FG production_in StockMovement layer created for this
+        # production order (by process_production or approve_production).
+        # If the FG has already been partially/fully consumed (e.g. sold),
+        # StockConsumption.in_movement is PROTECT-ed, so this intentionally
+        # raises django.db.models.deletion.ProtectedError and rolls back the
+        # whole reversal rather than silently destroying the consumption
+        # trail — same uncaught-ProtectedError convention already used by
+        # apps.purchase.services.reverse_stock_movements.
+        reverse_inflow_movements(production_order)
 
         # Delete FG InventoryRecord created by this production
         if production_order.fg_inventory_record_id:

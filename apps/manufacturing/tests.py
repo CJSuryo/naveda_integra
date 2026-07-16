@@ -664,6 +664,50 @@ class ProductionServiceTests(TestCase):
         self.assertTrue(JurnalDetail.objects.filter(akun=self.akun_fg, debit=self.order.total_cost).exists())
         self.assertTrue(JurnalDetail.objects.filter(akun=self.akun_wip, kredit=self.order.total_cost).exists())
 
+    def test_approve_production_wires_fg_to_ledger(self):
+        """approve_production's FG must be visible via the authoritative stock ledger
+        (get_available_stock), not just the legacy FIFOBatch/InventoryRecord mirrors —
+        sales consumes exclusively via the ledger."""
+        from .services import create_overhead_applied, process_production, approve_production
+        from apps.inventory.ledger import get_available_stock
+
+        self.order.status = 'in_progress'
+        self.order.save()
+        create_overhead_applied(self.order, {self.oh_cat.pk: Decimal('10')}, '2025-01')
+        process_production(self.order, as_wip=True)
+        approve_production(self.order)
+
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('10'))
+
+    def test_reverse_production_removes_fg_ledger_layer(self):
+        """reverse_production must remove the FG production_in ledger layer, not
+        just the legacy FIFOBatch/InventoryRecord — otherwise the ledger keeps
+        reporting phantom FG stock after reversal."""
+        from .services import process_production, reverse_production
+        from apps.inventory.ledger import get_available_stock
+
+        process_production(self.order)
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('10'))
+
+        reverse_production(self.order)
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('0'))
+
+    def test_reverse_production_blocked_when_fg_partially_consumed(self):
+        """If the FG layer produced by this order has already been (partially)
+        consumed — e.g. sold via the ledger — reverse_production must not
+        silently destroy the consumption/allocation trail. It must fail loud
+        (uncaught ProtectedError), matching the convention already used by
+        apps.purchase.services.reverse_stock_movements / reverse_inflow_movements."""
+        from django.db.models.deletion import ProtectedError
+        from .services import process_production, reverse_production
+        from apps.inventory.ledger import consume_stock
+
+        process_production(self.order)
+        consume_stock(self.fg, self.eb, None, None, Decimal('3'), '2025-01-15', 'sale_out')
+
+        with self.assertRaises(ProtectedError):
+            reverse_production(self.order)
+
     def test_period_end_closing_creates_variance_journals(self):
         from .services import period_end_closing
         from apps.jurnal.models import JurnalDetail, JurnalHeader
