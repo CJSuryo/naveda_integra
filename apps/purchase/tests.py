@@ -742,3 +742,50 @@ class PurchaseUomConversionTests(TestCase):
         qty, price = convert_input_to_base(self.item, self.ctn, Decimal('10'), Decimal('24000'))
         self.assertEqual(qty, Decimal('240'))
         self.assertEqual(price, Decimal('1000'))
+
+    def test_purchase_create_post_converts_carton_to_base(self):
+        """POSTing an item with input_uom_id in cartons should be converted to base
+        units (pcs) before being saved to PurchaseItem, exercising the real view path."""
+        role = Role.objects.create(kode='admin', nama='Admin UOM')
+        user = User.objects.create_user(email='uom@test.com', password='pass1234', role=role)
+        client = Client()
+        client.login(email='uom@test.com', password='pass1234')
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        stt = SubTransactionType.objects.create(
+            nama='Stok Awal UOM', direction='inflow', default_offset_account=akun_modal,
+        )
+
+        groups = [{
+            'entitas_bisnis_id': eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'coa_account_id': akun_persediaan.pk,
+                'offset_coa_account_id': akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '24000',
+                'input_uom_id': self.ctn.pk,
+            }],
+        }]
+        resp = client.post(reverse('purchase:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 302)
+        pi = PurchaseItem.objects.get(item=self.item)
+        self.assertEqual(pi.quantity, Decimal('240'))
+        self.assertEqual(pi.unit_price, Decimal('1000'))
+        self.assertEqual(pi.input_uom, self.ctn)
+        self.assertEqual(pi.input_qty, Decimal('10'))

@@ -1468,6 +1468,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                             pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
                         raise ValueError('Gudang tidak valid untuk bisnis ini.')
                     input_uom_id = item_data.get('input_uom_id') or None
+                    if input_uom_id and not UnitOfMeasure.objects.filter(pk=input_uom_id).exists():
+                        raise ValueError('Satuan input tidak valid.')
                     input_uom = UnitOfMeasure.objects.filter(pk=input_uom_id).first() if input_uom_id else None
                     item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
                     input_qty_raw = Decimal(str(item_data['quantity']))
@@ -1524,6 +1526,8 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                                 pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
                             raise ValueError('Gudang tidak valid untuk bisnis ini.')
                         input_uom_id = item_data.get('input_uom_id') or None
+                        if input_uom_id and not UnitOfMeasure.objects.filter(pk=input_uom_id).exists():
+                            raise ValueError('Satuan input tidak valid.')
                         input_uom = UnitOfMeasure.objects.filter(pk=input_uom_id).first() if input_uom_id else None
                         item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
                         input_qty_raw = Decimal(str(item_data['quantity']))
