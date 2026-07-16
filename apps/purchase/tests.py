@@ -789,3 +789,114 @@ class PurchaseUomConversionTests(TestCase):
         self.assertEqual(pi.unit_price, Decimal('1000'))
         self.assertEqual(pi.input_uom, self.ctn)
         self.assertEqual(pi.input_qty, Decimal('10'))
+
+    def test_purchase_edit_prefill_and_resave_does_not_compound_uom(self):
+        """Regression test: opening the edit form must prefill the original
+        input-unit qty/price (not the already-converted base values), and
+        resubmitting the form unchanged must NOT re-apply the UOM conversion
+        on top of the already-converted base values."""
+        role = Role.objects.create(kode='admin', nama='Admin UOM2')
+        user = User.objects.create_user(email='uom2@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM2')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM2', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        stt = SubTransactionType.objects.create(
+            nama='Stok Awal UOM2', direction='inflow', default_offset_account=akun_modal,
+        )
+
+        groups = [{
+            'entitas_bisnis_id': eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'coa_account_id': akun_persediaan.pk,
+                'offset_coa_account_id': akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '24000',
+                'input_uom_id': self.ctn.pk,
+            }],
+        }]
+        resp = client.post(reverse('purchase:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Edit',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 302)
+        purchase = PurchaseHeader.objects.get(deskripsi='Test UOM Edit')
+        pi = PurchaseItem.objects.get(item=self.item, purchase_eb__purchase_header=purchase)
+        self.assertEqual(pi.quantity, Decimal('240'))
+        self.assertEqual(pi.unit_price, Decimal('1000'))
+
+        # 1. GET the edit view and inspect the prefill data.
+        edit_resp = client.get(reverse('purchase:update', args=[purchase.pk]))
+        self.assertEqual(edit_resp.status_code, 200)
+        eb_groups_data = json.loads(edit_resp.context['eb_groups_json'])
+        prefill_item = eb_groups_data[0]['items'][0]
+        self.assertEqual(Decimal(prefill_item['quantity']), Decimal('10'))
+        self.assertEqual(Decimal(prefill_item['unit_price']), Decimal('24000'))
+        self.assertEqual(str(prefill_item['input_uom_id']), str(self.ctn.pk))
+
+        # 2. Resave the update view using exactly the prefilled values
+        # unchanged (simulating a no-op resave), and verify the stored base
+        # quantity/price are stable — not compounded (e.g. 5760 instead of 240).
+        resave_groups = [{
+            'entitas_bisnis_id': eb_groups_data[0]['entitas_bisnis_id'],
+            'items': [{
+                'item_id': prefill_item['item_id'],
+                'sub_transaction_type_id': prefill_item['sub_transaction_type_id'],
+                'coa_account_id': prefill_item['coa_account_id'],
+                'offset_coa_account_id': prefill_item['offset_coa_account_id'],
+                'quantity': prefill_item['quantity'],
+                'unit_price': prefill_item['unit_price'],
+                'input_uom_id': prefill_item['input_uom_id'],
+            }],
+        }]
+        resave_resp = client.post(reverse('purchase:update', args=[purchase.pk]), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Edit',
+            'eb_groups_data': json.dumps(resave_groups),
+        })
+        self.assertEqual(resave_resp.status_code, 302)
+        pi = PurchaseItem.objects.get(item=self.item, purchase_eb__purchase_header=purchase)
+        self.assertEqual(pi.quantity, Decimal('240'))
+        self.assertEqual(pi.unit_price, Decimal('1000'))
+
+        # 3. A second resave cycle must remain stable too (no progressive
+        # compounding across multiple saves).
+        edit_resp2 = client.get(reverse('purchase:update', args=[purchase.pk]))
+        eb_groups_data2 = json.loads(edit_resp2.context['eb_groups_json'])
+        prefill_item2 = eb_groups_data2[0]['items'][0]
+        self.assertEqual(Decimal(prefill_item2['quantity']), Decimal('10'))
+        self.assertEqual(Decimal(prefill_item2['unit_price']), Decimal('24000'))
+        resave_groups2 = [{
+            'entitas_bisnis_id': eb_groups_data2[0]['entitas_bisnis_id'],
+            'items': [{
+                'item_id': prefill_item2['item_id'],
+                'sub_transaction_type_id': prefill_item2['sub_transaction_type_id'],
+                'coa_account_id': prefill_item2['coa_account_id'],
+                'offset_coa_account_id': prefill_item2['offset_coa_account_id'],
+                'quantity': prefill_item2['quantity'],
+                'unit_price': prefill_item2['unit_price'],
+                'input_uom_id': prefill_item2['input_uom_id'],
+            }],
+        }]
+        resave_resp2 = client.post(reverse('purchase:update', args=[purchase.pk]), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Edit',
+            'eb_groups_data': json.dumps(resave_groups2),
+        })
+        self.assertEqual(resave_resp2.status_code, 302)
+        pi = PurchaseItem.objects.get(item=self.item, purchase_eb__purchase_header=purchase)
+        self.assertEqual(pi.quantity, Decimal('240'))
+        self.assertEqual(pi.unit_price, Decimal('1000'))

@@ -636,8 +636,11 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'coa_account_text': str(pi.coa_account),
                 'offset_coa_account_id': pi.offset_coa_account_id,
                 'offset_coa_account_text': str(pi.offset_coa_account),
-                'quantity': str(pi.quantity),
-                'unit_price': str(pi.unit_price),
+                'quantity': str(pi.input_qty) if pi.input_qty is not None else str(pi.quantity),
+                'unit_price': (
+                    str((pi.unit_price * pi.quantity) / pi.input_qty)
+                    if pi.input_qty else str(pi.unit_price)
+                ),
                 'metode_alokasi_biaya': pi.metode_alokasi_biaya or '',
                 'tanggal_kadaluarsa': '',
                 'lead_time_days': pi.lead_time_days or '',

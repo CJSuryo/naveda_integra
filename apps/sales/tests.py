@@ -1058,6 +1058,117 @@ class SalesUomConversionTests(TestCase):
         self.assertEqual(si.input_uom, self.box)
         self.assertEqual(si.input_qty, Decimal('3'))
 
+    def test_sales_edit_prefill_and_resave_does_not_compound_uom(self):
+        """Regression test: opening the edit form must prefill the original
+        input-unit qty/price (not the already-converted base values), and
+        resubmitting the form unchanged must NOT re-apply the UOM conversion
+        on top of the already-converted base values."""
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales Edit')
+        user = User.objects.create_user(email='uom-sales-edit@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales Edit')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales Edit', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item.coa_account = akun_persediaan
+        self.item.save()
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM Edit', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        # Stock in base units (pcs) on the ledger — enough to cover 3 boxes * 12 = 36 pcs,
+        # plus headroom for the resave cycles (FIFO allocation happens on every resave
+        # since items are deleted and recreated).
+        from apps.inventory.ledger import record_inflow
+        record_inflow(
+            self.item, eb, None, None, Decimal('1000'), Decimal('5000'),
+            '2026-01-01', 'purchase_in',
+        )
+
+        def make_groups(qty, price, input_uom_id):
+            return [{
+                'eb_selection': f'lv1:{eb.pk}',
+                'payment_account_id': akun_modal.pk,
+                'items': [{
+                    'item_id': self.item.pk,
+                    'sub_transaction_type_id': stt.pk,
+                    'quantity': qty,
+                    'selling_price': price,
+                    'offset_coa_account_id': akun_persediaan.pk,
+                    'revenue_account_id': akun_pendapatan.pk,
+                    'payment_account_id': akun_modal.pk,
+                    'input_uom_id': input_uom_id,
+                }],
+            }]
+
+        resp = client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Edit',
+            'eb_groups_data': json.dumps(make_groups('3', '120000', self.box.pk)),
+        })
+        self.assertEqual(resp.status_code, 302)
+        sales = SalesHeader.objects.get(deskripsi='Test UOM Sales Edit')
+        si = SalesItem.objects.get(item=self.item, sales_eb__sales_header=sales)
+        self.assertEqual(si.quantity, Decimal('36'))
+        self.assertEqual(si.selling_price, Decimal('10000'))
+
+        # 1. GET the edit view and inspect the prefill data.
+        edit_resp = client.get(reverse('sales:update', args=[sales.pk]))
+        self.assertEqual(edit_resp.status_code, 200)
+        eb_groups_data = json.loads(edit_resp.context['eb_groups_json'])
+        prefill_item = eb_groups_data[0]['items'][0]
+        self.assertEqual(Decimal(prefill_item['quantity']), Decimal('3'))
+        self.assertEqual(Decimal(prefill_item['selling_price']), Decimal('120000'))
+        self.assertEqual(str(prefill_item['input_uom_id']), str(self.box.pk))
+
+        # 2. Resave using exactly the prefilled values unchanged (no-op resave) —
+        # verify the stored base quantity/price are stable, not compounded
+        # (e.g. 432 instead of 36).
+        resave_resp = client.post(reverse('sales:update', args=[sales.pk]), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Edit',
+            'eb_groups_data': json.dumps(make_groups(
+                prefill_item['quantity'], prefill_item['selling_price'], prefill_item['input_uom_id'],
+            )),
+        })
+        self.assertEqual(resave_resp.status_code, 302)
+        si = SalesItem.objects.get(item=self.item, sales_eb__sales_header=sales)
+        self.assertEqual(si.quantity, Decimal('36'))
+        self.assertEqual(si.selling_price, Decimal('10000'))
+
+        # 3. A second resave cycle must remain stable too (no progressive
+        # compounding across multiple saves).
+        edit_resp2 = client.get(reverse('sales:update', args=[sales.pk]))
+        eb_groups_data2 = json.loads(edit_resp2.context['eb_groups_json'])
+        prefill_item2 = eb_groups_data2[0]['items'][0]
+        self.assertEqual(Decimal(prefill_item2['quantity']), Decimal('3'))
+        self.assertEqual(Decimal(prefill_item2['selling_price']), Decimal('120000'))
+        resave_resp2 = client.post(reverse('sales:update', args=[sales.pk]), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Edit',
+            'eb_groups_data': json.dumps(make_groups(
+                prefill_item2['quantity'], prefill_item2['selling_price'], prefill_item2['input_uom_id'],
+            )),
+        })
+        self.assertEqual(resave_resp2.status_code, 302)
+        si = SalesItem.objects.get(item=self.item, sales_eb__sales_header=sales)
+        self.assertEqual(si.quantity, Decimal('36'))
+        self.assertEqual(si.selling_price, Decimal('10000'))
+
     def test_sales_create_post_invalid_input_uom_id_rejected(self):
         """A truthy-but-nonexistent input_uom_id must not silently fall through
         to unconverted passthrough treatment — it must be rejected."""
