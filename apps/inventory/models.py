@@ -192,7 +192,7 @@ class Warehouse(models.Model):
         'entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT,
         related_name='warehouses', verbose_name='Bisnis (Entitas Bisnis Lv1)',
     )
-    kode = models.CharField(max_length=30, verbose_name='Kode Gudang')
+    kode = models.CharField(max_length=30, editable=False, verbose_name='Kode Gudang')
     nama = models.CharField(max_length=255, verbose_name='Nama Gudang')
     alamat = models.TextField(blank=True, null=True, verbose_name='Alamat')
     is_active = models.BooleanField(default=True, verbose_name='Aktif')
@@ -206,6 +206,34 @@ class Warehouse(models.Model):
 
     def __str__(self) -> str:
         return f'{self.kode} — {self.nama}'
+
+    def save(self, *args, **kwargs):
+        if not self.kode:
+            self.kode = self._generate_kode()
+        super().save(*args, **kwargs)
+
+    def _generate_kode(self) -> str:
+        """Generate sequential warehouse code: GDG-{entitas_bisnis_id}-{seq}."""
+        pattern = f'GDG-{self.entitas_bisnis_id}-'
+
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            last = (
+                Warehouse.objects
+                .select_for_update()
+                .filter(entitas_bisnis_id=self.entitas_bisnis_id, kode__startswith=pattern)
+                .order_by('-kode')
+                .values_list('kode', flat=True)
+                .first()
+            )
+            if last:
+                try:
+                    seq = int(last.rsplit('-', 1)[1]) + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            else:
+                seq = 1
+            return f'{pattern}{seq:03d}'
 
 
 class StockMovement(models.Model):

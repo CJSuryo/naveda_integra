@@ -660,11 +660,22 @@ class WarehouseCrudTests(TestCase):
 
     def test_create(self):
         resp = self.client.post(reverse('inventory:warehouse_create'), {
-            'entitas_bisnis': self.eb.pk, 'kode': 'WH2',
+            'entitas_bisnis': self.eb.pk,
             'nama': 'Gudang Cabang', 'alamat': 'Jl. X', 'is_active': 'on',
         })
         self.assertEqual(resp.status_code, 302)
-        self.assertTrue(Warehouse.objects.filter(kode='WH2').exists())
+        wh = Warehouse.objects.get(nama='Gudang Cabang')
+        self.assertEqual(wh.kode, f'GDG-{self.eb.pk}-001')
+
+    def test_create_kode_auto_sequential(self):
+        Warehouse.objects.create(entitas_bisnis=self.eb, kode=f'GDG-{self.eb.pk}-001', nama='Existing')
+        resp = self.client.post(reverse('inventory:warehouse_create'), {
+            'entitas_bisnis': self.eb.pk,
+            'nama': 'Gudang Kedua', 'alamat': '', 'is_active': 'on',
+        })
+        self.assertEqual(resp.status_code, 302)
+        wh = Warehouse.objects.get(nama='Gudang Kedua')
+        self.assertEqual(wh.kode, f'GDG-{self.eb.pk}-002')
 
     def test_toggle_active_soft(self):
         wh = Warehouse.objects.create(entitas_bisnis=self.eb, kode='WH3', nama='G3')

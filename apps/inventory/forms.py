@@ -49,10 +49,9 @@ class InventoryRecordForm(forms.ModelForm):
 class WarehouseForm(forms.ModelForm):
     class Meta:
         model = Warehouse
-        fields = ('entitas_bisnis', 'kode', 'nama', 'alamat', 'is_active')
+        fields = ('entitas_bisnis', 'nama', 'alamat', 'is_active')
         widgets = {
             'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'kode': forms.TextInput(attrs={'class': 'ni-input'}),
             'nama': forms.TextInput(attrs={'class': 'ni-input'}),
             'alamat': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
             'is_active': forms.CheckboxInput(),

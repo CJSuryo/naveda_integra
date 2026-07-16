@@ -4,6 +4,12 @@
   <h1 class="ni-page__title">{{ title }}</h1>
   <form method="post" class="ni-form">
     {% csrf_token %}
+    {% if is_edit %}
+      <div class="ni-form-group">
+        <label class="ni-form-label">Kode Gudang</label>
+        <input type="text" class="ni-input" value="{{ warehouse.kode }}" disabled>
+      </div>
+    {% endif %}
     {% for field in form %}
       <div class="ni-form-group">
         <label class="ni-form-label">{{ field.label }}</label>
