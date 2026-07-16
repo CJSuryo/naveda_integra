@@ -1,14 +1,36 @@
 """Manufacturing admin."""
+from django import forms
 from django.contrib import admin
 
+from .forms import BULK_TIPE_ITEM
 from .models import (
     BillOfMaterials, BOMLine, ProductionOrder, ProductionRMConsumption,
     OverheadCategory, OverheadRate, OverheadApplied, PeriodClosing,
 )
 
 
+class BOMLineAdminForm(forms.ModelForm):
+    """Blocks bulk items (RMB/FGB/ITMB) as raw_material — they have no
+    defined qty_required semantics for BOM consumption. See BULK_TIPE_ITEM
+    in apps.manufacturing.forms for the underlying financial-corruption risk.
+    """
+
+    class Meta:
+        model = BOMLine
+        fields = '__all__'
+
+    def clean_raw_material(self):
+        raw_material = self.cleaned_data.get('raw_material')
+        if raw_material is not None and raw_material.tipe_item in BULK_TIPE_ITEM:
+            raise forms.ValidationError(
+                'Item bulk (RMB/FGB/ITMB) belum didukung sebagai bahan baku BOM.'
+            )
+        return raw_material
+
+
 class BOMLineInline(admin.TabularInline):
     model = BOMLine
+    form = BOMLineAdminForm
     extra = 0
     fields = ['raw_material', 'qty_required']
     autocomplete_fields = []

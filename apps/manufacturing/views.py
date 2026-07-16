@@ -57,7 +57,7 @@ def bom_list(request):
 def bom_create(request):
     rm_items = (
         ItemMasterPurchase.objects
-        .filter(tipe_item__in=['RM', 'RMB'])
+        .filter(tipe_item='RM')
         .order_by('nama')
         .values('id', 'item_id', 'nama')
     )
@@ -134,7 +134,7 @@ def bom_update(request, pk):
 
     rm_items = (
         ItemMasterPurchase.objects
-        .filter(tipe_item__in=['RM', 'RMB'])
+        .filter(tipe_item='RM')
         .order_by('nama')
         .values('id', 'item_id', 'nama')
     )

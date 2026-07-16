@@ -115,6 +115,14 @@ class ProductionOrderForm(forms.ModelForm):
         return tanggal
 
 
+# Bulk item types have no defined "value" semantics for BOMLine.qty_required
+# (unlike PurchaseItem.total_value/SalesItem.hpp_terpakai). Allowing them as a
+# BOM raw_material lets a small qty_required (e.g. 0.5) slip past
+# validate_production() and then be silently misread as a Rupiah VALUE by
+# apps.inventory.ledger.consume_stock(), understating RM cost with no error.
+BULK_TIPE_ITEM = ('RMB', 'FGB', 'ITMB')
+
+
 def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
     """Parse BOM line data from POST.
 
@@ -143,6 +151,20 @@ def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
                 raise ValueError
         except (InvalidOperation, ValueError):
             errors.append(f'Baris {i + 1}: Qty tidak valid.')
+            i += 1
+            continue
+        try:
+            rm_item = ItemMasterPurchase.objects.filter(pk=int(rm_id)).only('tipe_item').first()
+        except (ValueError, TypeError):
+            rm_item = None
+        if rm_item is None:
+            errors.append(f'Baris {i + 1}: Item bahan baku tidak ditemukan.')
+            i += 1
+            continue
+        if rm_item.tipe_item in BULK_TIPE_ITEM:
+            errors.append(
+                f'Baris {i + 1}: Item bulk (RMB/FGB/ITMB) belum didukung sebagai bahan baku BOM.'
+            )
             i += 1
             continue
         lines.append({'raw_material_id': int(rm_id), 'qty_required': qty})

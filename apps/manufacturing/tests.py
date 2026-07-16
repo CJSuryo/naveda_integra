@@ -867,6 +867,52 @@ class ProductionBulkFGTests(TestCase):
 # BOM view tests
 # ---------------------------------------------------------------------------
 
+class ParseBomLinesTests(TestCase):
+    """Direct unit tests of parse_bom_lines() — bypasses login/client so it
+    is unaffected by the pre-existing axes-backend test-client issue."""
+
+    def setUp(self):
+        self.rm = _make_item('RM-0001', 'Biji Kopi', 'RM')
+        self.rmb = _make_item('RMB-0001', 'Minyak Curah', 'RMB')
+        self.fgb = _make_item('FGB-0001', 'Selai Curah', 'FGB')
+        self.itmb = _make_item('ITMB-0001', 'Bahan Curah Lain', 'ITMB')
+
+    def test_normal_rm_is_accepted(self):
+        from .forms import parse_bom_lines
+        lines, errors = parse_bom_lines({'rm_0': str(self.rm.pk), 'qty_0': '2.0000'})
+        self.assertEqual(errors, [])
+        self.assertEqual(len(lines), 1)
+
+    def test_bulk_rmb_is_rejected(self):
+        from .forms import parse_bom_lines
+        lines, errors = parse_bom_lines({'rm_0': str(self.rmb.pk), 'qty_0': '0.5000'})
+        self.assertTrue(errors, 'RMB raw_material should produce a validation error')
+        self.assertEqual(lines, [])
+
+    def test_bulk_fgb_is_rejected(self):
+        from .forms import parse_bom_lines
+        lines, errors = parse_bom_lines({'rm_0': str(self.fgb.pk), 'qty_0': '0.5000'})
+        self.assertTrue(errors, 'FGB raw_material should produce a validation error')
+        self.assertEqual(lines, [])
+
+    def test_bulk_itmb_is_rejected(self):
+        from .forms import parse_bom_lines
+        lines, errors = parse_bom_lines({'rm_0': str(self.itmb.pk), 'qty_0': '0.5000'})
+        self.assertTrue(errors, 'ITMB raw_material should produce a validation error')
+        self.assertEqual(lines, [])
+
+    def test_mixed_lines_one_bulk_one_normal_reports_error(self):
+        """A bulk-RM line anywhere in the batch must produce an error, which
+        the calling view treats as fatal (it only saves when there are no
+        errors at all — see bom_create/bom_update in views.py)."""
+        from .forms import parse_bom_lines
+        lines, errors = parse_bom_lines({
+            'rm_0': str(self.rm.pk), 'qty_0': '2.0000',
+            'rm_1': str(self.rmb.pk), 'qty_1': '0.5000',
+        })
+        self.assertTrue(errors)
+
+
 class BOMViewTests(TestCase):
     def setUp(self):
         self.user = _make_user()
@@ -913,6 +959,65 @@ class BOMViewTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse('manufacturing:bom_list'))
         self.assertNotEqual(response.status_code, 200)
+
+    def test_bom_create_post_rejects_bulk_raw_material(self):
+        """RMB (bulk RM) has no defined qty_required semantics — must be
+        rejected as a BOM raw material at the form/view level, not silently
+        misinterpreted as a value by consume_stock() downstream."""
+        rmb = _make_item('RMB-0001', 'Minyak Curah', 'RMB')
+        response = self.client.post(reverse('manufacturing:bom_create'), {
+            'finished_good': self.fg.pk,
+            'entitas_bisnis': self.eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': rmb.pk,
+            'qty_0': '0.5000',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(BillOfMaterials.objects.count(), 0)
+
+    def test_bom_create_post_rejects_itmb_raw_material(self):
+        itmb = _make_item('ITMB-0001', 'Bahan Curah Lain', 'ITMB')
+        response = self.client.post(reverse('manufacturing:bom_create'), {
+            'finished_good': self.fg.pk,
+            'entitas_bisnis': self.eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': itmb.pk,
+            'qty_0': '0.5000',
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(BillOfMaterials.objects.count(), 0)
+
+    def test_bom_update_post_rejects_bulk_raw_material(self):
+        rmb = _make_item('RMB-0002', 'Minyak Curah 2', 'RMB')
+        bom = _make_bom_with_line(self.eb, self.fg, self.rm)
+        response = self.client.post(reverse('manufacturing:bom_update', args=[bom.pk]), {
+            'finished_good': self.fg.pk,
+            'entitas_bisnis': self.eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': rmb.pk,
+            'qty_0': '0.5000',
+        })
+        self.assertEqual(response.status_code, 200)
+        # Existing valid line must remain untouched
+        bom.refresh_from_db()
+        self.assertEqual(bom.lines.count(), 1)
+        self.assertEqual(bom.lines.first().raw_material_id, self.rm.pk)
+
+    def test_bom_create_post_normal_rm_still_valid(self):
+        response = self.client.post(reverse('manufacturing:bom_create'), {
+            'finished_good': self.fg.pk,
+            'entitas_bisnis': self.eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': self.rm.pk,
+            'qty_0': '2.0000',
+        })
+        self.assertEqual(BillOfMaterials.objects.count(), 1)
+        bom = BillOfMaterials.objects.first()
+        self.assertRedirects(response, reverse('manufacturing:bom_detail', args=[bom.pk]))
 
 
 # ---------------------------------------------------------------------------
