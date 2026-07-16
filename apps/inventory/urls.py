@@ -18,4 +18,6 @@ urlpatterns = [
     path('warehouse/create/', views.warehouse_create, name='warehouse_create'),
     path('warehouse/<int:pk>/edit/', views.warehouse_update, name='warehouse_update'),
     path('warehouse/<int:pk>/toggle/', views.warehouse_toggle, name='warehouse_toggle'),
+    path('ledger/', views.stock_ledger, name='stock_ledger'),
+    path('kartu-stok/', views.stock_card, name='stock_card'),
 ]

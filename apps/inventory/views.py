@@ -410,6 +410,72 @@ def convert_bulk_to_satuan(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect('inventory:detail', pk=pk)
 
 
+@login_required
+def stock_ledger(request: HttpRequest) -> HttpResponse:
+    """Buku persediaan: daftar StockMovement + saldo berjalan (read-only)."""
+    from apps.inventory.models import StockMovement
+    from apps.purchase.models import ItemMasterPurchase
+    item_id = request.GET.get('item', '')
+    wh_id = request.GET.get('warehouse', '')
+    tgl_dari = request.GET.get('tanggal_dari', '')
+    tgl_sampai = request.GET.get('tanggal_sampai', '')
+
+    qs = StockMovement.objects.select_related('item', 'entitas_bisnis', 'warehouse')
+    if item_id:
+        qs = qs.filter(item_id=item_id)
+    if wh_id:
+        qs = qs.filter(warehouse_id=wh_id)
+    if tgl_dari:
+        qs = qs.filter(tanggal__gte=tgl_dari)
+    if tgl_sampai:
+        qs = qs.filter(tanggal__lte=tgl_sampai)
+    qs = qs.order_by('tanggal', 'created_at')
+
+    rows, saldo = [], Decimal('0')
+    for mv in qs:
+        saldo += mv.qty
+        rows.append({'mv': mv, 'saldo': saldo})
+
+    return render(request, 'inventory/stock_ledger.html', {
+        'title': 'Buku Persediaan',
+        'rows': rows,
+        'items': ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id'),
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
+        'item_filter': item_id, 'wh_filter': wh_id,
+        'tanggal_dari': tgl_dari, 'tanggal_sampai': tgl_sampai,
+    })
+
+
+@login_required
+def stock_card(request: HttpRequest) -> HttpResponse:
+    """Kartu stok per item: layer inflow aktif + saldo per gudang (read-only)."""
+    from django.db.models import Sum
+    from apps.inventory.models import StockMovement
+    from apps.purchase.models import ItemMasterPurchase
+    item_id = request.GET.get('item', '')
+    item = None
+    layers = []
+    saldo_per_wh = []
+    if item_id:
+        item = get_object_or_404(ItemMasterPurchase, pk=item_id)
+        layers = StockMovement.objects.filter(
+            item=item, remaining_qty__gt=0).select_related(
+            'entitas_bisnis', 'warehouse').order_by('tanggal', 'created_at')
+        saldo_per_wh = (
+            StockMovement.objects.filter(item=item)
+            .values('warehouse__kode')
+            .annotate(saldo=Sum('qty')).order_by('warehouse__kode')
+        )
+    return render(request, 'inventory/stock_card.html', {
+        'title': 'Kartu Stok', 'item': item, 'layers': layers,
+        'saldo_per_wh': saldo_per_wh,
+        'items': ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id'),
+        'item_filter': item_id,
+    })
+
+
 # ── Laporan Persediaan ───────────────────────────────────────────────────────
 
 INVENTORY_TIPE_ITEMS = ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB')

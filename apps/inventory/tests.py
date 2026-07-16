@@ -672,3 +672,49 @@ class WarehouseCrudTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         wh.refresh_from_db()
         self.assertFalse(wh.is_active)
+
+
+from apps.inventory.ledger import record_inflow
+
+
+class StockLedgerViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='sl@example.com', password='pw123456', name='S')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='Retail-Ledger')
+        self.eb = EntitasBisnis.objects.create(nama='Biz L', tipe_entitas=self.tipe, status_aktif=True)
+        from apps.uom.models import UnitOfMeasure
+        from apps.purchase.models import ItemMasterPurchase
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item = ItemMasterPurchase.objects.create(nama='Led', tipe_item='ITM', stock_uom=pcs)
+        from datetime import date
+        record_inflow(self.item, self.eb, None, None,
+                      Decimal('100'), Decimal('500'), date.today(), 'purchase_in')
+
+    def test_ledger_renders_movement_and_balance(self):
+        resp = self.client.get(reverse('inventory:stock_ledger'), {'item': self.item.pk})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '100')   # qty masuk terlihat
+
+
+class StockCardViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='sc@example.com', password='pw123456', name='C')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='Retail-Card')
+        self.eb = EntitasBisnis.objects.create(nama='Biz C', tipe_entitas=self.tipe, status_aktif=True)
+        from apps.uom.models import UnitOfMeasure
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.ledger import record_inflow
+        from datetime import date
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item = ItemMasterPurchase.objects.create(nama='Card', tipe_item='ITM', stock_uom=pcs)
+        record_inflow(self.item, self.eb, None, None,
+                      Decimal('50'), Decimal('200'), date.today(), 'purchase_in')
+
+    def test_card_shows_active_layers(self):
+        resp = self.client.get(reverse('inventory:stock_card'), {'item': self.item.pk})
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, '50')  # layer remaining_qty

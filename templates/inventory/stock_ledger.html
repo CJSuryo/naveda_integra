@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="ni-page">
+  <h1 class="ni-page__title">{{ title }}</h1>
+  <form method="get" class="ni-filter">
+    <select name="item" class="ni-input">
+      <option value="">— Semua Item —</option>
+      {% for it in items %}<option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>{% endfor %}
+    </select>
+    <select name="warehouse" class="ni-input">
+      <option value="">— Semua Gudang —</option>
+      {% for w in warehouses %}<option value="{{ w.pk }}" {% if wh_filter == w.pk|stringformat:'s' %}selected{% endif %}>{{ w.kode }}</option>{% endfor %}
+    </select>
+    <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
+    <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
+    <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+  </form>
+  <table class="ni-table">
+    <thead><tr><th>Tanggal</th><th>Item</th><th>Jenis</th><th>Gudang</th><th>Qty</th><th>Biaya/Unit</th><th>Saldo</th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.mv.tanggal }}</td>
+        <td>{{ r.mv.item.item_id }}</td>
+        <td>{{ r.mv.get_movement_type_display }}</td>
+        <td>{{ r.mv.warehouse.kode|default:'—' }}</td>
+        <td>{{ r.mv.qty }}</td>
+        <td>{{ r.mv.unit_cost }}</td>
+        <td>{{ r.saldo }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7">Tidak ada pergerakan.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
