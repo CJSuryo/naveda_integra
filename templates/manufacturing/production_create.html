@@ -45,6 +45,19 @@
 
         <div class="ni-form-row">
           <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.warehouse_rm.id_for_label }}">{{ form.warehouse_rm.label }}</label>
+            {{ form.warehouse_rm }}
+            {% if form.warehouse_rm.errors %}<div class="ni-form-error">{{ form.warehouse_rm.errors }}</div>{% endif %}
+          </div>
+          <div class="ni-form-group" style="flex:1">
+            <label class="ni-form-label" for="{{ form.warehouse_fg.id_for_label }}">{{ form.warehouse_fg.label }}</label>
+            {{ form.warehouse_fg }}
+            {% if form.warehouse_fg.errors %}<div class="ni-form-error">{{ form.warehouse_fg.errors }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="ni-form-row">
+          <div class="ni-form-group" style="flex:1">
             <label class="ni-form-label" for="{{ form.qty_produced.id_for_label }}">{{ form.qty_produced.label }} <span style="color:var(--ni-danger)">*</span></label>
             {{ form.qty_produced }}
             {% if form.qty_produced.errors %}<div class="ni-form-error">{{ form.qty_produced.errors }}</div>{% endif %}

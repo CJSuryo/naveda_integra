@@ -346,7 +346,7 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                 line.raw_material, production_order.entitas_bisnis,
                 production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
                 qty_needed, production_order.tanggal, 'production_out',
-                source=production_order)
+                source=production_order, warehouse=production_order.warehouse_rm)
             total_rm_cost += _rm_result.total_cost
             for alloc in _rm_result.allocations:
                 if alloc.in_movement.legacy_fifo_batch_id:
@@ -416,7 +416,8 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                 production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
                 fg_qty, fg_value, production_order.tanggal, 'production_in',
                 source=production_order,
-                legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
+                legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record,
+                warehouse=production_order.warehouse_fg)
 
         # 5. Generate journal entries
         # WIP: post RM consumption + overhead only (no FG completion entry yet)
@@ -663,7 +664,8 @@ def approve_production(production_order: ProductionOrder) -> None:
             production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
             fg_qty, fg_value, production_order.tanggal, 'production_in',
             source=production_order,
-            legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
+            legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record,
+            warehouse=production_order.warehouse_fg)
 
         # Create completion journal (DR fg_coa / CR wip_coa)
         _create_fg_completion_journal(production_order)

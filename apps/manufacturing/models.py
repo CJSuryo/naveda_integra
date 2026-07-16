@@ -124,6 +124,16 @@ class ProductionOrder(models.Model):
         related_name='production_orders',
         verbose_name='BOM (Finished Good)',
     )
+    warehouse_rm = models.ForeignKey(
+        'inventory.Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='production_orders_rm',
+        verbose_name='Gudang Bahan Baku',
+    )
+    warehouse_fg = models.ForeignKey(
+        'inventory.Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='production_orders_fg',
+        verbose_name='Gudang Hasil Produksi',
+    )
     qty_produced = models.DecimalField(
         max_digits=15,
         decimal_places=4,

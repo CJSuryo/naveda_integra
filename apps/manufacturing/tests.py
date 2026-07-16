@@ -761,6 +761,71 @@ class ProductionServiceTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Warehouse (multi-gudang) wiring tests — Task 6
+# ---------------------------------------------------------------------------
+
+class ProductionWarehouseTests(TestCase):
+    """RM consumption must lock to warehouse_rm; FG inflow must land in
+    warehouse_fg, for both the direct-completed and WIP-approval paths."""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.user = _make_user()
+        self.eb = _make_entitas()
+        self.wh_rm = Warehouse.objects.create(entitas_bisnis=self.eb, kode='WH-RM', nama='Gudang Bahan Baku')
+        self.wh_fg = Warehouse.objects.create(entitas_bisnis=self.eb, kode='WH-FG', nama='Gudang Barang Jadi')
+        self.akun_wip = _make_akun('1301', 'WIP')
+        self.akun_rm = _make_akun('1201', 'Persediaan RM')
+        self.akun_fg = _make_akun('1401', 'Persediaan FG')
+        self.fg = _make_item('FG-0002', 'Kopi Sachet WH', 'FG', self.akun_fg)
+        self.rm = _make_item('RM-0002', 'Biji Kopi WH', 'RM', self.akun_rm)
+        self.bom = _make_bom_with_line(self.eb, self.fg, self.rm)
+        rm_batch = _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])[0]
+
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.rm, self.eb, None, None, Decimal('100'),
+                      Decimal('5000'), '2025-01-01', 'purchase_in',
+                      legacy_fifo_batch=rm_batch, warehouse=self.wh_rm)
+
+        self.order = ProductionOrder.objects.create(
+            tanggal='2025-01-10', entitas_bisnis=self.eb,
+            bom=self.bom, qty_produced=Decimal('10'), coa_produksi=self.akun_wip,
+            warehouse_rm=self.wh_rm, warehouse_fg=self.wh_fg,
+        )
+
+    def test_process_production_locks_rm_and_fg_warehouses(self):
+        """Completed path: RM outflow warehouse=wh_rm, FG inflow warehouse=wh_fg."""
+        from .services import process_production
+        from apps.inventory.models import StockMovement
+        process_production(self.order)
+
+        rm_out = StockMovement.objects.get(
+            item=self.rm, movement_type='production_out',
+            source_content_type__model='productionorder', source_object_id=self.order.pk,
+        )
+        self.assertEqual(rm_out.warehouse_id, self.wh_rm.pk)
+
+        fg_in = StockMovement.objects.get(
+            item=self.fg, movement_type='production_in',
+            source_content_type__model='productionorder', source_object_id=self.order.pk,
+        )
+        self.assertEqual(fg_in.warehouse_id, self.wh_fg.pk)
+
+    def test_approve_production_locks_fg_warehouse(self):
+        """WIP-approval path: FG inflow must also land in warehouse_fg."""
+        from .services import process_production, approve_production
+        from apps.inventory.models import StockMovement
+        process_production(self.order, as_wip=True)
+        approve_production(self.order)
+
+        fg_in = StockMovement.objects.get(
+            item=self.fg, movement_type='production_in',
+            source_content_type__model='productionorder', source_object_id=self.order.pk,
+        )
+        self.assertEqual(fg_in.warehouse_id, self.wh_fg.pk)
+
+
+# ---------------------------------------------------------------------------
 # Bulk FG (FGB) production tests — value-based ledger convention
 # ---------------------------------------------------------------------------
 

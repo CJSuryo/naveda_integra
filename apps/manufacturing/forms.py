@@ -56,6 +56,8 @@ class ProductionOrderForm(forms.ModelForm):
             'entitas_bisnis_lv2',
             'entitas_bisnis_lv3',
             'bom',
+            'warehouse_rm',
+            'warehouse_fg',
             'qty_produced',
             'status',
             'lama_pengerjaan',
@@ -71,6 +73,8 @@ class ProductionOrderForm(forms.ModelForm):
             'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
             'entitas_bisnis': forms.Select(attrs={'class': 'ni-input', 'id': 'id_entitas_bisnis'}),
             'bom': forms.Select(attrs={'class': 'ni-input', 'id': 'id_bom'}),
+            'warehouse_rm': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse_fg': forms.Select(attrs={'class': 'ni-input'}),
             'qty_produced': forms.NumberInput(
                 attrs={'class': 'ni-input', 'step': '0.0001', 'min': '0.0001', 'id': 'id_qty_produced'},
             ),
