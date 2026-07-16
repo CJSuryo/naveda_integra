@@ -1,3 +1,5 @@
+import itertools
+
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 
@@ -5,10 +7,29 @@ from .forms import ItemUOMForm, UnitOfMeasureForm
 from .models import ItemUOM, UnitOfMeasure
 
 
+DIMENSION_ICONS = {
+    'count': '🔢',
+    'weight': '⚖️',
+    'volume': '🧪',
+    'length': '📏',
+    'area': '📐',
+}
+
+
 @login_required
 def unit_list(request):
-    units = UnitOfMeasure.objects.all().order_by('dimension', 'kode')
-    return render(request, 'uom/unit_list.html', {'units': units, 'title': 'Master Satuan'})
+    units = list(UnitOfMeasure.objects.for_dropdown())
+    groups = []
+    for dimension, dim_units in itertools.groupby(units, key=lambda u: u.dimension):
+        dim_units = list(dim_units)
+        base_unit = next((u for u in dim_units if u.is_base), None)
+        groups.append({
+            'dimension_label': dim_units[0].get_dimension_display(),
+            'icon': DIMENSION_ICONS.get(dimension, ''),
+            'units': dim_units,
+            'base_unit': base_unit,
+        })
+    return render(request, 'uom/unit_list.html', {'groups': groups, 'title': 'Master Satuan'})
 
 
 @login_required

@@ -14,42 +14,50 @@
   </div>
 </div>
 
-<div class="ni-card ni-animate-fade-in">
-  <div class="ni-table-wrapper">
-    <table class="ni-table">
-      <thead>
-        <tr>
-          <th>Kode</th>
-          <th>Nama</th>
-          <th>Dimensi</th>
-          <th class="ni-text-right">Faktor</th>
-          <th>Base</th>
-          <th>Sistem</th>
-          <th>Aktif</th>
-          <th>Aksi</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in units %}
-        <tr>
-          <td>{{ u.kode }}</td>
-          <td>{{ u.nama }}</td>
-          <td>{{ u.get_dimension_display }}</td>
-          <td class="ni-text-right">{{ u.factor_to_base|trim_decimal }}</td>
-          <td>{{ u.is_base|yesno:'Ya,-' }}</td>
-          <td>{{ u.is_system|yesno:'Ya,-' }}</td>
-          <td>{{ u.is_active|yesno:'Ya,-' }}</td>
-          <td>
-            <div class="ni-btn-row">
-              <a href="{% url 'uom:update' u.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-            </div>
-          </td>
-        </tr>
-        {% empty %}
-        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada data satuan.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+{% for g in groups %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px">
+  <details open>
+    <summary style="cursor:pointer;font-weight:600;font-size:1.05em;padding:14px 16px">
+      {{ g.icon }} {{ g.dimension_label|upper }} ({{ g.units|length }})
+      {% if g.base_unit %}
+      <span class="ni-text-muted" style="font-weight:400;font-size:0.85em;float:right">Base: {{ g.base_unit.kode }}</span>
+      {% endif %}
+    </summary>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Kode</th>
+            <th>Nama</th>
+            <th class="ni-text-right">Faktor</th>
+            <th>Base</th>
+            <th>Sistem</th>
+            <th>Aktif</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in g.units %}
+          <tr>
+            <td>{{ u.kode }}</td>
+            <td>{{ u.nama }}</td>
+            <td class="ni-text-right">{{ u.factor_to_base|trim_decimal }}</td>
+            <td>{{ u.is_base|yesno:'Ya,-' }}</td>
+            <td>{{ u.is_system|yesno:'Ya,-' }}</td>
+            <td>{{ u.is_active|yesno:'Ya,-' }}</td>
+            <td>
+              <div class="ni-btn-row">
+                <a href="{% url 'uom:update' u.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
 </div>
+{% empty %}
+<div class="ni-card ni-text-center ni-text-muted" style="padding:24px">Belum ada data satuan.</div>
+{% endfor %}
 {% endblock %}
