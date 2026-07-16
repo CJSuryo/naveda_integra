@@ -8,6 +8,8 @@ from apps.accounts.models import Role, User
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.master_data.models import Akun, AsetLv1, AsetLv2, EkuitasLv1, EkuitasLv2, PendapatanLv1, PendapatanLv2
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType, FIFOBatch
+from apps.uom.conversion import convert_input_to_base
+from apps.uom.models import UnitOfMeasure, ItemUOM
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesEventLog, SalesTaxLine
 from .services import get_available_stock, consume_fifo
 
@@ -974,3 +976,142 @@ class SalesEBIsolationTests(TestCase):
         out = StockMovement.objects.get(
             source_object_id=si.pk, source_content_type__model='salesitem')
         self.assertEqual(out.warehouse_id, wh_a.pk)
+
+
+class SalesUomConversionTests(TestCase):
+    """Konversi UOM diterapkan lewat helper; FIFO/ledger tetap dalam base."""
+
+    def setUp(self):
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Jual', tipe_item='FG', stock_uom=self.pcs)
+        self.box = UnitOfMeasure.objects.create(
+            kode='box-s', nama='Box', dimension='count', factor_to_base=None)
+        ItemUOM.objects.create(item=self.item, uom=self.box, qty_in_stock_uom=Decimal('12'))
+
+    def test_helper_box_sale(self):
+        qty, price = convert_input_to_base(self.item, self.box, Decimal('3'), Decimal('120000'))
+        self.assertEqual(qty, Decimal('36'))     # 3 * 12
+        self.assertEqual(price, Decimal('10000'))  # 360.000 / 36
+
+    def test_sales_create_post_converts_box_to_base(self):
+        """POSTing a non-bulk item with input_uom_id in boxes must be converted
+        to base units (pcs) — and selling_price re-based per pcs — before
+        being saved to SalesItem, exercising the real create view path."""
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales')
+        user = User.objects.create_user(email='uom-sales@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item.coa_account = akun_persediaan
+        self.item.save()
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        # Stock in base units (pcs) on the ledger — enough to cover 3 boxes * 12 = 36 pcs.
+        from apps.inventory.ledger import record_inflow
+        record_inflow(
+            self.item, eb, None, None, Decimal('100'), Decimal('5000'),
+            '2026-01-01', 'purchase_in',
+        )
+
+        groups = [{
+            'eb_selection': f'lv1:{eb.pk}',
+            'payment_account_id': akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'quantity': '3',
+                'selling_price': '120000',
+                'offset_coa_account_id': akun_persediaan.pk,
+                'revenue_account_id': akun_pendapatan.pk,
+                'payment_account_id': akun_modal.pk,
+                'input_uom_id': self.box.pk,
+            }],
+        }]
+        resp = client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 302)
+        si = SalesItem.objects.get(item=self.item)
+        self.assertEqual(si.quantity, Decimal('36'))
+        self.assertEqual(si.selling_price, Decimal('10000'))
+        self.assertEqual(si.input_uom, self.box)
+        self.assertEqual(si.input_qty, Decimal('3'))
+
+    def test_sales_create_post_invalid_input_uom_id_rejected(self):
+        """A truthy-but-nonexistent input_uom_id must not silently fall through
+        to unconverted passthrough treatment — it must be rejected."""
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales Bad')
+        user = User.objects.create_user(email='uom-sales-bad@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales Bad')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales Bad', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item.coa_account = akun_persediaan
+        self.item.save()
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM Bad', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        from apps.inventory.ledger import record_inflow
+        record_inflow(
+            self.item, eb, None, None, Decimal('100'), Decimal('5000'),
+            '2026-01-01', 'purchase_in',
+        )
+
+        groups = [{
+            'eb_selection': f'lv1:{eb.pk}',
+            'payment_account_id': akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'quantity': '3',
+                'selling_price': '120000',
+                'offset_coa_account_id': akun_persediaan.pk,
+                'revenue_account_id': akun_pendapatan.pk,
+                'payment_account_id': akun_modal.pk,
+                'input_uom_id': 999999,
+            }],
+        }]
+        with self.assertRaises(ValueError):
+            client.post(reverse('sales:create'), {
+                'tanggal': '2026-01-15',
+                'deskripsi': 'Test UOM Sales Bad',
+                'eb_groups_data': json.dumps(groups),
+            })
+        self.assertFalse(SalesItem.objects.filter(item=self.item).exists())

@@ -266,6 +266,15 @@ class SalesItem(models.Model):
         null=True, blank=True, related_name='sales_items',
         verbose_name='Gudang',
     )
+    input_uom = models.ForeignKey(
+        'uom.UnitOfMeasure', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='sales_items_input',
+        verbose_name='Satuan Input',
+    )
+    input_qty = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        verbose_name='Qty Input (satuan asli)',
+    )
 
     class Meta:
         verbose_name = 'Sales Item'

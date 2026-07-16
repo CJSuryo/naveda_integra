@@ -306,6 +306,9 @@
   // Active warehouses, keyed to their owning lv1 EntitasBisnis
   var WAREHOUSES = {{ warehouses_json|default:"[]"|safe }};
 
+  // Per-item valid UOM options for the per-row Satuan selector
+  var ITEM_UOMS = {{ item_uoms_json|default:"{}"|safe }};
+
   // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
   var ebOptions = [
     {% for eb in eb_options %}
@@ -378,6 +381,15 @@
     }
   }
 
+  // ── Satuan (UOM) helpers ─────────────────────────────────────────────
+  function uomOptions(itemId, selected) {
+    var info = ITEM_UOMS[itemId]; if (!info) return '';
+    var sel = selected || info.default_id;
+    return info.options.map(function (o) {
+      return '<option value="' + o.id + '"' + (String(o.id) === String(sel) ? ' selected' : '') + '>' + o.kode + '</option>';
+    }).join('');
+  }
+
   window.toggleUniformWarehouse = function (gid) {
     var checkbox = document.getElementById(gid + '_wh_uniform_toggle');
     var wrap     = document.getElementById(gid + '_wh_uniform_wrap');
@@ -437,6 +449,7 @@
             '<th style="width:9%">Revenue Akun</th>' +
             '<th style="width:9%">Payment Akun</th>' +
             '<th style="width:8%">Gudang</th>' +
+            '<th style="width:6%">Satuan</th>' +
             '<th style="width:4%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
@@ -568,6 +581,7 @@
       '<td class="item-field-td" data-label="Revenue Akun"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Payment Akun"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Gudang"' + fieldTdStyle + '><select id="' + rid + '_gudang" class="ni-sales-input wh-select">' + warehouseOptions(ebLv1IdForRow, prefill ? (prefill.warehouse_id || '') : '') + '</select></td>' +
+      '<td class="item-field-td" data-label="Satuan"' + fieldTdStyle + '><select id="' + rid + '_uom" class="ni-sales-input uom-select">' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
       '<td data-label="">' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
@@ -581,7 +595,7 @@
     trAdv.className = 'advanced-row';
     trAdv.style.display = hasTaxLines ? '' : 'none';
     trAdv.innerHTML =
-      '<td colspan="11" style="padding:8px 10px;background:var(--ni-bg);">' +
+      '<td colspan="12" style="padding:8px 10px;background:var(--ni-bg);">' +
         '<div class="ni-tax-lines-header">' +
           '<span><i data-lucide="receipt" style="width:12px;height:12px;vertical-align:middle;"></i> Tax Lines</span>' +
           '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addTaxLine(\'' + rid + '\')" style="padding:4px 10px;">' +
@@ -646,6 +660,8 @@
         showItemFields(rid, tipeItem);
         checkStock(rid, val);
         toggleBulkSalesFields(rid, tipeItem);
+        var uomSel = document.getElementById(rid + '_uom');
+        if (uomSel) uomSel.innerHTML = uomOptions(val, '');
         if (opt && opt.selling_price) {
           var priceField = document.getElementById(rid + '_price');
           if (priceField && !priceField.value) {
@@ -1083,6 +1099,7 @@
           revenue_account_id: document.getElementById(rid + '_revenue').value || '',
           payment_account_id: document.getElementById(rid + '_payment') ? document.getElementById(rid + '_payment').value : '',
           warehouse_id: document.getElementById(rid + '_gudang') ? document.getElementById(rid + '_gudang').value : '',
+          input_uom_id: document.getElementById(rid + '_uom') ? document.getElementById(rid + '_uom').value : '',
           tax_lines: collectTaxLines(rid),
           tax: '',
           tax_type: '',
