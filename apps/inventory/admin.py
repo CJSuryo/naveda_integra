@@ -34,9 +34,9 @@ class InventoryRecordAdmin(admin.ModelAdmin):
 
 @admin.register(StockMovement)
 class StockMovementAdmin(admin.ModelAdmin):
-    list_display = ('item', 'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
+    list_display = ('item', 'entitas_bisnis', 'warehouse', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
                     'tanggal', 'movement_type', 'qty', 'unit_cost', 'remaining_qty')
-    list_filter = ('movement_type', 'tanggal')
+    list_filter = ('movement_type', 'tanggal', 'warehouse')
     search_fields = ('item__nama', 'item__item_id')
     readonly_fields = [f.name for f in StockMovement._meta.fields]
 

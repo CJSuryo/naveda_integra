@@ -553,3 +553,24 @@ class WarehouseModelTest(DjangoTestCase):
         # kode sama di bisnis sama: ditolak
         with self.assertRaises(IntegrityError):
             Warehouse.objects.create(entitas_bisnis=self.biz_a, kode='GD01', nama='A-Dup')
+
+
+class StockMovementWarehouseFieldTest(DjangoTestCase):
+    def test_warehouse_nullable_and_assignable(self):
+        from apps.inventory.models import Warehouse
+        tipe = TipeEntitas.objects.create(nama='T-SMWH')
+        biz = EntitasBisnis.objects.create(nama='Biz-SMWH', tipe_entitas=tipe)
+        item = ItemMasterPurchase.objects.create(nama='X', tipe_item='RM')
+        wh = Warehouse.objects.create(entitas_bisnis=biz, kode='GD1', nama='G1')
+        # null diperbolehkan
+        m_null = StockMovement.objects.create(
+            item=item, entitas_bisnis=biz, tanggal='2026-07-16',
+            movement_type='purchase_in', qty=Decimal('5'), unit_cost=Decimal('10'),
+            remaining_qty=Decimal('5'))
+        self.assertIsNone(m_null.warehouse)
+        # bisa di-set
+        m_wh = StockMovement.objects.create(
+            item=item, entitas_bisnis=biz, warehouse=wh, tanggal='2026-07-16',
+            movement_type='purchase_in', qty=Decimal('5'), unit_cost=Decimal('10'),
+            remaining_qty=Decimal('5'))
+        self.assertEqual(m_wh.warehouse_id, wh.pk)

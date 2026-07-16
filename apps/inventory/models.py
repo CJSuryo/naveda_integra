@@ -240,6 +240,11 @@ class StockMovement(models.Model):
         null=True, blank=True, related_name='stock_movements_lv3',
         verbose_name='Entitas Bisnis Lv3',
     )
+    warehouse = models.ForeignKey(
+        'inventory.Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='stock_movements',
+        verbose_name='Gudang',
+    )
     tanggal = models.DateField(db_index=True, verbose_name='Tanggal')
     movement_type = models.CharField(
         max_length=20, choices=MOVEMENT_TYPE_CHOICES, db_index=True,
@@ -285,6 +290,8 @@ class StockMovement(models.Model):
             models.Index(fields=['item', 'tanggal'], name='idx_sm_item_tanggal'),
             models.Index(fields=['source_content_type', 'source_object_id'],
                          name='idx_sm_source'),
+            models.Index(fields=['item', 'warehouse', 'remaining_qty'],
+                         name='idx_sm_item_wh_remaining'),
         ]
 
     def __str__(self) -> str:
