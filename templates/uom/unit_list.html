@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load uom_extras %}
 {% block title %}Master Satuan{% endblock %}
 {% block content %}
 <div class="ni-page-header">
@@ -34,7 +35,7 @@
           <td>{{ u.kode }}</td>
           <td>{{ u.nama }}</td>
           <td>{{ u.get_dimension_display }}</td>
-          <td class="ni-text-right">{{ u.factor_to_base|default:'-' }}</td>
+          <td class="ni-text-right">{{ u.factor_to_base|trim_decimal }}</td>
           <td>{{ u.is_base|yesno:'Ya,-' }}</td>
           <td>{{ u.is_system|yesno:'Ya,-' }}</td>
           <td>{{ u.is_active|yesno:'Ya,-' }}</td>
