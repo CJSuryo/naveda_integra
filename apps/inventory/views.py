@@ -19,8 +19,8 @@ from django.utils import timezone
 
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import InventoryRecordForm
-from .models import InventoryRecord
+from .forms import InventoryRecordForm, WarehouseForm
+from .models import InventoryRecord, Warehouse
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -224,6 +224,69 @@ def inventory_delete(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 @login_required
+def warehouse_list(request: HttpRequest) -> HttpResponse:
+    """List all warehouses.
+
+    Note: unlike ``inventory_list``, this does not scope by
+    ``_resolve_eb_lv1_ids`` — that helper resolves a list of lv1:/lv2:/lv3:
+    selections coming from a filter widget and returns an EMPTY set when
+    given an empty list (it has no "return everything" sentinel meaning for
+    an empty input). Passing ``[]`` would therefore always filter the
+    queryset down to zero rows rather than "all accessible businesses".
+    Warehouse master data has no such filter UI yet, so we simply list all
+    warehouses.
+    """
+    qs = Warehouse.objects.select_related('entitas_bisnis').order_by(
+        'entitas_bisnis', 'kode')
+    return render(request, 'inventory/warehouse_list.html', {
+        'warehouses': qs, 'title': 'Master Gudang',
+    })
+
+
+@login_required
+def warehouse_create(request: HttpRequest) -> HttpResponse:
+    if request.method == 'POST':
+        form = WarehouseForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Gudang berhasil dibuat.')
+            return redirect('inventory:warehouse_list')
+    else:
+        form = WarehouseForm()
+    return render(request, 'inventory/warehouse_form.html',
+                  {'form': form, 'title': 'Gudang Baru', 'is_edit': False})
+
+
+@login_required
+def warehouse_update(request: HttpRequest, pk: int) -> HttpResponse:
+    wh = get_object_or_404(Warehouse, pk=pk)
+    if request.method == 'POST':
+        form = WarehouseForm(request.POST, instance=wh)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Gudang berhasil diperbarui.')
+            return redirect('inventory:warehouse_list')
+    else:
+        form = WarehouseForm(instance=wh)
+    return render(request, 'inventory/warehouse_form.html', {
+        'form': form, 'title': 'Edit Gudang', 'is_edit': True, 'warehouse': wh,
+    })
+
+
+@login_required
+def warehouse_toggle(request: HttpRequest, pk: int) -> HttpResponse:
+    wh = get_object_or_404(Warehouse, pk=pk)
+    if request.method == 'POST':
+        wh.is_active = not wh.is_active
+        wh.save(update_fields=['is_active'])
+        messages.success(
+            request,
+            f'Gudang {wh.kode} {"diaktifkan" if wh.is_active else "dinonaktifkan"}.',
+        )
+    return redirect('inventory:warehouse_list')
+
+
+@login_required
 def convert_bulk_to_satuan(request: HttpRequest, pk: int) -> HttpResponse:
     """Convert a bulk inventory record to satuan inventory records.
 
@@ -345,6 +408,72 @@ def convert_bulk_to_satuan(request: HttpRequest, pk: int) -> HttpResponse:
         f'(Rp {total_deduction:,.0f}) dari {record.inventory_number}.',
     )
     return redirect('inventory:detail', pk=pk)
+
+
+@login_required
+def stock_ledger(request: HttpRequest) -> HttpResponse:
+    """Buku persediaan: daftar StockMovement + saldo berjalan (read-only)."""
+    from apps.inventory.models import StockMovement
+    from apps.purchase.models import ItemMasterPurchase
+    item_id = request.GET.get('item', '')
+    wh_id = request.GET.get('warehouse', '')
+    tgl_dari = request.GET.get('tanggal_dari', '')
+    tgl_sampai = request.GET.get('tanggal_sampai', '')
+
+    qs = StockMovement.objects.select_related('item', 'entitas_bisnis', 'warehouse')
+    if item_id:
+        qs = qs.filter(item_id=item_id)
+    if wh_id:
+        qs = qs.filter(warehouse_id=wh_id)
+    if tgl_dari:
+        qs = qs.filter(tanggal__gte=tgl_dari)
+    if tgl_sampai:
+        qs = qs.filter(tanggal__lte=tgl_sampai)
+    qs = qs.order_by('tanggal', 'created_at')
+
+    rows, saldo = [], Decimal('0')
+    for mv in qs:
+        saldo += mv.qty
+        rows.append({'mv': mv, 'saldo': saldo})
+
+    return render(request, 'inventory/stock_ledger.html', {
+        'title': 'Buku Persediaan',
+        'rows': rows,
+        'items': ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id'),
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
+        'item_filter': item_id, 'wh_filter': wh_id,
+        'tanggal_dari': tgl_dari, 'tanggal_sampai': tgl_sampai,
+    })
+
+
+@login_required
+def stock_card(request: HttpRequest) -> HttpResponse:
+    """Kartu stok per item: layer inflow aktif + saldo per gudang (read-only)."""
+    from django.db.models import Sum
+    from apps.inventory.models import StockMovement
+    from apps.purchase.models import ItemMasterPurchase
+    item_id = request.GET.get('item', '')
+    item = None
+    layers = []
+    saldo_per_wh = []
+    if item_id:
+        item = get_object_or_404(ItemMasterPurchase, pk=item_id)
+        layers = StockMovement.objects.filter(
+            item=item, remaining_qty__gt=0).select_related(
+            'entitas_bisnis', 'warehouse').order_by('tanggal', 'created_at')
+        saldo_per_wh = (
+            StockMovement.objects.filter(item=item)
+            .values('warehouse__kode')
+            .annotate(saldo=Sum('qty')).order_by('warehouse__kode')
+        )
+    return render(request, 'inventory/stock_card.html', {
+        'title': 'Kartu Stok', 'item': item, 'layers': layers,
+        'saldo_per_wh': saldo_per_wh,
+        'items': ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id'),
+        'item_filter': item_id,
+    })
 
 
 # ── Laporan Persediaan ───────────────────────────────────────────────────────

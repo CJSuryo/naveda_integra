@@ -48,6 +48,15 @@ class ProductionOrderForm(forms.ModelForm):
         ('in_progress', 'Work In Progress'),
     ]
 
+    input_uom = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_input_uom'}),
+        label='Satuan Input Qty Produksi',
+        help_text='Opsional. Bila dipilih, Qty Diproduksi di atas dibaca dalam satuan ini dan '
+                   'dikonversi otomatis ke satuan stok Finished Good.',
+    )
+
     class Meta:
         model = ProductionOrder
         fields = [
@@ -106,6 +115,8 @@ class ProductionOrderForm(forms.ModelForm):
         )
         from apps.master_data.utils import akun_sorted_queryset
         self.fields['coa_produksi'].queryset = akun_sorted_queryset()
+        from apps.uom.models import UnitOfMeasure
+        self.fields['input_uom'].queryset = UnitOfMeasure.objects.order_by('dimension', 'kode')
 
     def clean_tanggal(self):
         tanggal = self.cleaned_data.get('tanggal')
@@ -134,7 +145,35 @@ class ProductionOrderForm(forms.ModelForm):
                     'warehouse_fg',
                     'Gudang hasil produksi tidak sesuai bisnis yang dipilih.',
                 )
+
+        bom = cleaned.get('bom')
+        input_uom = cleaned.get('input_uom')
+        qty_produced_input = cleaned.get('qty_produced')
+        if input_uom is not None and bom is not None and qty_produced_input is not None:
+            from apps.uom.conversion import ConversionError, convert_input_to_base
+            try:
+                convert_input_to_base(bom.finished_good, input_uom, qty_produced_input, Decimal('0'))
+            except ConversionError as exc:
+                self.add_error('input_uom', str(exc))
         return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        input_uom = self.cleaned_data.get('input_uom')
+        if input_uom is not None:
+            from apps.uom.conversion import convert_input_to_base
+            bom = self.cleaned_data.get('bom') or instance.bom
+            input_qty = self.cleaned_data.get('qty_produced')
+            qty_base, _ = convert_input_to_base(bom.finished_good, input_uom, input_qty, Decimal('0'))
+            instance.input_uom = input_uom
+            instance.input_qty = input_qty
+            instance.qty_produced = qty_base
+        else:
+            instance.input_uom = None
+            instance.input_qty = None
+        if commit:
+            instance.save()
+        return instance
 
 
 # Bulk item types have no defined "value" semantics for BOMLine.qty_required
@@ -148,14 +187,27 @@ BULK_TIPE_ITEM = ('RMB', 'FGB', 'ITMB')
 def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
     """Parse BOM line data from POST.
 
-    Returns (valid_lines, errors). Each line: {'raw_material_id': int, 'qty_required': Decimal}.
+    Each row may optionally carry an ``input_uom_{i}`` (UnitOfMeasure pk) picked
+    by the user. When present, ``qty_{i}`` is interpreted as a quantity in that
+    UOM and is converted to the raw material's base/stock_uom via
+    ``convert_input_to_base`` before being stored as ``qty_required``. When
+    absent (legacy behaviour), ``qty_{i}`` is read as-is in the base UOM.
+
+    Returns (valid_lines, errors). Each line: {
+        'raw_material_id': int, 'qty_required': Decimal,
+        'input_uom_id': int | None, 'input_qty': Decimal | None,
+    }.
     """
+    from apps.uom.conversion import ConversionError, convert_input_to_base
+    from apps.uom.models import UnitOfMeasure
+
     lines: list[dict] = []
     errors: list[str] = []
     i = 0
     while f'rm_{i}' in post_data:
         rm_id = post_data.get(f'rm_{i}', '').strip()
         qty_str = post_data.get(f'qty_{i}', '').strip()
+        input_uom_str = post_data.get(f'input_uom_{i}', '').strip()
         if not rm_id and not qty_str:
             i += 1
             continue
@@ -176,7 +228,7 @@ def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
             i += 1
             continue
         try:
-            rm_item = ItemMasterPurchase.objects.filter(pk=int(rm_id)).only('tipe_item').first()
+            rm_item = ItemMasterPurchase.objects.filter(pk=int(rm_id)).first()
         except (ValueError, TypeError):
             rm_item = None
         if rm_item is None:
@@ -189,7 +241,34 @@ def parse_bom_lines(post_data: dict) -> tuple[list[dict], list[str]]:
             )
             i += 1
             continue
-        lines.append({'raw_material_id': int(rm_id), 'qty_required': qty})
+
+        input_uom = None
+        if input_uom_str:
+            try:
+                input_uom = UnitOfMeasure.objects.filter(pk=int(input_uom_str)).first()
+            except (ValueError, TypeError):
+                input_uom = None
+            if input_uom is None:
+                errors.append(f'Baris {i + 1}: Satuan input tidak ditemukan.')
+                i += 1
+                continue
+
+        if input_uom is not None:
+            try:
+                qty_base, _ = convert_input_to_base(rm_item, input_uom, qty, Decimal('0'))
+            except ConversionError as exc:
+                errors.append(f'Baris {i + 1}: {exc}')
+                i += 1
+                continue
+        else:
+            qty_base = qty
+
+        lines.append({
+            'raw_material_id': int(rm_id),
+            'qty_required': qty_base,
+            'input_uom_id': input_uom.pk if input_uom is not None else None,
+            'input_qty': qty if input_uom is not None else None,
+        })
         i += 1
 
     if not lines and not errors:

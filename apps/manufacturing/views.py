@@ -53,6 +53,15 @@ def bom_list(request):
     })
 
 
+def _uom_catalogue():
+    """All UOMs as {id: {kode, nama}}, for the row-builder input_uom select."""
+    from apps.uom.models import UnitOfMeasure
+    return {
+        str(u.pk): {'kode': u.kode, 'nama': u.nama}
+        for u in UnitOfMeasure.objects.order_by('dimension', 'kode')
+    }
+
+
 @login_required
 def bom_create(request):
     rm_items = (
@@ -91,6 +100,7 @@ def bom_create(request):
     return render(request, 'manufacturing/bom_form.html', {
         'form': form,
         'rm_data_json': safe_json(rm_data),
+        'uom_data_json': safe_json(_uom_catalogue()),
         'is_create': True,
     })
 
@@ -169,6 +179,7 @@ def bom_update(request, pk):
         'bom': bom,
         'existing_lines': existing_lines,
         'rm_data_json': safe_json(rm_data),
+        'uom_data_json': safe_json(_uom_catalogue()),
         'is_create': False,
     })
 

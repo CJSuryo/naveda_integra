@@ -1,4 +1,5 @@
 ﻿"""Manufacturing tests."""
+import re
 from datetime import date
 from decimal import Decimal
 
@@ -1335,4 +1336,201 @@ class OverheadCategoryViewTests(TestCase):
         cat = OverheadCategory.objects.first()
         self.assertIsNone(cat.cost_driver)
         self.assertIsNone(cat.coa_overhead_applied)
+
+
+# ---------------------------------------------------------------------------
+# UOM conversion in Manufacturing (BOM + Production) — Task 7
+# ---------------------------------------------------------------------------
+
+class ManufacturingUomTests(TestCase):
+    def setUp(self):
+        from apps.uom.models import UnitOfMeasure, ItemUOM
+        from apps.uom.conversion import convert_input_to_base
+        self._convert_input_to_base = convert_input_to_base
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.rm = _make_item('RM-UOM-0001', 'RM-A', 'RM')
+        self.rm.stock_uom = self.pcs
+        self.rm.save()
+        self.ctn = UnitOfMeasure.objects.create(
+            kode='ctn-m', nama='Carton', dimension='count', factor_to_base=None)
+        ItemUOM.objects.create(item=self.rm, uom=self.ctn, qty_in_stock_uom=Decimal('24'))
+
+    def test_bom_qty_converts_to_base(self):
+        qty_base, _ = self._convert_input_to_base(self.rm, self.ctn, Decimal('2'), Decimal('0'))
+        self.assertEqual(qty_base, Decimal('48'))
+
+    def test_bom_create_view_converts_input_uom_to_base(self):
+        """POST with input_uom_0/qty_0 in a packaging UOM must store
+        qty_required in the item's base/stock_uom, and persist the raw
+        input_uom/input_qty on the BOMLine for audit."""
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        fg = _make_item('FG-UOM-0001', 'FG-A', 'FG')
+
+        response = self.client.post(reverse('manufacturing:bom_create'), {
+            'finished_good': fg.pk,
+            'entitas_bisnis': eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': self.rm.pk,
+            'qty_0': '2',
+            'input_uom_0': self.ctn.pk,
+        })
+        self.assertEqual(BillOfMaterials.objects.count(), 1)
+        bom = BillOfMaterials.objects.first()
+        line = bom.lines.first()
+        self.assertEqual(line.qty_required, Decimal('48'))
+        self.assertEqual(line.input_uom_id, self.ctn.pk)
+        self.assertEqual(line.input_qty, Decimal('2'))
+
+    def test_bom_create_view_without_input_uom_is_unchanged(self):
+        """Regression: POST without input_uom_i must behave exactly as
+        before this change — qty_i is read directly as qty_required."""
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        fg = _make_item('FG-UOM-0002', 'FG-B', 'FG')
+
+        response = self.client.post(reverse('manufacturing:bom_create'), {
+            'finished_good': fg.pk,
+            'entitas_bisnis': eb.pk,
+            'tanggal_dibuat': '2025-01-01',
+            'catatan': '',
+            'rm_0': self.rm.pk,
+            'qty_0': '2.0000',
+        })
+        self.assertEqual(BillOfMaterials.objects.count(), 1)
+        bom = BillOfMaterials.objects.first()
+        line = bom.lines.first()
+        self.assertEqual(line.qty_required, Decimal('2.0000'))
+        self.assertIsNone(line.input_uom_id)
+        self.assertIsNone(line.input_qty)
+
+    def test_production_create_view_converts_input_uom_to_base(self):
+        """POST with input_uom on the production form must store
+        qty_produced in the FG's base/stock_uom, and persist input_uom/
+        input_qty on the ProductionOrder for audit."""
+        from apps.uom.models import ItemUOM
+        from apps.inventory.ledger import record_inflow
+
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        akun_wip = _make_akun('5901', 'WIP-UOM')
+        akun_rm = _make_akun('1491', 'Persediaan RM UOM')
+        akun_fg = _make_akun('1492', 'Persediaan FG UOM')
+        fg = _make_item('FG-UOM-0003', 'FG-C', 'FG', akun_fg)
+        fg.stock_uom = self.pcs
+        fg.save()
+        fg_box = self._get_or_create_uom('box-fg', 'Box FG', 'count')
+        ItemUOM.objects.create(item=fg, uom=fg_box, qty_in_stock_uom=Decimal('10'))
+
+        rm = _make_item('RM-UOM-0003', 'RM-C', 'RM', akun_rm)
+        bom = _make_bom_with_line(eb, fg, rm, qty_per_unit=Decimal('2'))
+        rm_batch = _seed_fifo(rm, [('2025-01-01', 1000, 5000)])[0]
+        record_inflow(rm, eb, None, None, Decimal('1000'), Decimal('5000'),
+                      '2025-01-01', 'purchase_in', legacy_fifo_batch=rm_batch)
+
+        response = self.client.post(reverse('manufacturing:production_create'), {
+            'tanggal': '2025-01-10',
+            'entitas_bisnis': eb.pk,
+            'bom': bom.pk,
+            'qty_produced': '3',
+            'input_uom': fg_box.pk,
+            'status': 'completed',
+            'coa_produksi': akun_wip.pk,
+        })
+        self.assertEqual(ProductionOrder.objects.count(), 1)
+        order = ProductionOrder.objects.first()
+        # 3 box x 10 pcs/box = 30 pcs (base qty)
+        self.assertEqual(order.qty_produced, Decimal('30'))
+        self.assertEqual(order.input_uom_id, fg_box.pk)
+        self.assertEqual(order.input_qty, Decimal('3'))
+
+    def test_production_create_view_without_input_uom_is_unchanged(self):
+        """Regression: POST without input_uom must behave exactly as before
+        this change — qty_produced is read directly as the base qty."""
+        from apps.inventory.ledger import record_inflow
+
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        akun_wip = _make_akun('5902', 'WIP-UOM-2')
+        akun_rm = _make_akun('1493', 'Persediaan RM UOM 2')
+        akun_fg = _make_akun('1494', 'Persediaan FG UOM 2')
+        fg = _make_item('FG-UOM-0004', 'FG-D', 'FG', akun_fg)
+        rm = _make_item('RM-UOM-0004', 'RM-D', 'RM', akun_rm)
+        bom = _make_bom_with_line(eb, fg, rm, qty_per_unit=Decimal('2'))
+        rm_batch = _seed_fifo(rm, [('2025-01-01', 1000, 5000)])[0]
+        record_inflow(rm, eb, None, None, Decimal('1000'), Decimal('5000'),
+                      '2025-01-01', 'purchase_in', legacy_fifo_batch=rm_batch)
+
+        response = self.client.post(reverse('manufacturing:production_create'), {
+            'tanggal': '2025-01-10',
+            'entitas_bisnis': eb.pk,
+            'bom': bom.pk,
+            'qty_produced': '5',
+            'status': 'completed',
+            'coa_produksi': akun_wip.pk,
+        })
+        self.assertEqual(ProductionOrder.objects.count(), 1)
+        order = ProductionOrder.objects.first()
+        self.assertEqual(order.qty_produced, Decimal('5'))
+        self.assertIsNone(order.input_uom_id)
+        self.assertIsNone(order.input_qty)
+
+    @staticmethod
+    def _get_or_create_uom(kode, nama, dimension):
+        from apps.uom.models import UnitOfMeasure
+        obj, _ = UnitOfMeasure.objects.get_or_create(
+            kode=kode, defaults={'nama': nama, 'dimension': dimension, 'factor_to_base': None},
+        )
+        return obj
+
+    def test_bom_create_get_renders_input_uom_select_markup(self):
+        """The row-builder JS must emit an input_uom_<i> select per BOM line
+        and expose the UOM catalogue as data for it to populate from."""
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:bom_create'))
+        content = response.content.decode()
+        self.assertIn("name=\"input_uom_'", content)
+        self.assertIn('UOM_DATA', content)
+        self.assertIn(self.ctn.kode, content)
+
+    def test_bom_update_get_prefills_existing_line_input_uom(self):
+        """Editing a BOM line saved with a packaging input_uom must show the
+        original input_qty/input_uom, not the converted base qty_required."""
+        user = _make_user()
+        self.client.force_login(user)
+        eb = _make_entitas()
+        fg = _make_item('FG-UOM-0005', 'FG-E', 'FG')
+        bom = BillOfMaterials.objects.create(
+            finished_good=fg, entitas_bisnis=eb, tanggal_dibuat='2025-01-01',
+        )
+        BOMLine.objects.create(
+            bom=bom, raw_material=self.rm, qty_required=Decimal('48'),
+            input_uom=self.ctn, input_qty=Decimal('2'),
+        )
+
+        response = self.client.get(reverse('manufacturing:bom_update', args=[bom.pk]))
+        content = response.content.decode()
+        match = re.search(
+            r"addRow\('%s',\s*'([^']*)',\s*'([^']*)'\)" % re.escape(str(self.rm.pk)),
+            content,
+        )
+        self.assertIsNotNone(match, 'addRow(...) call for existing line not found in rendered page')
+        # Must be plain-numeric (unlocalized) — a comma decimal separator (id
+        # locale default) would make the <input type="number"> silently blank.
+        self.assertEqual(Decimal(match.group(1)), Decimal('2'))
+        self.assertEqual(match.group(2), str(self.ctn.pk))
+
+    def test_production_create_get_renders_input_uom_field(self):
+        """The production order form's optional input_uom field must actually
+        be rendered on the create page, not just exist on the ModelForm."""
+        user = _make_user()
+        self.client.force_login(user)
+        response = self.client.get(reverse('manufacturing:production_create'))
+        self.assertContains(response, 'id_input_uom')
 

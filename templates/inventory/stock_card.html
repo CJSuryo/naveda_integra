@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="ni-page">
+  <h1 class="ni-page__title">{{ title }}</h1>
+  <form method="get" class="ni-filter">
+    <select name="item" class="ni-input" onchange="this.form.submit()">
+      <option value="">— Pilih Item —</option>
+      {% for it in items %}<option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>{% endfor %}
+    </select>
+  </form>
+  {% if item %}
+  <h2 class="ni-section-title">Saldo per Gudang</h2>
+  <table class="ni-table">
+    <thead><tr><th>Gudang</th><th>Saldo</th></tr></thead>
+    <tbody>
+      {% for s in saldo_per_wh %}<tr><td>{{ s.warehouse__kode|default:'—' }}</td><td>{{ s.saldo }}</td></tr>{% empty %}<tr><td colspan="2">—</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <h2 class="ni-section-title">Layer Inflow Aktif (FIFO)</h2>
+  <table class="ni-table">
+    <thead><tr><th>Tanggal</th><th>Entitas</th><th>Gudang</th><th>Sisa Qty</th><th>Biaya/Unit</th></tr></thead>
+    <tbody>
+      {% for l in layers %}
+      <tr><td>{{ l.tanggal }}</td><td>{{ l.entitas_bisnis.nama }}</td><td>{{ l.warehouse.kode|default:'—' }}</td><td>{{ l.remaining_qty }}</td><td>{{ l.unit_cost }}</td></tr>
+      {% empty %}
+      <tr><td colspan="5">Tidak ada layer aktif.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}
