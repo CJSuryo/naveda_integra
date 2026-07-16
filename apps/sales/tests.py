@@ -614,6 +614,12 @@ class SalesTaxLineViewTests(TestCase):
             quantity_in=Decimal('100'), unit_price=Decimal('10000'),
             remaining_qty=Decimal('100'),
         )
+        # Also seed the authoritative stock ledger (apps.inventory.ledger) —
+        # process_sales_fifo consumes via StockMovement layers, not the
+        # legacy FIFOBatch directly, since commit c646c61.
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.item, self.eb, None, None, Decimal('100'),
+                      Decimal('10000'), '2026-01-01', 'purchase_in')
 
     def _payload_with_tax_lines(self, tax_type='ppn_keluaran'):
         groups = [{
@@ -794,6 +800,12 @@ class SalesDetailJournalHistoryTests(TestCase):
             quantity_in=Decimal('100'), unit_price=Decimal('10000'),
             remaining_qty=Decimal('100'),
         )
+        # Also seed the authoritative stock ledger (apps.inventory.ledger) —
+        # process_sales_fifo consumes via StockMovement layers, not the
+        # legacy FIFOBatch directly, since commit c646c61.
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.item, self.eb, None, None, Decimal('100'),
+                      Decimal('10000'), '2026-01-01', 'purchase_in')
 
     def _eb_groups_payload(self, quantity='5', selling_price='20000'):
         groups = [{
@@ -887,3 +899,44 @@ class SalesEBIsolationTests(TestCase):
         self.assertEqual(
             get_available_stock(self.item, self.eb, self.lv2, self.lv3b),
             Decimal('10'))
+
+    def test_happy_path_multi_batch_fifo_consumption(self):
+        """Same-EB sale spanning two inflow batches computes correct FIFO cogs
+        and rebuilds SalesItemFIFOAllocation rows."""
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import InventoryRecord
+        from apps.sales.services import process_sales_fifo
+
+        # Two inflow batches at the same EB (lv1/lv2/lv3a), different unit costs.
+        # Each is linked to a legacy InventoryRecord so allocations get built.
+        rec1 = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, entitas_bisnis_lv2=self.lv2,
+            entitas_bisnis_lv3=self.lv3a, quantity=Decimal('10'),
+            unit_price=Decimal('5'), tanggal='2026-01-01')
+        record_inflow(self.item, self.eb, self.lv2, self.lv3a, Decimal('10'),
+                      Decimal('5'), '2026-01-01', 'purchase_in',
+                      legacy_inventory_record=rec1)
+        rec2 = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, entitas_bisnis_lv2=self.lv2,
+            entitas_bisnis_lv3=self.lv3a, quantity=Decimal('10'),
+            unit_price=Decimal('8'), tanggal='2026-01-02')
+        record_inflow(self.item, self.eb, self.lv2, self.lv3a, Decimal('10'),
+                      Decimal('8'), '2026-01-02', 'purchase_in',
+                      legacy_inventory_record=rec2)
+
+        header = self._sales_with_item(self.lv2, self.lv3a, '12')
+        reports = process_sales_fifo(header)
+
+        self.assertEqual(len(reports), 1)
+        self.assertFalse(reports[0].used_fallback)
+
+        si = header.entitas_groups.get().items.get()
+        # 10 units @5 + 2 units @8 = 66
+        self.assertEqual(si.cogs_amount, Decimal('66'))
+
+        allocations = list(si.fifo_allocations.all())
+        self.assertEqual(len(allocations), 2)
+        total_qty = sum(a.quantity_consumed for a in allocations)
+        total_cogs = sum(a.cogs_amount for a in allocations)
+        self.assertEqual(total_qty, Decimal('12'))
+        self.assertEqual(total_cogs, Decimal('66'))

@@ -819,8 +819,10 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
     if not eb_groups_list:
         errors['eb_groups'] = 'Minimal satu Entitas Bisnis harus ditambahkan.'
 
-    # Pre-compute total demand per item for cross-row stock validation
-    item_demands: dict[int, Decimal] = {}
+    # Pre-compute total demand per (item, eb) for cross-row stock validation.
+    # Keyed by (item_id, eb_lv1_id, eb_lv2_id, eb_lv3_id) to match the EB
+    # isolation enforced by process_sales_fifo / apps.inventory.ledger.
+    item_demands: dict[tuple, Decimal] = {}
     all_items_flat: list[dict] = []
 
     for g_idx, group in enumerate(eb_groups_list):
@@ -880,7 +882,11 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             # Stock validation (skip for bulk items — value-based tracking)
             if not is_bulk:
                 iid = int(item_id)
-                item_demands[iid] = item_demands.get(iid, Decimal('0')) + qty
+                demand_key = (
+                    iid, eb_resolved['lv1_id'],
+                    eb_resolved.get('lv2_id'), eb_resolved.get('lv3_id'),
+                )
+                item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + qty
 
             # Bulk inventory value validation
             if is_bulk:
@@ -924,18 +930,61 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
 
             all_items_flat.append(item_data)
 
-    # Check stock availability
-    for iid, total_demand in item_demands.items():
-        available = get_available_stock(iid)
-        if existing:
-            for eg in existing.entitas_groups.all():
-                for old_si in eg.items.filter(item_id=iid):
-                    available += old_si.quantity
-        if total_demand > available:
-            errors[f'item_stock_{iid}'] = (
-                f'Stok tidak mencukupi. '
-                f'Total permintaan: {total_demand} unit, Stok tersedia: {available} unit.'
-            )
+    # Check stock availability — EB-isolated, matching the consumption scope
+    # used by process_sales_fifo (apps.inventory.ledger.get_available_stock).
+    # A stale global (non-EB-isolated) check here would pass validation for a
+    # sale whose own EB branch lacks stock but a sibling EB has some, only to
+    # blow up later as an unhandled InsufficientStockError inside the save
+    # transaction.
+    if item_demands:
+        from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+        from apps.inventory.ledger import get_available_stock as ledger_available_stock
+
+        eb_lv1_cache: dict[int, EntitasBisnis | None] = {}
+        eb_lv2_cache: dict[int, EntitasBisnisLv2 | None] = {}
+        eb_lv3_cache: dict[int, EntitasBisnisLv3 | None] = {}
+        item_cache: dict[int, ItemMasterPurchase | None] = {}
+
+        for (iid, lv1_id, lv2_id, lv3_id), total_demand in item_demands.items():
+            if iid not in item_cache:
+                item_cache[iid] = ItemMasterPurchase.objects.filter(pk=iid).first()
+            item_obj = item_cache[iid]
+            if item_obj is None:
+                continue
+
+            if lv1_id not in eb_lv1_cache:
+                eb_lv1_cache[lv1_id] = EntitasBisnis.objects.filter(pk=lv1_id).first()
+            eb_lv1_obj = eb_lv1_cache[lv1_id]
+            if eb_lv1_obj is None:
+                continue
+
+            eb_lv2_obj = None
+            if lv2_id:
+                if lv2_id not in eb_lv2_cache:
+                    eb_lv2_cache[lv2_id] = EntitasBisnisLv2.objects.filter(pk=lv2_id).first()
+                eb_lv2_obj = eb_lv2_cache[lv2_id]
+
+            eb_lv3_obj = None
+            if lv3_id:
+                if lv3_id not in eb_lv3_cache:
+                    eb_lv3_cache[lv3_id] = EntitasBisnisLv3.objects.filter(pk=lv3_id).first()
+                eb_lv3_obj = eb_lv3_cache[lv3_id]
+
+            available = ledger_available_stock(item_obj, eb_lv1_obj, eb_lv2_obj, eb_lv3_obj)
+            if existing:
+                for eg in existing.entitas_groups.filter(
+                    entitas_bisnis_id=lv1_id,
+                    entitas_bisnis_lv2_id=lv2_id,
+                    entitas_bisnis_lv3_id=lv3_id,
+                ):
+                    for old_si in eg.items.filter(item_id=iid):
+                        available += old_si.quantity
+            if total_demand > available:
+                errors[f'item_stock_{iid}_{lv1_id}_{lv2_id or 0}_{lv3_id or 0}'] = (
+                    f'Stok tidak mencukupi untuk "{item_obj.nama}" di entitas bisnis '
+                    f'"{eb_lv3_obj.nama if eb_lv3_obj else (eb_lv2_obj.nama if eb_lv2_obj else eb_lv1_obj.nama)}". '
+                    f'Total permintaan: {total_demand} unit, Stok tersedia: {available} unit.'
+                )
 
     if errors:
         dj_messages.error(request, 'Terdapat kesalahan pada form. Silakan periksa kembali.')
@@ -955,108 +1004,126 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
         })
 
     # Save
-    with transaction.atomic():
-        if existing:
-            _cancel_sales_pajak(existing)
-            reverse_sales_automated_journals(existing)
-            reverse_sales_fifo(existing)
-            existing.entitas_groups.all().delete()
-            existing.tanggal = tanggal
-            existing.deskripsi = deskripsi
-            existing.save()
-            sales = existing
-        else:
-            sales = SalesHeader.objects.create(
-                tanggal=tanggal,
-                deskripsi=deskripsi,
-                created_by=request.user,
-            )
-
-        for group in eb_groups_list:
-            eb_resolved = _resolve_eb_selection(group['eb_selection'], request.user)
-            eb_group = SalesEntitasBisnis.objects.create(
-                sales_header=sales,
-                entitas_bisnis_id=eb_resolved['lv1_id'],
-                entitas_bisnis_lv2_id=eb_resolved.get('lv2_id'),
-                entitas_bisnis_lv3_id=eb_resolved.get('lv3_id'),
-                payment_account_id=None,  # now per-item on SalesItem
-            )
-
-            for item_data in group.get('items', []):
-                tax_val = item_data.get('tax')
-                tax_amount = Decimal(str(tax_val)) if tax_val else None
-                is_bulk = item_data.get('is_bulk') == '1'
-
-                si = SalesItem.objects.create(
-                    sales_eb=eb_group,
-                    item_id=item_data['item_id'],
-                    sub_transaction_type_id=item_data['sub_transaction_type_id'],
-                    quantity=Decimal('0') if is_bulk else Decimal(str(item_data['quantity'])),
-                    selling_price=Decimal(str(item_data.get('selling_price') or '0')),
-                    hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
-                    offset_coa_account_id=item_data['offset_coa_account_id'],
-                    revenue_account_id=item_data['revenue_account_id'],
-                    payment_account_id=item_data.get('payment_account_id') or None,
-                    tax=tax_amount,
-                    tax_type=item_data.get('tax_type', ''),
-                    tax_account_id=item_data.get('tax_account_id') or None,
-                    tax_payment=item_data.get('tax_payment', ''),
-                    tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
+    from apps.inventory.ledger import InsufficientStockError
+    try:
+        with transaction.atomic():
+            if existing:
+                _cancel_sales_pajak(existing)
+                reverse_sales_automated_journals(existing)
+                reverse_sales_fifo(existing)
+                existing.entitas_groups.all().delete()
+                existing.tanggal = tanggal
+                existing.deskripsi = deskripsi
+                existing.save()
+                sales = existing
+            else:
+                sales = SalesHeader.objects.create(
+                    tanggal=tanggal,
+                    deskripsi=deskripsi,
+                    created_by=request.user,
                 )
 
-                # Buat SalesTaxLine dari tax_lines array (format baru)
-                for tl_data in item_data.get('tax_lines', []):
-                    tl_tax_type = tl_data.get('tax_type', '')
-                    if not tl_tax_type:
-                        continue
-                    tl_tax_raw = tl_data.get('tax')
-                    tl_tax_val = Decimal(str(tl_tax_raw)) if tl_tax_raw else None
-                    tl_is_manual = bool(tl_data.get('is_manual', False)) or bool(tl_tax_val)
-                    tl_tax_account_id = tl_data.get('tax_account_id') or None
-                    tl_tax_payment_account_id = tl_data.get('tax_payment_account_id') or None
-                    if not tl_tax_account_id or not tl_tax_payment_account_id:
-                        continue
-                    SalesTaxLine.objects.create(
-                        sales_item=si,
-                        tax_type=tl_tax_type,
-                        tax=tl_tax_val,
-                        is_manual=tl_is_manual,
-                        tax_account_id=tl_tax_account_id,
-                        tax_payment_account_id=tl_tax_payment_account_id,
+            for group in eb_groups_list:
+                eb_resolved = _resolve_eb_selection(group['eb_selection'], request.user)
+                eb_group = SalesEntitasBisnis.objects.create(
+                    sales_header=sales,
+                    entitas_bisnis_id=eb_resolved['lv1_id'],
+                    entitas_bisnis_lv2_id=eb_resolved.get('lv2_id'),
+                    entitas_bisnis_lv3_id=eb_resolved.get('lv3_id'),
+                    payment_account_id=None,  # now per-item on SalesItem
+                )
+
+                for item_data in group.get('items', []):
+                    tax_val = item_data.get('tax')
+                    tax_amount = Decimal(str(tax_val)) if tax_val else None
+                    is_bulk = item_data.get('is_bulk') == '1'
+
+                    si = SalesItem.objects.create(
+                        sales_eb=eb_group,
+                        item_id=item_data['item_id'],
+                        sub_transaction_type_id=item_data['sub_transaction_type_id'],
+                        quantity=Decimal('0') if is_bulk else Decimal(str(item_data['quantity'])),
+                        selling_price=Decimal(str(item_data.get('selling_price') or '0')),
+                        hpp_terpakai=Decimal(str(item_data['hpp_terpakai'])) if is_bulk else None,
+                        offset_coa_account_id=item_data['offset_coa_account_id'],
+                        revenue_account_id=item_data['revenue_account_id'],
+                        payment_account_id=item_data.get('payment_account_id') or None,
+                        tax=tax_amount,
+                        tax_type=item_data.get('tax_type', ''),
+                        tax_account_id=item_data.get('tax_account_id') or None,
+                        tax_payment=item_data.get('tax_payment', ''),
+                        tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
                     )
 
-        # Process FIFO outflow
-        reports = process_sales_fifo(sales)
-        for rep in reports:
-            if rep.used_fallback:
-                sumber = ', '.join(
-                    f"{row['qty']} dari {row['eb_name']} ({row['level']})"
-                    for row in rep.by_level if row['level'] != rep.requested_level)
-                dj_messages.warning(
-                    request,
-                    f'Stok di level {rep.requested_level} tidak mencukupi; '
-                    f'sebagian diambil dari induk: {sumber}.')
+                    # Buat SalesTaxLine dari tax_lines array (format baru)
+                    for tl_data in item_data.get('tax_lines', []):
+                        tl_tax_type = tl_data.get('tax_type', '')
+                        if not tl_tax_type:
+                            continue
+                        tl_tax_raw = tl_data.get('tax')
+                        tl_tax_val = Decimal(str(tl_tax_raw)) if tl_tax_raw else None
+                        tl_is_manual = bool(tl_data.get('is_manual', False)) or bool(tl_tax_val)
+                        tl_tax_account_id = tl_data.get('tax_account_id') or None
+                        tl_tax_payment_account_id = tl_data.get('tax_payment_account_id') or None
+                        if not tl_tax_account_id or not tl_tax_payment_account_id:
+                            continue
+                        SalesTaxLine.objects.create(
+                            sales_item=si,
+                            tax_type=tl_tax_type,
+                            tax=tl_tax_val,
+                            is_manual=tl_is_manual,
+                            tax_account_id=tl_tax_account_id,
+                            tax_payment_account_id=tl_tax_payment_account_id,
+                        )
 
-        # Generate automated journals
-        create_sales_automated_journals(sales, user=request.user)
+            # Process FIFO outflow
+            reports = process_sales_fifo(sales)
+            for rep in reports:
+                if rep.used_fallback:
+                    sumber = ', '.join(
+                        f"{row['qty']} dari {row['eb_name']} ({row['level']})"
+                        for row in rep.by_level if row['level'] != rep.requested_level)
+                    dj_messages.warning(
+                        request,
+                        f'Stok di level {rep.requested_level} tidak mencukupi; '
+                        f'sebagian diambil dari induk: {sumber}.')
 
-        event_type = 'EDITED' if existing else 'CREATED'
-        SalesEventLog.objects.create(
-            sales_header=sales,
-            event_type=event_type,
-            description=f'Transaksi {sales.transaction_id} {"diperbarui" if existing else "dibuat"} via form.',
-            actor=request.user,
-        )
-        SalesEventLog.objects.create(
-            sales_header=sales,
-            event_type='FIFO_PROCESSED',
-            actor=None,
-        )
-        SalesEventLog.objects.create(
-            sales_header=sales,
-            event_type='JOURNAL_CREATED',
-            actor=None,
-        )
+            # Generate automated journals
+            create_sales_automated_journals(sales, user=request.user)
+
+            event_type = 'EDITED' if existing else 'CREATED'
+            SalesEventLog.objects.create(
+                sales_header=sales,
+                event_type=event_type,
+                description=f'Transaksi {sales.transaction_id} {"diperbarui" if existing else "dibuat"} via form.',
+                actor=request.user,
+            )
+            SalesEventLog.objects.create(
+                sales_header=sales,
+                event_type='FIFO_PROCESSED',
+                actor=None,
+            )
+            SalesEventLog.objects.create(
+                sales_header=sales,
+                event_type='JOURNAL_CREATED',
+                actor=None,
+            )
+    except InsufficientStockError as exc:
+        dj_messages.error(request, f'Stok tidak mencukupi untuk memproses transaksi ini: {exc}')
+        inventory_items = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
+        ).select_related('coa_account').order_by('nama')
+        return render(request, 'sales/sales_form.html', {
+            'title': 'Edit Penjualan' if existing else 'Tambah Penjualan',
+            'today': tanggal or timezone.now().date(),
+            'sales': existing,
+            'items_master': inventory_items,
+            'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
+            'akun_list': get_akun_sorted(),
+            'eb_options': _get_eb_dropdown_options(request.user),
+            'errors': {'stock': str(exc)},
+            'eb_groups_json': safe_json(eb_groups_list),
+        })
 
     action = 'diperbarui' if existing else 'dibuat'
     dj_messages.success(request, f'Sales {sales.transaction_id} berhasil {action}.')
