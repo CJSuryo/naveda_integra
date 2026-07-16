@@ -21,7 +21,7 @@ from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data, _get_item_uoms_data
-from apps.uom.conversion import convert_input_to_base
+from apps.uom.conversion import ConversionError, convert_input_to_base, to_stock_uom
 from apps.uom.models import UnitOfMeasure
 
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
@@ -894,7 +894,22 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     iid, eb_resolved['lv1_id'],
                     eb_resolved.get('lv2_id'), eb_resolved.get('lv3_id'),
                 )
-                item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + qty
+                # Convert to the item's stock UOM before accumulating demand —
+                # the raw input-unit qty understates demand whenever the row
+                # uses a packaging UOM (conversion factor >= 1), which would
+                # silently weaken this pre-validation check.
+                demand_qty = qty
+                demand_input_uom_id = item_data.get('input_uom_id') or None
+                if demand_input_uom_id:
+                    demand_input_uom = UnitOfMeasure.objects.filter(pk=demand_input_uom_id).first()
+                    if demand_input_uom is not None:
+                        demand_item_obj = ItemMasterPurchase.objects.filter(pk=iid).first()
+                        if demand_item_obj is not None:
+                            try:
+                                demand_qty = to_stock_uom(qty, demand_input_uom, demand_item_obj)
+                            except ConversionError:
+                                pass
+                item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + demand_qty
 
             # Bulk inventory value validation
             if is_bulk:
@@ -1061,6 +1076,11 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                         qty_base = Decimal('0')
                         input_qty_raw = None
                         selling_base = Decimal(str(item_data.get('selling_price') or '0'))
+                        # Bulk items are value-based (not unit-based) and must
+                        # never persist a UOM, regardless of what the client
+                        # submitted — a real UOM with input_qty=None would be
+                        # a misleading audit record.
+                        input_uom = None
                     else:
                         item_obj = ItemMasterPurchase.objects.get(pk=item_data['item_id'])
                         input_qty_raw = Decimal(str(item_data['quantity']))

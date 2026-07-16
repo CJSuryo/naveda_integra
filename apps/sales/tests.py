@@ -1115,3 +1115,148 @@ class SalesUomConversionTests(TestCase):
                 'eb_groups_data': json.dumps(groups),
             })
         self.assertFalse(SalesItem.objects.filter(item=self.item).exists())
+
+    def test_sales_create_post_bulk_item_ignores_submitted_input_uom(self):
+        """Bulk items (value-based tracking) must never persist input_uom,
+        even if a client submits one alongside is_bulk='1' — the backend
+        must null it out regardless of what was posted."""
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import InventoryRecord
+
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales Bulk')
+        user = User.objects.create_user(email='uom-sales-bulk@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales Bulk')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales Bulk', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        bulk_item = ItemMasterPurchase.objects.create(
+            nama='Jual Bulk', tipe_item='FGB', coa_account=akun_persediaan)
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM Bulk', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        # Bulk stock is value-based: qty=1, unit_cost=total_value on the ledger
+        # (consumed by process_sales_fifo), plus a legacy InventoryRecord (used
+        # by the pre-transaction bulk-value validation in _handle_sales_save).
+        record_inflow(
+            bulk_item, eb, None, None, Decimal('1'), Decimal('500000'),
+            '2026-01-01', 'purchase_in',
+        )
+        InventoryRecord.objects.create(
+            item=bulk_item, entitas_bisnis=eb, quantity=Decimal('1'),
+            unit_price=Decimal('500000'), tanggal='2026-01-01')
+
+        groups = [{
+            'eb_selection': f'lv1:{eb.pk}',
+            'payment_account_id': akun_modal.pk,
+            'items': [{
+                'item_id': bulk_item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'is_bulk': '1',
+                'hpp_terpakai': '100000',
+                'selling_price': '150000',
+                'offset_coa_account_id': akun_persediaan.pk,
+                'revenue_account_id': akun_pendapatan.pk,
+                'payment_account_id': akun_modal.pk,
+                # A buggy/malicious client still sends a real input_uom_id
+                # even though this row is bulk — the backend must ignore it.
+                'input_uom_id': self.box.pk,
+            }],
+        }]
+        resp = client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Bulk',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 302)
+        si = SalesItem.objects.get(item=bulk_item)
+        self.assertIsNone(si.input_uom)
+        self.assertIsNone(si.input_qty)
+        self.assertEqual(si.quantity, Decimal('0'))
+
+    def test_sales_create_post_stock_prevalidation_uses_converted_qty(self):
+        """The pre-transaction stock-demand validation loop must convert the
+        input-unit qty to base units before comparing against available
+        stock — otherwise it under-counts demand for any UOM-converted row.
+
+        3 boxes * 12 pcs/box = 36 pcs demand. Available stock is 20 pcs:
+        more than the raw (unconverted) "demand" of 3, but less than the
+        true converted demand of 36. Only a unit-aware check catches this.
+        """
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales Prevalid')
+        user = User.objects.create_user(email='uom-sales-prevalid@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales Prevalid')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales Prevalid', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item.coa_account = akun_persediaan
+        self.item.save()
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM Prevalid', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        from apps.inventory.ledger import record_inflow
+        # Only 20 pcs available — enough for 3 raw units, not enough for the
+        # true converted demand of 36 pcs (3 boxes * 12 pcs/box).
+        record_inflow(
+            self.item, eb, None, None, Decimal('20'), Decimal('5000'),
+            '2026-01-01', 'purchase_in',
+        )
+
+        groups = [{
+            'eb_selection': f'lv1:{eb.pk}',
+            'payment_account_id': akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'quantity': '3',
+                'selling_price': '120000',
+                'offset_coa_account_id': akun_persediaan.pk,
+                'revenue_account_id': akun_pendapatan.pk,
+                'payment_account_id': akun_modal.pk,
+                'input_uom_id': self.box.pk,
+            }],
+        }]
+        resp = client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Prevalid',
+            'eb_groups_data': json.dumps(groups),
+        })
+        # Pre-validation must reject: re-renders the form with errors (200),
+        # not a redirect (302), and no SalesItem gets created.
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(SalesItem.objects.filter(item=self.item).exists())
+        errors = resp.context['errors']
+        self.assertTrue(
+            any(k.startswith('item_stock_') for k in errors),
+            f'Expected an item_stock_* validation error, got: {errors}')

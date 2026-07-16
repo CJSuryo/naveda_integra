@@ -581,7 +581,7 @@
       '<td class="item-field-td" data-label="Revenue Akun"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Payment Akun"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Gudang"' + fieldTdStyle + '><select id="' + rid + '_gudang" class="ni-sales-input wh-select">' + warehouseOptions(ebLv1IdForRow, prefill ? (prefill.warehouse_id || '') : '') + '</select></td>' +
-      '<td class="item-field-td" data-label="Satuan"' + fieldTdStyle + '><select id="' + rid + '_uom" class="ni-sales-input uom-select">' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
+      '<td class="item-field-td col-uom" data-label="Satuan"' + fieldTdStyle + '><select id="' + rid + '_uom" class="ni-sales-input uom-select"' + satuanInputDisabled + '>' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
       '<td data-label="">' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
@@ -826,6 +826,14 @@
       inp.style.display = isBulk ? 'none' : '';
       inp.disabled = isBulk;
       if (isBulk) inp.value = '';
+    });
+    // Bulk items are value-based (HPP) and UOM-agnostic — never let a bulk
+    // row submit a real input_uom_id (see backend guard in views.py that
+    // nulls input_uom for is_bulk regardless, but keep the UI consistent).
+    tr.querySelectorAll('td.col-uom select').forEach(function (sel) {
+      sel.style.display = isBulk ? 'none' : '';
+      sel.disabled = isBulk;
+      if (isBulk) sel.value = '';
     });
     tr.querySelectorAll('td.col-bulk input').forEach(function (inp) {
       inp.style.display = '';  // Always show HPP field
