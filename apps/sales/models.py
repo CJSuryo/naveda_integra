@@ -261,6 +261,11 @@ class SalesItem(models.Model):
         verbose_name='Tax Payment Account',
         help_text='Utang PPN Keluaran (jika belum transfer).',
     )
+    warehouse = models.ForeignKey(
+        'inventory.Warehouse', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='sales_items',
+        verbose_name='Gudang',
+    )
 
     class Meta:
         verbose_name = 'Sales Item'

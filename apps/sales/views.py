@@ -16,11 +16,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
-from apps.inventory.models import InventoryRecord
+from apps.inventory.models import InventoryRecord, Warehouse
 from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
-from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data
 
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
 from .services import (
@@ -360,6 +360,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'sub_transaction_types': SubTransactionType.objects.filter(module='sales').order_by('nama'),
         'akun_list': get_akun_sorted(),
         'eb_options': _get_eb_dropdown_options(request.user),
+        'warehouses_json': safe_json(_get_warehouses_data()),
     })
 
 
@@ -410,6 +411,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
                 'tax_account_id': si.tax_account_id or '',
                 'tax_payment': si.tax_payment or '',
                 'tax_payment_account_id': si.tax_payment_account_id or '',
+                'warehouse_id': si.warehouse_id or '',
                 # New: tax lines array
                 'tax_lines': [
                     {
@@ -442,6 +444,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'akun_list': get_akun_sorted(),
         'eb_options': _get_eb_dropdown_options(request.user),
         'eb_groups_json': safe_json(eb_groups_data),
+        'warehouses_json': safe_json(_get_warehouses_data()),
     })
 
 
@@ -1001,6 +1004,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'eb_options': _get_eb_dropdown_options(request.user),
             'errors': errors,
             'eb_groups_json': safe_json(eb_groups_list),
+            'warehouses_json': safe_json(_get_warehouses_data()),
         })
 
     # Save
@@ -1038,6 +1042,11 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     tax_amount = Decimal(str(tax_val)) if tax_val else None
                     is_bulk = item_data.get('is_bulk') == '1'
 
+                    wh_id = item_data.get('warehouse_id') or None
+                    if wh_id and not Warehouse.objects.filter(
+                            pk=wh_id, entitas_bisnis_id=eb_resolved['lv1_id']).exists():
+                        raise ValueError('Gudang tidak valid untuk bisnis ini.')
+
                     si = SalesItem.objects.create(
                         sales_eb=eb_group,
                         item_id=item_data['item_id'],
@@ -1053,6 +1062,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                         tax_account_id=item_data.get('tax_account_id') or None,
                         tax_payment=item_data.get('tax_payment', ''),
                         tax_payment_account_id=item_data.get('tax_payment_account_id') or None,
+                        warehouse_id=wh_id,
                     )
 
                     # Buat SalesTaxLine dari tax_lines array (format baru)
@@ -1123,6 +1133,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'eb_options': _get_eb_dropdown_options(request.user),
             'errors': {'stock': str(exc)},
             'eb_groups_json': safe_json(eb_groups_list),
+            'warehouses_json': safe_json(_get_warehouses_data()),
         })
 
     action = 'diperbarui' if existing else 'dibuat'

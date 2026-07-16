@@ -940,3 +940,37 @@ class SalesEBIsolationTests(TestCase):
         total_cogs = sum(a.cogs_amount for a in allocations)
         self.assertEqual(total_qty, Decimal('12'))
         self.assertEqual(total_cogs, Decimal('66'))
+
+    def test_sale_consumes_only_selected_warehouse(self):
+        """When a SalesItem specifies a warehouse, process_sales_fifo must lock
+        consumption to that warehouse's layers only, even if a cheaper/older
+        layer sits in a sibling warehouse of the same EB."""
+        from apps.inventory.models import Warehouse, StockMovement
+        from apps.inventory.ledger import record_inflow
+        from apps.sales.services import process_sales_fifo
+
+        wh_a = Warehouse.objects.create(entitas_bisnis=self.eb, kode='SA', nama='SGudang A')
+        wh_b = Warehouse.objects.create(entitas_bisnis=self.eb, kode='SB', nama='SGudang B')
+        record_inflow(self.item, self.eb, self.lv2, self.lv3a, Decimal('10'), Decimal('100'),
+                      '2026-01-01', 'purchase_in', warehouse=wh_a)
+        record_inflow(self.item, self.eb, self.lv2, self.lv3a, Decimal('10'), Decimal('999'),
+                      '2026-01-01', 'purchase_in', warehouse=wh_b)
+
+        header = SalesHeader.objects.create(tanggal='2026-01-03')
+        eb_group = SalesEntitasBisnis.objects.create(
+            sales_header=header, entitas_bisnis=self.eb,
+            entitas_bisnis_lv2=self.lv2, entitas_bisnis_lv3=self.lv3a)
+        si = SalesItem.objects.create(
+            sales_eb=eb_group, item=self.item, sub_transaction_type=self.stt,
+            quantity=Decimal('6'), selling_price=Decimal('10'),
+            offset_coa_account=self.akun_hpp, revenue_account=self.akun_rev,
+            warehouse=wh_a)
+
+        process_sales_fifo(header)
+        si.refresh_from_db()
+        # Must only draw from wh_a's layer (unit cost 100), never touching wh_b.
+        self.assertEqual(si.cogs_amount, Decimal('600'))
+
+        out = StockMovement.objects.get(
+            source_object_id=si.pk, source_content_type__model='salesitem')
+        self.assertEqual(out.warehouse_id, wh_a.pk)

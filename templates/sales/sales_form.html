@@ -303,6 +303,9 @@
   // Data from server (for edit mode)
   var existingGroups = {{ eb_groups_json|default:"[]"|safe }};
 
+  // Active warehouses, keyed to their owning lv1 EntitasBisnis
+  var WAREHOUSES = {{ warehouses_json|default:"[]"|safe }};
+
   // Entitas bisnis options from server (hierarchical lv1/lv2/lv3)
   var ebOptions = [
     {% for eb in eb_options %}
@@ -349,6 +352,53 @@
     return '';
   }
 
+  // ── Warehouse (gudang) helpers ──────────────────────────────────────
+  function warehouseOptions(lv1Id, selected) {
+    var opts = ['<option value="">— (opsional)</option>'];
+    WAREHOUSES.filter(function (w) { return String(w.entitas_bisnis_id) === String(lv1Id); })
+      .forEach(function (w) {
+        var sel = String(w.id) === String(selected) ? ' selected' : '';
+        opts.push('<option value="' + w.id + '"' + sel + '>' + w.kode + ' — ' + w.nama + '</option>');
+      });
+    return opts.join('');
+  }
+
+  function refreshGroupWarehouseOptions(gid) {
+    var card = document.getElementById(gid);
+    if (!card) return;
+    var ebSelect = card.querySelector('.eb-select');
+    var lv1Id = ebSelect ? getEBLv1Id(ebSelect.value) : '';
+    var uniformSel = document.getElementById(gid + '_wh_uniform');
+    if (uniformSel) uniformSel.innerHTML = warehouseOptions(lv1Id, uniformSel.value);
+    var tbody = document.getElementById(gid + '_items');
+    if (tbody) {
+      tbody.querySelectorAll('.wh-select').forEach(function (sel) {
+        sel.innerHTML = warehouseOptions(lv1Id, sel.value);
+      });
+    }
+  }
+
+  window.toggleUniformWarehouse = function (gid) {
+    var checkbox = document.getElementById(gid + '_wh_uniform_toggle');
+    var wrap     = document.getElementById(gid + '_wh_uniform_wrap');
+    var tbody    = document.getElementById(gid + '_items');
+    var active   = !!(checkbox && checkbox.checked);
+    if (wrap) wrap.style.display = active ? '' : 'none';
+    if (tbody) {
+      tbody.querySelectorAll('.wh-select').forEach(function (sel) { sel.disabled = active; });
+    }
+    if (active) {
+      var uniformSel = document.getElementById(gid + '_wh_uniform');
+      applyUniformWarehouse(gid, uniformSel ? uniformSel.value : '');
+    }
+  };
+
+  window.applyUniformWarehouse = function (gid, whId) {
+    var tbody = document.getElementById(gid + '_items');
+    if (!tbody) return;
+    tbody.querySelectorAll('.wh-select').forEach(function (sel) { sel.value = whId; });
+  };
+
   // ── Add EB Group ──────────────────────────────────────────────────────────
   window.addEBGroup = function (prefill) {
     ebGroupCount++;
@@ -386,6 +436,7 @@
             '<th style="width:9%">Offset CoA</th>' +
             '<th style="width:9%">Revenue Akun</th>' +
             '<th style="width:9%">Payment Akun</th>' +
+            '<th style="width:8%">Gudang</th>' +
             '<th style="width:4%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
@@ -398,6 +449,12 @@
         '<span class="ni-advanced-toggle" onclick="toggleAdvanced(\'' + gid + '\')">' +
           '<i data-lucide="settings" style="width:12px;height:12px"></i> Advanced (Pajak)' +
         '</span>' +
+        '<label style="display:flex;align-items:center;gap:4px;font-size:0.75rem;color:var(--ni-text-muted);white-space:nowrap;">' +
+          '<input type="checkbox" id="' + gid + '_wh_uniform_toggle" onchange="toggleUniformWarehouse(\'' + gid + '\')"> Gudang seragam' +
+        '</label>' +
+        '<span id="' + gid + '_wh_uniform_wrap" style="display:none;">' +
+          '<select id="' + gid + '_wh_uniform" class="ni-input ni-input--sm" onchange="applyUniformWarehouse(\'' + gid + '\', this.value)">' + warehouseOptions('', '') + '</select>' +
+        '</span>' +
         '<div style="margin-left:auto;display:flex;gap:16px;font-size:0.85rem;" class="ni-eb-group-footer">' +
           '<span style="color:var(--ni-text-muted);">Total HPP: <strong id="' + gid + '_total_hpp" style="color:var(--ni-danger);">0</strong></span>' +
           '<span style="color:var(--ni-text-muted);">Total Penjualan: <strong id="' + gid + '_total_sales" style="color:var(--ni-primary);">0</strong></span>' +
@@ -406,6 +463,7 @@
       '</div>';
 
     container.appendChild(card);
+    refreshGroupWarehouseOptions(gid);
     lucide.createIcons();
 
     // Pre-fill items if editing
@@ -438,6 +496,7 @@
         sel.tomselect.clear();
       }
     });
+    refreshGroupWarehouseOptions(gid);
   };
 
   // ── Add Item Row ──────────────────────────────────────────────────────────
@@ -445,6 +504,10 @@
     itemCounters[gid] = (itemCounters[gid] || 0) + 1;
     var rid = gid + '_item_' + itemCounters[gid];
     var tbody = document.getElementById(gid + '_items');
+
+    var rowCard        = document.getElementById(gid);
+    var rowEbSelect     = rowCard ? rowCard.querySelector('.eb-select') : null;
+    var ebLv1IdForRow    = rowEbSelect ? getEBLv1Id(rowEbSelect.value) : '';
 
     var sttSelectOptions = '<option value="">— Pilih —</option>';
     sttOptions.forEach(function (stt) {
@@ -504,6 +567,7 @@
       '<td class="item-field-td" data-label="Offset CoA (HPP)"' + fieldTdStyle + '><select id="' + rid + '_offset" class="ni-sales-input">' + offsetOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Revenue Akun"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Payment Akun"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
+      '<td class="item-field-td" data-label="Gudang"' + fieldTdStyle + '><select id="' + rid + '_gudang" class="ni-sales-input wh-select">' + warehouseOptions(ebLv1IdForRow, prefill ? (prefill.warehouse_id || '') : '') + '</select></td>' +
       '<td data-label="">' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
@@ -517,7 +581,7 @@
     trAdv.className = 'advanced-row';
     trAdv.style.display = hasTaxLines ? '' : 'none';
     trAdv.innerHTML =
-      '<td colspan="10" style="padding:8px 10px;background:var(--ni-bg);">' +
+      '<td colspan="11" style="padding:8px 10px;background:var(--ni-bg);">' +
         '<div class="ni-tax-lines-header">' +
           '<span><i data-lucide="receipt" style="width:12px;height:12px;vertical-align:middle;"></i> Tax Lines</span>' +
           '<button type="button" class="ni-btn ni-btn--secondary ni-btn--sm" onclick="addTaxLine(\'' + rid + '\')" style="padding:4px 10px;">' +
@@ -529,6 +593,17 @@
 
     tbody.appendChild(tr);
     tbody.appendChild(trAdv);
+
+    // If "Gudang seragam" is active for this group, lock the new row's select too.
+    var uniformToggle = document.getElementById(gid + '_wh_uniform_toggle');
+    if (uniformToggle && uniformToggle.checked) {
+      var uniformSel = document.getElementById(gid + '_wh_uniform');
+      var whSel       = document.getElementById(rid + '_gudang');
+      if (whSel) {
+        whSel.value    = uniformSel ? uniformSel.value : '';
+        whSel.disabled = true;
+      }
+    }
 
     // Prefill tax lines from server data (edit mode)
     if (hasTaxLines) {
@@ -1007,6 +1082,7 @@
           offset_coa_account_id: document.getElementById(rid + '_offset').value || '',
           revenue_account_id: document.getElementById(rid + '_revenue').value || '',
           payment_account_id: document.getElementById(rid + '_payment') ? document.getElementById(rid + '_payment').value : '',
+          warehouse_id: document.getElementById(rid + '_gudang') ? document.getElementById(rid + '_gudang').value : '',
           tax_lines: collectTaxLines(rid),
           tax: '',
           tax_type: '',
