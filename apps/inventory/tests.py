@@ -529,3 +529,27 @@ class ReconcileCommandTests(DjangoTestCase):
         out = StringIO()
         call_command('reconcile_stock_ledger', stdout=out)
         self.assertIn('Rekonsiliasi cocok', out.getvalue())
+
+
+class WarehouseModelTest(DjangoTestCase):
+    def setUp(self):
+        from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
+        tipe = TipeEntitas.objects.create(nama='Retail-WHT')
+        self.biz_a = EntitasBisnis.objects.create(nama='Bisnis A', tipe_entitas=tipe)
+        self.biz_b = EntitasBisnis.objects.create(nama='Bisnis B', tipe_entitas=tipe)
+
+    def test_create_and_str(self):
+        from apps.inventory.models import Warehouse
+        wh = Warehouse.objects.create(entitas_bisnis=self.biz_a, kode='GD01', nama='Gudang Utama')
+        self.assertTrue(wh.is_active)
+        self.assertEqual(str(wh), 'GD01 — Gudang Utama')
+
+    def test_kode_unique_per_business_only(self):
+        from django.db import IntegrityError
+        from apps.inventory.models import Warehouse
+        Warehouse.objects.create(entitas_bisnis=self.biz_a, kode='GD01', nama='A-Utama')
+        # kode sama di bisnis berbeda: boleh
+        Warehouse.objects.create(entitas_bisnis=self.biz_b, kode='GD01', nama='B-Utama')
+        # kode sama di bisnis sama: ditolak
+        with self.assertRaises(IntegrityError):
+            Warehouse.objects.create(entitas_bisnis=self.biz_a, kode='GD01', nama='A-Dup')

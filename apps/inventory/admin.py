@@ -1,7 +1,7 @@
 """Inventory admin."""
 from django.contrib import admin
 from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecord
-from apps.inventory.models import StockMovement, StockConsumption
+from apps.inventory.models import StockMovement, StockConsumption, Warehouse
 
 
 class MutasiInventoryDetailInline(admin.TabularInline):
@@ -56,3 +56,11 @@ class StockConsumptionAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+
+@admin.register(Warehouse)
+class WarehouseAdmin(admin.ModelAdmin):
+    list_display = ('kode', 'nama', 'entitas_bisnis', 'is_active', 'created_at')
+    list_filter = ('entitas_bisnis', 'is_active')
+    search_fields = ('kode', 'nama')
+    autocomplete_fields = ('entitas_bisnis',)

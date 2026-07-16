@@ -182,6 +182,32 @@ class InventoryRecord(models.Model):
             return f'{pattern}{seq:03d}'
 
 
+class Warehouse(models.Model):
+    """Physical stock location, scoped to a business/tenant (EntitasBisnis lv1).
+
+    Orthogonal to the accounting EB hierarchy: a warehouse belongs to exactly
+    one business but may be used by any of that business's branches (lv2/lv3).
+    """
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT,
+        related_name='warehouses', verbose_name='Bisnis (Entitas Bisnis Lv1)',
+    )
+    kode = models.CharField(max_length=30, verbose_name='Kode Gudang')
+    nama = models.CharField(max_length=255, verbose_name='Nama Gudang')
+    alamat = models.TextField(blank=True, null=True, verbose_name='Alamat')
+    is_active = models.BooleanField(default=True, verbose_name='Aktif')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Gudang'
+        verbose_name_plural = 'Gudang'
+        unique_together = (('entitas_bisnis', 'kode'),)
+        ordering = ['entitas_bisnis', 'kode']
+
+    def __str__(self) -> str:
+        return f'{self.kode} — {self.nama}'
+
+
 class StockMovement(models.Model):
     """Append-only authoritative stock ledger.
 
