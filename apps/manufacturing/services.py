@@ -380,13 +380,20 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
 
         if not as_wip:
             # 3. Create FG FIFO inflow batch (completed mode only)
+            # Bulk FG (FGB): value-based convention (qty=1, unit_price=total_value),
+            # matching Purchase's inflow dual-write for bulk items — see
+            # apps.purchase.services.create_fifo_batches / create_stock_movements.
+            fg_is_bulk = fg_item.tipe_item in ('RMB', 'FGB', 'ITMB')
+            fg_qty = Decimal('1') if fg_is_bulk else qty_produced
+            fg_value = total_cost if fg_is_bulk else unit_cost
+
             fg_batch = FIFOBatch.objects.create(
                 purchase_item=None,
                 item=fg_item,
                 tanggal=production_order.tanggal,
-                quantity_in=qty_produced,
-                unit_price=unit_cost,
-                remaining_qty=qty_produced,
+                quantity_in=fg_qty,
+                unit_price=fg_value,
+                remaining_qty=fg_qty,
             )
 
             # 4. Create FG InventoryRecord
@@ -394,8 +401,8 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                 item=fg_item,
                 purchase_item=None,
                 entitas_bisnis=entitas_bisnis,
-                quantity=qty_produced,
-                unit_price=unit_cost,
+                quantity=fg_qty,
+                unit_price=fg_value,
                 tanggal=production_order.tanggal,
                 lead_time_days=production_order.lead_time_days,
                 ordering_cost=production_order.ordering_cost,
@@ -407,7 +414,7 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
             record_inflow(
                 fg_item, entitas_bisnis,
                 production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
-                qty_produced, unit_cost, production_order.tanggal, 'production_in',
+                fg_qty, fg_value, production_order.tanggal, 'production_in',
                 source=production_order,
                 legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
 
@@ -615,14 +622,21 @@ def approve_production(production_order: ProductionOrder) -> None:
     qty_produced = production_order.qty_produced
 
     with transaction.atomic():
+        # Bulk FG (FGB): value-based convention (qty=1, unit_price=total_value),
+        # matching process_production's completed-mode FG inflow and Purchase's
+        # inflow dual-write for bulk items.
+        fg_is_bulk = fg_item.tipe_item in ('RMB', 'FGB', 'ITMB')
+        fg_qty = Decimal('1') if fg_is_bulk else qty_produced
+        fg_value = production_order.total_cost if fg_is_bulk else production_order.unit_cost
+
         # Create FG FIFO inflow batch
         fg_batch = FIFOBatch.objects.create(
             purchase_item=None,
             item=fg_item,
             tanggal=production_order.tanggal,
-            quantity_in=qty_produced,
-            unit_price=production_order.unit_cost,
-            remaining_qty=qty_produced,
+            quantity_in=fg_qty,
+            unit_price=fg_value,
+            remaining_qty=fg_qty,
         )
 
         # Create FG InventoryRecord
@@ -630,8 +644,8 @@ def approve_production(production_order: ProductionOrder) -> None:
             item=fg_item,
             purchase_item=None,
             entitas_bisnis=production_order.entitas_bisnis,
-            quantity=qty_produced,
-            unit_price=production_order.unit_cost,
+            quantity=fg_qty,
+            unit_price=fg_value,
             tanggal=production_order.tanggal,
             lead_time_days=production_order.lead_time_days,
             ordering_cost=production_order.ordering_cost,
@@ -647,7 +661,7 @@ def approve_production(production_order: ProductionOrder) -> None:
         record_inflow(
             fg_item, production_order.entitas_bisnis,
             production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
-            qty_produced, production_order.unit_cost, production_order.tanggal, 'production_in',
+            fg_qty, fg_value, production_order.tanggal, 'production_in',
             source=production_order,
             legacy_fifo_batch=fg_batch, legacy_inventory_record=inv_record)
 
@@ -714,13 +728,18 @@ def reverse_production(production_order: ProductionOrder) -> None:
                 entitas_bisnis=production_order.entitas_bisnis,
             ).delete()
 
-        # Delete FG FIFO batch created by this production
+        # Delete FG FIFO batch created by this production. Bulk FG (FGB) was
+        # written with qty=1 / unit_price=total_cost (see process_production /
+        # approve_production); non-bulk uses qty_produced / unit_cost.
+        fg_is_bulk = fg_item.tipe_item in ('RMB', 'FGB', 'ITMB')
+        fg_qty = Decimal('1') if fg_is_bulk else production_order.qty_produced
+        fg_value = production_order.total_cost if fg_is_bulk else production_order.unit_cost
         FIFOBatch.objects.filter(
             item=fg_item,
             purchase_item__isnull=True,
             tanggal=production_order.tanggal,
-            quantity_in=production_order.qty_produced,
-            unit_price=production_order.unit_cost,
+            quantity_in=fg_qty,
+            unit_price=fg_value,
         ).delete()
 
         # Delete journal entries

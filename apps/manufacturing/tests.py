@@ -761,6 +761,109 @@ class ProductionServiceTests(TestCase):
 
 
 # ---------------------------------------------------------------------------
+# Bulk FG (FGB) production tests — value-based ledger convention
+# ---------------------------------------------------------------------------
+
+class ProductionBulkFGTests(TestCase):
+    """FG completion for a bulk finished good (FGB) must follow the ledger's
+    value-based convention (qty=1, unit_cost=total_value), same as Purchase's
+    inflow dual-write for bulk items. RM lines stay non-bulk (RM) here — the
+    RM-consumption side for bulk (RMB) is out of scope, see task report."""
+
+    def setUp(self):
+        self.user = _make_user()
+        self.eb = _make_entitas()
+        self.akun_wip = _make_akun('1301', 'WIP')
+        self.akun_rm = _make_akun('1201', 'Persediaan RM')
+        self.akun_fg = _make_akun('1401', 'Persediaan FG Bulk')
+        self.fg = _make_item('FGB-0001', 'Semen Curah', 'FGB', self.akun_fg)
+        self.rm = _make_item('RM-0001', 'Klinker', 'RM', self.akun_rm)
+        self.bom = _make_bom_with_line(self.eb, self.fg, self.rm, qty_per_unit=Decimal('2'))
+        rm_batch = _seed_fifo(self.rm, [('2025-01-01', 100, 5000)])[0]
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.rm, self.eb, None, None, Decimal('100'),
+                      Decimal('5000'), '2025-01-01', 'purchase_in',
+                      legacy_fifo_batch=rm_batch)
+        self.order = ProductionOrder.objects.create(
+            tanggal='2025-01-10', entitas_bisnis=self.eb,
+            bom=self.bom, qty_produced=Decimal('10'), coa_produksi=self.akun_wip,
+        )
+
+    def test_process_production_bulk_fg_uses_value_convention(self):
+        """qty_produced=10, 2 RM/unit @ 5000 = 100,000 total_cost (no overhead).
+        Bulk FG completion must write qty=1 / unit_cost=total_value everywhere,
+        not qty=10 / unit_cost=per-unit."""
+        from .services import process_production
+        from apps.purchase.models import FIFOBatch
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.inventory.ledger import get_available_stock
+
+        process_production(self.order)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_cost, Decimal('100000'))
+
+        fg_batch = FIFOBatch.objects.get(item=self.fg)
+        self.assertEqual(fg_batch.quantity_in, Decimal('1'))
+        self.assertEqual(fg_batch.unit_price, Decimal('100000'))
+        self.assertEqual(fg_batch.remaining_qty, Decimal('1'))
+
+        fg_rec = InventoryRecord.objects.get(item=self.fg)
+        self.assertEqual(fg_rec.quantity, Decimal('1'))
+        self.assertEqual(fg_rec.unit_price, Decimal('100000'))
+
+        fg_movement = StockMovement.objects.get(item=self.fg, movement_type='production_in')
+        self.assertEqual(fg_movement.qty, Decimal('1'))
+        self.assertEqual(fg_movement.unit_cost, Decimal('100000'))
+        self.assertEqual(fg_movement.remaining_qty, Decimal('1'))
+
+        # Ledger get_available_stock is unit-agnostic (sums remaining_qty);
+        # for a bulk layer that's the bulk "1 unit" convention, not a real qty.
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('1'))
+
+    def test_approve_production_bulk_fg_uses_value_convention(self):
+        """Same value-based convention must hold for the WIP-approval path."""
+        from .services import process_production, approve_production
+        from apps.purchase.models import FIFOBatch
+        from apps.inventory.models import InventoryRecord, StockMovement
+        from apps.inventory.ledger import get_available_stock
+
+        self.order.status = 'in_progress'
+        self.order.save()
+        process_production(self.order, as_wip=True)
+        approve_production(self.order)
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.total_cost, Decimal('100000'))
+
+        fg_batch = FIFOBatch.objects.get(item=self.fg)
+        self.assertEqual(fg_batch.quantity_in, Decimal('1'))
+        self.assertEqual(fg_batch.unit_price, Decimal('100000'))
+
+        fg_rec = InventoryRecord.objects.get(item=self.fg)
+        self.assertEqual(fg_rec.quantity, Decimal('1'))
+        self.assertEqual(fg_rec.unit_price, Decimal('100000'))
+
+        fg_movement = StockMovement.objects.get(item=self.fg, movement_type='production_in')
+        self.assertEqual(fg_movement.qty, Decimal('1'))
+        self.assertEqual(fg_movement.unit_cost, Decimal('100000'))
+
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('1'))
+
+    def test_reverse_production_bulk_fg_removes_ledger_layer(self):
+        """Reversal of a bulk-FG production order must remove the FG layer,
+        leaving get_available_stock at 0 — same as the non-bulk case."""
+        from .services import process_production, reverse_production
+        from apps.inventory.ledger import get_available_stock
+
+        process_production(self.order)
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('1'))
+
+        reverse_production(self.order)
+        self.assertEqual(get_available_stock(self.fg, self.eb), Decimal('0'))
+        self.order.refresh_from_db()
+        self.assertFalse(self.order.is_processed)
+
+
+# ---------------------------------------------------------------------------
 # BOM view tests
 # ---------------------------------------------------------------------------
 
