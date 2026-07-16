@@ -74,6 +74,15 @@ class BOMLine(models.Model):
         decimal_places=4,
         verbose_name='Qty per Unit FG',
     )
+    input_uom = models.ForeignKey(
+        'uom.UnitOfMeasure', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='bom_lines_input',
+        verbose_name='Satuan Input RM',
+    )
+    input_qty = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        verbose_name='Qty Input per Unit FG',
+    )
 
     class Meta:
         verbose_name = 'BOM Line'
@@ -138,6 +147,15 @@ class ProductionOrder(models.Model):
         max_digits=15,
         decimal_places=4,
         verbose_name='Qty Diproduksi',
+    )
+    input_uom = models.ForeignKey(
+        'uom.UnitOfMeasure', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='production_orders_input',
+        verbose_name='Satuan Input FG',
+    )
+    input_qty = models.DecimalField(
+        max_digits=15, decimal_places=4, null=True, blank=True,
+        verbose_name='Qty Input (satuan asli)',
     )
     overhead_cost = models.DecimalField(
         max_digits=19,
