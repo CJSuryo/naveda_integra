@@ -12,7 +12,8 @@ from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
 
 from naveda_integra.ratelimit_utils import rate_from
-from django.db.models import Q, Sum
+from django.db import transaction
+from django.db.models import ProtectedError, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -1334,17 +1335,17 @@ def adjustment_create(request: HttpRequest) -> HttpResponse:
         form = StockAdjustmentForm(request.POST)
         formset = StockAdjustmentItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
-            adj = form.save()
-            formset.instance = adj
-            formset.save()
             try:
-                header = process_adjustment(adj)
+                with transaction.atomic():
+                    adj = form.save()
+                    formset.instance = adj
+                    formset.save()
+                    header = process_adjustment(adj)
             except ValueError as e:
-                adj.delete()
                 messages.error(request, str(e))
-                return redirect('inventory:adjustment_create')
-            messages.success(request, f'Adjustment {adj.nomor} diposting. Jurnal {header.nomor_transaksi}.')
-            return redirect('inventory:adjustment_list')
+            else:
+                messages.success(request, f'Adjustment {adj.nomor} diposting. Jurnal {header.nomor_transaksi}.')
+                return redirect('inventory:adjustment_list')
     else:
         form = StockAdjustmentForm()
         formset = StockAdjustmentItemFormSet()
@@ -1361,7 +1362,7 @@ def adjustment_delete(request: HttpRequest, pk: int) -> HttpResponse:
                 reverse_adjustment(adj, request)
             adj.delete()
             messages.success(request, f'Adjustment {adj.nomor} dibatalkan.')
-        except Exception as e:
+        except (ValueError, ProtectedError) as e:
             messages.error(request, f'Gagal membatalkan: {e}')
         return redirect('inventory:adjustment_list')
     return render(request, 'inventory/adjustment_delete_confirm.html', {'adj': adj})

@@ -101,5 +101,5 @@ class StockAdjustmentItemForm(forms.ModelForm):
 StockAdjustmentItemFormSet = inlineformset_factory(
     StockAdjustment, StockAdjustmentItem,
     form=StockAdjustmentItemForm,
-    fields=('item', 'qty', 'unit_cost'), extra=1, min_num=1, validate_min=True, can_delete=True,
+    fields=('item', 'qty', 'unit_cost'), extra=3, min_num=1, validate_min=True, can_delete=True,
 )

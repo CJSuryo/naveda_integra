@@ -177,3 +177,47 @@ class AdjustmentViewTests(TestCase):
     def test_create_get_renders(self):
         resp = self.client.get(reverse('inventory:adjustment_create'))
         self.assertEqual(resp.status_code, 200)
+
+    def test_create_post_success_posts_adjustment(self):
+        from apps.master_data.models import Akun
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.models import Warehouse, StockAdjustment
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        item.coa_account = persediaan
+        item.save()
+        selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        data = {
+            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'akun_selisih': selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '10', 'items-0-unit_cost': '5',
+        }
+        resp = self.client.post(reverse('inventory:adjustment_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockAdjustment.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'entitas_bisnis': '', 'warehouse': '',
+            'akun_selisih': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '', 'items-0-unit_cost': '',
+        }
+        resp = self.client.post(reverse('inventory:adjustment_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse, StockAdjustment
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih2')
+        adj = StockAdjustment.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                             warehouse=wh, akun_selisih=selisih)
+        resp = self.client.post(reverse('inventory:adjustment_delete', args=[adj.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockAdjustment.objects.filter(pk=adj.pk).exists())
