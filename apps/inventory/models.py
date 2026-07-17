@@ -325,3 +325,61 @@ class StockConsumption(models.Model):
 
     def __str__(self) -> str:
         return f'{self.out_movement_id} → {self.in_movement_id} × {self.qty}'
+
+
+class _NomorMixin:
+    """Helper penghasil nomor TRX-<PREFIX>-NNN, aman-konkuren."""
+    NOMOR_PREFIX = ''
+
+    def _generate_nomor(self):
+        from django.db import transaction as _t
+        with _t.atomic():
+            last = (
+                type(self).objects.select_for_update()
+                .filter(nomor__startswith=self.NOMOR_PREFIX)
+                .order_by('-nomor').values_list('nomor', flat=True).first()
+            )
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1 if last else 1
+            except (ValueError, IndexError):
+                seq = 1
+            return f'{self.NOMOR_PREFIX}{seq:03d}'
+
+
+class StockAdjustment(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-ADJ-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='stock_adjustments')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments')
+    akun_selisih = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='stock_adjustments', verbose_name='Akun Selisih Persediaan')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Adjustment'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockAdjustmentItem(models.Model):
+    adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4, help_text='Bertanda: + naik, - turun')
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0, help_text='Untuk kenaikan')
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'{self.item.item_id} × {self.qty}'
