@@ -1,32 +1,56 @@
 {% extends 'base.html' %}
+{% block title %}Master Gudang{% endblock %}
 {% block content %}
-<div class="ni-page">
-  <div class="ni-page__header">
-    <h1 class="ni-page__title">{{ title }}</h1>
-    <a href="{% url 'inventory:warehouse_create' %}" class="ni-btn ni-btn--primary">+ Gudang</a>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">Lokasi fisik penyimpanan stok per Entitas Bisnis</p>
   </div>
-  <table class="ni-table">
-    <thead><tr><th>Bisnis</th><th>Kode</th><th>Nama</th><th>Alamat</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-      {% for w in warehouses %}
-      <tr>
-        <td>{{ w.entitas_bisnis.nama }}</td>
-        <td>{{ w.kode }}</td>
-        <td>{{ w.nama }}</td>
-        <td>{{ w.alamat|default:'—' }}</td>
-        <td>{% if w.is_active %}Aktif{% else %}Nonaktif{% endif %}</td>
-        <td>
-          <a href="{% url 'inventory:warehouse_update' w.pk %}" class="ni-link">Edit</a>
-          <form method="post" action="{% url 'inventory:warehouse_toggle' w.pk %}" style="display:inline">
-            {% csrf_token %}
-            <button type="submit" class="ni-link">{% if w.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %}</button>
-          </form>
-        </td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="6">Belum ada gudang.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:warehouse_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Gudang Baru
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr><th>Bisnis</th><th>Kode</th><th>Nama</th><th>Alamat</th><th>Status</th><th>Aksi</th></tr>
+      </thead>
+      <tbody>
+        {% for w in warehouses %}
+        <tr>
+          <td>{{ w.entitas_bisnis.nama }}</td>
+          <td>{{ w.kode }}</td>
+          <td>{{ w.nama }}</td>
+          <td>{{ w.alamat|default:'—' }}</td>
+          <td>
+            {% if w.is_active %}
+            <span class="ni-badge ni-badge--success">Aktif</span>
+            {% else %}
+            <span class="ni-badge ni-badge--secondary">Nonaktif</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'inventory:warehouse_update' w.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <form method="post" action="{% url 'inventory:warehouse_toggle' w.pk %}" style="display:inline"
+                    onsubmit="return confirm('{% if w.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %} gudang {{ w.kode|escapejs }}?')">
+                {% csrf_token %}
+                <button type="submit" class="ni-btn ni-btn--secondary ni-btn--sm">
+                  {% if w.is_active %}Nonaktifkan{% else %}Aktifkan{% endif %}
+                </button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Belum ada gudang.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
