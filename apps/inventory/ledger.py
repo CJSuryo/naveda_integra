@@ -54,11 +54,12 @@ def requested_level(eb_lv2, eb_lv3) -> str:
     return 'lv1'
 
 
-def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse=None):
+def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse=None, *, order='fifo'):
     """Return [(level_label, eb_name, queryset), ...] closest EB node first.
 
     Each queryset selects inflow layers (remaining_qty > 0) at that tier,
-    FIFO-ordered. Sibling branches are never included.
+    ordered per `order` ('fifo' → oldest first, 'lifo' → newest first).
+    Sibling branches are never included.
 
     When `warehouse` is given, layers are restricted to that exact warehouse
     (NULL-warehouse layers are excluded — no cross-warehouse fallback). When
@@ -68,23 +69,24 @@ def _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse=None):
     base = StockMovement.objects.filter(item=item, remaining_qty__gt=0)
     if warehouse is not None:
         base = base.filter(warehouse=warehouse)
+    order_by = ('tanggal', 'created_at') if order == 'fifo' else ('-tanggal', '-created_at')
     tiers = []
     if eb_lv3 is not None:
         tiers.append((
             'lv3', eb_lv3.nama,
-            base.filter(entitas_bisnis_lv3=eb_lv3).order_by('tanggal', 'created_at'),
+            base.filter(entitas_bisnis_lv3=eb_lv3).order_by(*order_by),
         ))
     if eb_lv2 is not None:
         tiers.append((
             'lv2', eb_lv2.nama,
             base.filter(entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3__isnull=True)
-                .order_by('tanggal', 'created_at'),
+                .order_by(*order_by),
         ))
     tiers.append((
         'lv1', eb_lv1.nama,
         base.filter(entitas_bisnis=eb_lv1, entitas_bisnis_lv2__isnull=True,
                     entitas_bisnis_lv3__isnull=True)
-            .order_by('tanggal', 'created_at'),
+            .order_by(*order_by),
     ))
     return tiers
 
@@ -137,6 +139,32 @@ class ConsumptionResult:
 _LEVEL_RANK = {'lv1': 1, 'lv2': 2, 'lv3': 3}
 
 
+def _take_tier_sequential(layers, remaining):
+    """FIFO/LIFO: `layers` sudah terurut. Ambil di biaya asli tiap layer.
+
+    Mengembalikan (picked, cost, taken) dengan
+    picked = [(layer, take, alloc_unit_cost), ...].
+    Meng-update remaining_qty tiap layer + mirror legacy secara in-place.
+    """
+    picked = []
+    cost = Decimal('0')
+    taken = Decimal('0')
+    for layer in layers:
+        if remaining <= 0:
+            break
+        take = min(layer.remaining_qty, remaining)
+        if take <= 0:
+            continue
+        layer.remaining_qty -= take
+        layer.save(update_fields=['remaining_qty'])
+        _mirror_decrement(layer, take, take * layer.unit_cost)
+        picked.append((layer, take, layer.unit_cost))
+        cost += take * layer.unit_cost
+        taken += take
+        remaining -= take
+    return picked, cost, taken
+
+
 @transaction.atomic
 def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
                   source=None, metode='fifo', *, warehouse=None):
@@ -162,29 +190,31 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
             source, req_level, req_rank, warehouse=warehouse,
         )
 
+    method = _normalize_method(metode)
+    order = 'lifo' if method == 'lifo' else 'fifo'
+
     remaining = qty
     total_cost = Decimal('0')
     per_level = {}          # level -> {'eb_name': str, 'qty': Decimal}
-    picked = []              # (in_layer, take)
+    picked = []             # (layer, take, alloc_unit_cost)
 
-    for level, eb_name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse):
+    for level, eb_name, qs in _candidate_tiers(
+        item, eb_lv1, eb_lv2, eb_lv3, warehouse, order=order,
+    ):
         if remaining <= 0:
             break
-        layers = qs.select_for_update()
-        for layer in layers:
-            if remaining <= 0:
-                break
-            take = min(layer.remaining_qty, remaining)
-            if take <= 0:
-                continue
-            layer.remaining_qty -= take
-            layer.save(update_fields=['remaining_qty'])
-            _mirror_decrement(layer, take, take * layer.unit_cost)
-            total_cost += take * layer.unit_cost
-            picked.append((layer, take))
-            slot = per_level.setdefault(level, {'eb_name': eb_name, 'qty': Decimal('0')})
-            slot['qty'] += take
-            remaining -= take
+        layers = list(qs.select_for_update())
+        if method == 'average':
+            tier_picked, tier_cost, tier_qty = _take_tier_average(layers, remaining)
+        else:
+            tier_picked, tier_cost, tier_qty = _take_tier_sequential(layers, remaining)
+        if tier_qty <= 0:
+            continue
+        picked.extend(tier_picked)
+        total_cost += tier_cost
+        remaining -= tier_qty
+        slot = per_level.setdefault(level, {'eb_name': eb_name, 'qty': Decimal('0')})
+        slot['qty'] += tier_qty
 
     if remaining > 0:
         raise InsufficientStockError(
@@ -208,9 +238,9 @@ def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
     allocations = [
         StockConsumption.objects.create(
             out_movement=out_movement, in_movement=layer,
-            qty=take, unit_cost=layer.unit_cost,
+            qty=take, unit_cost=alloc_unit_cost,
         )
-        for layer, take in picked
+        for layer, take, alloc_unit_cost in picked
     ]
 
     used_fallback = any(_LEVEL_RANK[lvl] < req_rank for lvl in per_level)
