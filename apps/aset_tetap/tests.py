@@ -9,6 +9,7 @@ from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 from apps.master_data.models import Akun
 from .models import AsetTetapRecord, AssetDisposal
+from .services import process_asset_disposal
 
 User = get_user_model()
 
@@ -157,3 +158,124 @@ class AssetDisposalModelTests(TestCase):
             akun_laba_rugi=self.akun_lr,
         )
         self.assertTrue(d.disposal_number.startswith('DSP-'))
+
+
+class ProcessDisposalTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        self.item = ItemMasterPurchase.objects.create(nama='Mesin X', tipe_item='ATP', coa_account=self.akun_aset)
+        self.akun_akum = Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.01', nama='Akumulasi Penyusutan')
+        self.akun_kas = Akun.objects.create(kategori_id='aset', kode_akun='1.1.1.01', nama='Kas')
+        self.akun_lr = Akun.objects.create(kategori_id='pendapatan', kode_akun='8.1.01', nama='Laba/Rugi Pelepasan')
+
+    def _make_record(self, qty='1', harga='1000000', akum='0', residu='0'):
+        return AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=Decimal(qty), harga_perolehan=Decimal(harga),
+            akumulasi_penyusutan=Decimal(akum), nilai_residu=Decimal(residu),
+        )
+
+    def _sum_debit_kredit(self, header):
+        from apps.jurnal.models import JurnalDetail
+        d = sum(x.debit for x in JurnalDetail.objects.filter(jurnal_header=header))
+        k = sum(x.kredit for x in JurnalDetail.objects.filter(jurnal_header=header))
+        return d, k
+
+    def test_jual_laba(self):
+        # perolehan 1jt, akum 600rb -> nilai buku 400rb; jual 500rb -> laba 100rb
+        rec = self._make_record(qty='1', harga='1000000', akum='600000')
+        d = AssetDisposal(aset=rec, jenis='jual', quantity=Decimal('1'),
+                          harga_jual=Decimal('500000'), akun_kas=self.akun_kas,
+                          akun_laba_rugi=self.akun_lr)
+        header = process_asset_disposal(d)
+        from apps.jurnal.models import JurnalDetail
+        lr = JurnalDetail.objects.get(jurnal_header=header, akun=self.akun_lr)
+        self.assertEqual(lr.kredit, Decimal('100000.0000'))  # laba di kredit
+        self.assertEqual(lr.debit, Decimal('0'))
+        deb, kre = self._sum_debit_kredit(header)
+        self.assertEqual(deb, kre)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, 'dilepas')
+        self.assertEqual(rec.quantity, Decimal('0.0000'))
+
+    def test_jual_rugi(self):
+        # nilai buku 400rb; jual 300rb -> rugi 100rb (debit)
+        rec = self._make_record(qty='1', harga='1000000', akum='600000')
+        d = AssetDisposal(aset=rec, jenis='jual', quantity=Decimal('1'),
+                          harga_jual=Decimal('300000'), akun_kas=self.akun_kas,
+                          akun_laba_rugi=self.akun_lr)
+        header = process_asset_disposal(d)
+        from apps.jurnal.models import JurnalDetail
+        lr = JurnalDetail.objects.get(jurnal_header=header, akun=self.akun_lr)
+        self.assertEqual(lr.debit, Decimal('100000.0000'))
+        deb, kre = self._sum_debit_kredit(header)
+        self.assertEqual(deb, kre)
+
+    def test_jual_impas(self):
+        rec = self._make_record(qty='1', harga='1000000', akum='600000')
+        d = AssetDisposal(aset=rec, jenis='jual', quantity=Decimal('1'),
+                          harga_jual=Decimal('400000'), akun_kas=self.akun_kas,
+                          akun_laba_rugi=self.akun_lr)
+        header = process_asset_disposal(d)
+        from apps.jurnal.models import JurnalDetail
+        self.assertFalse(JurnalDetail.objects.filter(jurnal_header=header, akun=self.akun_lr).exists())
+        deb, kre = self._sum_debit_kredit(header)
+        self.assertEqual(deb, kre)
+
+    def test_non_jual_full_loss(self):
+        # hibah: tidak ada kas, seluruh nilai buku jadi rugi
+        rec = self._make_record(qty='1', harga='1000000', akum='600000')
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('1'),
+                          harga_jual=Decimal('999'), akun_kas=self.akun_kas,  # harus diabaikan
+                          akun_laba_rugi=self.akun_lr)
+        header = process_asset_disposal(d)
+        from apps.jurnal.models import JurnalDetail
+        self.assertFalse(JurnalDetail.objects.filter(jurnal_header=header, akun=self.akun_kas).exists())
+        lr = JurnalDetail.objects.get(jurnal_header=header, akun=self.akun_lr)
+        self.assertEqual(lr.debit, Decimal('400000.0000'))  # seluruh nilai buku = rugi
+        deb, kre = self._sum_debit_kredit(header)
+        self.assertEqual(deb, kre)
+
+    def test_partial_prorata(self):
+        # qty 10, harga 1jt/unit -> total 10jt, akum 2jt, residu 1jt; lepas 3
+        rec = self._make_record(qty='10', harga='1000000', akum='2000000', residu='1000000')
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('3'),
+                          akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d)
+        d.refresh_from_db()
+        self.assertEqual(d.perolehan_dilepas, Decimal('3000000.0000'))
+        self.assertEqual(d.akumulasi_dilepas, Decimal('600000.0000'))   # 2jt * 0.3
+        self.assertEqual(d.residu_dilepas, Decimal('300000.0000'))      # 1jt * 0.3
+        rec.refresh_from_db()
+        self.assertEqual(rec.quantity, Decimal('7.0000'))
+        self.assertEqual(rec.status, 'aktif')
+        self.assertEqual(rec.total_value, Decimal('7000000.0000'))
+        self.assertEqual(rec.akumulasi_penyusutan, Decimal('1400000.0000'))
+        self.assertEqual(rec.nilai_residu, Decimal('700000.0000'))
+
+    def test_validasi_qty_melebihi(self):
+        rec = self._make_record(qty='2', harga='1000000')
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('5'),
+                          akun_laba_rugi=self.akun_lr)
+        with self.assertRaises(ValueError):
+            process_asset_disposal(d)
+
+    def test_validasi_akun_aset_kosong(self):
+        item2 = ItemMasterPurchase.objects.create(nama='Tanpa COA', tipe_item='ATP')  # coa_account None
+        rec = AsetTetapRecord.objects.create(
+            item=item2, entitas_bisnis=self.entitas, quantity=1, harga_perolehan=1000000,
+        )
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('1'),
+                          akun_laba_rugi=self.akun_lr)
+        with self.assertRaises(ValueError):
+            process_asset_disposal(d)
+
+    def test_validasi_akumulasi_akun_hilang(self):
+        self.akun_akum.delete()
+        rec = self._make_record(qty='1', harga='1000000')
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('1'),
+                          akun_laba_rugi=self.akun_lr)
+        with self.assertRaises(ValueError):
+            process_asset_disposal(d)

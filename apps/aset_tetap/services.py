@@ -7,7 +7,7 @@ from django.utils import timezone
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 from apps.master_data.models import Akun
 
-from .models import AsetTetapRecord
+from .models import AsetTetapRecord, AssetDisposal
 
 
 # ---------------------------------------------------------------------------
@@ -204,5 +204,137 @@ def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
                 kredit=depreciation_amount,
             ),
         ])
+
+    return header
+
+
+# ---------------------------------------------------------------------------
+# Journal Generation for Asset Disposal
+# ---------------------------------------------------------------------------
+
+def _next_disposal_journal_number() -> str:
+    """Nomor jurnal pelepasan sekuensial: TRX-DSP-xxx."""
+    last = (
+        JurnalHeader.objects
+        .filter(nomor_transaksi__startswith='TRX-DSP-')
+        .order_by('-nomor_transaksi')
+        .values_list('nomor_transaksi', flat=True)
+        .first()
+    )
+    if last:
+        try:
+            seq = int(last.rsplit('-', 1)[1]) + 1
+        except (ValueError, IndexError):
+            seq = 1
+    else:
+        seq = 1
+    return f'TRX-DSP-{seq:03d}'
+
+
+def _resolve_asset_account(record: AsetTetapRecord):
+    """Akun aset yang didebit saat perolehan: purchase_item.coa_account -> item.coa_account."""
+    if record.purchase_item_id and record.purchase_item and record.purchase_item.coa_account:
+        return record.purchase_item.coa_account
+    if record.item and record.item.coa_account:
+        return record.item.coa_account
+    return None
+
+
+def process_asset_disposal(disposal: AssetDisposal) -> JurnalHeader:
+    """Proses pelepasan aset: hitung snapshot, kurangi aset, buat jurnal pelepasan.
+
+    Jurnal:
+        Kredit Aset (perolehan dilepas)
+        Debit  Akumulasi Penyusutan (akumulasi dilepas)
+        Debit  Kas/Piutang (harga jual) -- hanya jenis 'jual' & harga_jual > 0
+        Laba (kredit) / Rugi (debit) pada akun_laba_rugi -- selisih
+    """
+    quantize = Decimal('0.0001')
+    aset = disposal.aset
+    jenis = disposal.jenis
+    quantity = disposal.quantity
+
+    # Normalisasi non-jual
+    if jenis != 'jual':
+        disposal.harga_jual = Decimal('0')
+        disposal.akun_kas = None
+    harga_jual = disposal.harga_jual or Decimal('0')
+
+    # Validasi
+    if aset.status != 'aktif':
+        raise ValueError('Aset sudah dilepas dan tidak dapat dilepas lagi.')
+    if quantity is None or quantity <= 0:
+        raise ValueError('Quantity pelepasan harus lebih dari 0.')
+    if quantity > aset.quantity:
+        raise ValueError(
+            f'Quantity pelepasan ({quantity}) melebihi sisa quantity aset ({aset.quantity}).'
+        )
+    if harga_jual < 0:
+        raise ValueError('Harga jual tidak boleh negatif.')
+    if jenis == 'jual' and harga_jual > 0 and not disposal.akun_kas:
+        raise ValueError('Akun Kas/Piutang wajib dipilih untuk pelepasan jenis jual.')
+    if not disposal.akun_laba_rugi_id:
+        raise ValueError('Akun Laba/Rugi Pelepasan wajib dipilih.')
+
+    akun_aset = _resolve_asset_account(aset)
+    if not akun_aset:
+        raise ValueError('Akun Aset tidak dapat ditentukan (coa_account item/purchase kosong).')
+    akun_akumulasi = Akun.objects.filter(kode_akun__startswith='1.2.7').first()
+    if not akun_akumulasi:
+        raise ValueError('Akun Akumulasi Penyusutan (1.2.7.xx) belum tersedia di Chart of Accounts.')
+
+    # Snapshot pro-rata
+    fraksi = quantity / aset.quantity
+    perolehan_dilepas = (quantity * aset.harga_perolehan).quantize(quantize)
+    akumulasi_dilepas = (aset.akumulasi_penyusutan * fraksi).quantize(quantize)
+    residu_dilepas = (aset.nilai_residu * fraksi).quantize(quantize)
+    nilai_buku_dilepas = perolehan_dilepas - akumulasi_dilepas
+    laba_rugi = (harga_jual - nilai_buku_dilepas).quantize(quantize)
+
+    # Baris jurnal: (akun, debit, kredit)
+    lines = [
+        (akun_aset, Decimal('0'), perolehan_dilepas),        # Kredit aset
+        (akun_akumulasi, akumulasi_dilepas, Decimal('0')),   # Debit akumulasi
+    ]
+    if jenis == 'jual' and harga_jual > 0:
+        lines.append((disposal.akun_kas, harga_jual, Decimal('0')))   # Debit kas
+    if laba_rugi > 0:
+        lines.append((disposal.akun_laba_rugi, Decimal('0'), laba_rugi))   # Kredit laba
+    elif laba_rugi < 0:
+        lines.append((disposal.akun_laba_rugi, -laba_rugi, Decimal('0')))  # Debit rugi
+
+    total_debit = sum((d for _, d, _ in lines), Decimal('0'))
+    total_kredit = sum((k for _, _, k in lines), Decimal('0'))
+    if total_debit != total_kredit:
+        raise ValueError(
+            f'Jurnal pelepasan tidak balance: debit {total_debit} != kredit {total_kredit}.'
+        )
+
+    with transaction.atomic():
+        disposal.perolehan_dilepas = perolehan_dilepas
+        disposal.akumulasi_dilepas = akumulasi_dilepas
+        disposal.residu_dilepas = residu_dilepas
+        disposal.laba_rugi = laba_rugi
+
+        aset.quantity -= quantity
+        aset.akumulasi_penyusutan -= akumulasi_dilepas
+        aset.nilai_residu -= residu_dilepas
+        if aset.quantity <= 0:
+            aset.status = 'dilepas'
+        aset.save()
+
+        header = JurnalHeader.objects.create(
+            tanggal=disposal.tanggal,
+            nomor_transaksi=_next_disposal_journal_number(),
+            uraian_transaksi=f'Pelepasan {aset.aset_number} ({jenis}) — {aset.item.nama}',
+            entitas_bisnis=aset.entitas_bisnis,
+            is_penyesuaian=False,
+        )
+        JurnalDetail.objects.bulk_create([
+            JurnalDetail(jurnal_header=header, akun=akun, debit=d, kredit=k)
+            for akun, d, k in lines
+        ])
+        disposal.jurnal_header = header
+        disposal.save()
 
     return header
