@@ -25,10 +25,12 @@ def _base_by_dimension():
 
 def _item_stock_uom_map():
     from apps.purchase.models import ItemMasterPurchase
+    # Unfiltered by tipe_item: ItemUOMForm's `item` field has no queryset
+    # restriction, so any item type (including ATP/ALL) is selectable and
+    # must have an entry here, or the preview silently degrades for it.
     return {
         str(i.pk): (i.stock_uom.kode if i.stock_uom_id else '')
-        for i in ItemMasterPurchase.objects.select_related('stock_uom').filter(
-            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'])
+        for i in ItemMasterPurchase.objects.select_related('stock_uom').all()
     }
 
 
