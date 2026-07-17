@@ -1,10 +1,11 @@
 """Inventory forms."""
 from django import forms
+from django.forms import inlineformset_factory
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 
-from .models import InventoryRecord, Warehouse
+from .models import InventoryRecord, StockAdjustment, StockAdjustmentItem, Warehouse
 
 
 class InventoryRecordForm(forms.ModelForm):
@@ -56,3 +57,30 @@ class WarehouseForm(forms.ModelForm):
             'alamat': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
             'is_active': forms.CheckboxInput(),
         }
+
+
+class StockAdjustmentForm(forms.ModelForm):
+    class Meta:
+        model = StockAdjustment
+        fields = ('tanggal', 'entitas_bisnis', 'entitas_bisnis_lv2',
+                  'entitas_bisnis_lv3', 'warehouse', 'akun_selisih', 'keterangan')
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+
+StockAdjustmentItemFormSet = inlineformset_factory(
+    StockAdjustment, StockAdjustmentItem,
+    fields=('item', 'qty', 'unit_cost'), extra=1, can_delete=True,
+    widgets={
+        'item': forms.Select(attrs={'class': 'ni-input'}),
+        'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        'unit_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+    },
+)

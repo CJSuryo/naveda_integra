@@ -137,3 +137,11 @@ class ReverseAdjustmentTests(ProcessAdjustmentTests):
         h.refresh_from_db()
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('20'))
+
+
+class AdjustmentFormTests(TestCase):
+    def test_form_fields(self):
+        from apps.inventory.forms import StockAdjustmentForm
+        f = StockAdjustmentForm()
+        for name in ('tanggal', 'entitas_bisnis', 'warehouse', 'akun_selisih', 'keterangan'):
+            self.assertIn(name, f.fields)
