@@ -1,37 +1,99 @@
 {% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Buku Persediaan{% endblock %}
 {% block content %}
-<div class="ni-page">
-  <h1 class="ni-page__title">{{ title }}</h1>
-  <form method="get" class="ni-filter">
-    <select name="item" class="ni-input">
-      <option value="">— Semua Item —</option>
-      {% for it in items %}<option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>{% endfor %}
-    </select>
-    <select name="warehouse" class="ni-input">
-      <option value="">— Semua Gudang —</option>
-      {% for w in warehouses %}<option value="{{ w.pk }}" {% if wh_filter == w.pk|stringformat:'s' %}selected{% endif %}>{{ w.kode }}</option>{% endfor %}
-    </select>
-    <input type="date" name="tanggal_dari" value="{{ tanggal_dari }}" class="ni-input">
-    <input type="date" name="tanggal_sampai" value="{{ tanggal_sampai }}" class="ni-input">
-    <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
-  </form>
-  <table class="ni-table">
-    <thead><tr><th>Tanggal</th><th>Item</th><th>Jenis</th><th>Gudang</th><th>Qty</th><th>Biaya/Unit</th><th>Saldo</th></tr></thead>
-    <tbody>
-      {% for r in rows %}
-      <tr>
-        <td>{{ r.mv.tanggal }}</td>
-        <td>{{ r.mv.item.item_id }}</td>
-        <td>{{ r.mv.get_movement_type_display }}</td>
-        <td>{{ r.mv.warehouse.kode|default:'—' }}</td>
-        <td>{{ r.mv.qty }}</td>
-        <td>{{ r.mv.unit_cost }}</td>
-        <td>{{ r.saldo }}</td>
-      </tr>
-      {% empty %}
-      <tr><td colspan="7">Tidak ada pergerakan.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Buku Persediaan</h1>
+    <p class="ni-page-header__subtitle">Pergerakan stok append-only beserta saldo berjalan</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" id="ledgerFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:180px;">
+        <label class="ni-form-label">Item</label>
+        <select name="item" class="ni-input">
+          <option value="">— Semua Item —</option>
+          {% for it in items %}
+          <option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Gudang</label>
+        <select name="warehouse" class="ni-input">
+          <option value="">— Semua Gudang —</option>
+          {% for w in warehouses %}
+          <option value="{{ w.pk }}" {% if wh_filter == w.pk|stringformat:'s' %}selected{% endif %}>{{ w.kode }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="ledgerFilterForm" %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'inventory:stock_ledger' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+{% if not saldo_valid %}
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;border-left:3px solid var(--ni-warning,#f59e0b);">
+  <div class="ni-card__body" style="padding:12px 16px;font-size:0.85em;">
+    <i data-lucide="info" style="width:14px;height:14px;vertical-align:text-bottom;"></i>
+    Kolom <strong>Saldo</strong> hanya bermakna bila difilter ke <strong>satu item</strong> dan <strong>satu gudang</strong>.
+  </div>
+</div>
+{% endif %}
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th>
+          <th>Item</th>
+          <th>Jenis</th>
+          <th>Gudang</th>
+          <th class="ni-text-right">Qty</th>
+          <th class="ni-text-right">Biaya/Unit</th>
+          <th class="ni-text-right">Saldo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.mv.tanggal }}</td>
+          <td>{{ r.mv.item.item_id }}</td>
+          <td>
+            {% if r.mv.qty > 0 %}
+            <span class="ni-badge ni-badge--success">{{ r.mv.get_movement_type_display }}</span>
+            {% else %}
+            <span class="ni-badge ni-badge--danger">{{ r.mv.get_movement_type_display }}</span>
+            {% endif %}
+          </td>
+          <td>{{ r.mv.warehouse.kode|default:'—' }}</td>
+          <td class="ni-text-right" style="color:{% if r.mv.qty < 0 %}var(--ni-danger,#ef4444){% else %}var(--ni-success,#10b981){% endif %};font-weight:500;">
+            {{ r.mv.qty|floatformat:'-2' }} {{ r.mv.item.stock_uom.kode|default:'' }}
+          </td>
+          <td class="ni-text-right">{{ r.mv.unit_cost|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ r.saldo|floatformat:'-2' }} {{ r.mv.item.stock_uom.kode|default:'' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Tidak ada pergerakan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
