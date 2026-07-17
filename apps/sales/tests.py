@@ -682,6 +682,32 @@ class SalesTaxLineViewTests(TestCase):
         self.assertEqual(pt.status, 'dibatalkan')
 
 
+class SalesFormItemRowLayoutTests(TestCase):
+    """The per-line Satuan selector must sit next to Qty, matching the
+    purchase form layout — not off at the far end of the row where it's
+    easy to miss."""
+
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='layout@test.com', password='pass1234', name='Layout User')
+        self.client.force_login(self.user)
+
+    def test_satuan_column_sits_between_qty_and_harga_jual(self):
+        resp = self.client.get(reverse('sales:create'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+
+        qty_th = body.index('>Qty<')
+        satuan_th = body.index('>Satuan<')
+        harga_th = body.index('>Harga Jual<')
+        self.assertTrue(qty_th < satuan_th < harga_th)
+
+        qty_td = body.index('data-label="Qty"')
+        satuan_td = body.index('data-label="Satuan"')
+        harga_td = body.index('data-label="Harga Jual"')
+        self.assertTrue(qty_td < satuan_td < harga_td)
+
+
 class SalesInvoicePaymentLabelTests(TestCase):
     def setUp(self):
         self.client = Client()

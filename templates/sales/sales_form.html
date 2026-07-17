@@ -442,6 +442,7 @@
             '<th style="width:17%">Item</th>' +
             '<th style="width:10%">Sub-Trx Type</th>' +
             '<th class="col-satuan" style="width:6%">Qty</th>' +
+            '<th class="col-uom" style="width:6%">Satuan</th>' +
             '<th style="width:9%">Harga Jual</th>' +
             '<th class="col-satuan" style="width:7%">Total</th>' +
             '<th class="col-bulk" style="width:9%">HPP</th>' +
@@ -449,7 +450,6 @@
             '<th style="width:9%">Revenue Akun</th>' +
             '<th style="width:9%">Payment Akun</th>' +
             '<th style="width:8%">Gudang</th>' +
-            '<th style="width:6%">Satuan</th>' +
             '<th style="width:4%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
@@ -574,6 +574,7 @@
       '</td>' +
       '<td class="item-field-td" data-label="Sub-Trx Type"' + fieldTdStyle + '><select class="ni-sales-input stt-select" data-rid="' + rid + '" onchange="onSTTChange(this, \'' + rid + '\')">' + sttSelectOptions + '</select></td>' +
       '<td class="item-field-td col-satuan" data-label="Qty"' + fieldTdStyle + '><input type="number" id="' + rid + '_qty" class="ni-sales-input qty-field" min="0.0001" step="0.0001" value="' + prefillQty + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Qty"' + satuanInputDisabled + '></td>' +
+      '<td class="item-field-td col-uom" data-label="Satuan"' + fieldTdStyle + '><select id="' + rid + '_uom" class="ni-sales-input uom-select"' + satuanInputDisabled + '>' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
       '<td class="item-field-td" data-label="Harga Jual"' + fieldTdStyle + '><input type="number" id="' + rid + '_price" class="ni-sales-input price-field" min="0.01" step="0.01" value="' + prefillPrice + '" oninput="updateTotal(\'' + rid + '\')" placeholder="Harga Jual"></td>' +
       '<td class="item-field-td col-satuan" data-label="Total"' + fieldTdStyle + '><input type="text" id="' + rid + '_total" class="ni-sales-input total-field" readonly value="' + prefillTotal + '"' + satuanInputDisabled + '></td>' +
       '<td class="item-field-td col-bulk" data-label="HPP Terpakai"' + fieldTdStyle + '><input type="number" id="' + rid + '_hpp" class="ni-sales-input hpp-field" min="0.01" step="0.01" value="' + prefillHpp + '" oninput="updateGroupTotals(\'' + gid + '\')" placeholder="HPP Terpakai"' + bulkInputDisabled + '></td>' +
@@ -581,7 +582,6 @@
       '<td class="item-field-td" data-label="Revenue Akun"' + fieldTdStyle + '><select id="' + rid + '_revenue" class="ni-sales-input">' + revenueOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Payment Akun"' + fieldTdStyle + '><select id="' + rid + '_payment" class="ni-sales-input">' + paymentOptions + '</select></td>' +
       '<td class="item-field-td" data-label="Gudang"' + fieldTdStyle + '><select id="' + rid + '_gudang" class="ni-sales-input wh-select">' + warehouseOptions(ebLv1IdForRow, prefill ? (prefill.warehouse_id || '') : '') + '</select></td>' +
-      '<td class="item-field-td col-uom" data-label="Satuan"' + fieldTdStyle + '><select id="' + rid + '_uom" class="ni-sales-input uom-select"' + satuanInputDisabled + '>' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
       '<td data-label="">' +
         '<button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm" onclick="removeItemRow(\'' + rid + '\')" style="padding:4px 8px;">' +
           '<i data-lucide="trash-2" style="width:12px;height:12px"></i>' +
