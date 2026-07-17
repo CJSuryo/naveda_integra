@@ -11,7 +11,10 @@ from django.db import transaction
 
 from .models import StockMovement, StockConsumption
 
-OUTFLOW_MOVEMENT_TYPES = {'sale_out', 'production_out'}
+OUTFLOW_MOVEMENT_TYPES = {
+    'sale_out', 'production_out',
+    'adjustment_out', 'opname_out', 'transfer_out', 'return_supplier',
+}
 
 _METHOD_ALIASES = {
     '': 'fifo',
@@ -463,7 +466,10 @@ def reverse_movements(source):
     outflows.delete()
 
 
-INFLOW_MOVEMENT_TYPES = {'purchase_in', 'production_in', 'saldo_awal'}
+INFLOW_MOVEMENT_TYPES = {
+    'purchase_in', 'production_in', 'saldo_awal',
+    'adjustment_in', 'opname_in', 'transfer_in', 'return_customer',
+}
 
 
 @transaction.atomic
