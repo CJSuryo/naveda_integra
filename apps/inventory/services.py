@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
-from .models import StockAdjustment, StockOpname
+from .models import StockAdjustment, StockOpname, StockTransfer
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -174,3 +174,64 @@ def reverse_opname(opn: StockOpname, request=None) -> None:
     opn.jurnal_header = None
     opn.status = 'draft'
     opn.save(update_fields=['jurnal_header', 'status'])
+
+
+@transaction.atomic
+def process_transfer(trf: StockTransfer) -> None:
+    if trf.status == 'posted':
+        raise ValueError('Transfer sudah diposting.')
+    if trf.eb_asal_id == trf.eb_tujuan_id and trf.warehouse_asal_id == trf.warehouse_tujuan_id:
+        raise ValueError('Transfer asal dan tujuan tidak boleh sama (entitas & gudang identik).')
+    if trf.is_cross_entity and not trf.akun_perantara_id:
+        raise ValueError('Transfer lintas entitas wajib mengisi Akun Perantara.')
+    items = list(trf.items.select_related('item').all())
+    if not items:
+        raise ValueError('Transfer tanpa item.')
+
+    total_value = Decimal('0')
+    akun_persediaan = None
+    for d in items:
+        if d.item.coa_account is None:
+            raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
+        akun_persediaan = d.item.coa_account
+        result = ledger.consume_stock(
+            d.item, trf.eb_asal, trf.eb_asal_lv2, trf.eb_asal_lv3, d.qty,
+            trf.tanggal, 'transfer_out', source=trf,
+            metode=d.item.metode_biaya_persediaan, warehouse=trf.warehouse_asal)
+        unit_cost = (result.total_cost / d.qty) if d.qty else Decimal('0')
+        mv_in = ledger.record_inflow(
+            d.item, trf.eb_tujuan, trf.eb_tujuan_lv2, trf.eb_tujuan_lv3, d.qty,
+            unit_cost, trf.tanggal, 'transfer_in', source=trf,
+            warehouse=trf.warehouse_tujuan)
+        d.unit_cost = unit_cost
+        d.movement_out = result.out_movement
+        d.movement_in = mv_in
+        d.save(update_fields=['unit_cost', 'movement_out', 'movement_in'])
+        total_value += result.total_cost
+
+    if trf.is_cross_entity and total_value > 0:
+        trf.jurnal_header_asal = _post_journal(
+            trf.tanggal, 'TRX-TRF-', f'Transfer Keluar {trf.nomor}', trf.eb_asal,
+            [(trf.akun_perantara, total_value, Decimal('0')),
+             (akun_persediaan, Decimal('0'), total_value)])
+        trf.jurnal_header_tujuan = _post_journal(
+            trf.tanggal, 'TRX-TRF-', f'Transfer Masuk {trf.nomor}', trf.eb_tujuan,
+            [(akun_persediaan, total_value, Decimal('0')),
+             (trf.akun_perantara, Decimal('0'), total_value)])
+    trf.status = 'posted'
+    trf.save(update_fields=['jurnal_header_asal', 'jurnal_header_tujuan', 'status'])
+
+
+@transaction.atomic
+def reverse_transfer(trf: StockTransfer, request=None) -> None:
+    if trf.status != 'posted':
+        raise ValueError('Transfer belum diposting.')
+    ledger.reverse_movements(trf)
+    ledger.reverse_inflow_movements(trf)
+    _reverse_journal(trf.jurnal_header_asal, request)
+    _reverse_journal(trf.jurnal_header_tujuan, request)
+    trf.items.update(movement_out=None, movement_in=None)
+    trf.jurnal_header_asal = None
+    trf.jurnal_header_tujuan = None
+    trf.status = 'draft'
+    trf.save(update_fields=['jurnal_header_asal', 'jurnal_header_tujuan', 'status'])

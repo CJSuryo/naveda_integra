@@ -379,3 +379,75 @@ class StockTransferModelTests(TestCase):
         StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('5'))
         self.assertTrue(h.nomor.startswith('TRX-TRF-'))
         self.assertFalse(h.is_cross_entity)
+
+
+class ProcessTransferTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        self.wh3 = Warehouse.objects.create(entitas_bisnis=self.eb2, nama='G3')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.perantara = Akun.objects.create(kode_akun='1.1.9', nama='Perantara Transfer')
+
+    def test_intra_entity_moves_stock_no_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-01', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('6'))
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh2), Decimal('4'))
+        self.assertIsNone(h.jurnal_header_asal)
+
+    def test_cross_entity_creates_two_balanced_journals(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-01', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3, akun_perantara=self.perantara)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(get_available_stock(self.item, self.eb2, warehouse=self.wh3), Decimal('4'))
+        for hdr in (h.jurnal_header_asal, h.jurnal_header_tujuan):
+            self.assertIsNotNone(hdr)
+            self.assertEqual(sum(d.debit for d in hdr.details.all()),
+                             sum(d.kredit for d in hdr.details.all()))
+
+    def test_self_transfer_same_entity_same_warehouse_rejected(self):
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        h = StockTransfer.objects.create(tanggal='2026-04-02', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh1)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('1'))
+        with self.assertRaises(ValueError):
+            process_transfer(h)
+
+    def test_cross_entity_without_akun_perantara_rejected(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-03', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        with self.assertRaises(ValueError):
+            process_transfer(h)
