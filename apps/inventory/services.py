@@ -88,3 +88,28 @@ def process_adjustment(adj: StockAdjustment) -> JurnalHeader:
     adj.status = 'posted'
     adj.save(update_fields=['jurnal_header', 'status'])
     return header
+
+
+def _reverse_journal(header, request=None):
+    if header is None:
+        return
+    from apps.jurnal.utils import log_jurnal_terhapus
+    log_jurnal_terhapus(header, 'inventory', request)
+    header.details.all().delete()
+    header.delete()
+
+
+@transaction.atomic
+def reverse_adjustment(adj: StockAdjustment, request=None) -> None:
+    """Batalkan posting: pulihkan layer (inflow) & konsumsi (outflow), hapus jurnal."""
+    if adj.status != 'posted':
+        raise ValueError('Adjustment belum diposting.')
+    # outflow (adjustment_out) → pulihkan layer yang dikonsumsi
+    ledger.reverse_movements(adj)
+    # inflow (adjustment_in) → hapus layer (ProtectedError bila sudah dikonsumsi)
+    ledger.reverse_inflow_movements(adj)
+    _reverse_journal(adj.jurnal_header, request)
+    adj.items.update(movement=None)
+    adj.jurnal_header = None
+    adj.status = 'draft'
+    adj.save(update_fields=['jurnal_header', 'status'])

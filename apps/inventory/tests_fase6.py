@@ -107,3 +107,17 @@ class ProcessAdjustmentTests(TestCase):
         StockAdjustmentItem.objects.create(adjustment=h, item=self.item, qty=Decimal('-5'))
         process_adjustment(h)
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('15'))
+
+
+class ReverseAdjustmentTests(ProcessAdjustmentTests):
+    def test_reverse_restores_stock_and_removes_journal(self):
+        from apps.inventory.services import process_adjustment, reverse_adjustment
+        from apps.inventory.ledger import get_available_stock
+        from apps.jurnal.models import JurnalHeader
+        h = self._header()  # +10
+        header = process_adjustment(h)
+        reverse_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
