@@ -9,7 +9,7 @@ from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 from apps.master_data.models import Akun
 from .models import AsetTetapRecord, AssetDisposal
-from .services import process_asset_disposal
+from .services import process_asset_disposal, reverse_asset_disposal
 
 User = get_user_model()
 
@@ -279,3 +279,49 @@ class ProcessDisposalTests(TestCase):
                           akun_laba_rugi=self.akun_lr)
         with self.assertRaises(ValueError):
             process_asset_disposal(d)
+
+
+class ReverseDisposalTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        self.item = ItemMasterPurchase.objects.create(nama='Mesin X', tipe_item='ATP', coa_account=self.akun_aset)
+        Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.01', nama='Akumulasi Penyusutan')
+        self.akun_lr = Akun.objects.create(kategori_id='pendapatan', kode_akun='8.1.01', nama='Laba/Rugi Pelepasan')
+
+    def test_reversal_restores_state(self):
+        from apps.jurnal.models import JurnalHeader
+        rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=Decimal('10'), harga_perolehan=Decimal('1000000'),
+            akumulasi_penyusutan=Decimal('2000000'), nilai_residu=Decimal('1000000'),
+        )
+        # dua pelepasan
+        d1 = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('3'), akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d1)
+        rec.refresh_from_db()
+        d2 = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('2'), akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d2)
+        rec.refresh_from_db()
+        self.assertEqual(rec.quantity, Decimal('5.0000'))
+
+        # reversal d1 (yang pertama — bebas kapan saja)
+        header_pk = d1.jurnal_header_id
+        reverse_asset_disposal(d1)
+        rec.refresh_from_db()
+        self.assertEqual(rec.quantity, Decimal('8.0000'))              # 5 + 3
+        self.assertEqual(rec.status, 'aktif')
+        self.assertFalse(JurnalHeader.objects.filter(pk=header_pk).exists())
+        self.assertFalse(AssetDisposal.objects.filter(pk=d1.pk).exists())
+
+    def test_reversal_logs_deletion(self):
+        from apps.jurnal.models import JurnalTerhapus
+        rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=Decimal('1'), harga_perolehan=Decimal('1000000'),
+        )
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('1'), akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d)
+        reverse_asset_disposal(d)
+        self.assertTrue(JurnalTerhapus.objects.exists())

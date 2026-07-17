@@ -319,3 +319,26 @@ def process_asset_disposal(disposal: AssetDisposal) -> JurnalHeader:
         disposal.save()
 
     return header
+
+
+def reverse_asset_disposal(disposal: AssetDisposal, request=None) -> None:
+    """Batalkan pelepasan: hapus jurnal (dengan log), pulihkan state aset dari snapshot,
+    lalu hapus record disposal. Boleh dilakukan kapan saja (tidak harus yang terakhir).
+    """
+    from apps.jurnal.utils import log_jurnal_terhapus
+
+    aset = disposal.aset
+    with transaction.atomic():
+        header = disposal.jurnal_header
+        if header:
+            log_jurnal_terhapus(header, 'aset_tetap', request)
+            header.details.all().delete()
+            header.delete()
+
+        aset.quantity += disposal.quantity
+        aset.akumulasi_penyusutan += disposal.akumulasi_dilepas
+        aset.nilai_residu += disposal.residu_dilepas
+        aset.status = 'aktif'
+        aset.save()
+
+        disposal.delete()
