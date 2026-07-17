@@ -861,3 +861,35 @@ class NormalizeMethodTests(DjangoTestCase):
         from apps.inventory.ledger import _normalize_method
         with self.assertRaises(ValueError):
             _normalize_method('xyz')
+
+
+class ConsumeStockLifoTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Beras', tipe_item='RM')
+
+    def _inflow(self, qty, cost, tanggal):
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.eb, None, None, Decimal(qty),
+                             Decimal(cost), tanggal, 'purchase_in')
+
+    def test_lifo_consumes_newest_first(self):
+        from apps.inventory.ledger import consume_stock
+        l1 = self._inflow('10', '5', '2026-01-01')   # tua, murah
+        l2 = self._inflow('10', '8', '2026-01-02')   # baru, mahal
+        # LIFO: 10@8 + 2@5 = 90
+        result = consume_stock(self.item, self.eb, None, None, Decimal('12'),
+                               '2026-01-03', 'sale_out', metode='lifo')
+        self.assertEqual(result.total_cost, Decimal('90'))
+        l1.refresh_from_db(); l2.refresh_from_db()
+        self.assertEqual(l2.remaining_qty, Decimal('0'))
+        self.assertEqual(l1.remaining_qty, Decimal('8'))
+
+    def test_fifo_vs_lifo_differ_on_same_stock(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '5', '2026-01-01')
+        self._inflow('10', '8', '2026-01-02')
+        fifo = consume_stock(self.item, self.eb, None, None, Decimal('12'),
+                             '2026-01-03', 'sale_out', metode='fifo')
+        self.assertEqual(fifo.total_cost, Decimal('66'))  # 10@5 + 2@8
