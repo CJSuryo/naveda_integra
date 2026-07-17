@@ -282,7 +282,10 @@ function prepareBulkSubmit() {
       <tbody>
         {% for record in records %}
         <tr>
-          <td><a href="{% url 'aset_tetap:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.aset_number }}</a></td>
+          <td>
+            <a href="{% url 'aset_tetap:detail' record.pk %}" style="color:var(--ni-primary);text-decoration:none;font-weight:500;">{{ record.aset_number }}</a>
+            {% if record.status == 'dilepas' %}<br><span class="ni-badge ni-badge--secondary">Dilepas</span>{% endif %}
+          </td>
           <td>{{ record.item.item_id }} - {{ record.item.nama }}</td>
           <td>{{ record.item.kategori.nama|default:'-' }}</td>
           <td style="font-size:0.8rem;">{{ record.item.coa_account.kode_akun|default:'-' }}<br><span style="color:var(--ni-text-muted);">{{ record.item.coa_account.nama|default:'' }}</span></td>

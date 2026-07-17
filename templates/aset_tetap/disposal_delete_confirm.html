@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Batalkan Pelepasan {{ disposal.disposal_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Batalkan Pelepasan Aset</h1>
+    <p class="ni-page-header__subtitle">{{ record.aset_number }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
+      Batalkan pelepasan <strong>{{ disposal.disposal_number }}</strong>
+      ({{ disposal.get_jenis_display }}, qty {{ disposal.quantity|floatformat:"-4" }})
+      untuk aset <strong>{{ record.aset_number }}</strong>?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      Jurnal
+      {% if disposal.jurnal_header %}<strong>{{ disposal.jurnal_header.nomor_transaksi }}</strong>{% else %}terkait{% endif %}
+      akan dihapus dan aset dipulihkan (quantity +{{ disposal.quantity|floatformat:"-4" }},
+      akumulasi &amp; residu dikembalikan).
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Batalkan Pelepasan</button>
+        <a href="{% url 'aset_tetap:detail' record.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -171,5 +171,82 @@
 </div>
 {% endif %}
 
+<!-- Pelepasan Aset -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 16px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="log-out" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Pelepasan Aset
+    </h3>
+    {% if can_dispose %}
+    <form method="post" action="{% url 'aset_tetap:dispose' record.pk %}">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group"><label class="ni-form-label">Jenis</label>{{ disposal_form.jenis }}</div>
+        <div class="ni-form-group"><label class="ni-form-label">Tanggal</label>{{ disposal_form.tanggal }}</div>
+        <div class="ni-form-group"><label class="ni-form-label">Quantity (sisa {{ record.quantity|floatformat:"-4" }})</label>{{ disposal_form.quantity }}</div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group"><label class="ni-form-label">Harga Jual (isi bila jenis Jual)</label>{{ disposal_form.harga_jual }}</div>
+        <div class="ni-form-group"><label class="ni-form-label">Akun Kas/Piutang</label>{{ disposal_form.akun_kas }}</div>
+        <div class="ni-form-group"><label class="ni-form-label">Akun Laba/Rugi Pelepasan</label>{{ disposal_form.akun_laba_rugi }}</div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group" style="flex:1"><label class="ni-form-label">Keterangan</label>{{ disposal_form.keterangan }}</div>
+      </div>
+      <div class="ni-btn-row" style="margin-top:12px;">
+        <button type="submit" class="ni-btn ni-btn--primary"
+                onclick="return confirm('Proses pelepasan aset ini?')">
+          <i data-lucide="log-out" style="width:14px;height:14px"></i> Lepas Aset
+        </button>
+      </div>
+    </form>
+    {% else %}
+      <p style="color:var(--ni-text-muted);">Aset ini sudah dilepas seluruhnya (status: {{ record.get_status_display }}).</p>
+    {% endif %}
+  </div>
+</div>
+
+{% if disposals %}
+<!-- Riwayat Pelepasan -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 16px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="history" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Riwayat Pelepasan
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor</th><th>Tanggal</th><th>Jenis</th>
+            <th class="ni-text-right">Qty</th><th class="ni-text-right">Harga Jual</th>
+            <th class="ni-text-right">Laba/Rugi</th><th>Jurnal</th><th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in disposals %}
+          <tr>
+            <td>{{ d.disposal_number }}</td>
+            <td>{{ d.tanggal }}</td>
+            <td>{{ d.get_jenis_display }}</td>
+            <td class="ni-text-right">{{ d.quantity|floatformat:"-4" }}</td>
+            <td class="ni-text-right">{{ d.harga_jual|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ d.laba_rugi|floatformat:0|intcomma }}</td>
+            <td>{% if d.jurnal_header %}<a href="{% url 'jurnal:header_detail' d.jurnal_header.pk %}" style="color:var(--ni-primary);">{{ d.jurnal_header.nomor_transaksi }}</a>{% else %}—{% endif %}</td>
+            <td>
+              <a href="{% url 'aset_tetap:disposal_delete' record.pk d.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i> Batalkan
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% include 'components/delete_modal.html' %}
 {% endblock %}
