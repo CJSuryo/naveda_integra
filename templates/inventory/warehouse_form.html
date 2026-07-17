@@ -1,26 +1,61 @@
 {% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
-<div class="ni-page">
-  <h1 class="ni-page__title">{{ title }}</h1>
-  <form method="post" class="ni-form">
-    {% csrf_token %}
-    {% if is_edit %}
-      <div class="ni-form-group">
-        <label class="ni-form-label">Kode Gudang</label>
-        <input type="text" class="ni-input" value="{{ warehouse.kode }}" disabled>
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ title }}</h1>
+    <p class="ni-page-header__subtitle">{% if is_edit %}Edit data gudang{% else %}Tambah gudang baru{% endif %}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:warehouse_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% if is_edit %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">Kode Gudang</label>
+          <input type="text" class="ni-input" value="{{ warehouse.kode }}" disabled>
+        </div>
       </div>
-    {% endif %}
-    {% for field in form %}
-      <div class="ni-form-group">
-        <label class="ni-form-label">{{ field.label }}</label>
-        {{ field }}
-        {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+      {% endif %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
+          {{ form.entitas_bisnis }}
+          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.nama.label }}</label>
+          {{ form.nama }}
+          {% if form.nama.errors %}<div class="ni-form-error">{{ form.nama.errors }}</div>{% endif %}
+        </div>
       </div>
-    {% endfor %}
-    <div class="ni-form-actions">
-      <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
-      <a href="{% url 'inventory:warehouse_list' %}" class="ni-btn">Batal</a>
-    </div>
-  </form>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.alamat.label }}</label>
+          {{ form.alamat }}
+          {% if form.alamat.errors %}<div class="ni-form-error">{{ form.alamat.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group ni-form-group--inline">
+          {{ form.is_active }}
+          <label class="ni-form-label" style="margin:0;">{{ form.is_active.label }}</label>
+          {% if form.is_active.errors %}<div class="ni-form-error">{{ form.is_active.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'inventory:warehouse_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
 </div>
 {% endblock %}
