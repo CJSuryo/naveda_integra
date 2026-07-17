@@ -16,6 +16,13 @@ DIMENSION_ICONS = {
 }
 
 
+def _base_by_dimension():
+    return {
+        u.dimension: u.kode
+        for u in UnitOfMeasure.objects.filter(is_base=True)
+    }
+
+
 @login_required
 def unit_list(request):
     units = list(UnitOfMeasure.objects.for_dropdown())
@@ -42,7 +49,8 @@ def unit_create(request):
     else:
         form = UnitOfMeasureForm()
     return render(request, 'uom/unit_form.html',
-                  {'form': form, 'is_edit': False, 'title': 'Satuan Baru'})
+                  {'form': form, 'is_edit': False, 'title': 'Satuan Baru',
+                   'base_by_dimension': _base_by_dimension()})
 
 
 @login_required
@@ -56,7 +64,8 @@ def unit_update(request, pk):
     else:
         form = UnitOfMeasureForm(instance=unit)
     return render(request, 'uom/unit_form.html',
-                  {'form': form, 'is_edit': True, 'unit': unit, 'title': 'Edit Satuan'})
+                  {'form': form, 'is_edit': True, 'unit': unit, 'title': 'Edit Satuan',
+                   'base_by_dimension': _base_by_dimension()})
 
 
 @login_required

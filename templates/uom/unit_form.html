@@ -20,6 +20,7 @@
       <em>Satuan bawaan sistem — kode tidak dapat diubah.</em>
     </p>
     {% endif %}
+    {{ base_by_dimension|json_script:"baseByDimension" }}
     <form method="post">
       {% csrf_token %}
       <div class="ni-form-row">
@@ -47,17 +48,16 @@
         </div>
       </div>
       <div class="ni-form-row">
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.is_base.label }}</label>
+        <div class="ni-form-group ni-form-group--inline">
           {{ form.is_base }}
-          {% if form.is_base.errors %}<div class="ni-form-error">{{ form.is_base.errors }}</div>{% endif %}
+          <label class="ni-form-label" style="margin:0;">{{ form.is_base.label }}</label>
         </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.is_active.label }}</label>
+        <div class="ni-form-group ni-form-group--inline">
           {{ form.is_active }}
-          {% if form.is_active.errors %}<div class="ni-form-error">{{ form.is_active.errors }}</div>{% endif %}
+          <label class="ni-form-label" style="margin:0;">{{ form.is_active.label }}</label>
         </div>
       </div>
+      <p id="uomPreview" class="ni-text-muted" style="font-size:0.85em;margin:8px 0 0;"></p>
       <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'uom:list' %}" class="ni-btn ni-btn--secondary">Batal</a>
@@ -65,4 +65,44 @@
     </form>
   </div>
 </div>
+
+<script>
+(function () {
+  'use strict';
+  var baseMap = JSON.parse(document.getElementById('baseByDimension').textContent || '{}');
+  var form = document.querySelector('.ni-card form');
+  if (!form) return;
+  var kode = form.querySelector('[name="kode"]');
+  var dim = form.querySelector('[name="dimension"]');
+  var factor = form.querySelector('[name="factor_to_base"]');
+  var isBase = form.querySelector('[name="is_base"]');
+  var preview = document.getElementById('uomPreview');
+
+  function baseKode() {
+    return (dim && baseMap[dim.value]) ? baseMap[dim.value] : '(base)';
+  }
+  function render() {
+    if (isBase && isBase.checked) {
+      if (factor) { factor.value = '1'; factor.setAttribute('disabled', 'disabled'); }
+    } else if (factor) {
+      factor.removeAttribute('disabled');
+    }
+    var k = (kode && kode.value) ? kode.value : '(kode)';
+    var f = (factor && factor.value) ? factor.value : '?';
+    preview.textContent = '1 ' + k + ' = ' + f + ' ' + baseKode();
+  }
+  [kode, dim, factor].forEach(function (el) {
+    if (el) { el.addEventListener('input', render); el.addEventListener('change', render); }
+  });
+  if (isBase) isBase.addEventListener('change', render);
+  render();
+  // Re-enable factor before submit so disabled value still posts as 1
+  form.addEventListener('submit', function () {
+    if (factor && factor.hasAttribute('disabled')) {
+      factor.removeAttribute('disabled');
+      factor.value = '1';
+    }
+  });
+})();
+</script>
 {% endblock %}
