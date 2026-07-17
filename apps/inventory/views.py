@@ -456,30 +456,44 @@ def stock_ledger(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def stock_card(request: HttpRequest) -> HttpResponse:
-    """Kartu stok per item: layer inflow aktif + saldo per gudang (read-only)."""
+    """Kartu stok per item: valuasi, layer inflow aktif + saldo per gudang (read-only)."""
     from django.db.models import Sum
     from apps.inventory.models import StockMovement
     from apps.purchase.models import ItemMasterPurchase
     item_id = request.GET.get('item', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
     item = None
     layers = []
     saldo_per_wh = []
+    total_on_hand = Decimal('0')
+    total_value = Decimal('0')
     if item_id:
-        item = get_object_or_404(ItemMasterPurchase, pk=item_id)
-        layers = StockMovement.objects.filter(
-            item=item, remaining_qty__gt=0).select_related(
-            'entitas_bisnis', 'warehouse').order_by('tanggal', 'created_at')
+        item = get_object_or_404(
+            ItemMasterPurchase.objects.select_related('stock_uom'), pk=item_id)
+        mv_qs = StockMovement.objects.filter(item=item)
+        layer_qs = mv_qs.filter(remaining_qty__gt=0)
+        if eb_filter_list:
+            eb_ids = _resolve_eb_lv1_ids(eb_filter_list, request.user)
+            mv_qs = mv_qs.filter(entitas_bisnis_id__in=eb_ids)
+            layer_qs = layer_qs.filter(entitas_bisnis_id__in=eb_ids)
+        layers = list(
+            layer_qs.select_related('entitas_bisnis', 'warehouse')
+            .order_by('tanggal', 'created_at'))
         saldo_per_wh = (
-            StockMovement.objects.filter(item=item)
-            .values('warehouse__kode')
+            mv_qs.values('warehouse__kode')
             .annotate(saldo=Sum('qty')).order_by('warehouse__kode')
         )
+        total_on_hand = mv_qs.aggregate(s=Sum('qty'))['s'] or Decimal('0')
+        total_value = sum((l.remaining_qty * l.unit_cost for l in layers), Decimal('0'))
     return render(request, 'inventory/stock_card.html', {
         'title': 'Kartu Stok', 'item': item, 'layers': layers,
         'saldo_per_wh': saldo_per_wh,
+        'total_on_hand': total_on_hand, 'total_value': total_value,
         'items': ItemMasterPurchase.objects.filter(
             tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']).order_by('item_id'),
         'item_filter': item_id,
+        'eb_tree': _get_eb_tree(request.user),
+        'eb_filter_list': eb_filter_list,
     })
 
 

@@ -787,3 +787,36 @@ class StockLedgerViewTests(DjangoTestCase):
     def test_eb_tree_in_context(self):
         resp = self.client.get(reverse('inventory:stock_ledger'))
         self.assertIn('eb_tree', resp.context)
+
+
+class StockCardViewTests(DjangoTestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='u2@example.com', password='p', name='U2')
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-01-01',
+            movement_type='purchase_in', qty=Decimal('10'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('4'))
+        StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-01-02',
+            movement_type='purchase_in', qty=Decimal('8'), unit_cost=Decimal('6'),
+            remaining_qty=Decimal('8'))
+
+    def test_totals_computed(self):
+        url = reverse('inventory:stock_card')
+        resp = self.client.get(url, {'item': self.item.pk})
+        self.assertEqual(resp.status_code, 200)
+        # total on hand = saldo semua movement = 10 + 8 = 18
+        self.assertEqual(resp.context['total_on_hand'], Decimal('18'))
+        # total value = layer aktif: 4*5 + 8*6 = 20 + 48 = 68
+        self.assertEqual(resp.context['total_value'], Decimal('68'))
+
+    def test_no_item_no_totals(self):
+        resp = self.client.get(reverse('inventory:stock_card'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.context['item'])
