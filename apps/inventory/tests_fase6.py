@@ -550,3 +550,20 @@ class TransferViewTests(TestCase):
         resp = self.client.post(reverse('inventory:transfer_delete', args=[trf.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(StockTransfer.objects.filter(pk=trf.pk).exists())
+
+
+class ReturCustomerModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_header(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(retur=h, item=self.item, qty=Decimal('2'),
+                                         unit_cost=Decimal('5'), harga_jual=Decimal('9'))
+        self.assertTrue(h.nomor.startswith('TRX-RTC-'))

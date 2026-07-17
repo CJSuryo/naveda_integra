@@ -471,3 +471,41 @@ class StockTransferItem(models.Model):
     unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
     movement_out = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
     movement_in = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class ReturCustomer(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-RTC-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    sales_header = models.ForeignKey('sales.SalesHeader', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers')
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='retur_customers')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Retur Pelanggan'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class ReturCustomerItem(models.Model):
+    retur = models.ForeignKey(ReturCustomer, on_delete=models.CASCADE, related_name='items')
+    sales_item = models.ForeignKey('sales.SalesItem', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0, help_text='Biaya HPP asli dari transaksi penjualan')
+    harga_jual = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
