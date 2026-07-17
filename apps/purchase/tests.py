@@ -21,6 +21,33 @@ from .models import (
 from .services import create_automated_journals, create_fifo_batches
 
 
+class ItemMasterFormUomTests(TestCase):
+    """Registration simplification: stock_uom is the one required unit; purchase
+    and sales units are optional transaction defaults, not mandatory setup."""
+
+    def _form(self):
+        from apps.purchase.forms import ItemMasterPurchaseForm
+        return ItemMasterPurchaseForm(tipe_item_choices=['ITM'])
+
+    def test_stock_uom_required_for_inventory_item(self):
+        self.assertTrue(self._form().fields['stock_uom'].required)
+
+    def test_purchase_uom_is_optional_default(self):
+        field = self._form().fields['purchase_uom']
+        self.assertFalse(field.required)
+        self.assertIn('Default', field.label)
+
+    def test_sales_uom_is_optional_default(self):
+        field = self._form().fields['sales_uom']
+        self.assertFalse(field.required)
+        self.assertIn('Default', field.label)
+
+    def test_asset_item_has_no_stock_uom_field(self):
+        from apps.purchase.forms import ItemMasterPurchaseForm
+        form = ItemMasterPurchaseForm(tipe_item_choices=['ATP'])
+        self.assertNotIn('stock_uom', form.fields)
+
+
 class KategoriItemModelTests(TestCase):
     def test_str(self):
         k = KategoriItem.objects.create(nama='Coffee', tipe_item='RM')
@@ -350,19 +377,25 @@ class PurchaseViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def test_item_master_create_post(self):
+        from apps.uom.models import UnitOfMeasure
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
         resp = self.client.post(reverse('purchase:item_master_create'), {
             'nama': 'Gula Pasir',
             'tipe_item': 'RM',
             'unit_price': '15000',
+            'stock_uom': pcs.pk,
         })
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(ItemMasterPurchase.objects.filter(nama='Gula Pasir').exists())
 
     def test_item_master_update(self):
+        from apps.uom.models import UnitOfMeasure
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
         resp = self.client.post(reverse('purchase:item_master_update', args=[self.item.pk]), {
             'nama': 'Kopi Robusta',
             'tipe_item': 'RM',
             'unit_price': '40000',
+            'stock_uom': pcs.pk,
         })
         self.assertEqual(resp.status_code, 302)
         self.item.refresh_from_db()
@@ -789,6 +822,71 @@ class PurchaseUomConversionTests(TestCase):
         self.assertEqual(pi.unit_price, Decimal('1000'))
         self.assertEqual(pi.input_uom, self.ctn)
         self.assertEqual(pi.input_qty, Decimal('10'))
+
+    def test_item_uoms_data_drops_unresolvable_default(self):
+        """The transaction UOM selector must not offer a default purchase/sales
+        unit that has no conversion to the item's stock unit — otherwise the UI
+        offers a unit the backend guard would reject."""
+        from apps.uom.models import UnitOfMeasure
+        from apps.purchase.views import _get_item_uoms_data
+        kg = UnitOfMeasure.objects.get(kode='kg')  # weight, unrelated to pcs stock
+        # item has pcs stock (count) but a mis-set purchase_uom in kg and no ItemUOM.
+        self.item.purchase_uom = kg
+        self.item.save(update_fields=['purchase_uom'])
+
+        data = _get_item_uoms_data('purchase')[self.item.pk]
+        kodes = {o['kode'] for o in data['options']}
+        self.assertNotIn('kg', kodes)
+        self.assertIn('pcs', kodes)
+        # default falls back to the stock unit since kg is not offered.
+        self.assertEqual(data['default_id'], self.pcs.pk)
+
+    def test_purchase_create_rejects_unresolvable_input_uom(self):
+        """An input_uom with no conversion path for the item (different
+        dimension, no ItemUOM) must be rejected with a form error instead of
+        blowing up mid-transaction or silently mis-converting."""
+        from apps.uom.models import UnitOfMeasure
+        kg = UnitOfMeasure.objects.get(kode='kg')  # weight; item stock is pcs (count)
+        role = Role.objects.create(kode='admin', nama='Admin UOM Bad')
+        user = User.objects.create_user(email='uom-bad@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Bad')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Bad', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        stt = SubTransactionType.objects.create(
+            nama='Stok Awal UOM Bad', direction='inflow', default_offset_account=akun_modal,
+        )
+
+        groups = [{
+            'entitas_bisnis_id': eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'coa_account_id': akun_persediaan.pk,
+                'offset_coa_account_id': akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '24000',
+                'input_uom_id': kg.pk,
+            }],
+        }]
+        resp = client.post(reverse('purchase:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Bad',
+            'eb_groups_data': json.dumps(groups),
+        })
+        # Form re-rendered (not redirect), nothing persisted.
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(PurchaseItem.objects.filter(item=self.item).exists())
 
     def test_purchase_edit_prefill_and_resave_does_not_compound_uom(self):
         """Regression test: opening the edit form must prefill the original

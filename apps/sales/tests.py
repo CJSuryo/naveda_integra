@@ -1058,6 +1058,66 @@ class SalesUomConversionTests(TestCase):
         self.assertEqual(si.input_uom, self.box)
         self.assertEqual(si.input_qty, Decimal('3'))
 
+    def test_sales_create_rejects_unresolvable_input_uom(self):
+        """An input_uom with no conversion path for the item (different
+        dimension, no ItemUOM) must be rejected with a form error, not raise an
+        uncaught ConversionError mid-transaction."""
+        kg = UnitOfMeasure.objects.get(kode='kg')  # weight; item stock is pcs (count)
+        role = Role.objects.create(kode='admin', nama='Admin UOM Sales Bad2')
+        user = User.objects.create_user(email='uom-sales-bad2@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Sales Bad2')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Sales Bad2', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        pendapatan_lv1 = PendapatanLv1.objects.create(kode='4', nama='Pendapatan')
+        pendapatan_lv2 = PendapatanLv2.objects.create(pendapatan=pendapatan_lv1, kode='1', nama='Pendapatan Usaha')
+        akun_pendapatan = Akun.objects.get(kategori_id='pendapatan', kategori_akun=pendapatan_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        self.item.coa_account = akun_persediaan
+        self.item.save()
+
+        stt = SubTransactionType.objects.create(
+            nama='Penjualan UOM Bad2', module='sales', direction='outflow',
+            default_offset_account=akun_persediaan,
+        )
+        from apps.inventory.ledger import record_inflow
+        record_inflow(
+            self.item, eb, None, None, Decimal('100'), Decimal('5000'),
+            '2026-01-01', 'purchase_in',
+        )
+
+        groups = [{
+            'eb_selection': f'lv1:{eb.pk}',
+            'payment_account_id': akun_modal.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'quantity': '3',
+                'selling_price': '120000',
+                'offset_coa_account_id': akun_persediaan.pk,
+                'revenue_account_id': akun_pendapatan.pk,
+                'payment_account_id': akun_modal.pk,
+                'input_uom_id': kg.pk,
+            }],
+        }]
+        resp = client.post(reverse('sales:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Sales Bad2',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(SalesItem.objects.filter(item=self.item).exists())
+
     def test_sales_edit_prefill_and_resave_does_not_compound_uom(self):
         """Regression test: opening the edit form must prefill the original
         input-unit qty/price (not the already-converted base values), and

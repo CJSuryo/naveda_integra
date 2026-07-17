@@ -21,7 +21,9 @@ from apps.master_data.models import Akun
 from apps.master_data.utils import get_akun_sorted
 from apps.purchase.models import ItemMasterPurchase, SubTransactionType
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, _get_warehouses_data, _get_item_uoms_data
-from apps.uom.conversion import ConversionError, convert_input_to_base, to_stock_uom
+from apps.uom.conversion import (
+    convert_input_to_base, resolvable_uoms_for_item, to_stock_uom,
+)
 from apps.uom.models import UnitOfMeasure
 
 from .models import SalesHeader, SalesEntitasBisnis, SalesItem, SalesTaxLine, SalesItemFIFOAllocation, SalesEventLog
@@ -908,10 +910,15 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
                     if demand_input_uom is not None:
                         demand_item_obj = ItemMasterPurchase.objects.filter(pk=iid).first()
                         if demand_item_obj is not None:
-                            try:
+                            if demand_input_uom.pk not in {
+                                    u.pk for u in resolvable_uoms_for_item(demand_item_obj)}:
+                                errors[f'group_{g_idx}_item_{i}_uom'] = (
+                                    f'Grup {g_idx + 1}, Item {i + 1}: satuan '
+                                    f'{demand_input_uom.kode} tidak punya konversi ke '
+                                    f'satuan stok item. Tetapkan konversi di master item dulu.'
+                                )
+                            else:
                                 demand_qty = to_stock_uom(qty, demand_input_uom, demand_item_obj)
-                            except ConversionError:
-                                pass
                 item_demands[demand_key] = item_demands.get(demand_key, Decimal('0')) + demand_qty
 
             # Bulk inventory value validation

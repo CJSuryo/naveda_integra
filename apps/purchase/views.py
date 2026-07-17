@@ -19,7 +19,7 @@ from apps.entitas_bisnis.models import EntitasBisnis
 from apps.inventory.models import Warehouse
 from apps.master_data.models import Akun, EntitasBisnisAkun
 from apps.master_data.utils import get_akun_sorted
-from apps.uom.conversion import convert_input_to_base
+from apps.uom.conversion import convert_input_to_base, resolvable_uoms_for_item
 from apps.uom.models import UnitOfMeasure
 
 from .forms import (
@@ -118,13 +118,28 @@ def _get_item_uoms_data(kind: str = 'purchase') -> dict:
     for iu in ItemUOM.objects.select_related('uom'):
         iu_map.setdefault(iu.item_id, []).append(iu.uom)
     for it in items:
-        seen, opts = set(), []
+        stock = it.stock_uom
+        item_uoms = iu_map.get(it.pk, [])
+
+        def _resolvable(u) -> bool:
+            # Mirror resolvable_uoms_for_item: stock itself, a defined ItemUOM,
+            # or a same-dimension physical unit sharing a universal factor.
+            if stock is None or u is None:
+                return False
+            if u.pk == stock.pk or any(x.pk == u.pk for x in item_uoms):
+                return True
+            return (u.dimension == stock.dimension
+                    and u.factor_to_base is not None
+                    and stock.factor_to_base is not None)
+
         default = it.purchase_uom if kind == 'purchase' else it.sales_uom
-        for u in [it.stock_uom, default, *iu_map.get(it.pk, [])]:
-            if u is not None and u.pk not in seen:
+        seen, opts = set(), []
+        for u in [stock, default, *item_uoms]:
+            if u is not None and u.pk not in seen and _resolvable(u):
                 seen.add(u.pk)
                 opts.append({'id': u.pk, 'kode': u.kode, 'nama': u.nama})
-        default_id = default.pk if default else (it.stock_uom_id or '')
+        default_id = (default.pk if default and _resolvable(default)
+                      else (it.stock_uom_id or ''))
         result[it.pk] = {'options': opts, 'default_id': default_id}
     return result
 
@@ -1386,6 +1401,16 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
                 errors[f'item_{i}_{j}_qty'] = f'Quantity harus > 0 untuk item {j + 1} group {i + 1}.'
             if price <= 0:
                 errors[f'item_{i}_{j}_price'] = f'Harga satuan harus > 0 untuk item {j + 1} group {i + 1}.'
+            input_uom_id = item_data.get('input_uom_id') or None
+            if input_uom_id and item_data.get('item_id'):
+                item_obj = ItemMasterPurchase.objects.filter(pk=item_data['item_id']).first()
+                uom_obj = UnitOfMeasure.objects.filter(pk=input_uom_id).first()
+                if item_obj and uom_obj and uom_obj.pk not in {
+                        u.pk for u in resolvable_uoms_for_item(item_obj)}:
+                    errors[f'item_{i}_{j}_uom'] = (
+                        f'Satuan {uom_obj.kode} tidak punya konversi ke satuan stok '
+                        f'item {item_obj.nama}. Tetapkan konversi di master item dulu.'
+                    )
 
     if errors:
         dj_messages.error(request, 'Terdapat kesalahan pada form. Silakan periksa kembali.')

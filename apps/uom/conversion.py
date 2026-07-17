@@ -80,6 +80,38 @@ def convert_input_to_base(item, input_uom, input_qty, input_price):
     return qty_base, unit_price_base
 
 
+def resolvable_uoms_for_item(item):
+    """Units that can be converted to/from the item's stock_uom.
+
+    The transaction input_uom dropdown should be limited to these so a user can
+    never pick a unit that would raise ConversionError at posting time. Includes:
+    the stock_uom itself, every unit with a defined ItemUOM for this item, and
+    (when the stock_uom is physical) same-dimension units with a universal factor.
+    Returns [] when the item has no stock_uom.
+    """
+    from .models import UnitOfMeasure
+
+    stock = getattr(item, 'stock_uom', None) if item is not None else None
+    if stock is None:
+        return []
+
+    resolved = {stock.pk: stock}
+
+    for iu in ItemUOM.objects.filter(item=item).select_related('uom'):
+        resolved.setdefault(iu.uom.pk, iu.uom)
+
+    if stock.factor_to_base is not None:
+        universal = UnitOfMeasure.objects.filter(
+            dimension=stock.dimension,
+            factor_to_base__isnull=False,
+            is_active=True,
+        )
+        for u in universal:
+            resolved.setdefault(u.pk, u)
+
+    return list(resolved.values())
+
+
 def convert(qty: Decimal, from_uom, to_uom, item=None) -> Decimal:
     """Convert qty from one UOM to another.
 

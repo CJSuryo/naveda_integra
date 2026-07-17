@@ -78,6 +78,26 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             for f in ('masa_manfaat', 'metode_penyusutan', 'metode_amortisasi'):
                 self.fields.pop(f, None)
 
+        # UOM registration: pick the stock unit once (required); purchase and
+        # sales units are optional defaults that only pre-fill the transaction
+        # input unit, which can be overridden to any convertible unit.
+        if 'stock_uom' in self.fields:
+            self.fields['stock_uom'].required = True
+        if 'purchase_uom' in self.fields:
+            self.fields['purchase_uom'].required = False
+            self.fields['purchase_uom'].label = 'Default Satuan Pembelian'
+            self.fields['purchase_uom'].help_text = (
+                'Opsional. Satuan yang otomatis terisi saat pembelian; tetap bisa '
+                'diganti ke satuan lain yang punya konversi.'
+            )
+        if 'sales_uom' in self.fields:
+            self.fields['sales_uom'].required = False
+            self.fields['sales_uom'].label = 'Default Satuan Penjualan'
+            self.fields['sales_uom'].help_text = (
+                'Opsional. Satuan yang otomatis terisi saat penjualan; tetap bisa '
+                'diganti ke satuan lain yang punya konversi.'
+            )
+
         # Natural-sort CoA account choices by kode_akun (e.g. "1.1.10" sorts after "1.1.9")
         if 'coa_account' in self.fields:
             from apps.master_data.models import Akun

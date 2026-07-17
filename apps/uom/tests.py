@@ -296,6 +296,57 @@ class ConvertInputToBaseTests(TestCase):
         self.assertEqual(price, Decimal('1000'))        # total 240.000 / 240 pcs
 
 
+class ResolvableUomsForItemTests(TestCase):
+    """resolvable_uoms_for_item lists only units that actually convert for the
+    item, so transaction dropdowns never offer a unit that would raise
+    ConversionError at posting time."""
+
+    def setUp(self):
+        self.pcs = UnitOfMeasure.objects.get(kode='pcs')      # count, factor 1
+        self.kg = UnitOfMeasure.objects.get(kode='kg')        # weight, factor 1000
+        self.g = UnitOfMeasure.objects.get(kode='g')          # weight, factor 1
+        self.carton = UnitOfMeasure.objects.get(kode='carton')  # count, null factor
+        # A same-dimension packaging unit with NO ItemUOM for this item.
+        self.box = UnitOfMeasure.objects.get(kode='box')        # count, null factor
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', stock_uom=self.pcs)
+        ItemUOM.objects.create(item=self.item, uom=self.carton,
+                               qty_in_stock_uom=Decimal('24'))
+
+    def _resolvable_kodes(self, item):
+        from apps.uom.conversion import resolvable_uoms_for_item
+        return set(u.kode for u in resolvable_uoms_for_item(item))
+
+    def test_includes_stock_uom(self):
+        self.assertIn('pcs', self._resolvable_kodes(self.item))
+
+    def test_includes_defined_item_uom(self):
+        self.assertIn('carton', self._resolvable_kodes(self.item))
+
+    def test_excludes_same_dimension_packaging_without_item_uom(self):
+        # box is count like pcs, but has null factor and no ItemUOM -> not resolvable.
+        self.assertNotIn('box', self._resolvable_kodes(self.item))
+
+    def test_excludes_other_dimension(self):
+        # kg/g are weight; item stock is count with no cross-dimension mapping.
+        kodes = self._resolvable_kodes(self.item)
+        self.assertNotIn('kg', kodes)
+        self.assertNotIn('g', kodes)
+
+    def test_includes_universal_same_dimension(self):
+        # Item stocked in kg (weight, factor set) -> g resolves universally.
+        item_w = ItemMasterPurchase.objects.create(
+            nama='Tepung', tipe_item='RM', stock_uom=self.kg)
+        kodes = self._resolvable_kodes(item_w)
+        self.assertIn('kg', kodes)
+        self.assertIn('g', kodes)
+
+    def test_item_without_stock_uom_returns_empty(self):
+        item = ItemMasterPurchase.objects.create(nama='NoUom', tipe_item='RM')
+        from apps.uom.conversion import resolvable_uoms_for_item
+        self.assertEqual(list(resolvable_uoms_for_item(item)), [])
+
+
 class MasterSatuanMenuTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
