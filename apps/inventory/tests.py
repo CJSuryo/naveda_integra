@@ -838,3 +838,26 @@ class StockCardViewTests(DjangoTestCase):
         self.assertEqual(resp.context['total_on_hand'], Decimal('18'))
         self.assertEqual(resp.context['total_value'], Decimal('68'))
         self.assertEqual(len(resp.context['layers']), 2)
+
+
+class NormalizeMethodTests(DjangoTestCase):
+    def test_empty_defaults_to_fifo(self):
+        from apps.inventory.ledger import _normalize_method
+        self.assertEqual(_normalize_method(''), 'fifo')
+        self.assertEqual(_normalize_method(None), 'fifo')
+
+    def test_known_methods(self):
+        from apps.inventory.ledger import _normalize_method
+        self.assertEqual(_normalize_method('fifo'), 'fifo')
+        self.assertEqual(_normalize_method('lifo'), 'lifo')
+        self.assertEqual(_normalize_method('average'), 'average')
+        self.assertEqual(_normalize_method('weighted_moving_average'), 'average')
+
+    def test_case_insensitive_and_trimmed(self):
+        from apps.inventory.ledger import _normalize_method
+        self.assertEqual(_normalize_method('  LIFO '), 'lifo')
+
+    def test_unknown_raises(self):
+        from apps.inventory.ledger import _normalize_method
+        with self.assertRaises(ValueError):
+            _normalize_method('xyz')

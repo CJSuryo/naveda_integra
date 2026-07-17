@@ -4,7 +4,7 @@ All quantities are in the item's base uom (Decimal). Bulk items (RMB/FGB/ITMB)
 use the existing value-based convention (qty=1, unit_cost=total_value).
 """
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
@@ -12,6 +12,25 @@ from django.db import transaction
 from .models import StockMovement, StockConsumption
 
 OUTFLOW_MOVEMENT_TYPES = {'sale_out', 'production_out'}
+
+_METHOD_ALIASES = {
+    '': 'fifo',
+    'fifo': 'fifo',
+    'lifo': 'lifo',
+    'average': 'average',
+    'weighted_moving_average': 'average',
+}
+
+
+def _normalize_method(metode) -> str:
+    """Petakan pilihan metode item ke strategi engine ('fifo'|'lifo'|'average').
+
+    Kosong/None → 'fifo'. String tak dikenal → ValueError (jangan diam-diam FIFO).
+    """
+    key = (metode or '').strip().lower()
+    if key not in _METHOD_ALIASES:
+        raise ValueError(f'Metode biaya persediaan tak didukung: {metode!r}')
+    return _METHOD_ALIASES[key]
 
 
 class InsufficientStockError(ValueError):
