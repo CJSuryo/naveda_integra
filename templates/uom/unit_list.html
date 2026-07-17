@@ -44,13 +44,13 @@
             <td>{{ u.nama }}</td>
             <td class="ni-text-right">{{ u.factor_to_base|trim_decimal }}</td>
             <td class="ni-text-center">
-              {% if u.is_base %}<i data-lucide="check" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted">—</span>{% endif %}
+              {% if u.is_base %}<i data-lucide="check" role="img" aria-label="Ya" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted" aria-label="Tidak">—</span>{% endif %}
             </td>
             <td class="ni-text-center">
-              {% if u.is_system %}<i data-lucide="check" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted">—</span>{% endif %}
+              {% if u.is_system %}<i data-lucide="check" role="img" aria-label="Ya" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted" aria-label="Tidak">—</span>{% endif %}
             </td>
             <td class="ni-text-center">
-              {% if u.is_active %}<i data-lucide="check" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted">—</span>{% endif %}
+              {% if u.is_active %}<i data-lucide="check" role="img" aria-label="Ya" style="width:14px;height:14px;color:var(--ni-success,#10b981)"></i>{% else %}<span class="ni-text-muted" aria-label="Tidak">—</span>{% endif %}
             </td>
             <td>
               <div class="ni-btn-row">
