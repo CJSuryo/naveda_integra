@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 
 from .fields import GroupedModelChoiceField
@@ -14,6 +16,10 @@ class UnitOfMeasureForm(forms.ModelForm):
         # Guard: cannot edit kode of a system unit
         if self.instance.pk and self.instance.is_system:
             cleaned['kode'] = self.instance.kode
+        # A base unit's factor to itself is always 1, regardless of what the
+        # (JS-locked, but not server-trusted) form field submitted.
+        if cleaned.get('is_base'):
+            cleaned['factor_to_base'] = Decimal('1')
         return cleaned
 
 

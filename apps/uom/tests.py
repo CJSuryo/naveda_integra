@@ -254,6 +254,19 @@ class UnitViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(UnitOfMeasure.objects.filter(kode='sak').exists())
 
+    def test_is_base_forces_factor_to_one_server_side(self):
+        # A base unit's factor must always be 1, even if a non-JS/scripted
+        # client submits something else — the JS lock on the form is only
+        # a UX aid, not the source of truth.
+        resp = self.client.post(reverse('uom:create'), {
+            'kode': 'newbase', 'nama': 'New Base', 'dimension': 'count',
+            'factor_to_base': '5', 'is_base': 'on', 'is_active': 'on',
+        })
+        self.assertEqual(resp.status_code, 302)
+        unit = UnitOfMeasure.objects.get(kode='newbase')
+        self.assertTrue(unit.is_base)
+        self.assertEqual(unit.factor_to_base, Decimal('1'))
+
 
 class ItemMasterAdminInlineTests(TestCase):
     def test_itemuom_inline_registered(self):
