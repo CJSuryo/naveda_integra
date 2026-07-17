@@ -491,3 +491,62 @@ class ProcessTransferTests(TestCase):
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('10'))
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh2), Decimal('0'))
+
+
+class TransferViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u3@example.com', password='p', name='U3')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:transfer_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:transfer_create')).status_code, 200)
+
+    def test_create_post_intra_entity_success(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import Warehouse, StockTransfer
+        from apps.purchase.models import ItemMasterPurchase
+        wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG1')
+        wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG2')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.9', nama='Persediaan Transfer')
+        item.save()
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh1)
+        data = {
+            'tanggal': '2026-04-01', 'eb_asal': self.eb.pk, 'warehouse_asal': wh1.pk,
+            'eb_tujuan': self.eb.pk, 'warehouse_tujuan': wh2.pk, 'akun_perantara': '',
+            'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '4',
+        }
+        resp = self.client.post(reverse('inventory:transfer_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockTransfer.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'eb_asal': '', 'warehouse_asal': '',
+            'eb_tujuan': '', 'warehouse_tujuan': '', 'akun_perantara': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '',
+        }
+        resp = self.client.post(reverse('inventory:transfer_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.inventory.models import Warehouse, StockTransfer
+        wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG3')
+        wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG4')
+        trf = StockTransfer.objects.create(tanggal='2026-04-02', eb_asal=self.eb,
+                                           warehouse_asal=wh1, eb_tujuan=self.eb,
+                                           warehouse_tujuan=wh2)
+        resp = self.client.post(reverse('inventory:transfer_delete', args=[trf.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockTransfer.objects.filter(pk=trf.pk).exists())

@@ -22,10 +22,14 @@ from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .forms import (
     InventoryRecordForm, StockAdjustmentForm, StockAdjustmentItemFormSet,
-    StockOpnameForm, StockOpnameItemFormSet, WarehouseForm,
+    StockOpnameForm, StockOpnameItemFormSet, StockTransferForm, StockTransferItemFormSet,
+    WarehouseForm,
 )
-from .models import InventoryRecord, StockAdjustment, StockOpname, Warehouse
-from .services import process_adjustment, process_opname, reverse_adjustment, reverse_opname
+from .models import InventoryRecord, StockAdjustment, StockOpname, StockTransfer, Warehouse
+from .services import (
+    process_adjustment, process_opname, process_transfer,
+    reverse_adjustment, reverse_opname, reverse_transfer,
+)
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -1422,3 +1426,53 @@ def opname_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, f'Gagal membatalkan: {e}')
         return redirect('inventory:opname_list')
     return render(request, 'inventory/opname_delete_confirm.html', {'opn': opn})
+
+
+# ── Stock Transfer ───────────────────────────────────────────────────────
+
+@login_required
+def transfer_list(request: HttpRequest) -> HttpResponse:
+    """List all stock transfers."""
+    rows = StockTransfer.objects.select_related(
+        'eb_asal', 'warehouse_asal', 'eb_tujuan', 'warehouse_tujuan', 'akun_perantara').all()
+    return render(request, 'inventory/transfer_list.html', {'rows': rows})
+
+
+@login_required
+def transfer_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock transfer (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockTransferForm(request.POST)
+        formset = StockTransferItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    trf = form.save()
+                    formset.instance = trf
+                    formset.save()
+                    process_transfer(trf)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'Transfer {trf.nomor} diposting.')
+                return redirect('inventory:transfer_list')
+    else:
+        form = StockTransferForm()
+        formset = StockTransferItemFormSet()
+    return render(request, 'inventory/transfer_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def transfer_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus transfer."""
+    trf = get_object_or_404(StockTransfer, pk=pk)
+    if request.method == 'POST':
+        try:
+            if trf.status == 'posted':
+                reverse_transfer(trf, request)
+            trf.delete()
+            messages.success(request, f'Transfer {trf.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:transfer_list')
+    return render(request, 'inventory/transfer_delete_confirm.html', {'trf': trf})

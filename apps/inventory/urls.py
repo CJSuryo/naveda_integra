@@ -26,4 +26,7 @@ urlpatterns = [
     path('opname/', views.opname_list, name='opname_list'),
     path('opname/create/', views.opname_create, name='opname_create'),
     path('opname/<int:pk>/delete/', views.opname_delete, name='opname_delete'),
+    path('transfer/', views.transfer_list, name='transfer_list'),
+    path('transfer/create/', views.transfer_create, name='transfer_create'),
+    path('transfer/<int:pk>/delete/', views.transfer_delete, name='transfer_delete'),
 ]

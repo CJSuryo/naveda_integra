@@ -6,7 +6,8 @@ from apps.entitas_bisnis.models import EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 
 from .models import (
-    InventoryRecord, StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem, Warehouse,
+    InventoryRecord, StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem,
+    StockTransfer, StockTransferItem, Warehouse,
 )
 
 
@@ -151,5 +152,62 @@ StockOpnameItemFormSet = inlineformset_factory(
     StockOpname, StockOpnameItem,
     form=StockOpnameItemForm,
     fields=('item', 'qty_sistem', 'qty_fisik', 'unit_cost'),
+    extra=3, min_num=1, validate_min=True, can_delete=True,
+)
+
+
+class StockTransferForm(forms.ModelForm):
+    class Meta:
+        model = StockTransfer
+        fields = ('tanggal', 'eb_asal', 'eb_asal_lv2', 'eb_asal_lv3', 'warehouse_asal',
+                  'eb_tujuan', 'eb_tujuan_lv2', 'eb_tujuan_lv3', 'warehouse_tujuan',
+                  'akun_perantara', 'keterangan')
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'eb_asal': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_asal_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_asal_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse_asal': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_tujuan': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_tujuan_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_tujuan_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse_tujuan': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_perantara': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        active_eb = EntitasBisnis.objects.filter(status_aktif=True).order_by('nama')
+        self.fields['eb_asal'].queryset = active_eb
+        self.fields['eb_tujuan'].queryset = active_eb
+
+
+class StockTransferItemForm(forms.ModelForm):
+    class Meta:
+        model = StockTransferItem
+        fields = ('item', 'qty')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')
+
+    def clean_qty(self):
+        qty = self.cleaned_data.get('qty')
+        if qty is not None and qty <= 0:
+            raise forms.ValidationError('Qty transfer harus lebih dari 0.')
+        return qty
+
+
+StockTransferItemFormSet = inlineformset_factory(
+    StockTransfer, StockTransferItem,
+    form=StockTransferItemForm,
+    fields=('item', 'qty'),
     extra=3, min_num=1, validate_min=True, can_delete=True,
 )
