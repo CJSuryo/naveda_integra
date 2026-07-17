@@ -567,3 +567,19 @@ class ReturCustomerModelTests(TestCase):
         ReturCustomerItem.objects.create(retur=h, item=self.item, qty=Decimal('2'),
                                          unit_cost=Decimal('5'), harga_jual=Decimal('9'))
         self.assertTrue(h.nomor.startswith('TRX-RTC-'))
+
+
+class ReturSupplierModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_header(self):
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        self.assertTrue(h.nomor.startswith('TRX-RTS-'))
