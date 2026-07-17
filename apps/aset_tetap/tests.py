@@ -413,6 +413,41 @@ class AssetDisposalFormTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
 
 
+class DisposalViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='v@test.com', password='pass')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.01', nama='Akum')
+        self.akun_lr = Akun.objects.create(kategori_id='pendapatan', kode_akun='8.1.01', nama='LR')
+        self.item = ItemMasterPurchase.objects.create(nama='Mesin X', tipe_item='ATP', coa_account=akun_aset)
+        self.rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas, quantity=Decimal('5'), harga_perolehan=Decimal('1000000'),
+        )
+
+    def test_dispose_post_creates_disposal(self):
+        res = self.client.post(reverse('aset_tetap:dispose', args=[self.rec.pk]), {
+            'jenis': 'hibah', 'tanggal': '2026-07-17', 'quantity': '2',
+            'harga_jual': '0', 'akun_laba_rugi': self.akun_lr.pk,
+        })
+        self.assertEqual(res.status_code, 302)
+        self.assertEqual(AssetDisposal.objects.filter(aset=self.rec).count(), 1)
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.quantity, Decimal('3.0000'))
+
+    def test_disposal_delete_reverses(self):
+        d = AssetDisposal(aset=self.rec, jenis='hibah', quantity=Decimal('2'), akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d)
+        res = self.client.post(reverse('aset_tetap:disposal_delete', args=[self.rec.pk, d.pk]))
+        self.assertEqual(res.status_code, 302)
+        self.assertFalse(AssetDisposal.objects.filter(pk=d.pk).exists())
+        self.rec.refresh_from_db()
+        self.assertEqual(self.rec.quantity, Decimal('5.0000'))
+
+
 class BulkDepreciationViewTests(TestCase):
     def setUp(self):
         self.client = Client()

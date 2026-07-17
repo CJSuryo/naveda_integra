@@ -16,4 +16,6 @@ urlpatterns = [
     path('<int:pk>/jurnal-penyusutan/<int:jurnal_pk>/hapus/', views.delete_depreciation_journal, name='delete_dep_journal'),
     path('bulk-penyusutan/', views.aset_tetap_bulk_depreciation, name='bulk_depreciation'),
     path('bulk-penyusutan/preview/', views.aset_tetap_bulk_preview, name='bulk_preview'),
+    path('<int:pk>/lepas/', views.aset_tetap_dispose, name='dispose'),
+    path('<int:pk>/pelepasan/<int:disposal_pk>/batal/', views.aset_tetap_disposal_delete, name='disposal_delete'),
 ]

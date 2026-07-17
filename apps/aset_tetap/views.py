@@ -15,9 +15,12 @@ from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import AsetTetapRecordForm
-from .models import AsetTetapRecord
-from .services import calculate_depreciation, process_depreciation
+from .forms import AsetTetapRecordForm, AssetDisposalForm
+from .models import AsetTetapRecord, AssetDisposal
+from .services import (
+    calculate_depreciation, process_depreciation,
+    process_asset_disposal, reverse_asset_disposal,
+)
 
 DEFAULT_DAYS = 30  # monthly processing default
 
@@ -144,6 +147,10 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
     today = date_cls.today()
     suggested_days = (today - suggested_start_date).days + 1 if today >= suggested_start_date else 0
 
+    from datetime import date as _dc
+    disposal_form = AssetDisposalForm(aset=record, initial={'tanggal': _dc.today(), 'quantity': record.quantity})
+    disposals = record.disposals.select_related('akun_kas', 'akun_laba_rugi', 'jurnal_header').all()
+
     return render(request, 'aset_tetap/aset_tetap_detail.html', {
         'record': record,
         'preview_amount': preview_amount,
@@ -158,6 +165,9 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'suggested_start_date': suggested_start_date,
         'suggested_days': suggested_days,
         'today': today,
+        'disposal_form': disposal_form,
+        'disposals': disposals,
+        'can_dispose': record.status == 'aktif' and record.quantity > 0,
     })
 
 
@@ -543,6 +553,55 @@ def delete_depreciation_journal(request: HttpRequest, pk: int, jurnal_pk: int) -
         'record': record,
         'journal': journal,
         'dep_amount': dep_amount,
+    })
+
+
+@login_required
+def aset_tetap_dispose(request: HttpRequest, pk: int) -> HttpResponse:
+    """Proses pelepasan aset dari halaman detail."""
+    record = get_object_or_404(
+        AsetTetapRecord.objects.select_related('item', 'entitas_bisnis', 'purchase_item'),
+        pk=pk,
+    )
+    if request.method != 'POST':
+        return redirect('aset_tetap:detail', pk=pk)
+
+    form = AssetDisposalForm(request.POST, aset=record)
+    if not form.is_valid():
+        for field, errs in form.errors.items():
+            for e in errs:
+                messages.error(request, f'{field}: {e}')
+        return redirect('aset_tetap:detail', pk=pk)
+
+    disposal = form.save(commit=False)
+    disposal.aset = record
+    try:
+        header = process_asset_disposal(disposal)
+        messages.success(
+            request,
+            f'Pelepasan {record.aset_number} berhasil diproses. Jurnal: {header.nomor_transaksi}.',
+        )
+    except ValueError as e:
+        messages.error(request, str(e))
+    return redirect('aset_tetap:detail', pk=pk)
+
+
+@login_required
+def aset_tetap_disposal_delete(request: HttpRequest, pk: int, disposal_pk: int) -> HttpResponse:
+    """Batalkan pelepasan aset dan pulihkan aset."""
+    record = get_object_or_404(AsetTetapRecord, pk=pk)
+    disposal = get_object_or_404(AssetDisposal, pk=disposal_pk, aset=record)
+    if request.method == 'POST':
+        disposal_number = disposal.disposal_number
+        reverse_asset_disposal(disposal, request)
+        messages.success(
+            request,
+            f'Pelepasan {disposal_number} dibatalkan. Aset dipulihkan.',
+        )
+        return redirect('aset_tetap:detail', pk=pk)
+    return render(request, 'aset_tetap/disposal_delete_confirm.html', {
+        'record': record,
+        'disposal': disposal,
     })
 
 
