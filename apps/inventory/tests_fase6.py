@@ -241,3 +241,59 @@ class StockOpnameModelTests(TestCase):
                                            unit_cost=Decimal('5'))
         self.assertEqual(d.selisih, Decimal('-2'))
         self.assertTrue(h.nomor.startswith('TRX-OPN-'))
+
+
+class ProcessOpnameTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih Opname')
+
+    def test_posting_minus_consumes_and_balances(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('10'),
+                                       qty_fisik=Decimal('8'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('8'))
+        self.assertEqual(sum(d.debit for d in header.details.all()),
+                         sum(d.kredit for d in header.details.all()))
+
+    def test_zero_selisih_no_movement(self):
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('5'),
+                                       qty_fisik=Decimal('5'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        self.assertIsNone(header)  # tidak ada selisih → tidak ada jurnal
+
+    def test_reverse_restores_stock_and_removes_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname, reverse_opname
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-02', 'purchase_in', warehouse=self.wh)
+        h = StockOpname.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('10'),
+                                       qty_fisik=Decimal('8'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        reverse_opname(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())

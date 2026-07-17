@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
-from .models import StockAdjustment
+from .models import StockAdjustment, StockOpname
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -113,3 +113,64 @@ def reverse_adjustment(adj: StockAdjustment, request=None) -> None:
     adj.jurnal_header = None
     adj.status = 'draft'
     adj.save(update_fields=['jurnal_header', 'status'])
+
+
+@transaction.atomic
+def process_opname(opn: StockOpname):
+    """Posting selisih opname. Kembalikan JurnalHeader atau None bila semua selisih 0."""
+    if opn.status == 'posted':
+        raise ValueError('Opname sudah diposting.')
+    items = list(opn.items.select_related('item').all())
+    naik = Decimal('0')
+    turun = Decimal('0')
+    akun_persediaan = None
+    for d in items:
+        if d.selisih == 0:
+            continue
+        if d.item.coa_account is None:
+            raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
+        akun_persediaan = d.item.coa_account
+        if d.selisih > 0:
+            mv = ledger.record_inflow(
+                d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2, opn.entitas_bisnis_lv3,
+                d.selisih, d.unit_cost, opn.tanggal, 'opname_in', source=opn,
+                warehouse=opn.warehouse)
+            naik += d.selisih * d.unit_cost
+        else:
+            result = ledger.consume_stock(
+                d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2, opn.entitas_bisnis_lv3,
+                -d.selisih, opn.tanggal, 'opname_out', source=opn,
+                metode=d.item.metode_biaya_persediaan, warehouse=opn.warehouse)
+            mv = result.out_movement
+            turun += result.total_cost
+        d.movement = mv
+        d.save(update_fields=['movement'])
+
+    header = None
+    if naik > 0 or turun > 0:
+        lines = []
+        if naik > 0:
+            lines.append((akun_persediaan, naik, Decimal('0')))
+            lines.append((opn.akun_selisih, Decimal('0'), naik))
+        if turun > 0:
+            lines.append((opn.akun_selisih, turun, Decimal('0')))
+            lines.append((akun_persediaan, Decimal('0'), turun))
+        header = _post_journal(opn.tanggal, 'TRX-OPN-',
+                               f'Opname Stok {opn.nomor}', opn.entitas_bisnis, lines)
+        opn.jurnal_header = header
+    opn.status = 'posted'
+    opn.save(update_fields=['jurnal_header', 'status'])
+    return header
+
+
+@transaction.atomic
+def reverse_opname(opn: StockOpname, request=None) -> None:
+    if opn.status != 'posted':
+        raise ValueError('Opname belum diposting.')
+    ledger.reverse_movements(opn)
+    ledger.reverse_inflow_movements(opn)
+    _reverse_journal(opn.jurnal_header, request)
+    opn.items.update(movement=None)
+    opn.jurnal_header = None
+    opn.status = 'draft'
+    opn.save(update_fields=['jurnal_header', 'status'])
