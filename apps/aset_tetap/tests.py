@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
+from django.contrib.messages import get_messages
 from django.urls import reverse
 
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
@@ -362,3 +363,51 @@ class DepreciationGuardTests(TestCase):
         )
         with self.assertRaises(ValueError):
             process_depreciation(rec, Decimal('1000'))
+
+
+class BulkDepreciationViewTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.user = User.objects.create_user(email='bulk@test.com', password='pass')
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.02', nama='Mesin')
+        Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.02', nama='Akum')
+        Akun.objects.create(kategori_id='beban', kode_akun='5.1.19.02', nama='Beban Penyusutan')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Mesin X', tipe_item='ATP', coa_account=akun_aset,
+        )
+
+        self.disposed = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=1, harga_perolehan=100_000_000,
+            tanggal_perolehan='2026-01-01', masa_manfaat=5,
+            metode_penyusutan='straight_line', status='dilepas',
+        )
+        self.aktif = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=1, harga_perolehan=100_000_000,
+            tanggal_perolehan='2026-01-01', masa_manfaat=5,
+            metode_penyusutan='straight_line', status='aktif',
+        )
+
+    def test_skips_disposed_and_processes_active(self):
+        res = self.client.post(reverse('aset_tetap:bulk_depreciation'), {
+            'tanggal': '2026-06-01',
+            'entitas_bisnis': self.entitas.pk,
+            'record_ids': [self.disposed.pk, self.aktif.pk],
+        })
+        self.assertEqual(res.status_code, 302)
+
+        self.disposed.refresh_from_db()
+        self.aktif.refresh_from_db()
+
+        messages = list(get_messages(res.wsgi_request))
+        combined = ' '.join(str(m) for m in messages)
+
+        self.assertEqual(self.disposed.akumulasi_penyusutan, Decimal('0'))
+        self.assertGreater(self.aktif.akumulasi_penyusutan, Decimal('0'))
+
+        self.assertIn('1 aset diproses', combined)
+        self.assertIn('1 dilewati', combined)
