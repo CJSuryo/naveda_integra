@@ -346,7 +346,9 @@ def process_production(production_order: ProductionOrder, as_wip: bool = False) 
                 line.raw_material, production_order.entitas_bisnis,
                 production_order.entitas_bisnis_lv2, production_order.entitas_bisnis_lv3,
                 qty_needed, production_order.tanggal, 'production_out',
-                source=production_order, warehouse=production_order.warehouse_rm)
+                source=production_order,
+                metode=line.raw_material.metode_biaya_persediaan,
+                warehouse=production_order.warehouse_rm)
             total_rm_cost += _rm_result.total_cost
             for alloc in _rm_result.allocations:
                 if alloc.in_movement.legacy_fifo_batch_id:
