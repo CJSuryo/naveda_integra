@@ -325,3 +325,20 @@ class ReverseDisposalTests(TestCase):
         process_asset_disposal(d)
         reverse_asset_disposal(d)
         self.assertTrue(JurnalTerhapus.objects.exists())
+
+    def test_reversal_after_full_disposal_restores_active_status(self):
+        rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=Decimal('1'), harga_perolehan=Decimal('1000000'),
+        )
+        d = AssetDisposal(aset=rec, jenis='hibah', quantity=Decimal('1'), akun_laba_rugi=self.akun_lr)
+        process_asset_disposal(d)
+        rec.refresh_from_db()
+        # precondition: full disposal consumes the asset
+        self.assertEqual(rec.status, 'dilepas')
+        self.assertEqual(rec.quantity, Decimal('0.0000'))
+
+        reverse_asset_disposal(d)
+        rec.refresh_from_db()
+        self.assertEqual(rec.status, 'aktif')
+        self.assertEqual(rec.quantity, Decimal('1.0000'))
