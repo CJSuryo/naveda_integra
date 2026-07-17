@@ -165,6 +165,52 @@ def _take_tier_sequential(layers, remaining):
     return picked, cost, taken
 
 
+def _take_tier_average(layers, remaining):
+    """Moving weighted average dalam satu tier.
+
+    Biaya = qty × rata-rata tertimbang tier (dihitung sebelum pengurangan).
+    Qty dikurangi PROPORSIONAL di semua layer agar rata-rata sisa tetap benar
+    untuk konsumsi berikutnya. Sisa pembulatan dibebankan ke layer terakhir.
+
+    Mengembalikan (picked, cost, taken) dengan
+    picked = [(layer, take, avg), ...].
+    """
+    Q = Decimal('0.0001')
+    active = [l for l in layers if l.remaining_qty > 0]
+    total_qty = sum((l.remaining_qty for l in active), Decimal('0'))
+    if total_qty <= 0:
+        return [], Decimal('0'), Decimal('0')
+    total_value = sum((l.remaining_qty * l.unit_cost for l in active), Decimal('0'))
+    avg = (total_value / total_qty).quantize(Q)
+    take_total = min(remaining, total_qty)
+
+    if take_total >= total_qty:
+        per_layer = [(l, l.remaining_qty) for l in active]
+    else:
+        fraction = take_total / total_qty
+        per_layer = [(l, (l.remaining_qty * fraction).quantize(Q, rounding=ROUND_DOWN))
+                     for l in active]
+        allocated = sum((t for _, t in per_layer), Decimal('0'))
+        residual = take_total - allocated
+        if residual != 0:
+            l_last, t_last = per_layer[-1]
+            per_layer[-1] = (l_last, t_last + residual)
+
+    picked = []
+    cost = Decimal('0')
+    taken = Decimal('0')
+    for layer, take in per_layer:
+        if take <= 0:
+            continue
+        layer.remaining_qty -= take
+        layer.save(update_fields=['remaining_qty'])
+        _mirror_decrement(layer, take, take * avg)
+        picked.append((layer, take, avg))
+        cost += take * avg
+        taken += take
+    return picked, cost, taken
+
+
 @transaction.atomic
 def consume_stock(item, eb_lv1, eb_lv2, eb_lv3, qty, tanggal, movement_type,
                   source=None, metode='fifo', *, warehouse=None):

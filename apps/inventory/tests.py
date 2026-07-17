@@ -893,3 +893,68 @@ class ConsumeStockLifoTests(DjangoTestCase):
         fifo = consume_stock(self.item, self.eb, None, None, Decimal('12'),
                              '2026-01-03', 'sale_out', metode='fifo')
         self.assertEqual(fifo.total_cost, Decimal('66'))  # 10@5 + 2@8
+
+
+class ConsumeStockAverageTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Minyak', tipe_item='RM')
+
+    def _inflow(self, qty, cost, tanggal):
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.eb, None, None, Decimal(qty),
+                             Decimal(cost), tanggal, 'purchase_in')
+
+    def test_average_single_sale_uses_weighted_avg(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '100', '2026-01-01')
+        self._inflow('10', '200', '2026-01-02')  # avg = 150
+        result = consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                               '2026-01-03', 'sale_out', metode='average')
+        self.assertEqual(result.total_cost, Decimal('750'))  # 5 × 150
+
+    def test_average_repeated_sale_keeps_avg_stable(self):
+        """Invariant proporsional: penjualan kedua memakai avg yang sama (150),
+        bukan avg yang menggelembung (166.67 kalau salah pakai urutan FIFO)."""
+        from apps.inventory.ledger import consume_stock
+        l1 = self._inflow('10', '100', '2026-01-01')
+        l2 = self._inflow('10', '200', '2026-01-02')
+        consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                      '2026-01-03', 'sale_out', metode='average')
+        # Setelah jual 5: proporsional → L1=7.5, L2=7.5, avg tetap 150
+        l1.refresh_from_db(); l2.refresh_from_db()
+        self.assertEqual(l1.remaining_qty, Decimal('7.5'))
+        self.assertEqual(l2.remaining_qty, Decimal('7.5'))
+        result2 = consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                                '2026-01-04', 'sale_out', metode='average')
+        self.assertEqual(result2.total_cost, Decimal('750'))  # tetap 5 × 150
+
+    def test_average_full_consumption(self):
+        from apps.inventory.ledger import consume_stock, get_available_stock
+        self._inflow('10', '100', '2026-01-01')
+        self._inflow('10', '200', '2026-01-02')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('20'),
+                               '2026-01-03', 'sale_out', metode='average')
+        self.assertEqual(result.total_cost, Decimal('3000'))  # 20 × 150
+        self.assertEqual(get_available_stock(self.item, self.eb), Decimal('0'))
+
+    def test_average_alloc_unit_cost_is_avg(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '100', '2026-01-01')
+        self._inflow('10', '200', '2026-01-02')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                               '2026-01-03', 'sale_out', metode='average')
+        for alloc in result.allocations:
+            self.assertEqual(alloc.unit_cost, Decimal('150.0000'))
+
+    def test_average_reversal_restores_layers(self):
+        from apps.inventory.ledger import consume_stock, reverse_movements
+        l1 = self._inflow('10', '100', '2026-01-01')
+        l2 = self._inflow('10', '200', '2026-01-02')
+        consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                      '2026-01-03', 'sale_out', metode='average', source=self.item)
+        reverse_movements(self.item)
+        l1.refresh_from_db(); l2.refresh_from_db()
+        self.assertEqual(l1.remaining_qty, Decimal('10'))
+        self.assertEqual(l2.remaining_qty, Decimal('10'))
