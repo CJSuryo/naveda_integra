@@ -249,6 +249,14 @@ class StockMovement(models.Model):
         ('production_in', 'Produksi Masuk (FG)'),
         ('production_out', 'Produksi Keluar (RM)'),
         ('saldo_awal', 'Saldo Awal'),
+        ('adjustment_in', 'Penyesuaian Masuk'),
+        ('adjustment_out', 'Penyesuaian Keluar'),
+        ('opname_in', 'Opname Surplus'),
+        ('opname_out', 'Opname Minus'),
+        ('transfer_in', 'Transfer Masuk'),
+        ('transfer_out', 'Transfer Keluar'),
+        ('return_customer', 'Retur Pelanggan (Masuk)'),
+        ('return_supplier', 'Retur Supplier (Keluar)'),
     ]
     item = models.ForeignKey(
         'purchase.ItemMasterPurchase', on_delete=models.PROTECT,
