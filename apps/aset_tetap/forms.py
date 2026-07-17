@@ -82,6 +82,9 @@ class AssetDisposalForm(forms.ModelForm):
         qty = cleaned.get('quantity')
         harga = cleaned.get('harga_jual') or Decimal('0')
 
+        if harga < 0:
+            self.add_error('harga_jual', 'Harga jual tidak boleh negatif.')
+
         if qty is not None and qty <= 0:
             self.add_error('quantity', 'Quantity harus lebih dari 0.')
         elif self.aset is not None and qty is not None and qty > self.aset.quantity:

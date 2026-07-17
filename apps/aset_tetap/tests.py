@@ -395,6 +395,15 @@ class AssetDisposalFormTests(TestCase):
         self.assertFalse(form.is_valid())
         self.assertIn('akun_kas', form.errors)
 
+    def test_harga_jual_negatif_invalid(self):
+        from .forms import AssetDisposalForm
+        form = AssetDisposalForm(data={
+            'jenis': 'jual', 'tanggal': '2026-07-17', 'quantity': '1',
+            'harga_jual': '-100', 'akun_kas': self.akun_kas.pk, 'akun_laba_rugi': self.akun_lr.pk,
+        }, aset=self.rec)
+        self.assertFalse(form.is_valid())
+        self.assertIn('harga_jual', form.errors)
+
     def test_valid_hibah(self):
         from .forms import AssetDisposalForm
         form = AssetDisposalForm(data={
