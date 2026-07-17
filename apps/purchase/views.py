@@ -103,44 +103,44 @@ def _get_warehouses_data() -> list[dict]:
     )
 
 
-def _get_item_uoms_data(kind: str = 'purchase') -> dict:
+def _get_item_uoms_data() -> dict:
     """Map item_id -> daftar satuan valid untuk selector di form transaksi.
 
-    kind='purchase' → default purchase_uom; kind='sales' → default sales_uom.
-    Tiap item: stock_uom + (purchase/sales)_uom + semua ItemUOM.uom.
+    Default selalu satuan stok item. User tetap bebas memilih satuan lain
+    dalam dimensi yang sama (fisik, faktor universal) atau kemasan yang
+    sudah didefinisikan lewat ItemUOM — persis aturan resolvable_uoms_for_item,
+    supaya selector tidak pernah menawarkan satuan yang bakal ditolak backend
+    saat submit. Query dibatch per dimensi/item (bukan per-item ke DB) karena
+    ini dipanggil sekali untuk seluruh daftar item tiap render form transaksi.
     """
     from apps.uom.models import ItemUOM
     result: dict = {}
     items = ItemMasterPurchase.objects.filter(
         tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB']
-    ).select_related('stock_uom', 'purchase_uom', 'sales_uom')
+    ).select_related('stock_uom')
+
     iu_map: dict = {}
     for iu in ItemUOM.objects.select_related('uom'):
         iu_map.setdefault(iu.item_id, []).append(iu.uom)
+
+    physical_by_dimension: dict = {}
+    for u in UnitOfMeasure.objects.filter(factor_to_base__isnull=False, is_active=True):
+        physical_by_dimension.setdefault(u.dimension, []).append(u)
+
     for it in items:
         stock = it.stock_uom
-        item_uoms = iu_map.get(it.pk, [])
-
-        def _resolvable(u) -> bool:
-            # Mirror resolvable_uoms_for_item: stock itself, a defined ItemUOM,
-            # or a same-dimension physical unit sharing a universal factor.
-            if stock is None or u is None:
-                return False
-            if u.pk == stock.pk or any(x.pk == u.pk for x in item_uoms):
-                return True
-            return (u.dimension == stock.dimension
-                    and u.factor_to_base is not None
-                    and stock.factor_to_base is not None)
-
-        default = it.purchase_uom if kind == 'purchase' else it.sales_uom
+        if stock is None:
+            result[it.pk] = {'options': [], 'default_id': ''}
+            continue
+        candidates = [stock, *iu_map.get(it.pk, [])]
+        if stock.factor_to_base is not None:
+            candidates += physical_by_dimension.get(stock.dimension, [])
         seen, opts = set(), []
-        for u in [stock, default, *item_uoms]:
-            if u is not None and u.pk not in seen and _resolvable(u):
+        for u in candidates:
+            if u.pk not in seen:
                 seen.add(u.pk)
                 opts.append({'id': u.pk, 'kode': u.kode, 'nama': u.nama})
-        default_id = (default.pk if default and _resolvable(default)
-                      else (it.stock_uom_id or ''))
-        result[it.pk] = {'options': opts, 'default_id': default_id}
+        result[it.pk] = {'options': opts, 'default_id': stock.pk}
     return result
 
 
@@ -613,7 +613,7 @@ def purchase_create(request: HttpRequest) -> HttpResponse:
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
-        'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+        'item_uoms_json': safe_json(_get_item_uoms_data()),
         'uom_list_json': safe_json(_get_uom_list_data()),
     })
 
@@ -697,7 +697,7 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
         'kategori_items': KategoriItem.objects.all().order_by('nama'),
         'akun_list': get_akun_sorted(),
         'warehouses_json': safe_json(_get_warehouses_data()),
-        'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+        'item_uoms_json': safe_json(_get_item_uoms_data()),
         'uom_list_json': safe_json(_get_uom_list_data()),
     })
 
@@ -1433,7 +1433,7 @@ def _handle_purchase_save(request: HttpRequest, existing: PurchaseHeader | None 
             'kategori_items': KategoriItem.objects.all().order_by('nama'),
             'akun_list': get_akun_sorted(),
             'warehouses_json': safe_json(_get_warehouses_data()),
-            'item_uoms_json': safe_json(_get_item_uoms_data('purchase')),
+            'item_uoms_json': safe_json(_get_item_uoms_data()),
             'uom_list_json': safe_json(_get_uom_list_data()),
         })
 

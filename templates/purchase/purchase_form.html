@@ -749,19 +749,20 @@
       '<div class="ni-purchase-item-table-wrapper">' +
         '<table class="ni-purchase-item-table">' +
           '<thead><tr>' +
-            '<th style="width:28%">Item</th>' +
-            '<th style="width:22%"><span class="ni-tip">Jenis Transaksi' +
+            '<th style="width:24%">Item</th>' +
+            '<th style="width:18%"><span class="ni-tip">Jenis Transaksi' +
               '<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
               '<span class="ni-tip__box">Tipe sub-transaksi yang menentukan akun jurnal offset (hutang usaha, kas, dll).</span>' +
             '</span></th>' +
-            '<th style="width:10%">Qty</th>' +
-            '<th style="width:18%">Harga Satuan</th>' +
+            '<th style="width:9%">Qty</th>' +
+            '<th style="width:11%">Satuan</th>' +
+            '<th style="width:16%">Harga Satuan</th>' +
             '<th style="width:14%">Total</th>' +
             '<th style="width:5%"></th>' +
           '</tr></thead>' +
           '<tbody id="' + gid + '_items"></tbody>' +
           '<tfoot><tr>' +
-            '<td colspan="4" style="text-align:right;">Subtotal grup ini:</td>' +
+            '<td colspan="5" style="text-align:right;">Subtotal grup ini:</td>' +
             '<td><strong id="' + gid + '_subtotal">Rp 0</strong></td>' +
             '<td></td>' +
           '</tr></tfoot>' +
@@ -851,6 +852,7 @@
         '<div id="' + rid + '_offset_hint" class="ni-coa-hint">' + (prefillOffTxt ? '⟶ ' + prefillOffTxt : '') + '</div>' +
       '</td>' +
       '<td class="qty-cell"><input type="number" id="' + rid + '_qty" class="ni-purchase-input qty-field" min="0.0001" step="0.0001" value="' + (prefill ? (prefill.quantity || '') : '') + '" oninput="updateTotal(\'' + rid + '\')"></td>' +
+      '<td class="uom-cell"><select id="' + rid + '_uom" class="ni-purchase-input uom-select">' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></td>' +
       '<td class="price-cell">' +
         '<input type="text" id="' + rid + '_price" class="ni-purchase-input price-field" inputmode="numeric" placeholder="0">' +
         '<input type="number" id="' + rid + '_bulk_value" class="ni-purchase-input bulk-value-field" min="0.01" step="0.01" value="' + (prefill ? (prefill.bulk_value || '') : '') + '" style="display:none;" placeholder="Nilai Barang">' +
@@ -864,7 +866,7 @@
     trAdv.className = 'advanced-row';
     trAdv.style.display = 'none';
     trAdv.innerHTML =
-      '<td colspan="6" style="padding:8px 10px;background:var(--ni-bg);">' +
+      '<td colspan="7" style="padding:8px 10px;background:var(--ni-bg);">' +
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;font-size:0.8rem;">' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Metode Alokasi Biaya</label>' +
             '<select id="' + rid + '_metode" class="ni-purchase-input"><option value="">— Dari Item —</option>' +
@@ -887,7 +889,6 @@
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">MOQ<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Minimum Order Quantity — jumlah minimum per pesanan.</span></span></label><input type="number" id="' + rid + '_moq" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.moq || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;"><span class="ni-tip">Target Turnover<svg class="ni-tip__icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg><span class="ni-tip__box">Target perputaran persediaan dalam satu periode.</span></span></label><input type="number" id="' + rid + '_turnover" class="ni-purchase-input" step="0.0001" value="' + (prefill ? (prefill.target_turnover || '') : '') + '"></div>' +
           '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Gudang</label><select id="' + rid + '_gudang" class="ni-purchase-input wh-select">' + warehouseOptions(rowLv1Id, prefill ? (prefill.warehouse_id || '') : '') + '</select></div>' +
-          '<div><label style="color:var(--ni-text-muted);font-size:0.75rem;">Satuan</label><select id="' + rid + '_uom" class="ni-purchase-input uom-select">' + uomOptions(prefill ? (prefill.item_id || '') : '', prefill ? (prefill.input_uom_id || '') : '') + '</select></div>' +
         '</div>' +
       '</td>';
 
@@ -1031,15 +1032,17 @@
     var tr = document.getElementById(rid);
     if (!tr) return;
     var qtyCell   = tr.querySelector('.qty-cell');
+    var uomCell   = tr.querySelector('.uom-cell');
     var priceCell = tr.querySelector('.price-cell');
     var totalCell = tr.querySelector('.total-cell');
     var priceInp  = document.getElementById(rid + '_price');
     var bulkInp   = document.getElementById(rid + '_bulk_value');
     if (qtyCell)   qtyCell.style.display   = isBulk ? 'none' : '';
+    if (uomCell)   uomCell.style.display   = isBulk ? 'none' : '';
     if (totalCell) totalCell.style.display = isBulk ? 'none' : '';
     if (priceInp)  priceInp.style.display  = isBulk ? 'none' : '';
     if (bulkInp)   bulkInp.style.display   = isBulk ? '' : 'none';
-    if (priceCell) priceCell.colSpan       = isBulk ? 3 : 1;
+    if (priceCell) priceCell.colSpan       = isBulk ? 4 : 1;
     tr.dataset.tipeItem = tipeItem || '';
   };
 

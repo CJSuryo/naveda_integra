@@ -365,7 +365,7 @@ def sales_create(request: HttpRequest) -> HttpResponse:
         'akun_list': get_akun_sorted(),
         'eb_options': _get_eb_dropdown_options(request.user),
         'warehouses_json': safe_json(_get_warehouses_data()),
-        'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
+        'item_uoms_json': safe_json(_get_item_uoms_data()),
     })
 
 
@@ -454,7 +454,7 @@ def sales_update(request: HttpRequest, pk: int) -> HttpResponse:
         'eb_options': _get_eb_dropdown_options(request.user),
         'eb_groups_json': safe_json(eb_groups_data),
         'warehouses_json': safe_json(_get_warehouses_data()),
-        'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
+        'item_uoms_json': safe_json(_get_item_uoms_data()),
     })
 
 
@@ -1035,7 +1035,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'errors': errors,
             'eb_groups_json': safe_json(eb_groups_list),
             'warehouses_json': safe_json(_get_warehouses_data()),
-            'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
+            'item_uoms_json': safe_json(_get_item_uoms_data()),
         })
 
     # Save
@@ -1187,7 +1187,7 @@ def _handle_sales_save(request: HttpRequest, existing: SalesHeader | None = None
             'errors': {'stock': str(exc)},
             'eb_groups_json': safe_json(eb_groups_list),
             'warehouses_json': safe_json(_get_warehouses_data()),
-            'item_uoms_json': safe_json(_get_item_uoms_data('sales')),
+            'item_uoms_json': safe_json(_get_item_uoms_data()),
         })
 
     action = 'diperbarui' if existing else 'dibuat'

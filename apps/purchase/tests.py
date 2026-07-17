@@ -71,6 +71,19 @@ class RegistrationUomUiTests(TestCase):
         resp = self.client.get(reverse('purchase:detail', args=[ph.pk]))
         self.assertEqual(resp.status_code, 200)
 
+    def test_purchase_item_row_satuan_column_is_visible_not_advanced(self):
+        """The per-line Satuan (input_uom) selector must live in the always-
+        visible item row, next to Qty — not inside the advanced-row block
+        that's collapsed by default behind the 'Advanced' toggle."""
+        resp = self.client.get(reverse('purchase:create'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertIn('class="uom-cell"', body)
+        main_row_marker = body.index('tr.innerHTML =')
+        advanced_row_marker = body.index("trAdv.innerHTML =")
+        uom_cell_pos = body.index('class="uom-cell"')
+        self.assertTrue(main_row_marker < uom_cell_pos < advanced_row_marker)
+
     def test_purchase_quick_add_modal_has_no_purchase_sales_unit(self):
         resp = self.client.get(reverse('purchase:create'))
         self.assertEqual(resp.status_code, 200)
@@ -933,23 +946,57 @@ class PurchaseUomConversionTests(TestCase):
         self.assertEqual(pi.input_uom, self.ctn)
         self.assertEqual(pi.input_qty, Decimal('10'))
 
-    def test_item_uoms_data_drops_unresolvable_default(self):
-        """The transaction UOM selector must not offer a default purchase/sales
-        unit that has no conversion to the item's stock unit — otherwise the UI
-        offers a unit the backend guard would reject."""
+    def test_item_uoms_data_default_is_always_stock_uom(self):
+        """The transaction UOM selector must default to the item's stock unit,
+        never a legacy purchase_uom/sales_uom value — registration no longer
+        sets those, and they must not resurface as a stale default."""
         from apps.uom.models import UnitOfMeasure
         from apps.purchase.views import _get_item_uoms_data
-        kg = UnitOfMeasure.objects.get(kode='kg')  # weight, unrelated to pcs stock
-        # item has pcs stock (count) but a mis-set purchase_uom in kg and no ItemUOM.
-        self.item.purchase_uom = kg
+        carton_default = UnitOfMeasure.objects.create(
+            kode='ctn-legacy', nama='Legacy Carton', dimension='count', factor_to_base=None)
+        self.item.purchase_uom = carton_default  # stale/legacy data, no ItemUOM defined
         self.item.save(update_fields=['purchase_uom'])
 
-        data = _get_item_uoms_data('purchase')[self.item.pk]
-        kodes = {o['kode'] for o in data['options']}
-        self.assertNotIn('kg', kodes)
-        self.assertIn('pcs', kodes)
-        # default falls back to the stock unit since kg is not offered.
+        data = _get_item_uoms_data()[self.item.pk]
         self.assertEqual(data['default_id'], self.pcs.pk)
+        kodes = {o['kode'] for o in data['options']}
+        self.assertNotIn('ctn-legacy', kodes)
+
+    def test_item_uoms_data_includes_all_same_dimension_physical_units(self):
+        """User must be able to pick any unit in the same dimension as the
+        stock unit (e.g. kg stock -> g, ton also selectable), not just an
+        explicitly configured default — physical conversion is universal."""
+        from apps.uom.models import UnitOfMeasure
+        from apps.purchase.views import _get_item_uoms_data
+        kg = UnitOfMeasure.objects.get(kode='kg')
+        item_kg = ItemMasterPurchase.objects.create(
+            nama='Tepung', tipe_item='ITM', stock_uom=kg)
+
+        data = _get_item_uoms_data()[item_kg.pk]
+        kodes = {o['kode'] for o in data['options']}
+        self.assertIn('kg', kodes)
+        self.assertIn('g', kodes)
+        self.assertIn('ton', kodes)
+        self.assertEqual(data['default_id'], kg.pk)
+
+    def test_item_uoms_data_includes_itemuom_packaging(self):
+        """A packaging unit explicitly defined via ItemUOM for this item must
+        still be offered."""
+        from apps.purchase.views import _get_item_uoms_data
+        data = _get_item_uoms_data()[self.item.pk]
+        kodes = {o['kode'] for o in data['options']}
+        self.assertIn('ctn-p', kodes)
+
+    def test_item_uoms_data_excludes_undefined_packaging_same_dimension(self):
+        """A same-dimension packaging unit (e.g. box) with no ItemUOM defined
+        for this item must not be offered — 'same dimension' only guarantees
+        automatic conversion for physical units; packaging needs a per-item
+        factor, so offering it here would let a user pick a unit the backend
+        guard later rejects."""
+        from apps.purchase.views import _get_item_uoms_data
+        data = _get_item_uoms_data()[self.item.pk]
+        kodes = {o['kode'] for o in data['options']}
+        self.assertNotIn('box', kodes)
 
     def test_purchase_create_rejects_unresolvable_input_uom(self):
         """An input_uom with no conversion path for the item (different
