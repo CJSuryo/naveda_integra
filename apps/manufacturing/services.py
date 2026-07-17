@@ -49,24 +49,32 @@ def get_fifo_unit_cost(item_id: int) -> Decimal:
     return (total_value / total_qty).quantize(Decimal('0.0001'))
 
 
-def _simulate_fifo_cost(item_id: int, quantity: Decimal) -> tuple[Decimal, Decimal]:
-    """Read-only FIFO simulation — same batch order as _consume_fifo but no DB writes.
+def _simulate_fifo_cost(item_id: int, quantity: Decimal, metode: str = 'fifo') -> tuple[Decimal, Decimal]:
+    """Read-only simulasi biaya konsumsi — cocok dengan posting nyata per metode.
 
-    Returns (total_cost, qty_filled):
-      total_cost  — cost for the qty_filled portion (oldest batches first)
-      qty_filled  — how many units could be filled from current stock
-                    (may be < quantity if stock is insufficient)
-
-    Example: stock = 15 units @ Rp 20,000 (older) + 5 units @ Rp 18,000 (newer)
-      _simulate_fifo_cost(item, 10)  → (200_000, 10)   ← 10 × 20k, all from batch 1
-      _simulate_fifo_cost(item, 17)  → (336_000, 17)   ← 15 × 20k + 2 × 18k
-      _simulate_fifo_cost(item, 22)  → (390_000, 20)   ← only 20 available
+    metode: '' / 'fifo' → tertua dulu; 'lifo' → terbaru dulu;
+            'average' / 'weighted_moving_average' → qty × rata-rata tertimbang.
+    Mengembalikan (total_cost, qty_filled).
     """
-    batches = (
-        FIFOBatch.objects
-        .filter(item_id=item_id, remaining_qty__gt=0)
-        .order_by('tanggal', 'created_at')  # oldest first — same as _consume_fifo
-    )
+    from apps.inventory.ledger import _normalize_method
+    method = _normalize_method(metode)
+    batches = FIFOBatch.objects.filter(item_id=item_id, remaining_qty__gt=0)
+
+    if method == 'average':
+        agg = batches.aggregate(
+            total_qty=Sum('remaining_qty'),
+            total_value=Sum(F('remaining_qty') * F('unit_price')),
+        )
+        total_qty = agg['total_qty'] or Decimal('0')
+        total_value = agg['total_value'] or Decimal('0')
+        if total_qty <= 0:
+            return Decimal('0'), Decimal('0')
+        avg = (total_value / total_qty).quantize(Decimal('0.0001'))
+        qty_filled = min(quantity, total_qty)
+        return (avg * qty_filled).quantize(Decimal('0.0001')), qty_filled
+
+    order_by = ('tanggal', 'created_at') if method == 'fifo' else ('-tanggal', '-created_at')
+    batches = batches.order_by(*order_by)
     remaining = quantity
     total_cost = Decimal('0')
     qty_filled = Decimal('0')
@@ -100,7 +108,10 @@ def get_bom_preview(bom: BillOfMaterials, qty_produced: Decimal) -> list[dict]:
         available = get_available_stock(line.raw_material_id)
 
         # Simulate FIFO to get accurate costs (oldest batches consumed first)
-        fifo_cost, qty_filled = _simulate_fifo_cost(line.raw_material_id, qty_total)
+        fifo_cost, qty_filled = _simulate_fifo_cost(
+            line.raw_material_id, qty_total,
+            metode=line.raw_material.metode_biaya_persediaan,
+        )
         if qty_filled > 0:
             fifo_unit_cost = (fifo_cost / qty_filled).quantize(Decimal('0.0001'))
         else:

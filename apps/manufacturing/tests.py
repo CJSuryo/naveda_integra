@@ -1562,3 +1562,30 @@ class ManufacturingUomTests(TestCase):
         response = self.client.get(reverse('manufacturing:production_create'))
         self.assertContains(response, 'id_input_uom')
 
+
+class SimulateCostMethodTests(TestCase):
+    def setUp(self):
+        self.rm = _make_item('RM-M', 'RM Metode', 'RM')
+        _seed_fifo(self.rm, [
+            ('2026-01-01', 10, 100),
+            ('2026-01-02', 10, 200),
+        ])
+
+    def test_fifo_default(self):
+        from apps.manufacturing.services import _simulate_fifo_cost
+        cost, filled = _simulate_fifo_cost(self.rm.pk, Decimal('12'))
+        self.assertEqual(cost, Decimal('1400'))   # 10×100 + 2×200
+        self.assertEqual(filled, Decimal('12'))
+
+    def test_lifo(self):
+        from apps.manufacturing.services import _simulate_fifo_cost
+        cost, filled = _simulate_fifo_cost(self.rm.pk, Decimal('12'), metode='lifo')
+        self.assertEqual(cost, Decimal('2200'))   # 10×200 + 2×100
+        self.assertEqual(filled, Decimal('12'))
+
+    def test_average(self):
+        from apps.manufacturing.services import _simulate_fifo_cost
+        cost, filled = _simulate_fifo_cost(self.rm.pk, Decimal('5'), metode='average')
+        self.assertEqual(cost, Decimal('750'))     # 5 × 150
+        self.assertEqual(filled, Decimal('5'))
+
