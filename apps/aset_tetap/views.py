@@ -342,6 +342,10 @@ def aset_tetap_bulk_depreciation(request: HttpRequest) -> HttpResponse:
     error_msgs = []
 
     for record in records:
+        if record.status == 'dilepas':
+            skip_count += 1
+            continue
+
         if record.nilai_buku <= record.nilai_residu:
             skip_count += 1
             continue

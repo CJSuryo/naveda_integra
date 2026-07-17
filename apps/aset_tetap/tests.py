@@ -9,7 +9,7 @@ from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 from apps.master_data.models import Akun
 from .models import AsetTetapRecord, AssetDisposal
-from .services import process_asset_disposal, reverse_asset_disposal
+from .services import process_asset_disposal, reverse_asset_disposal, process_depreciation
 
 User = get_user_model()
 
@@ -342,3 +342,23 @@ class ReverseDisposalTests(TestCase):
         rec.refresh_from_db()
         self.assertEqual(rec.status, 'aktif')
         self.assertEqual(rec.quantity, Decimal('1.0000'))
+
+
+class DepreciationGuardTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.01', nama='Akum')
+        Akun.objects.create(kategori_id='beban', kode_akun='5.1.19.01', nama='Beban Penyusutan')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Mesin X', tipe_item='ATP', coa_account=akun_aset,
+        )
+
+    def test_process_depreciation_blocks_disposed(self):
+        rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=1, harga_perolehan=1000000, status='dilepas',
+        )
+        with self.assertRaises(ValueError):
+            process_depreciation(rec, Decimal('1000'))

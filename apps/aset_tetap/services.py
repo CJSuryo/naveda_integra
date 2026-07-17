@@ -156,6 +156,9 @@ def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
     if tanggal is None:
         tanggal = timezone.now().date()
 
+    if record.status == 'dilepas':
+        raise ValueError('Aset sudah dilepas — penyusutan tidak dapat diproses.')
+
     if depreciation_amount <= 0:
         raise ValueError('Jumlah penyusutan harus lebih dari 0.')
 
