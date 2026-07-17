@@ -958,3 +958,52 @@ class ConsumeStockAverageTests(DjangoTestCase):
         l1.refresh_from_db(); l2.refresh_from_db()
         self.assertEqual(l1.remaining_qty, Decimal('10'))
         self.assertEqual(l2.remaining_qty, Decimal('10'))
+
+
+class ConsumeStockMethodResolutionTests(DjangoTestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Garam', tipe_item='RM')
+
+    def _inflow(self, qty, cost, tanggal):
+        from apps.inventory.ledger import record_inflow
+        return record_inflow(self.item, self.eb, None, None, Decimal(qty),
+                             Decimal(cost), tanggal, 'purchase_in')
+
+    def test_empty_method_defaults_fifo(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '5', '2026-01-01')
+        self._inflow('10', '8', '2026-01-02')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('12'),
+                               '2026-01-03', 'sale_out', metode='')
+        self.assertEqual(result.total_cost, Decimal('66'))  # FIFO
+
+    def test_weighted_moving_average_alias(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '100', '2026-01-01')
+        self._inflow('10', '200', '2026-01-02')
+        result = consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                               '2026-01-03', 'sale_out',
+                               metode='weighted_moving_average')
+        self.assertEqual(result.total_cost, Decimal('750'))  # sama dengan average
+
+    def test_unknown_method_raises(self):
+        from apps.inventory.ledger import consume_stock
+        self._inflow('10', '5', '2026-01-01')
+        with self.assertRaises(ValueError):
+            consume_stock(self.item, self.eb, None, None, Decimal('1'),
+                          '2026-01-03', 'sale_out', metode='rata2')
+
+    def test_bulk_item_ignores_metode(self):
+        """Item bulk (RMB/FGB/ITMB) value-based & method-agnostic (spec §B.4):
+        metode tak dikenal pun tak memicu ValueError — cabang bulk tak validasi."""
+        from apps.inventory.ledger import record_inflow, consume_stock
+        bulk = ItemMasterPurchase.objects.create(nama='Pasir', tipe_item='RMB')
+        # Konvensi bulk: nilai layer = remaining_qty × unit_cost = 1 × 1000 = 1000
+        record_inflow(bulk, self.eb, None, None, Decimal('1'), Decimal('1000'),
+                      '2026-01-01', 'purchase_in')
+        # `value` = 400 (nilai stok yang dipotong), metode 'garbage' diabaikan
+        result = consume_stock(bulk, self.eb, None, None, Decimal('400'),
+                               '2026-01-03', 'sale_out', metode='garbage')
+        self.assertEqual(result.total_cost, Decimal('400'))
