@@ -745,3 +745,45 @@ class StockCardViewTests(TestCase):
         resp = self.client.get(reverse('inventory:stock_card'), {'item': self.item.pk})
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, '50')  # layer remaining_qty
+
+
+class StockLedgerViewTests(DjangoTestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='ledger@example.com', password='pw123456', name='Ledger Tester',
+            is_superuser=True, is_staff=True)
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb_a = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb_b = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb_a, tanggal='2026-01-01',
+            movement_type='purchase_in', qty=Decimal('10'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('10'))
+        StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb_b, tanggal='2026-01-02',
+            movement_type='purchase_in', qty=Decimal('7'), unit_cost=Decimal('5'),
+            remaining_qty=Decimal('7'))
+
+    def test_eb_filter_narrows_rows(self):
+        url = reverse('inventory:stock_ledger')
+        resp = self.client.get(url, {'entitas_bisnis': f'lv1:{self.eb_a.pk}'})
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.context['rows']
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['mv'].entitas_bisnis_id, self.eb_a.pk)
+
+    def test_saldo_valid_flag(self):
+        url = reverse('inventory:stock_ledger')
+        # tanpa filter spesifik → saldo tidak valid
+        resp = self.client.get(url)
+        self.assertFalse(resp.context['saldo_valid'])
+        # filter item + gudang → valid (gudang boleh kosong string? butuh keduanya)
+        resp2 = self.client.get(url, {'item': self.item.pk, 'warehouse': '999'})
+        self.assertTrue(resp2.context['saldo_valid'])
+
+    def test_eb_tree_in_context(self):
+        resp = self.client.get(reverse('inventory:stock_ledger'))
+        self.assertIn('eb_tree', resp.context)

@@ -419,8 +419,10 @@ def stock_ledger(request: HttpRequest) -> HttpResponse:
     wh_id = request.GET.get('warehouse', '')
     tgl_dari = request.GET.get('tanggal_dari', '')
     tgl_sampai = request.GET.get('tanggal_sampai', '')
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
 
-    qs = StockMovement.objects.select_related('item', 'entitas_bisnis', 'warehouse')
+    qs = StockMovement.objects.select_related(
+        'item', 'item__stock_uom', 'entitas_bisnis', 'warehouse')
     if item_id:
         qs = qs.filter(item_id=item_id)
     if wh_id:
@@ -429,6 +431,8 @@ def stock_ledger(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(tanggal__gte=tgl_dari)
     if tgl_sampai:
         qs = qs.filter(tanggal__lte=tgl_sampai)
+    if eb_filter_list:
+        qs = qs.filter(entitas_bisnis_id__in=_resolve_eb_lv1_ids(eb_filter_list, request.user))
     qs = qs.order_by('tanggal', 'created_at')
 
     rows, saldo = [], Decimal('0')
@@ -444,6 +448,9 @@ def stock_ledger(request: HttpRequest) -> HttpResponse:
         'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
         'item_filter': item_id, 'wh_filter': wh_id,
         'tanggal_dari': tgl_dari, 'tanggal_sampai': tgl_sampai,
+        'eb_tree': _get_eb_tree(request.user),
+        'eb_filter_list': eb_filter_list,
+        'saldo_valid': bool(item_id) and bool(wh_id),
     })
 
 
