@@ -383,3 +383,45 @@ class StockAdjustmentItem(models.Model):
 
     def __str__(self):
         return f'{self.item.item_id} × {self.qty}'
+
+
+class StockOpname(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-OPN-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='stock_opnames')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames')
+    akun_selisih = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='stock_opnames')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Opname'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockOpnameItem(models.Model):
+    opname = models.ForeignKey(StockOpname, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty_sistem = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    qty_fisik = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    selisih = models.DecimalField(max_digits=15, decimal_places=4, default=0, editable=False)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def save(self, *args, **kwargs):
+        self.selisih = (self.qty_fisik or 0) - (self.qty_sistem or 0)
+        super().save(*args, **kwargs)

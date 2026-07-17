@@ -221,3 +221,23 @@ class AdjustmentViewTests(TestCase):
         resp = self.client.post(reverse('inventory:adjustment_delete', args=[adj.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(StockAdjustment.objects.filter(pk=adj.pk).exists())
+
+
+class StockOpnameModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.akun = Akun.objects.create(kode_akun='5.9.2', nama='Selisih Opname')
+
+    def test_selisih_autocompute(self):
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.akun)
+        d = StockOpnameItem.objects.create(opname=h, item=self.item,
+                                           qty_sistem=Decimal('10'), qty_fisik=Decimal('8'),
+                                           unit_cost=Decimal('5'))
+        self.assertEqual(d.selisih, Decimal('-2'))
+        self.assertTrue(h.nomor.startswith('TRX-OPN-'))
