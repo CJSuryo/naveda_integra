@@ -8,11 +8,11 @@ from .models import ItemUOM, UnitOfMeasure
 
 
 DIMENSION_ICONS = {
-    'count': '🔢',
-    'weight': '⚖️',
-    'volume': '🧪',
-    'length': '📏',
-    'area': '📐',
+    'count': 'hash',
+    'weight': 'scale',
+    'volume': 'flask-conical',
+    'length': 'ruler',
+    'area': 'square',
 }
 
 
