@@ -27,7 +27,7 @@ def _post_journal(tanggal, prefix, uraian, entitas_bisnis, lines):
         raise ValueError(f'Jurnal tidak balance: debit {total_d} != kredit {total_k}.')
     header = JurnalHeader.objects.create(
         tanggal=tanggal, nomor_transaksi=_next_nomor_jurnal(prefix),
-        uraian_transaksi=uraian, entitas_bisnis=entitas_bisnis, is_penyesuaian=True,
+        uraian_transaksi=uraian, entitas_bisnis=entitas_bisnis, is_penyesuaian=False,
     )
     JurnalDetail.objects.bulk_create([
         JurnalDetail(jurnal_header=header, akun=akun, debit=d, kredit=k)
