@@ -12,6 +12,19 @@
   margin-bottom: 0;
 }
 
+/* Checkbox + label sitting side by side (e.g. "is_active", "is_base"),
+   instead of the label stacking above like a text-input label. */
+.ni-form-group--inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ni-form-group--inline .ni-form-label {
+  display: inline;
+  margin-bottom: 0;
+}
+
 /* ---------- Label ---------- */
 .ni-form-label {
   display: block;
