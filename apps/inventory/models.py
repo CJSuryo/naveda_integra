@@ -425,3 +425,49 @@ class StockOpnameItem(models.Model):
     def save(self, *args, **kwargs):
         self.selisih = (self.qty_fisik or 0) - (self.qty_sistem or 0)
         super().save(*args, **kwargs)
+
+
+class StockTransfer(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-TRF-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    eb_asal = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='transfers_asal')
+    eb_asal_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_asal_lv2')
+    eb_asal_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_asal_lv3')
+    warehouse_asal = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, related_name='transfers_out')
+    eb_tujuan = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='transfers_tujuan')
+    eb_tujuan_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_tujuan_lv2')
+    eb_tujuan_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_tujuan_lv3')
+    warehouse_tujuan = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, related_name='transfers_in')
+    akun_perantara = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers', help_text='Wajib bila lintas entitas (EB lv1 berbeda).')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header_asal = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    jurnal_header_tujuan = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Transfer'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    @property
+    def is_cross_entity(self):
+        return self.eb_asal_id != self.eb_tujuan_id
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockTransferItem(models.Model):
+    transfer = models.ForeignKey(StockTransfer, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement_out = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    movement_in = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')

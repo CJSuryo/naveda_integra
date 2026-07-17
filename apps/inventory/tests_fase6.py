@@ -359,3 +359,23 @@ class OpnameViewTests(TestCase):
         resp = self.client.post(reverse('inventory:opname_delete', args=[opn.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(StockOpname.objects.filter(pk=opn.pk).exists())
+
+
+class StockTransferModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_transfer(self):
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        h = StockTransfer.objects.create(
+            tanggal='2026-04-01', eb_asal=self.eb, warehouse_asal=self.wh1,
+            eb_tujuan=self.eb, warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('5'))
+        self.assertTrue(h.nomor.startswith('TRX-TRF-'))
+        self.assertFalse(h.is_cross_entity)
