@@ -32,20 +32,46 @@ class ItemMasterFormUomTests(TestCase):
     def test_stock_uom_required_for_inventory_item(self):
         self.assertTrue(self._form().fields['stock_uom'].required)
 
-    def test_purchase_uom_is_optional_default(self):
-        field = self._form().fields['purchase_uom']
-        self.assertFalse(field.required)
-        self.assertIn('Default', field.label)
+    def test_purchase_uom_not_in_registration_form(self):
+        # Registration asks for the stock unit only; purchase unit is chosen
+        # freely at transaction time, not fixed here.
+        self.assertNotIn('purchase_uom', self._form().fields)
 
-    def test_sales_uom_is_optional_default(self):
-        field = self._form().fields['sales_uom']
-        self.assertFalse(field.required)
-        self.assertIn('Default', field.label)
+    def test_sales_uom_not_in_registration_form(self):
+        self.assertNotIn('sales_uom', self._form().fields)
 
     def test_asset_item_has_no_stock_uom_field(self):
         from apps.purchase.forms import ItemMasterPurchaseForm
         form = ItemMasterPurchaseForm(tipe_item_choices=['ATP'])
         self.assertNotIn('stock_uom', form.fields)
+
+
+class RegistrationUomUiTests(TestCase):
+    """Rendered UIs must ask for the stock unit only — no purchase/sales unit
+    inputs at item registration or in the purchase quick-add modal."""
+
+    def setUp(self):
+        role = Role.objects.create(kode='admin', nama='Admin UI UOM')
+        self.user = User.objects.create_user(
+            email='ui-uom@test.com', password='pass1234', role=role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_item_master_form_has_no_purchase_sales_unit(self):
+        resp = self.client.get(reverse('purchase:item_master_create'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertNotIn('name="purchase_uom"', body)
+        self.assertNotIn('name="sales_uom"', body)
+
+    def test_purchase_quick_add_modal_has_no_purchase_sales_unit(self):
+        resp = self.client.get(reverse('purchase:create'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        self.assertNotIn('modal_purchase_uom', body)
+        self.assertNotIn('modal_sales_uom', body)
+        # The per-line transaction unit selector must remain.
+        self.assertIn('modal_stock_uom', body)
 
 
 class KategoriItemModelTests(TestCase):

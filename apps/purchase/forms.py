@@ -24,7 +24,7 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         model = ItemMasterPurchase
         fields = (
             'nama', 'tipe_item', 'kategori', 'velocity_category',
-            'coa_account', 'stock_uom', 'purchase_uom', 'sales_uom',
+            'coa_account', 'stock_uom',
             'lama_kadaluarsa', 'threshold_days_outstanding',
             'masa_manfaat', 'metode_penyusutan', 'metode_amortisasi',
             'metode_biaya_persediaan',
@@ -37,8 +37,6 @@ class ItemMasterPurchaseForm(forms.ModelForm):
             'velocity_category': forms.Select(attrs={'class': 'ni-input'}),
             'coa_account': forms.Select(attrs={'class': 'ni-input'}),
             'stock_uom': forms.Select(attrs={'class': 'ni-input'}),
-            'purchase_uom': forms.Select(attrs={'class': 'ni-input'}),
-            'sales_uom': forms.Select(attrs={'class': 'ni-input'}),
             'lama_kadaluarsa': forms.NumberInput(attrs={'class': 'ni-input'}),
             'threshold_days_outstanding': forms.NumberInput(attrs={'class': 'ni-input'}),
             'masa_manfaat': forms.NumberInput(attrs={'class': 'ni-input'}),
@@ -65,38 +63,22 @@ class ItemMasterPurchaseForm(forms.ModelForm):
         )
         if tipe_val == 'ATP' or (tipe_item_choices and tipe_item_choices == ['ATP']):
             for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
-                      'metode_amortisasi', 'metode_biaya_persediaan',
-                      'stock_uom', 'purchase_uom', 'sales_uom'):
+                      'metode_amortisasi', 'metode_biaya_persediaan', 'stock_uom'):
                 self.fields.pop(f, None)
         elif tipe_val == 'ALL' or (tipe_item_choices and tipe_item_choices == ['ALL']):
             for f in ('velocity_category', 'lama_kadaluarsa', 'threshold_days_outstanding',
-                      'metode_penyusutan', 'metode_biaya_persediaan',
-                      'stock_uom', 'purchase_uom', 'sales_uom'):
+                      'metode_penyusutan', 'metode_biaya_persediaan', 'stock_uom'):
                 self.fields.pop(f, None)
         else:
             # Inventory items: hide asset-specific fields
             for f in ('masa_manfaat', 'metode_penyusutan', 'metode_amortisasi'):
                 self.fields.pop(f, None)
 
-        # UOM registration: pick the stock unit once (required); purchase and
-        # sales units are optional defaults that only pre-fill the transaction
-        # input unit, which can be overridden to any convertible unit.
+        # UOM registration: the stock unit is picked once here and is required.
+        # Purchase and sales units are NOT set at registration — they are chosen
+        # freely per transaction and auto-converted to the stock unit.
         if 'stock_uom' in self.fields:
             self.fields['stock_uom'].required = True
-        if 'purchase_uom' in self.fields:
-            self.fields['purchase_uom'].required = False
-            self.fields['purchase_uom'].label = 'Default Satuan Pembelian'
-            self.fields['purchase_uom'].help_text = (
-                'Opsional. Satuan yang otomatis terisi saat pembelian; tetap bisa '
-                'diganti ke satuan lain yang punya konversi.'
-            )
-        if 'sales_uom' in self.fields:
-            self.fields['sales_uom'].required = False
-            self.fields['sales_uom'].label = 'Default Satuan Penjualan'
-            self.fields['sales_uom'].help_text = (
-                'Opsional. Satuan yang otomatis terisi saat penjualan; tetap bisa '
-                'diganti ke satuan lain yang punya konversi.'
-            )
 
         # Natural-sort CoA account choices by kode_akun (e.g. "1.1.10" sorts after "1.1.9")
         if 'coa_account' in self.fields:

@@ -1242,8 +1242,6 @@ def api_item_create(request: HttpRequest) -> JsonResponse:
         create_kwargs['threshold_days_outstanding'] = data.get('threshold_days_outstanding') or None
         create_kwargs['metode_biaya_persediaan'] = data.get('metode_biaya_persediaan', '')
         create_kwargs['stock_uom_id'] = data.get('stock_uom_id') or None
-        create_kwargs['purchase_uom_id'] = data.get('purchase_uom_id') or None
-        create_kwargs['sales_uom_id'] = data.get('sales_uom_id') or None
     # Fields for Aset Tetap (ATP)
     elif tipe_item == 'ATP':
         create_kwargs['masa_manfaat'] = data.get('masa_manfaat') or None
