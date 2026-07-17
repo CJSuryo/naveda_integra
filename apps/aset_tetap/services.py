@@ -116,11 +116,11 @@ def calculate_depreciation(record: AsetTetapRecord, tahun_ke: int = 1,
 # Journal Generation for Depreciation Processing
 # ---------------------------------------------------------------------------
 
-def _next_depreciation_journal_number() -> str:
-    """Generate sequential journal number for depreciation journals."""
+def _next_journal_number(prefix: str) -> str:
+    """Generate sequential journal number for a given prefix (e.g. 'TRX-DEP-', 'TRX-DSP-')."""
     last = (
         JurnalHeader.objects
-        .filter(nomor_transaksi__startswith='TRX-DEP-')
+        .filter(nomor_transaksi__startswith=prefix)
         .order_by('-nomor_transaksi')
         .values_list('nomor_transaksi', flat=True)
         .first()
@@ -132,7 +132,7 @@ def _next_depreciation_journal_number() -> str:
             seq = 1
     else:
         seq = 1
-    return f'TRX-DEP-{seq:03d}'
+    return f'{prefix}{seq:03d}'
 
 
 def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
@@ -181,7 +181,7 @@ def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
         record.save()
 
         # Create journal entry
-        nomor = _next_depreciation_journal_number()
+        nomor = _next_journal_number('TRX-DEP-')
         header = JurnalHeader.objects.create(
             tanggal=tanggal,
             nomor_transaksi=nomor,
@@ -211,25 +211,6 @@ def process_depreciation(record: AsetTetapRecord, depreciation_amount: Decimal,
 # ---------------------------------------------------------------------------
 # Journal Generation for Asset Disposal
 # ---------------------------------------------------------------------------
-
-def _next_disposal_journal_number() -> str:
-    """Nomor jurnal pelepasan sekuensial: TRX-DSP-xxx."""
-    last = (
-        JurnalHeader.objects
-        .filter(nomor_transaksi__startswith='TRX-DSP-')
-        .order_by('-nomor_transaksi')
-        .values_list('nomor_transaksi', flat=True)
-        .first()
-    )
-    if last:
-        try:
-            seq = int(last.rsplit('-', 1)[1]) + 1
-        except (ValueError, IndexError):
-            seq = 1
-    else:
-        seq = 1
-    return f'TRX-DSP-{seq:03d}'
-
 
 def _resolve_asset_account(record: AsetTetapRecord):
     """Akun aset yang didebit saat perolehan: purchase_item.coa_account -> item.coa_account."""
@@ -325,7 +306,7 @@ def process_asset_disposal(disposal: AssetDisposal) -> JurnalHeader:
 
         header = JurnalHeader.objects.create(
             tanggal=disposal.tanggal,
-            nomor_transaksi=_next_disposal_journal_number(),
+            nomor_transaksi=_next_journal_number('TRX-DSP-'),
             uraian_transaksi=f'Pelepasan {aset.aset_number} ({jenis}) — {aset.item.nama}',
             entitas_bisnis=aset.entitas_bisnis,
             is_penyesuaian=False,
