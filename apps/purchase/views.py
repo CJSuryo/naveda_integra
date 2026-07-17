@@ -707,18 +707,27 @@ def purchase_update(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def purchase_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Show purchase detail with all EB groups, items, and journal preview."""
+    from django.db.models import Prefetch
+    from apps.inventory.models import InventoryRecord
+
+    items_qs = PurchaseItem.objects.select_related(
+        'item__stock_uom', 'sub_transaction_type', 'coa_account', 'offset_coa_account',
+    ).prefetch_related(
+        Prefetch('inventory_records', queryset=InventoryRecord.objects.only('id', 'purchase_item_id')),
+    )
     purchase = get_object_or_404(
         PurchaseHeader.objects.prefetch_related(
             'entitas_groups__entitas_bisnis',
             'entitas_groups__entitas_bisnis_lv2',
             'entitas_groups__entitas_bisnis_lv3',
-            'entitas_groups__items__item',
-            'entitas_groups__items__sub_transaction_type',
-            'entitas_groups__items__coa_account',
-            'entitas_groups__items__offset_coa_account',
+            Prefetch('entitas_groups__items', queryset=items_qs),
         ),
         pk=pk,
     )
+    for eg in purchase.entitas_groups.all():
+        for pi in eg.items.all():
+            records = pi.inventory_records.all()
+            pi.linked_inventory_record = records[0] if records else None
 
     # Build journal preview entries
     journal_entries = []

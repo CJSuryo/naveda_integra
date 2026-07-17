@@ -64,6 +64,13 @@ class RegistrationUomUiTests(TestCase):
         self.assertNotIn('name="purchase_uom"', body)
         self.assertNotIn('name="sales_uom"', body)
 
+    def test_purchase_detail_renders_with_no_items(self):
+        """A purchase header with zero entitas groups/items must still render
+        (Prefetch-based item loading must not choke on an empty relation)."""
+        ph = PurchaseHeader.objects.create(tanggal='2026-01-01')
+        resp = self.client.get(reverse('purchase:detail', args=[ph.pk]))
+        self.assertEqual(resp.status_code, 200)
+
     def test_purchase_quick_add_modal_has_no_purchase_sales_unit(self):
         resp = self.client.get(reverse('purchase:create'))
         self.assertEqual(resp.status_code, 200)
@@ -801,6 +808,83 @@ class PurchaseUomConversionTests(TestCase):
         qty, price = convert_input_to_base(self.item, self.ctn, Decimal('10'), Decimal('24000'))
         self.assertEqual(qty, Decimal('240'))
         self.assertEqual(price, Decimal('1000'))
+
+    def _create_purchase_via_view(self, client):
+        """Shared setup: POST a purchase creating an inventory-backed item, and
+        return (purchase_header, purchase_item)."""
+        tipe = TipeEntitas.objects.create(nama='FnB UOM Detail')
+        eb = EntitasBisnis.objects.create(nama='Cafe UOM Detail', tipe_entitas=tipe)
+
+        aset_lv1 = AsetLv1.objects.create(kode='1', nama='Aset')
+        aset_lv2 = AsetLv2.objects.create(aset=aset_lv1, kode='1', nama='Persediaan')
+        akun_persediaan = Akun.objects.get(kategori_id='aset', kategori_akun=aset_lv2.pk)
+
+        ekuitas_lv1 = EkuitasLv1.objects.create(kode='1', nama='Ekuitas')
+        ekuitas_lv2 = EkuitasLv2.objects.create(ekuitas=ekuitas_lv1, kode='1', nama='Modal')
+        akun_modal = Akun.objects.get(kategori_id='ekuitas', kategori_akun=ekuitas_lv2.pk)
+
+        stt = SubTransactionType.objects.create(
+            nama='Stok Awal UOM Detail', direction='inflow', default_offset_account=akun_modal,
+        )
+
+        groups = [{
+            'entitas_bisnis_id': eb.pk,
+            'items': [{
+                'item_id': self.item.pk,
+                'sub_transaction_type_id': stt.pk,
+                'coa_account_id': akun_persediaan.pk,
+                'offset_coa_account_id': akun_modal.pk,
+                'quantity': '10',
+                'unit_price': '24000',
+                'input_uom_id': self.ctn.pk,
+            }],
+        }]
+        resp = client.post(reverse('purchase:create'), {
+            'tanggal': '2026-01-15',
+            'deskripsi': 'Test UOM Detail',
+            'eb_groups_data': json.dumps(groups),
+        })
+        self.assertEqual(resp.status_code, 302)
+        purchase = PurchaseHeader.objects.get(deskripsi='Test UOM Detail')
+        pi = PurchaseItem.objects.get(item=self.item, purchase_eb__purchase_header=purchase)
+        return purchase, pi
+
+    def test_purchase_detail_shows_qty_with_stock_uom(self):
+        """The Qty column on the purchase detail page must show the item's
+        stock unit next to the quantity — the stored quantity is already base
+        (pcs), so showing a bare number is ambiguous."""
+        from django.template.defaultfilters import floatformat
+        from django.contrib.humanize.templatetags.humanize import intcomma
+
+        role = Role.objects.create(kode='admin', nama='Admin UOM Detail')
+        user = User.objects.create_user(email='uom-detail@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        purchase, pi = self._create_purchase_via_view(client)
+        resp = client.get(reverse('purchase:detail', args=[purchase.pk]))
+        self.assertEqual(resp.status_code, 200)
+        expected_qty = intcomma(floatformat(pi.quantity, 0))
+        self.assertContains(resp, f'{expected_qty} pcs')
+
+    def test_purchase_detail_item_name_links_to_inventory_detail(self):
+        """The item name on the purchase detail page must link to the
+        InventoryRecord created for that purchase line, so a user can jump
+        straight from the transaction to the persediaan record it produced."""
+        from apps.inventory.models import InventoryRecord
+
+        role = Role.objects.create(kode='admin', nama='Admin UOM Detail Link')
+        user = User.objects.create_user(email='uom-detail-link@test.com', password='pass1234', role=role)
+        client = Client()
+        client.force_login(user)
+
+        purchase, pi = self._create_purchase_via_view(client)
+        record = InventoryRecord.objects.get(purchase_item=pi)
+
+        resp = client.get(reverse('purchase:detail', args=[purchase.pk]))
+        self.assertEqual(resp.status_code, 200)
+        expected_url = reverse('inventory:detail', args=[record.pk])
+        self.assertContains(resp, f'href="{expected_url}"')
 
     def test_purchase_create_post_converts_carton_to_base(self):
         """POSTing an item with input_uom_id in cartons should be converted to base

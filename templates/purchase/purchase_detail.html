@@ -66,12 +66,18 @@
         <tbody>
           {% for pi in eg.items.all %}
           <tr>
-            <td>{{ pi.item }}</td>
+            <td>
+              {% if pi.linked_inventory_record %}
+              <a href="{% url 'inventory:detail' pi.linked_inventory_record.pk %}" style="color:var(--ni-primary);">{{ pi.item }}</a>
+              {% else %}
+              {{ pi.item }}
+              {% endif %}
+            </td>
             <td>{{ pi.sub_transaction_type.nama }}</td>
             <td>{{ pi.coa_account }}</td>
             <td>{{ pi.offset_coa_account }}</td>
-            <td class="ni-text-right">{{ pi.quantity|floatformat:0|intcomma }}</td>
-            <td class="ni-text-right">{{ pi.unit_price|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ pi.quantity|floatformat:0|intcomma }}{% if pi.item.stock_uom %} {{ pi.item.stock_uom.kode }}{% endif %}</td>
+            <td class="ni-text-right">{{ pi.unit_price|floatformat:0|intcomma }}{% if pi.item.stock_uom %} / {{ pi.item.stock_uom.kode }}{% endif %}</td>
             <td class="ni-text-right"><strong>{{ pi.total_value|floatformat:0|intcomma }}</strong></td>
           </tr>
           {% empty %}

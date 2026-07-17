@@ -402,7 +402,7 @@ class InventoryViewTests(TestCase):
         role = Role.objects.create(kode='admin', nama='Admin')
         self.user = User.objects.create_user(email='test@test.com', password='pass', role=role)
         self.client = Client()
-        self.client.login(email='test@test.com', password='pass')
+        self.client.force_login(self.user)
 
         self.tipe = TipeEntitas.objects.create(nama='FnB')
         self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
@@ -421,6 +421,22 @@ class InventoryViewTests(TestCase):
         resp = self.client.get(reverse('inventory:detail', args=[self.record.pk]))
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, self.record.inventory_number)
+
+    def test_detail_view_shows_stock_uom(self):
+        """Quantity on the inventory detail page must show its unit — a bare
+        number is ambiguous without knowing the item's stock UOM."""
+        from apps.uom.models import UnitOfMeasure
+        from django.template.defaultfilters import floatformat
+        from django.contrib.humanize.templatetags.humanize import intcomma
+
+        pcs = UnitOfMeasure.objects.get(kode='pcs')
+        self.item.stock_uom = pcs
+        self.item.save(update_fields=['stock_uom'])
+
+        resp = self.client.get(reverse('inventory:detail', args=[self.record.pk]))
+        self.assertEqual(resp.status_code, 200)
+        expected_qty = intcomma(floatformat(self.record.quantity, 4))
+        self.assertContains(resp, f'{expected_qty} pcs')
 
     def test_login_required(self):
         self.client.logout()

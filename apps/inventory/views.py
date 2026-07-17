@@ -81,7 +81,7 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """Show inventory record detail with mutation history."""
     record = get_object_or_404(
         InventoryRecord.objects.select_related(
-            'item', 'entitas_bisnis',
+            'item__stock_uom', 'entitas_bisnis',
             'purchase_item__purchase_eb__purchase_header',
         ),
         pk=pk,

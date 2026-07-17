@@ -31,13 +31,16 @@
       <dt>Inventory Number</dt><dd>{{ record.inventory_number }}</dd>
       <dt>Item</dt><dd>{{ record.item.item_id }} - {{ record.item.nama }}</dd>
       <dt>Tipe Item</dt><dd>{{ record.item.get_tipe_item_display }}</dd>
+      {% if not is_bulk %}
+      <dt>Satuan Stok</dt><dd>{{ record.item.stock_uom.kode|default:'-' }}</dd>
+      {% endif %}
       <dt>Entitas Bisnis</dt><dd>{{ record.entitas_bisnis.nama }}</dd>
       <dt>Tanggal</dt><dd>{{ record.tanggal }}</dd>
       {% if is_bulk %}
       <dt>Nilai Persediaan</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
       {% else %}
-      <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}</dd>
-      <dt>Unit Cost</dt><dd>{{ record.unit_price|floatformat:0|intcomma }}</dd>
+      <dt>Quantity</dt><dd>{{ record.quantity|floatformat:4|intcomma }}{% if record.item.stock_uom %} {{ record.item.stock_uom.kode }}{% endif %}</dd>
+      <dt>Unit Cost</dt><dd>{{ record.unit_price|floatformat:0|intcomma }}{% if record.item.stock_uom %} / {{ record.item.stock_uom.kode }}{% endif %}</dd>
       <dt>Total Value</dt><dd><strong>{{ record.total_value|floatformat:0|intcomma }}</strong></dd>
       {% endif %}
       <dt>Lead Time (Days)</dt><dd>{{ record.lead_time_days|default:'-' }}</dd>
@@ -69,7 +72,7 @@
             <th>Tanggal</th>
             <th>Tipe</th>
             <th>Referensi</th>
-            <th class="ni-text-right">{% if is_bulk %}Nilai Persediaan{% else %}Quantity{% endif %}</th>
+            <th class="ni-text-right">{% if is_bulk %}Nilai Persediaan{% else %}Quantity{% if record.item.stock_uom %} ({{ record.item.stock_uom.kode }}){% endif %}{% endif %}</th>
             <th>Keterangan</th>
           </tr>
         </thead>
