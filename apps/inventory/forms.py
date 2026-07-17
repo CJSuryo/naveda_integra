@@ -74,13 +74,32 @@ class StockAdjustmentForm(forms.ModelForm):
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
+            status_aktif=True,
+        ).order_by('nama')
+
+
+class StockAdjustmentItemForm(forms.ModelForm):
+    class Meta:
+        model = StockAdjustmentItem
+        fields = ('item', 'qty', 'unit_cost')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')
+
 
 StockAdjustmentItemFormSet = inlineformset_factory(
     StockAdjustment, StockAdjustmentItem,
-    fields=('item', 'qty', 'unit_cost'), extra=1, can_delete=True,
-    widgets={
-        'item': forms.Select(attrs={'class': 'ni-input'}),
-        'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
-        'unit_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
-    },
+    form=StockAdjustmentItemForm,
+    fields=('item', 'qty', 'unit_cost'), extra=1, min_num=1, validate_min=True, can_delete=True,
 )

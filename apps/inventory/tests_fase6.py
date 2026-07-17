@@ -145,3 +145,13 @@ class AdjustmentFormTests(TestCase):
         f = StockAdjustmentForm()
         for name in ('tanggal', 'entitas_bisnis', 'warehouse', 'akun_selisih', 'keterangan'):
             self.assertIn(name, f.fields)
+
+    def test_formset_requires_at_least_one_item(self):
+        from apps.inventory.forms import StockAdjustmentItemFormSet
+        data = {
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '', 'items-0-unit_cost': '',
+        }
+        fs = StockAdjustmentItemFormSet(data=data)
+        self.assertFalse(fs.is_valid())
