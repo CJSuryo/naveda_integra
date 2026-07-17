@@ -59,3 +59,51 @@ class StockAdjustmentModelTests(TestCase):
             adjustment=h, item=self.item, qty=Decimal('-3'), unit_cost=Decimal('5'),
         )
         self.assertEqual(d.qty, Decimal('-3'))
+
+
+class ProcessAdjustmentTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih Persediaan')
+
+    def _header(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        h = StockAdjustment.objects.create(
+            tanggal='2026-02-01', entitas_bisnis=self.eb, warehouse=self.wh,
+            akun_selisih=self.selisih,
+        )
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item,
+                                           qty=Decimal('10'), unit_cost=Decimal('5'))
+        return h
+
+    def test_increase_creates_inflow_and_balanced_journal(self):
+        from apps.inventory.services import process_adjustment
+        from apps.inventory.ledger import get_available_stock
+        h = self._header()
+        header = process_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'posted')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        deb = sum(d.debit for d in header.details.all())
+        kre = sum(d.kredit for d in header.details.all())
+        self.assertEqual(deb, kre)
+        self.assertEqual(deb, Decimal('50'))
+
+    def test_decrease_consumes_stock(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+        record_inflow(self.item, self.eb, None, None, Decimal('20'), Decimal('4'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockAdjustment.objects.create(tanggal='2026-02-02', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item, qty=Decimal('-5'))
+        process_adjustment(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('15'))
