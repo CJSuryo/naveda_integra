@@ -365,6 +365,45 @@ class DepreciationGuardTests(TestCase):
             process_depreciation(rec, Decimal('1000'))
 
 
+class AssetDisposalFormTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        self.item = ItemMasterPurchase.objects.create(nama='Mesin X', tipe_item='ATP', coa_account=akun_aset)
+        self.akun_lr = Akun.objects.create(kategori_id='pendapatan', kode_akun='8.1.01', nama='LR')
+        self.akun_kas = Akun.objects.create(kategori_id='aset', kode_akun='1.1.1.01', nama='Kas')
+        self.rec = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas, quantity=Decimal('5'), harga_perolehan=Decimal('1000000'),
+        )
+
+    def test_qty_melebihi_invalid(self):
+        from .forms import AssetDisposalForm
+        form = AssetDisposalForm(data={
+            'jenis': 'hibah', 'tanggal': '2026-07-17', 'quantity': '9',
+            'harga_jual': '0', 'akun_laba_rugi': self.akun_lr.pk,
+        }, aset=self.rec)
+        self.assertFalse(form.is_valid())
+        self.assertIn('quantity', form.errors)
+
+    def test_jual_tanpa_kas_invalid(self):
+        from .forms import AssetDisposalForm
+        form = AssetDisposalForm(data={
+            'jenis': 'jual', 'tanggal': '2026-07-17', 'quantity': '1',
+            'harga_jual': '500000', 'akun_laba_rugi': self.akun_lr.pk,
+        }, aset=self.rec)
+        self.assertFalse(form.is_valid())
+        self.assertIn('akun_kas', form.errors)
+
+    def test_valid_hibah(self):
+        from .forms import AssetDisposalForm
+        form = AssetDisposalForm(data={
+            'jenis': 'hibah', 'tanggal': '2026-07-17', 'quantity': '2',
+            'harga_jual': '0', 'akun_laba_rugi': self.akun_lr.pk,
+        }, aset=self.rec)
+        self.assertTrue(form.is_valid(), form.errors)
+
+
 class BulkDepreciationViewTests(TestCase):
     def setUp(self):
         self.client = Client()
