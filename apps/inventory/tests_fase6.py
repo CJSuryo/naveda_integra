@@ -121,3 +121,19 @@ class ReverseAdjustmentTests(ProcessAdjustmentTests):
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
         self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+    def test_reverse_consume_adjustment_restores_consumed_layer(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment, reverse_adjustment
+        record_inflow(self.item, self.eb, None, None, Decimal('20'), Decimal('4'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockAdjustment.objects.create(tanggal='2026-02-03', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item, qty=Decimal('-5'))
+        process_adjustment(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('15'))
+        reverse_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('20'))
