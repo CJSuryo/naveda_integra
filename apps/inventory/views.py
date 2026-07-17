@@ -19,8 +19,9 @@ from django.utils import timezone
 
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import InventoryRecordForm, WarehouseForm
-from .models import InventoryRecord, Warehouse
+from .forms import InventoryRecordForm, StockAdjustmentForm, StockAdjustmentItemFormSet, WarehouseForm
+from .models import InventoryRecord, StockAdjustment, Warehouse
+from .services import process_adjustment, reverse_adjustment
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -1314,3 +1315,53 @@ def inventory_export_pdf(request: HttpRequest) -> HttpResponse:
         'total_nilai': total_nilai,
         'total_records': len(records),
     })
+
+
+# ── Stock Adjustment ───────────────────────────────────────────────────────
+
+@login_required
+def adjustment_list(request: HttpRequest) -> HttpResponse:
+    """List all stock adjustments."""
+    rows = StockAdjustment.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'akun_selisih').all()
+    return render(request, 'inventory/adjustment_list.html', {'rows': rows})
+
+
+@login_required
+def adjustment_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock adjustment (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockAdjustmentForm(request.POST)
+        formset = StockAdjustmentItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            adj = form.save()
+            formset.instance = adj
+            formset.save()
+            try:
+                header = process_adjustment(adj)
+            except ValueError as e:
+                adj.delete()
+                messages.error(request, str(e))
+                return redirect('inventory:adjustment_create')
+            messages.success(request, f'Adjustment {adj.nomor} diposting. Jurnal {header.nomor_transaksi}.')
+            return redirect('inventory:adjustment_list')
+    else:
+        form = StockAdjustmentForm()
+        formset = StockAdjustmentItemFormSet()
+    return render(request, 'inventory/adjustment_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def adjustment_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus adjustment."""
+    adj = get_object_or_404(StockAdjustment, pk=pk)
+    if request.method == 'POST':
+        try:
+            if adj.status == 'posted':
+                reverse_adjustment(adj, request)
+            adj.delete()
+            messages.success(request, f'Adjustment {adj.nomor} dibatalkan.')
+        except Exception as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:adjustment_list')
+    return render(request, 'inventory/adjustment_delete_confirm.html', {'adj': adj})

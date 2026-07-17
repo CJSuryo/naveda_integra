@@ -20,4 +20,7 @@ urlpatterns = [
     path('warehouse/<int:pk>/toggle/', views.warehouse_toggle, name='warehouse_toggle'),
     path('ledger/', views.stock_ledger, name='stock_ledger'),
     path('kartu-stok/', views.stock_card, name='stock_card'),
+    path('adjustment/', views.adjustment_list, name='adjustment_list'),
+    path('adjustment/create/', views.adjustment_create, name='adjustment_create'),
+    path('adjustment/<int:pk>/delete/', views.adjustment_delete, name='adjustment_delete'),
 ]

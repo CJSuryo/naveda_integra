@@ -155,3 +155,25 @@ class AdjustmentFormTests(TestCase):
         }
         fs = StockAdjustmentItemFormSet(data=data)
         self.assertFalse(fs.is_valid())
+
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+
+User = get_user_model()
+
+
+class AdjustmentViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u@example.com', password='p', name='U')
+        self.client.force_login(self.user)
+
+    def test_list_renders(self):
+        resp = self.client.get(reverse('inventory:adjustment_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_create_get_renders(self):
+        resp = self.client.get(reverse('inventory:adjustment_create'))
+        self.assertEqual(resp.status_code, 200)
