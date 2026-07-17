@@ -93,7 +93,7 @@
           <td>{{ l.warehouse.kode|default:'—' }}</td>
           <td class="ni-text-right">{{ l.remaining_qty|floatformat:'-2' }} {{ item.stock_uom.kode|default:'' }}</td>
           <td class="ni-text-right">{{ l.unit_cost|floatformat:0|intcomma }}</td>
-          <td class="ni-text-right">{% widthratio l.remaining_qty 1 l.unit_cost %}</td>
+          <td class="ni-text-right">{% widthratio l.remaining_qty 1 l.unit_cost as nilai_layer %}{{ nilai_layer|intcomma }}</td>
         </tr>
         {% empty %}
         <tr><td colspan="6" class="ni-text-center ni-text-muted">Tidak ada layer aktif.</td></tr>
