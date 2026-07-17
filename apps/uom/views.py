@@ -23,6 +23,15 @@ def _base_by_dimension():
     }
 
 
+def _item_stock_uom_map():
+    from apps.purchase.models import ItemMasterPurchase
+    return {
+        str(i.pk): (i.stock_uom.kode if i.stock_uom_id else '')
+        for i in ItemMasterPurchase.objects.select_related('stock_uom').filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'])
+    }
+
+
 @login_required
 def unit_list(request):
     units = list(UnitOfMeasure.objects.for_dropdown())
@@ -93,7 +102,8 @@ def conversion_create(request):
     else:
         form = ItemUOMForm()
     return render(request, 'uom/item_conversion_form.html',
-                  {'form': form, 'title': 'Konversi Baru', 'is_edit': False})
+                  {'form': form, 'title': 'Konversi Baru', 'is_edit': False,
+                   'item_stock_uom_map': _item_stock_uom_map()})
 
 
 @login_required
@@ -107,7 +117,8 @@ def conversion_update(request, pk):
     else:
         form = ItemUOMForm(instance=obj)
     return render(request, 'uom/item_conversion_form.html',
-                  {'form': form, 'title': 'Edit Konversi', 'is_edit': True})
+                  {'form': form, 'title': 'Edit Konversi', 'is_edit': True,
+                   'item_stock_uom_map': _item_stock_uom_map()})
 
 
 @login_required

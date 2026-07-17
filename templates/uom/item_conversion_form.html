@@ -48,6 +48,8 @@
           {% if form.qty_in_stock_uom.errors %}<div class="ni-form-error">{{ form.qty_in_stock_uom.errors }}</div>{% endif %}
         </div>
       </div>
+      {% if item_stock_uom_map %}{{ item_stock_uom_map|json_script:"itemStockUom" }}{% endif %}
+      <p id="convPreview" class="ni-text-muted" style="font-size:0.85em;margin:8px 0 0;"></p>
       <div class="ni-btn-row" style="margin-top:24px;">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'uom:conversion_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
@@ -56,4 +58,33 @@
     {% endif %}
   </div>
 </div>
+<script>
+(function () {
+  'use strict';
+  var mapEl = document.getElementById('itemStockUom');
+  if (!mapEl) return;
+  var map = JSON.parse(mapEl.textContent || '{}');
+  var form = document.querySelector('.ni-card form');
+  if (!form) return;
+  var itemSel = form.querySelector('[name="item"]');
+  var uomSel = form.querySelector('[name="uom"]');
+  var qty = form.querySelector('[name="qty_in_stock_uom"]');
+  var preview = document.getElementById('convPreview');
+  if (!preview) return;
+  function uomText(sel) {
+    if (!sel) return '?';
+    var opt = sel.options[sel.selectedIndex];
+    return opt ? opt.text.trim() : '?';
+  }
+  function render() {
+    var stockKode = (itemSel && map[itemSel.value]) ? map[itemSel.value] : '(stock uom)';
+    var q = (qty && qty.value) ? qty.value : '?';
+    preview.textContent = '1 ' + uomText(uomSel) + ' = ' + q + ' ' + stockKode;
+  }
+  [itemSel, uomSel, qty].forEach(function (el) {
+    if (el) { el.addEventListener('input', render); el.addEventListener('change', render); }
+  });
+  render();
+})();
+</script>
 {% endblock %}
