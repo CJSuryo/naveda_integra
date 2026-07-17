@@ -1,32 +1,110 @@
 {% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Kartu Stok{% endblock %}
 {% block content %}
-<div class="ni-page">
-  <h1 class="ni-page__title">{{ title }}</h1>
-  <form method="get" class="ni-filter">
-    <select name="item" class="ni-input" onchange="this.form.submit()">
-      <option value="">— Pilih Item —</option>
-      {% for it in items %}<option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>{% endfor %}
-    </select>
-  </form>
-  {% if item %}
-  <h2 class="ni-section-title">Saldo per Gudang</h2>
-  <table class="ni-table">
-    <thead><tr><th>Gudang</th><th>Saldo</th></tr></thead>
-    <tbody>
-      {% for s in saldo_per_wh %}<tr><td>{{ s.warehouse__kode|default:'—' }}</td><td>{{ s.saldo }}</td></tr>{% empty %}<tr><td colspan="2">—</td></tr>{% endfor %}
-    </tbody>
-  </table>
-  <h2 class="ni-section-title">Layer Inflow Aktif (FIFO)</h2>
-  <table class="ni-table">
-    <thead><tr><th>Tanggal</th><th>Entitas</th><th>Gudang</th><th>Sisa Qty</th><th>Biaya/Unit</th></tr></thead>
-    <tbody>
-      {% for l in layers %}
-      <tr><td>{{ l.tanggal }}</td><td>{{ l.entitas_bisnis.nama }}</td><td>{{ l.warehouse.kode|default:'—' }}</td><td>{{ l.remaining_qty }}</td><td>{{ l.unit_cost }}</td></tr>
-      {% empty %}
-      <tr><td colspan="5">Tidak ada layer aktif.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Kartu Stok</h1>
+    <p class="ni-page-header__subtitle">Saldo, valuasi, dan layer FIFO aktif per item</p>
+  </div>
 </div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" id="stockCardForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:220px;">
+        <label class="ni-form-label">Item</label>
+        <select name="item" class="ni-input" onchange="this.form.submit()">
+          <option value="">— Pilih Item —</option>
+          {% for it in items %}
+          <option value="{{ it.pk }}" {% if item_filter == it.pk|stringformat:'s' %}selected{% endif %}>{{ it.item_id }} — {{ it.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="stockCardForm" %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Terapkan
+      </button>
+    </form>
+  </div>
+</div>
+
+{% if item %}
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;">
+  <div class="ni-card ni-animate-fade-in" style="flex:1;min-width:220px;">
+    <div class="ni-card__body" style="padding:16px;">
+      <p class="ni-text-muted" style="margin:0 0 4px;font-size:0.8em;">Total Stok On-Hand</p>
+      <p style="margin:0;font-size:1.5em;font-weight:600;">
+        {{ total_on_hand|floatformat:'-2' }} <span style="font-size:0.6em;font-weight:400;">{{ item.stock_uom.kode|default:'' }}</span>
+      </p>
+    </div>
+  </div>
+  <div class="ni-card ni-animate-fade-in" style="flex:1;min-width:220px;">
+    <div class="ni-card__body" style="padding:16px;">
+      <p class="ni-text-muted" style="margin:0 0 4px;font-size:0.8em;">Total Nilai Persediaan</p>
+      <p style="margin:0;font-size:1.5em;font-weight:600;">
+        Rp {{ total_value|floatformat:0|intcomma }}
+      </p>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+    <h2 class="ni-page-header__title" style="font-size:1.05em;margin:0;">Saldo per Gudang</h2>
+    <a href="{% url 'inventory:stock_ledger' %}?item={{ item.pk }}" class="ni-btn ni-btn--secondary ni-btn--sm">
+      <i data-lucide="book-open" style="width:14px;height:14px"></i> Lihat di Buku Persediaan
+    </a>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead><tr><th>Gudang</th><th class="ni-text-right">Saldo</th></tr></thead>
+      <tbody>
+        {% for s in saldo_per_wh %}
+        <tr>
+          <td>{{ s.warehouse__kode|default:'—' }}</td>
+          <td class="ni-text-right">{{ s.saldo|floatformat:'-2' }} {{ item.stock_uom.kode|default:'' }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="2" class="ni-text-center ni-text-muted">—</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body" style="padding:12px 16px;">
+    <h2 class="ni-page-header__title" style="font-size:1.05em;margin:0;">Layer Inflow Aktif (FIFO)</h2>
+  </div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Tanggal</th><th>Entitas</th><th>Gudang</th>
+          <th class="ni-text-right">Sisa Qty</th><th class="ni-text-right">Biaya/Unit</th><th class="ni-text-right">Nilai Layer</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in layers %}
+        <tr>
+          <td>{{ l.tanggal }}</td>
+          <td>{{ l.entitas_bisnis.nama }}</td>
+          <td>{{ l.warehouse.kode|default:'—' }}</td>
+          <td class="ni-text-right">{{ l.remaining_qty|floatformat:'-2' }} {{ item.stock_uom.kode|default:'' }}</td>
+          <td class="ni-text-right">{{ l.unit_cost|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{% widthratio l.remaining_qty 1 l.unit_cost %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="ni-text-center ni-text-muted">Tidak ada layer aktif.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="ni-card ni-text-center ni-text-muted" style="padding:32px;">
+  Pilih item untuk melihat kartu stok, valuasi, dan layer FIFO aktif.
+</div>
+{% endif %}
 {% endblock %}
