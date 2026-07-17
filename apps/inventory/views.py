@@ -20,9 +20,12 @@ from django.utils import timezone
 
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import InventoryRecordForm, StockAdjustmentForm, StockAdjustmentItemFormSet, WarehouseForm
-from .models import InventoryRecord, StockAdjustment, Warehouse
-from .services import process_adjustment, reverse_adjustment
+from .forms import (
+    InventoryRecordForm, StockAdjustmentForm, StockAdjustmentItemFormSet,
+    StockOpnameForm, StockOpnameItemFormSet, WarehouseForm,
+)
+from .models import InventoryRecord, StockAdjustment, StockOpname, Warehouse
+from .services import process_adjustment, process_opname, reverse_adjustment, reverse_opname
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -1366,3 +1369,56 @@ def adjustment_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, f'Gagal membatalkan: {e}')
         return redirect('inventory:adjustment_list')
     return render(request, 'inventory/adjustment_delete_confirm.html', {'adj': adj})
+
+
+# ── Stock Opname ─────────────────────────────────────────────────────────
+
+@login_required
+def opname_list(request: HttpRequest) -> HttpResponse:
+    """List all stock opnames."""
+    rows = StockOpname.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'akun_selisih').all()
+    return render(request, 'inventory/opname_list.html', {'rows': rows})
+
+
+@login_required
+def opname_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock opname (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockOpnameForm(request.POST)
+        formset = StockOpnameItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    opn = form.save()
+                    formset.instance = opn
+                    formset.save()
+                    header = process_opname(opn)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                msg = f'Opname {opn.nomor} diposting.'
+                if header:
+                    msg += f' Jurnal {header.nomor_transaksi}.'
+                messages.success(request, msg)
+                return redirect('inventory:opname_list')
+    else:
+        form = StockOpnameForm()
+        formset = StockOpnameItemFormSet()
+    return render(request, 'inventory/opname_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def opname_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus opname."""
+    opn = get_object_or_404(StockOpname, pk=pk)
+    if request.method == 'POST':
+        try:
+            if opn.status == 'posted':
+                reverse_opname(opn, request)
+            opn.delete()
+            messages.success(request, f'Opname {opn.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:opname_list')
+    return render(request, 'inventory/opname_delete_confirm.html', {'opn': opn})

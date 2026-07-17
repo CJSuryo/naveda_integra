@@ -5,7 +5,9 @@ from django.forms import inlineformset_factory
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
 
-from .models import InventoryRecord, StockAdjustment, StockAdjustmentItem, Warehouse
+from .models import (
+    InventoryRecord, StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem, Warehouse,
+)
 
 
 class InventoryRecordForm(forms.ModelForm):
@@ -102,4 +104,52 @@ StockAdjustmentItemFormSet = inlineformset_factory(
     StockAdjustment, StockAdjustmentItem,
     form=StockAdjustmentItemForm,
     fields=('item', 'qty', 'unit_cost'), extra=3, min_num=1, validate_min=True, can_delete=True,
+)
+
+
+class StockOpnameForm(forms.ModelForm):
+    class Meta:
+        model = StockOpname
+        fields = ('tanggal', 'entitas_bisnis', 'entitas_bisnis_lv2',
+                  'entitas_bisnis_lv3', 'warehouse', 'akun_selisih', 'keterangan')
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
+            status_aktif=True,
+        ).order_by('nama')
+
+
+class StockOpnameItemForm(forms.ModelForm):
+    class Meta:
+        model = StockOpnameItem
+        fields = ('item', 'qty_sistem', 'qty_fisik', 'unit_cost')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'qty_sistem': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'qty_fisik': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')
+
+
+StockOpnameItemFormSet = inlineformset_factory(
+    StockOpname, StockOpnameItem,
+    form=StockOpnameItemForm,
+    fields=('item', 'qty_sistem', 'qty_fisik', 'unit_cost'),
+    extra=3, min_num=1, validate_min=True, can_delete=True,
 )

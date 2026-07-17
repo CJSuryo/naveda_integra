@@ -23,4 +23,7 @@ urlpatterns = [
     path('adjustment/', views.adjustment_list, name='adjustment_list'),
     path('adjustment/create/', views.adjustment_create, name='adjustment_create'),
     path('adjustment/<int:pk>/delete/', views.adjustment_delete, name='adjustment_delete'),
+    path('opname/', views.opname_list, name='opname_list'),
+    path('opname/create/', views.opname_create, name='opname_create'),
+    path('opname/<int:pk>/delete/', views.opname_delete, name='opname_delete'),
 ]

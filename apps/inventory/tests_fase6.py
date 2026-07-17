@@ -297,3 +297,65 @@ class ProcessOpnameTests(TestCase):
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
         self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class OpnameViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u2@example.com', password='p', name='U2')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:opname_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:opname_create')).status_code, 200)
+
+    def test_create_post_success_posts_opname(self):
+        from apps.master_data.models import Akun
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.models import Warehouse, StockOpname
+        from apps.inventory.ledger import record_inflow
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        item.coa_account = persediaan
+        item.save()
+        selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih')
+        # Seed existing stock so the opname's decrease (10 -> 8) can be consumed.
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh)
+        data = {
+            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'akun_selisih': selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty_sistem': '10',
+            'items-0-qty_fisik': '8', 'items-0-unit_cost': '5',
+        }
+        resp = self.client.post(reverse('inventory:opname_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockOpname.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'entitas_bisnis': '', 'warehouse': '',
+            'akun_selisih': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty_sistem': '', 'items-0-qty_fisik': '',
+            'items-0-unit_cost': '',
+        }
+        resp = self.client.post(reverse('inventory:opname_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse, StockOpname
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        selisih = Akun.objects.create(kode_akun='5.9.3', nama='Selisih2')
+        opn = StockOpname.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                         warehouse=wh, akun_selisih=selisih)
+        resp = self.client.post(reverse('inventory:opname_delete', args=[opn.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockOpname.objects.filter(pk=opn.pk).exists())
