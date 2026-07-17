@@ -1,11 +1,14 @@
 """Unit tests for the aset_tetap app."""
+from decimal import Decimal
+
 from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
-from .models import AsetTetapRecord
+from apps.master_data.models import Akun
+from .models import AsetTetapRecord, AssetDisposal
 
 User = get_user_model()
 
@@ -129,3 +132,28 @@ class AsetTetapViewTests(TestCase):
         self.client.logout()
         res = self.client.get(reverse('aset_tetap:list'))
         self.assertNotEqual(res.status_code, 200)
+
+
+class AssetDisposalModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='FnB')
+        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
+        self.akun_aset = Akun.objects.create(kategori_id='aset', kode_akun='1.2.1.01', nama='Mesin')
+        self.item = ItemMasterPurchase.objects.create(nama='Mesin X', tipe_item='ATP', coa_account=self.akun_aset)
+        self.record = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.entitas,
+            quantity=10, harga_perolehan=1_000_000,
+        )
+        self.akun_akum = Akun.objects.create(kategori_id='aset', kode_akun='1.2.7.01', nama='Akumulasi Penyusutan')
+        self.akun_kas = Akun.objects.create(kategori_id='aset', kode_akun='1.1.1.01', nama='Kas')
+        self.akun_lr = Akun.objects.create(kategori_id='pendapatan', kode_akun='8.1.01', nama='Laba/Rugi Pelepasan Aset')
+
+    def test_status_default_aktif(self):
+        self.assertEqual(self.record.status, 'aktif')
+
+    def test_disposal_number_auto(self):
+        d = AssetDisposal.objects.create(
+            aset=self.record, jenis='jual', quantity=1,
+            akun_laba_rugi=self.akun_lr,
+        )
+        self.assertTrue(d.disposal_number.startswith('DSP-'))

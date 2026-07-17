@@ -18,6 +18,10 @@ class AsetTetapRecord(models.Model):
         ('service_hours', 'Satuan Jam Kerja (Service Hours)'),
         ('units_of_production', 'Satuan Hasil Produksi (Productive Output)'),
     ]
+    STATUS_CHOICES = [
+        ('aktif', 'Aktif'),
+        ('dilepas', 'Dilepas'),
+    ]
 
     aset_number = models.CharField(
         max_length=50,
@@ -123,6 +127,13 @@ class AsetTetapRecord(models.Model):
         default='baik',
         verbose_name='Kondisi Aset',
     )
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='aktif',
+        db_index=True,
+        verbose_name='Status Aset',
+    )
     keterangan = models.TextField(
         blank=True,
         verbose_name='Keterangan',
@@ -176,3 +187,74 @@ class AsetTetapRecord(models.Model):
             else:
                 seq = 1
             return f'{pattern}{seq:03d}'
+
+
+class AssetDisposal(models.Model):
+    """Peristiwa pelepasan aset tetap — memicu jurnal pelepasan & laba/rugi."""
+    JENIS_CHOICES = [
+        ('jual', 'Jual'),
+        ('hibah', 'Hibah'),
+        ('rusak', 'Rusak'),
+        ('musnah', 'Musnah'),
+    ]
+
+    disposal_number = models.CharField(max_length=50, unique=True, editable=False, verbose_name='Nomor Pelepasan')
+    aset = models.ForeignKey('AsetTetapRecord', on_delete=models.PROTECT, related_name='disposals', verbose_name='Aset')
+    tanggal = models.DateField(default=timezone.now, db_index=True, verbose_name='Tanggal Pelepasan')
+    jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, verbose_name='Jenis Pelepasan')
+    quantity = models.DecimalField(max_digits=15, decimal_places=4, verbose_name='Quantity Dilepas')
+    harga_jual = models.DecimalField(max_digits=19, decimal_places=4, default=0, verbose_name='Harga Jual')
+    akun_kas = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT, null=True, blank=True,
+        related_name='disposal_kas', verbose_name='Akun Kas/Piutang',
+    )
+    akun_laba_rugi = models.ForeignKey(
+        'master_data.Akun', on_delete=models.PROTECT,
+        related_name='disposal_laba_rugi', verbose_name='Akun Laba/Rugi Pelepasan',
+    )
+    perolehan_dilepas = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    akumulasi_dilepas = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    residu_dilepas = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    laba_rugi = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    jurnal_header = models.ForeignKey(
+        'jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+',
+    )
+    keterangan = models.TextField(blank=True, verbose_name='Keterangan')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Pelepasan Aset'
+        verbose_name_plural = 'Pelepasan Aset'
+        ordering = ['-tanggal', '-created_at']
+        indexes = [
+            models.Index(fields=['aset', 'tanggal'], name='idx_disposal_aset_tgl'),
+        ]
+
+    def __str__(self) -> str:
+        return self.disposal_number
+
+    def save(self, *args, **kwargs):
+        if not self.disposal_number:
+            self.disposal_number = self._generate_disposal_number()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def _generate_disposal_number() -> str:
+        from django.db import transaction as db_transaction
+        with db_transaction.atomic():
+            last = (
+                AssetDisposal.objects
+                .select_for_update()
+                .filter(disposal_number__startswith='DSP-')
+                .order_by('-disposal_number')
+                .values_list('disposal_number', flat=True)
+                .first()
+            )
+            if last:
+                try:
+                    seq = int(last.rsplit('-', 1)[1]) + 1
+                except (ValueError, IndexError):
+                    seq = 1
+            else:
+                seq = 1
+            return f'DSP-{seq:03d}'
