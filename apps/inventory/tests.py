@@ -820,3 +820,21 @@ class StockCardViewTests(DjangoTestCase):
         resp = self.client.get(reverse('inventory:stock_card'))
         self.assertEqual(resp.status_code, 200)
         self.assertIsNone(resp.context['item'])
+
+    def test_eb_filter_narrows_totals(self):
+        self.user.is_superuser = True
+        self.user.is_staff = True
+        self.user.save()
+        eb_b = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        StockMovement.objects.create(
+            item=self.item, entitas_bisnis=eb_b, tanggal='2026-01-03',
+            movement_type='purchase_in', qty=Decimal('100'), unit_cost=Decimal('9'),
+            remaining_qty=Decimal('100'))
+        url = reverse('inventory:stock_card')
+        resp = self.client.get(
+            url, {'item': self.item.pk, 'entitas_bisnis': f'lv1:{self.eb.pk}'})
+        self.assertEqual(resp.status_code, 200)
+        # Only self.eb's movements: total_on_hand 10+8=18, total_value 4*5+8*6=68
+        self.assertEqual(resp.context['total_on_hand'], Decimal('18'))
+        self.assertEqual(resp.context['total_value'], Decimal('68'))
+        self.assertEqual(len(resp.context['layers']), 2)
