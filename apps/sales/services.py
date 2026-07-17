@@ -245,6 +245,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> list:
                         si.item, eb_group.entitas_bisnis,
                         eb_group.entitas_bisnis_lv2, eb_group.entitas_bisnis_lv3,
                         amount, sales_header.tanggal, 'sale_out', source=si,
+                        metode=si.item.metode_biaya_persediaan,
                         warehouse=si.warehouse)
                     si.cogs_amount = result.total_cost
                 else:
@@ -252,6 +253,7 @@ def process_sales_fifo(sales_header: SalesHeader) -> list:
                         si.item, eb_group.entitas_bisnis,
                         eb_group.entitas_bisnis_lv2, eb_group.entitas_bisnis_lv3,
                         si.quantity, sales_header.tanggal, 'sale_out', source=si,
+                        metode=si.item.metode_biaya_persediaan,
                         warehouse=si.warehouse)
                     si.cogs_amount = result.total_cost
                 si.inventory_account_id = si.item.coa_account_id
