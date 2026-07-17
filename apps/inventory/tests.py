@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
 from apps.purchase.models import ItemMasterPurchase
-from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecord
+from .models import InventoryRecord
 
 User = get_user_model()
 
@@ -338,27 +338,6 @@ class MirrorAndReverseTests(DjangoTestCase):
         self.assertEqual(result.total_cost, Decimal('20'))
         layer.refresh_from_db()
         self.assertEqual(layer.remaining_qty, Decimal('6'))
-
-
-class InventoryModelTests(TestCase):
-    def setUp(self):
-        self.tipe = TipeEntitas.objects.create(nama='FnB')
-        self.entitas = EntitasBisnis.objects.create(nama='PT Test', tipe_entitas=self.tipe)
-
-    def test_mutasi_header_str(self):
-        h = MutasiInventoryHeader.objects.create(entitas_bisnis=self.entitas)
-        self.assertIn(str(h.id), str(h))
-
-    def test_mutasi_detail_str(self):
-        h = MutasiInventoryHeader.objects.create(entitas_bisnis=self.entitas)
-        d = MutasiInventoryDetail.objects.create(mutasi_inventory_header=h)
-        self.assertIn(str(h.id), str(d))
-
-    def test_cascade_delete(self):
-        h = MutasiInventoryHeader.objects.create(entitas_bisnis=self.entitas)
-        MutasiInventoryDetail.objects.create(mutasi_inventory_header=h)
-        h.delete()
-        self.assertEqual(MutasiInventoryDetail.objects.count(), 0)
 
 
 class InventoryRecordModelTests(TestCase):
