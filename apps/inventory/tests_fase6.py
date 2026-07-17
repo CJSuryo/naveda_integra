@@ -451,3 +451,43 @@ class ProcessTransferTests(TestCase):
         StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
         with self.assertRaises(ValueError):
             process_transfer(h)
+
+    def test_reverse_cross_entity_restores_stock_and_removes_both_journals(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer, reverse_transfer
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-04', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-04', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3, akun_perantara=self.perantara)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        h.refresh_from_db()
+        header_asal_pk = h.jurnal_header_asal.pk
+        header_tujuan_pk = h.jurnal_header_tujuan.pk
+        reverse_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('10'))
+        self.assertEqual(get_available_stock(self.item, self.eb2, warehouse=self.wh3), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header_asal_pk).exists())
+        self.assertFalse(JurnalHeader.objects.filter(pk=header_tujuan_pk).exists())
+
+    def test_reverse_intra_entity_restores_stock_no_journal_errors(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer, reverse_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-05', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-05', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        reverse_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('10'))
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh2), Decimal('0'))
