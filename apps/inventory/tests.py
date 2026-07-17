@@ -704,7 +704,7 @@ class WarehouseCrudTests(TestCase):
 from apps.inventory.ledger import record_inflow
 
 
-class StockLedgerViewTests(TestCase):
+class StockLedgerRenderTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             email='sl@example.com', password='pw123456', name='S')
@@ -725,7 +725,7 @@ class StockLedgerViewTests(TestCase):
         self.assertContains(resp, '100')   # qty masuk terlihat
 
 
-class StockCardViewTests(TestCase):
+class StockCardRenderTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(
             email='sc@example.com', password='pw123456', name='C')
