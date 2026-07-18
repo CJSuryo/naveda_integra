@@ -6,7 +6,9 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
-from .models import StockAdjustment, StockOpname, StockTransfer, ReturCustomer, ReturSupplier
+from .models import (
+    ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment, StockOpname, StockTransfer,
+)
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -364,3 +366,19 @@ def reverse_retur_supplier(rts: ReturSupplier, request=None) -> None:
     rts.jurnal_header = None
     rts.status = 'draft'
     rts.save(update_fields=['jurnal_header', 'status'])
+
+
+def reorder_status(item, eb_lv1, warehouse, eb_lv2=None, eb_lv3=None) -> str:
+    """Kembalikan 'critical' (<=minimum), 'warning' (<=reorder_point), atau 'ok'.
+
+    'none' bila belum ada setting untuk (item, warehouse).
+    """
+    setting = ItemReorderSetting.objects.filter(item=item, warehouse=warehouse).first()
+    if setting is None:
+        return 'none'
+    available = ledger.get_available_stock(item, eb_lv1, eb_lv2, eb_lv3, warehouse=warehouse)
+    if available <= setting.minimum_stock:
+        return 'critical'
+    if available <= setting.reorder_point:
+        return 'warning'
+    return 'ok'
