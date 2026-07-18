@@ -246,6 +246,13 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
     payment_account atau sales_eb.payment_account sebagai fallback, offset_coa_account
     untuk HPP). Parameter akun_pendapatan/akun_piutang/akun_hpp hanya dipakai bila
     sales_item kosong (retur berdiri sendiri / unit test).
+
+    Catatan untuk pemanggil (mis. UI/form): keputusan pakai akun sales_item vs.
+    override adalah PER ITEM (ReturCustomerItem.sales_item), bukan berdasarkan
+    ReturCustomer.sales_header di header. Kedua field tidak otomatis konsisten —
+    header bisa punya sales_header terisi sementara sebagian item tidak
+    terhubung ke sales_item manapun. UI yang menampilkan field override akun
+    harus mengecek sales_item per baris item, bukan hanya sales_header di header.
     """
     if rtc.status == 'posted':
         raise ValueError('Retur sudah diposting.')
@@ -261,6 +268,8 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
         akun_persediaan = d.item.coa_account
         if akun_persediaan is None:
             raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
+        # Asumsi 1 set akun pendapatan/piutang/HPP per dokumen — bila item campuran
+        # (sebagian punya sales_item, sebagian tidak), item terakhir yang diproses menang.
         si = d.sales_item
         if si is not None:
             ap = si.revenue_account
