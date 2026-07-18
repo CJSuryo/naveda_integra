@@ -36,9 +36,15 @@
       </div>
       <div class="ni-form-row">
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.akun_selisih.label }}</label>
+          <label class="ni-form-label" title="Akun kontra selisih nilai persediaan: didebit saat stok berkurang (susut/rusak), dikredit saat stok bertambah (surplus). Umumnya akun Beban.">
+            {{ form.akun_selisih.label }}
+            <i data-lucide="info" style="width:12px;height:12px;vertical-align:-1px;color:var(--ni-text-muted);"></i>
+          </label>
           {{ form.akun_selisih }}
           {% if form.akun_selisih.errors %}<div class="ni-form-error">{{ form.akun_selisih.errors }}</div>{% endif %}
+          <p style="font-size:0.75rem;color:var(--ni-text-muted);margin:4px 0 0;">
+            Akun lawan selisih persediaan — didebit saat stok berkurang (susut/rusak), dikredit saat stok bertambah (surplus). Umumnya akun Beban.
+          </p>
         </div>
       </div>
       <div class="ni-form-row">
