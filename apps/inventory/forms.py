@@ -7,7 +7,8 @@ from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase
 
 from .models import (
-    InventoryRecord, ReturCustomer, ReturCustomerItem, ReturSupplier, ReturSupplierItem,
+    InventoryRecord, ItemReorderSetting, ReturCustomer, ReturCustomerItem,
+    ReturSupplier, ReturSupplierItem,
     StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem,
     StockTransfer, StockTransferItem, Warehouse,
 )
@@ -330,3 +331,22 @@ ReturSupplierItemFormSet = inlineformset_factory(
     fields=('item', 'qty'),
     extra=3, min_num=1, validate_min=True, can_delete=True,
 )
+
+
+class ItemReorderSettingForm(forms.ModelForm):
+    class Meta:
+        model = ItemReorderSetting
+        fields = ('item', 'warehouse', 'minimum_stock', 'reorder_point', 'reorder_qty')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': forms.Select(attrs={'class': 'ni-input'}),
+            'minimum_stock': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'reorder_point': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'reorder_qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')

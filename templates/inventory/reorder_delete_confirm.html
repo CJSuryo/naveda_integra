@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Hapus Pengaturan Reorder{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hapus Pengaturan Reorder</h1>
+    <p class="ni-page-header__subtitle">{{ setting.item.item_id }} @ {{ setting.warehouse.nama }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:20px;">
+      Hapus pengaturan reorder untuk <strong>{{ setting.item.nama }}</strong>
+      di gudang <strong>{{ setting.warehouse.nama }}</strong>?
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Hapus</button>
+        <a href="{% url 'inventory:reorder_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

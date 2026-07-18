@@ -21,19 +21,19 @@ from django.utils import timezone
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
 from .forms import (
-    InventoryRecordForm, ReturCustomerForm, ReturCustomerItemFormSet,
+    InventoryRecordForm, ItemReorderSettingForm, ReturCustomerForm, ReturCustomerItemFormSet,
     ReturSupplierForm, ReturSupplierItemFormSet,
     StockAdjustmentForm, StockAdjustmentItemFormSet,
     StockOpnameForm, StockOpnameItemFormSet, StockTransferForm, StockTransferItemFormSet,
     WarehouseForm,
 )
 from .models import (
-    InventoryRecord, ReturCustomer, ReturSupplier, StockAdjustment, StockOpname,
-    StockTransfer, Warehouse,
+    InventoryRecord, ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment,
+    StockOpname, StockTransfer, Warehouse,
 )
 from .services import (
     process_adjustment, process_opname, process_retur_customer, process_retur_supplier,
-    process_transfer,
+    process_transfer, reorder_status,
     reverse_adjustment, reverse_opname, reverse_retur_customer, reverse_retur_supplier,
     reverse_transfer,
 )
@@ -1588,3 +1588,40 @@ def retur_supplier_delete(request: HttpRequest, pk: int) -> HttpResponse:
             messages.error(request, f'Gagal membatalkan: {e}')
         return redirect('inventory:retur_supplier_list')
     return render(request, 'inventory/retur_supplier_delete_confirm.html', {'rts': rts})
+
+
+# ── Reorder Point ────────────────────────────────────────────────────────
+
+@login_required
+def reorder_list(request: HttpRequest) -> HttpResponse:
+    """List all reorder settings with computed stock status badge."""
+    rows = []
+    for s in ItemReorderSetting.objects.select_related('item', 'warehouse', 'warehouse__entitas_bisnis'):
+        rows.append({'setting': s,
+                     'status': reorder_status(s.item, s.warehouse.entitas_bisnis, s.warehouse)})
+    return render(request, 'inventory/reorder_list.html', {'rows': rows})
+
+
+@login_required
+def reorder_create(request: HttpRequest) -> HttpResponse:
+    """Create a reorder setting for an item+warehouse."""
+    if request.method == 'POST':
+        form = ItemReorderSettingForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Pengaturan reorder disimpan.')
+            return redirect('inventory:reorder_list')
+    else:
+        form = ItemReorderSettingForm()
+    return render(request, 'inventory/reorder_form.html', {'form': form})
+
+
+@login_required
+def reorder_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a reorder setting."""
+    s = get_object_or_404(ItemReorderSetting, pk=pk)
+    if request.method == 'POST':
+        s.delete()
+        messages.success(request, 'Pengaturan reorder dihapus.')
+        return redirect('inventory:reorder_list')
+    return render(request, 'inventory/reorder_delete_confirm.html', {'setting': s})

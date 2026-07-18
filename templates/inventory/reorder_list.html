@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Reorder Point{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Reorder Point</h1>
+    <p class="ni-page-header__subtitle">Pengaturan minimum stock &amp; titik pemesanan ulang per item/gudang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:reorder_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Pengaturan Baru
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Gudang</th>
+          <th>Minimum Stock</th>
+          <th>Reorder Point</th>
+          <th>Reorder Qty</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.setting.item.item_id }} — {{ row.setting.item.nama }}</td>
+          <td>{{ row.setting.warehouse.nama }}</td>
+          <td>{{ row.setting.minimum_stock|floatformat:2 }}</td>
+          <td>{{ row.setting.reorder_point|floatformat:2 }}</td>
+          <td>{{ row.setting.reorder_qty|floatformat:2 }}</td>
+          <td>
+            {% if row.status == 'critical' %}
+            <span class="ni-badge ni-badge--danger">Kritis</span>
+            {% elif row.status == 'warning' %}
+            <span class="ni-badge ni-badge--warning">Perlu Reorder</span>
+            {% elif row.status == 'ok' %}
+            <span class="ni-badge ni-badge--success">Aman</span>
+            {% else %}
+            <span class="ni-badge ni-badge--secondary">-</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'inventory:reorder_delete' row.setting.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Hapus</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada pengaturan reorder.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
