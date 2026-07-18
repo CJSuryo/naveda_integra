@@ -7,8 +7,32 @@ from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
 from .models import (
-    ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment, StockOpname, StockTransfer,
+    InventoryRecord, ItemReorderSetting, ReturCustomer, ReturSupplier,
+    StockAdjustment, StockOpname, StockTransfer,
 )
+
+BULK_ITEM_TYPES = ('RMB', 'FGB', 'ITMB')
+
+
+def _create_inflow_record(item, eb, eb_lv2, eb_lv3, qty, unit_cost, tanggal):
+    """Buat InventoryRecord mirror untuk layer inflow non-purchase (adjustment/
+    opname/transfer/retur pelanggan) supaya lot muncul di daftar & detail
+    persediaan dan ikut ter-decrement otomatis saat dikonsumsi (via
+    ledger._mirror_decrement, lewat legacy_inventory_record pada movement).
+
+    ``qty``/``unit_cost`` adalah nilai yang sama persis dengan yang di-pass ke
+    ``ledger.record_inflow`` di call-site — sehingga representasi record konsisten
+    dengan layer StockMovement-nya. Konvensi bulk value-based (quantity=1,
+    unit_price=total_value) mengikuti purchase/produksi.
+    """
+    is_bulk = item.tipe_item in BULK_ITEM_TYPES
+    rec_qty = Decimal('1') if is_bulk else qty
+    rec_price = (qty * unit_cost) if is_bulk else unit_cost
+    return InventoryRecord.objects.create(
+        item=item, entitas_bisnis=eb,
+        entitas_bisnis_lv2=eb_lv2, entitas_bisnis_lv3=eb_lv3,
+        quantity=rec_qty, unit_price=rec_price, tanggal=tanggal,
+    )
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -85,10 +109,13 @@ def process_adjustment(adj: StockAdjustment) -> JurnalHeader:
         if akun_persediaan is None:
             raise ValueError(f'Item {d.item.item_id} belum punya coa_account (persediaan).')
         if d.qty > 0:
+            rec = _create_inflow_record(
+                d.item, adj.entitas_bisnis, adj.entitas_bisnis_lv2, adj.entitas_bisnis_lv3,
+                d.qty, d.unit_cost, adj.tanggal)
             mv = ledger.record_inflow(
                 d.item, adj.entitas_bisnis, adj.entitas_bisnis_lv2, adj.entitas_bisnis_lv3,
                 d.qty, d.unit_cost, adj.tanggal, 'adjustment_in', source=adj,
-                warehouse=adj.warehouse,
+                warehouse=adj.warehouse, legacy_inventory_record=rec,
             )
             naik += d.qty * d.unit_cost
         elif d.qty < 0:
@@ -164,10 +191,13 @@ def process_opname(opn: StockOpname):
             raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
         akun_persediaan = d.item.coa_account
         if d.selisih > 0:
+            rec = _create_inflow_record(
+                d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2, opn.entitas_bisnis_lv3,
+                d.selisih, d.unit_cost, opn.tanggal)
             mv = ledger.record_inflow(
                 d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2, opn.entitas_bisnis_lv3,
                 d.selisih, d.unit_cost, opn.tanggal, 'opname_in', source=opn,
-                warehouse=opn.warehouse)
+                warehouse=opn.warehouse, legacy_inventory_record=rec)
             naik += d.selisih * d.unit_cost
         else:
             result = ledger.consume_stock(
@@ -234,10 +264,13 @@ def process_transfer(trf: StockTransfer) -> None:
             trf.tanggal, 'transfer_out', source=trf,
             metode=d.item.metode_biaya_persediaan, warehouse=trf.warehouse_asal)
         unit_cost = (result.total_cost / d.qty) if d.qty else Decimal('0')
+        rec = _create_inflow_record(
+            d.item, trf.eb_tujuan, trf.eb_tujuan_lv2, trf.eb_tujuan_lv3,
+            d.qty, unit_cost, trf.tanggal)
         mv_in = ledger.record_inflow(
             d.item, trf.eb_tujuan, trf.eb_tujuan_lv2, trf.eb_tujuan_lv3, d.qty,
             unit_cost, trf.tanggal, 'transfer_in', source=trf,
-            warehouse=trf.warehouse_tujuan)
+            warehouse=trf.warehouse_tujuan, legacy_inventory_record=rec)
         d.unit_cost = unit_cost
         d.movement_out = result.out_movement
         d.movement_in = mv_in
@@ -364,10 +397,13 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
             ahpp = si.offset_coa_account
         else:
             ap, api, ahpp = akun_pendapatan, akun_piutang, akun_hpp
+        rec = _create_inflow_record(
+            d.item, rtc.entitas_bisnis, rtc.entitas_bisnis_lv2, rtc.entitas_bisnis_lv3,
+            d.qty, d.unit_cost, rtc.tanggal)
         mv = ledger.record_inflow(
             d.item, rtc.entitas_bisnis, rtc.entitas_bisnis_lv2, rtc.entitas_bisnis_lv3,
             d.qty, d.unit_cost, rtc.tanggal, 'return_customer', source=rtc,
-            warehouse=rtc.warehouse)
+            warehouse=rtc.warehouse, legacy_inventory_record=rec)
         d.movement = mv
         d.save(update_fields=['movement'])
 

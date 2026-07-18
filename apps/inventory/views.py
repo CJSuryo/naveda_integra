@@ -117,11 +117,35 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'keterangan': f'Pembelian via {record.purchase_item.purchase_eb.purchase_header.transaction_id}',
         })
     else:
-        # Saldo awal — compute original value/quantity from remaining + all consumed allocations
         from decimal import Decimal
         from django.db.models import Sum
         from apps.sales.models import SalesItemFIFOAllocation as _SIFA
-        if is_bulk:
+        from .models import StockMovement
+
+        # Record ini bisa berasal dari inflow transaksi (adjustment/opname/
+        # transfer/retur pelanggan) yang punya StockMovement mirror, ATAU saldo
+        # awal manual yang tak punya movement sama sekali.
+        inflow_mv = (
+            record.stock_movements
+            .exclude(movement_type='saldo_awal')
+            .order_by('tanggal', 'created_at')
+            .first()
+        )
+        if inflow_mv is not None:
+            label = dict(StockMovement.MOVEMENT_TYPE_CHOICES).get(
+                inflow_mv.movement_type, inflow_mv.movement_type)
+            ref = (getattr(inflow_mv.source, 'nomor', '') or '') if inflow_mv.source else ''
+            # qty asli inflow (movement.qty tidak ikut ter-decrement, hanya remaining_qty)
+            qty_display = (inflow_mv.qty * inflow_mv.unit_cost) if is_bulk else inflow_mv.qty
+            mutations.append({
+                'tanggal': record.tanggal,
+                'tipe': f'Masuk ({label})',
+                'referensi': ref or f'{record.tanggal}',
+                'url': None,
+                'quantity': qty_display,
+                'keterangan': f'{label} via {ref}' if ref else label,
+            })
+        elif is_bulk:
             consumed_total = (
                 _SIFA.objects
                 .filter(inventory_record=record)

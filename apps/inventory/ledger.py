@@ -512,7 +512,15 @@ def reverse_inflow_movements(source):
     not a bug to work around here.
     """
     ct = ContentType.objects.get_for_model(type(source))
-    StockMovement.objects.filter(
+    inflows = StockMovement.objects.filter(
         source_content_type=ct, source_object_id=source.pk,
         movement_type__in=INFLOW_MOVEMENT_TYPES,
-    ).delete()
+    )
+    # Hapus juga InventoryRecord mirror yang dibuat untuk layer inflow ini
+    # (adjustment/opname/transfer/retur pelanggan) supaya pembatalan tidak
+    # meninggalkan lot hantu di daftar persediaan. Data lama tanpa link → no-op.
+    rec_ids = [r for r in inflows.values_list('legacy_inventory_record_id', flat=True) if r]
+    inflows.delete()
+    if rec_ids:
+        from .models import InventoryRecord
+        InventoryRecord.objects.filter(pk__in=rec_ids).delete()
