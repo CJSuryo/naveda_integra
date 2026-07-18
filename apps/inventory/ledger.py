@@ -103,6 +103,36 @@ def get_available_stock(item, eb_lv1, eb_lv2=None, eb_lv3=None, *, warehouse=Non
     return total
 
 
+def current_unit_cost(item, eb_lv1, eb_lv2=None, eb_lv3=None, *, warehouse=None,
+                      metode=None) -> 'Decimal | None':
+    """Harga acuan per unit dari layer tersisa, mengikuti metode costing item.
+
+    FIFO  -> unit_cost layer tersisa TERTUA (akan keluar berikutnya).
+    LIFO  -> unit_cost layer tersisa TERBARU.
+    average / weighted_moving_average -> rata-rata tertimbang layer tersisa.
+    Kembalikan None bila tidak ada stok tersisa di scope (item baru / tanpa layer).
+    """
+    strategy = _normalize_method(metode if metode is not None else item.metode_biaya_persediaan)
+    order = 'lifo' if strategy == 'lifo' else 'fifo'
+    if strategy == 'average':
+        total_qty = Decimal('0')
+        total_val = Decimal('0')
+        for _lvl, _name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse):
+            for layer in qs:
+                total_qty += layer.remaining_qty
+                total_val += layer.remaining_qty * layer.unit_cost
+        if total_qty <= 0:
+            return None
+        return (total_val / total_qty).quantize(Decimal('0.0001'))
+    # FIFO / LIFO: layer pertama (per urutan) dari tier terdekat yang punya stok
+    for _lvl, _name, qs in _candidate_tiers(item, eb_lv1, eb_lv2, eb_lv3, warehouse,
+                                            order=order):
+        layer = qs.first()
+        if layer is not None:
+            return layer.unit_cost
+    return None
+
+
 def record_inflow(item, eb_lv1, eb_lv2, eb_lv3, qty, unit_cost, tanggal,
                   movement_type, source=None, *, warehouse=None,
                   legacy_fifo_batch=None, legacy_inventory_record=None):
