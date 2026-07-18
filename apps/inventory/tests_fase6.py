@@ -701,3 +701,78 @@ class ProcessReturSupplierTests(TestCase):
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
         self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class ReturViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u4@example.com', password='p', name='U4')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:retur_customer_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_customer_create')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_supplier_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_supplier_create')).status_code, 200)
+
+    def test_create_post_retur_customer_success_with_override_akun(self):
+        from apps.inventory.models import Warehouse, ReturCustomer
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RC1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.10', nama='Persediaan RC')
+        item.save()
+        akun_pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        akun_piutang = Akun.objects.create(kode_akun='1.1.3', nama='Piutang')
+        akun_hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        data = {
+            'tanggal': '2026-05-05', 'sales_header': '', 'entitas_bisnis': self.eb.pk,
+            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'keterangan': '', 'akun_pendapatan': akun_pendapatan.pk,
+            'akun_piutang': akun_piutang.pk, 'akun_hpp': akun_hpp.pk,
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '2',
+            'items-0-unit_cost': '5', 'items-0-harga_jual': '9',
+        }
+        resp = self.client.post(reverse('inventory:retur_customer_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ReturCustomer.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_retur_supplier_success(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import Warehouse, ReturSupplier
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RS1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.11', nama='Persediaan RS')
+        item.save()
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh)
+        akun_lawan = Akun.objects.create(kode_akun='2.1.2', nama='Hutang RS')
+        data = {
+            'tanggal': '2026-05-06', 'purchase_header': '', 'entitas_bisnis': self.eb.pk,
+            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'akun_lawan': akun_lawan.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '3',
+        }
+        resp = self.client.post(reverse('inventory:retur_supplier_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ReturSupplier.objects.filter(status='posted').count(), 1)
+
+    def test_delete_draft_retur_customer_just_deletes(self):
+        from apps.inventory.models import Warehouse, ReturCustomer
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RC2')
+        h = ReturCustomer.objects.create(tanggal='2026-05-07', entitas_bisnis=self.eb, warehouse=wh)
+        resp = self.client.post(reverse('inventory:retur_customer_delete', args=[h.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ReturCustomer.objects.filter(pk=h.pk).exists())
+
+    def test_delete_draft_retur_supplier_just_deletes(self):
+        from apps.inventory.models import Warehouse, ReturSupplier
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RS2')
+        h = ReturSupplier.objects.create(tanggal='2026-05-07', entitas_bisnis=self.eb, warehouse=wh)
+        resp = self.client.post(reverse('inventory:retur_supplier_delete', args=[h.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ReturSupplier.objects.filter(pk=h.pk).exists())

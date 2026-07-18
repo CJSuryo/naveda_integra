@@ -3,10 +3,12 @@ from django import forms
 from django.forms import inlineformset_factory
 
 from apps.entitas_bisnis.models import EntitasBisnis
+from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase
 
 from .models import (
-    InventoryRecord, StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem,
+    InventoryRecord, ReturCustomer, ReturCustomerItem, ReturSupplier, ReturSupplierItem,
+    StockAdjustment, StockAdjustmentItem, StockOpname, StockOpnameItem,
     StockTransfer, StockTransferItem, Warehouse,
 )
 
@@ -208,6 +210,123 @@ class StockTransferItemForm(forms.ModelForm):
 StockTransferItemFormSet = inlineformset_factory(
     StockTransfer, StockTransferItem,
     form=StockTransferItemForm,
+    fields=('item', 'qty'),
+    extra=3, min_num=1, validate_min=True, can_delete=True,
+)
+
+
+class ReturCustomerForm(forms.ModelForm):
+    """Akun override (pendapatan/piutang/HPP) dipakai hanya untuk item tanpa sales_item asal."""
+    akun_pendapatan = forms.ModelChoiceField(queryset=Akun.objects.all(), required=False,
+                                             widget=forms.Select(attrs={'class': 'ni-input'}))
+    akun_piutang = forms.ModelChoiceField(queryset=Akun.objects.all(), required=False,
+                                          widget=forms.Select(attrs={'class': 'ni-input'}))
+    akun_hpp = forms.ModelChoiceField(queryset=Akun.objects.all(), required=False,
+                                      widget=forms.Select(attrs={'class': 'ni-input'}))
+
+    class Meta:
+        model = ReturCustomer
+        fields = ('tanggal', 'sales_header', 'entitas_bisnis', 'entitas_bisnis_lv2',
+                  'entitas_bisnis_lv3', 'warehouse', 'keterangan')
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'sales_header': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['sales_header'].required = False
+        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
+            status_aktif=True,
+        ).order_by('nama')
+
+
+class ReturCustomerItemForm(forms.ModelForm):
+    class Meta:
+        model = ReturCustomerItem
+        fields = ('item', 'qty', 'unit_cost', 'harga_jual')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'unit_cost': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'harga_jual': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')
+
+    def clean_qty(self):
+        qty = self.cleaned_data.get('qty')
+        if qty is not None and qty <= 0:
+            raise forms.ValidationError('Qty retur harus lebih dari 0.')
+        return qty
+
+
+ReturCustomerItemFormSet = inlineformset_factory(
+    ReturCustomer, ReturCustomerItem,
+    form=ReturCustomerItemForm,
+    fields=('item', 'qty', 'unit_cost', 'harga_jual'),
+    extra=3, min_num=1, validate_min=True, can_delete=True,
+)
+
+
+class ReturSupplierForm(forms.ModelForm):
+    class Meta:
+        model = ReturSupplier
+        fields = ('tanggal', 'purchase_header', 'entitas_bisnis', 'entitas_bisnis_lv2',
+                  'entitas_bisnis_lv3', 'warehouse', 'akun_lawan', 'keterangan')
+        widgets = {
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'purchase_header': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
+            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_lawan': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['purchase_header'].required = False
+        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
+            status_aktif=True,
+        ).order_by('nama')
+
+
+class ReturSupplierItemForm(forms.ModelForm):
+    class Meta:
+        model = ReturSupplierItem
+        fields = ('item', 'qty')
+        widgets = {
+            'item': forms.Select(attrs={'class': 'ni-input'}),
+            'qty': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['item'].queryset = ItemMasterPurchase.objects.filter(
+            tipe_item__in=['RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB'],
+        ).order_by('item_id')
+
+    def clean_qty(self):
+        qty = self.cleaned_data.get('qty')
+        if qty is not None and qty <= 0:
+            raise forms.ValidationError('Qty retur harus lebih dari 0.')
+        return qty
+
+
+ReturSupplierItemFormSet = inlineformset_factory(
+    ReturSupplier, ReturSupplierItem,
+    form=ReturSupplierItemForm,
     fields=('item', 'qty'),
     extra=3, min_num=1, validate_min=True, can_delete=True,
 )

@@ -29,4 +29,10 @@ urlpatterns = [
     path('transfer/', views.transfer_list, name='transfer_list'),
     path('transfer/create/', views.transfer_create, name='transfer_create'),
     path('transfer/<int:pk>/delete/', views.transfer_delete, name='transfer_delete'),
+    path('retur-pelanggan/', views.retur_customer_list, name='retur_customer_list'),
+    path('retur-pelanggan/create/', views.retur_customer_create, name='retur_customer_create'),
+    path('retur-pelanggan/<int:pk>/delete/', views.retur_customer_delete, name='retur_customer_delete'),
+    path('retur-supplier/', views.retur_supplier_list, name='retur_supplier_list'),
+    path('retur-supplier/create/', views.retur_supplier_create, name='retur_supplier_create'),
+    path('retur-supplier/<int:pk>/delete/', views.retur_supplier_delete, name='retur_supplier_delete'),
 ]

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Retur Pelanggan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Retur Pelanggan</h1>
+    <p class="ni-page-header__subtitle">Daftar retur barang dari pelanggan</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:retur_customer_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Retur Baru
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Nomor</th>
+          <th>Tanggal</th>
+          <th>Entitas Bisnis</th>
+          <th>Gudang</th>
+          <th>No. Penjualan</th>
+          <th>Status</th>
+          <th>Aksi</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.nomor }}</td>
+          <td>{{ row.tanggal }}</td>
+          <td>{{ row.entitas_bisnis.nama }}</td>
+          <td>{{ row.warehouse.nama|default:'-' }}</td>
+          <td>{{ row.sales_header.nomor|default:'-' }}</td>
+          <td>
+            {% if row.status == 'posted' %}
+            <span class="ni-badge ni-badge--success">Posted</span>
+            {% else %}
+            <span class="ni-badge ni-badge--secondary">Draft</span>
+            {% endif %}
+          </td>
+          <td>
+            <div class="ni-btn-row">
+              <a href="{% url 'inventory:retur_customer_delete' row.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">Batalkan</a>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="ni-text-center ni-text-muted">Belum ada data retur pelanggan.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
