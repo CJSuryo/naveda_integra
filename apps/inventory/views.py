@@ -1643,12 +1643,12 @@ def stock_available(request: HttpRequest) -> JsonResponse:
     item_id = request.GET.get('item')
     warehouse_id = request.GET.get('warehouse')
     if not (item_id and warehouse_id):
-        return JsonResponse({'available': None})
+        return JsonResponse({'available': None, 'unit_cost': None})
     try:
         item = ItemMasterPurchase.objects.get(pk=item_id)
         warehouse = Warehouse.objects.select_related('entitas_bisnis').get(pk=warehouse_id)
     except (ValueError, ItemMasterPurchase.DoesNotExist, Warehouse.DoesNotExist):
-        return JsonResponse({'available': None})
+        return JsonResponse({'available': None, 'unit_cost': None})
 
     eb_id = request.GET.get('eb')
     eb = (EntitasBisnis.objects.filter(pk=eb_id).first() if eb_id else None) or warehouse.entitas_bisnis
@@ -1656,10 +1656,7 @@ def stock_available(request: HttpRequest) -> JsonResponse:
     eb_lv3 = EntitasBisnisLv3.objects.filter(pk=request.GET.get('eb_lv3')).first()
 
     available = ledger.get_available_stock(item, eb, eb_lv2, eb_lv3, warehouse=warehouse)
-    unit_cost = ledger.current_unit_cost(
-        item, eb, eb_lv2, eb_lv3, warehouse=warehouse,
-        metode=item.metode_biaya_persediaan,
-    )
+    unit_cost = ledger.current_unit_cost(item, eb, eb_lv2, eb_lv3, warehouse=warehouse)
     return JsonResponse({
         'available': str(available),
         'unit_cost': (str(unit_cost) if unit_cost is not None else None),
