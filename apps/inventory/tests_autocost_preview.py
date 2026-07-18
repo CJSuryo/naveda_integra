@@ -175,3 +175,47 @@ class AdjustmentPreviewEndpointTests(TestCase):
         j = data.json()
         self.assertEqual(Decimal(j['total_debit']), Decimal('1240'))
         self.assertEqual(j['mutasi'][0]['movement_type'], 'adjustment_out')
+
+
+class PreviewEqualsPostingTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(email='u3@example.com', password='x')
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM',
+                                                      metode_biaya_persediaan='fifo')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('20'),
+                             Decimal('100'), '2026-01-01', 'adjustment_in', warehouse=self.wh)
+
+    def test_opname_preview_and_real_posting_match(self):
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname
+        payload = {
+            'tanggal': '2026-07-18', 'eb_hierarki': f'lv1:{self.eb.pk}',
+            'warehouse': self.wh.pk, 'akun_selisih': self.selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '1', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': self.item.pk, 'items-0-qty_sistem': '20',
+            'items-0-qty_fisik': '18', 'items-0-unit_cost': '100',
+        }
+        prev = self.client.post('/inventory/opname/preview/', payload).json()
+        # posting sungguhan
+        opn = StockOpname.objects.create(tanggal='2026-07-18', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=opn, item=self.item,
+                                       qty_sistem=Decimal('20'), qty_fisik=Decimal('18'),
+                                       unit_cost=Decimal('100'))
+        header = process_opname(opn)
+        real_debit = sum(d.debit for d in header.details.all())
+        self.assertEqual(Decimal(prev['total_debit']), real_debit)
+        self.assertEqual(Decimal(prev['total_debit']), Decimal('200'))  # 2 * 100
+        self.assertEqual(prev['mutasi'][0]['movement_type'], 'opname_out')
+        self.assertEqual(Decimal(prev['mutasi'][0]['stok_sesudah']), Decimal('18'))
