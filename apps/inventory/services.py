@@ -317,7 +317,7 @@ def reverse_retur_customer(rtc: ReturCustomer, request=None) -> None:
 
 
 @transaction.atomic
-def process_retur_supplier(rts: ReturSupplier, request=None) -> JurnalHeader:
+def process_retur_supplier(rts: ReturSupplier) -> JurnalHeader:
     """Retur supplier: barang keluar (consume via metode costing item) + K Persediaan / D Hutang-Kas."""
     if rts.status == 'posted':
         raise ValueError('Retur sudah diposting.')
