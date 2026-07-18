@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Retur Pelanggan {{ rtc.nomor }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Retur Pelanggan {{ rtc.nomor }}</h1>
+    <p class="ni-page-header__subtitle">
+      {{ rtc.tanggal }} · {{ rtc.entitas_bisnis.nama }}
+      {% if rtc.status == 'posted' %}
+      <span class="ni-badge ni-badge--success">Posted</span>
+      {% else %}
+      <span class="ni-badge ni-badge--secondary">Draft</span>
+      {% endif %}
+    </p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:retur_customer_list' %}" class="ni-btn ni-btn--secondary">Kembali</a>
+    <a href="{% url 'inventory:retur_customer_delete' rtc.pk %}" class="ni-btn ni-btn--outline-danger">Batalkan</a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <table class="ni-table">
+      <tbody>
+        <tr><th style="width:220px;">Nomor</th><td>{{ rtc.nomor }}</td></tr>
+        <tr><th>Tanggal</th><td>{{ rtc.tanggal }}</td></tr>
+        <tr>
+          <th>No. Penjualan</th>
+          <td>
+            {% if rtc.sales_header %}
+            <a href="{% url 'sales:detail' rtc.sales_header.pk %}">{{ rtc.sales_header.transaction_id }}</a>
+            {% else %}
+            <span class="ni-text-muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <th>Entitas Bisnis</th>
+          <td>
+            {{ rtc.entitas_bisnis.nama }}
+            {% if rtc.entitas_bisnis_lv2 %} / {{ rtc.entitas_bisnis_lv2.nama }}{% endif %}
+            {% if rtc.entitas_bisnis_lv3 %} / {{ rtc.entitas_bisnis_lv3.nama }}{% endif %}
+          </td>
+        </tr>
+        <tr><th>Gudang</th><td>{{ rtc.warehouse.nama|default:'-' }}</td></tr>
+        <tr>
+          <th>Jurnal</th>
+          <td>
+            {% if rtc.jurnal_header %}
+            <a href="{% url 'jurnal:header_detail' rtc.jurnal_header.pk %}">{{ rtc.jurnal_header.nomor_transaksi }}</a>
+            {% else %}
+            <span class="ni-text-muted">-</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr><th>Keterangan</th><td>{{ rtc.keterangan|default:'-' }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-top:20px;">
+  <div class="ni-card__header"><h2 class="ni-card__title">Item Diretur</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Faktur Asal</th>
+          <th class="ni-text-right">Qty</th>
+          <th class="ni-text-right">HPP / Unit</th>
+          <th class="ni-text-right">Total HPP</th>
+          <th class="ni-text-right">Harga Jual</th>
+          <th class="ni-text-right">Total Jual</th>
+          <th class="ni-text-right">PPN Diretur</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.d.item.item_id }} — {{ r.d.item.nama }}</td>
+          <td>
+            {% if r.d.sales_item %}
+            <a href="{% url 'sales:detail' r.d.sales_item.sales_eb.sales_header.pk %}">
+              {{ r.d.sales_item.sales_eb.sales_header.transaction_id }}</a>
+            {% else %}
+            <span class="ni-text-muted">-</span>
+            {% endif %}
+          </td>
+          <td class="ni-text-right">{{ r.d.qty|floatformat:4|intcomma }}</td>
+          <td class="ni-text-right">{{ r.d.unit_cost|floatformat:2|intcomma }}</td>
+          <td class="ni-text-right">{{ r.hpp|floatformat:2|intcomma }}</td>
+          <td class="ni-text-right">{{ r.d.harga_jual|floatformat:2|intcomma }}</td>
+          <td class="ni-text-right">{{ r.jual|floatformat:2|intcomma }}</td>
+          <td class="ni-text-right">{{ r.ppn|floatformat:2|intcomma }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Tidak ada item.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if rows %}
+      <tfoot>
+        <tr>
+          <th colspan="4" class="ni-text-right">Total</th>
+          <th class="ni-text-right">{{ total_hpp|floatformat:2|intcomma }}</th>
+          <th></th>
+          <th class="ni-text-right">{{ total_jual|floatformat:2|intcomma }}</th>
+          <th class="ni-text-right">{{ total_ppn|floatformat:2|intcomma }}</th>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+
+{% if jurnal_lines %}
+<div class="ni-card ni-animate-fade-in" style="margin-top:20px;">
+  <div class="ni-card__header"><h2 class="ni-card__title">Jurnal {{ rtc.jurnal_header.nomor_transaksi }}</h2></div>
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr><th>Akun</th><th class="ni-text-right">Debit</th><th class="ni-text-right">Kredit</th></tr>
+      </thead>
+      <tbody>
+        {% for line in jurnal_lines %}
+        <tr>
+          <td>{{ line.akun.kode_akun }} {{ line.akun.nama }}</td>
+          <td class="ni-text-right">{{ line.debit|floatformat:2|intcomma }}</td>
+          <td class="ni-text-right">{{ line.kredit|floatformat:2|intcomma }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

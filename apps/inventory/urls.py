@@ -33,6 +33,7 @@ urlpatterns = [
     path('transfer/<int:pk>/delete/', views.transfer_delete, name='transfer_delete'),
     path('retur-pelanggan/', views.retur_customer_list, name='retur_customer_list'),
     path('retur-pelanggan/create/', views.retur_customer_create, name='retur_customer_create'),
+    path('retur-pelanggan/<int:pk>/', views.retur_customer_detail, name='retur_customer_detail'),
     path('retur-pelanggan/<int:pk>/delete/', views.retur_customer_delete, name='retur_customer_delete'),
     path('retur-supplier/', views.retur_supplier_list, name='retur_supplier_list'),
     path('retur-supplier/create/', views.retur_supplier_create, name='retur_supplier_create'),

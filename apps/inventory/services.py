@@ -360,6 +360,31 @@ def _batal_retur_customer_ppn(rtc: ReturCustomer) -> None:
         batal_pajak(pt)
 
 
+def sync_retur_customer_sales_header(rtc: ReturCustomer) -> bool:
+    """Isi ``sales_header`` dari faktur asal item bila header belum dipilih.
+
+    Di form, "Dokumen Penjualan Asal" hanya alat bantu filter dan boleh kosong —
+    yang wajib dipilih user adalah faktur per baris item (``sales_item``).
+    Akibatnya kolom "No. Penjualan" di daftar retur tampil "-" padahal returnya
+    jelas berasal dari sebuah faktur. Turunkan header dari item bila seluruh item
+    berasal dari satu SalesHeader yang sama (kalau lintas faktur, biarkan kosong
+    karena tidak ada satu nomor yang benar).
+
+    Mengembalikan True bila ``rtc.sales_header`` berubah.
+    """
+    if rtc.sales_header_id:
+        return False
+    header_ids = set(
+        rtc.items.filter(sales_item__isnull=False)
+        .values_list('sales_item__sales_eb__sales_header_id', flat=True)
+    )
+    if len(header_ids) != 1:
+        return False
+    rtc.sales_header_id = header_ids.pop()
+    rtc.save(update_fields=['sales_header'])
+    return True
+
+
 @transaction.atomic
 def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
                            akun_piutang=None, akun_hpp=None) -> JurnalHeader:
@@ -385,6 +410,7 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
     items = list(rtc.items.select_related('item', 'sales_item', 'sales_item__sales_eb').all())
     if not items:
         raise ValueError('Retur tanpa item.')
+    sync_retur_customer_sales_header(rtc)
     akun_persediaan = _assert_single_inventory_account(items)
 
     revenue_map = OrderedDict()  # (ap.pk, api.pk) -> [ap, api, nilai]

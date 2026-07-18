@@ -165,3 +165,91 @@ class ReturSupplierAkunPreviewTests(TestCase):
         data = resp.json()
         self.assertTrue(data['ok'])
         self.assertIsNone(data['akun_lawan'])
+
+
+class ReturCustomerSalesHeaderTests(TestCase):
+    """No. Penjualan harus terisi dari faktur asal item walau dropdown header
+    di form dikosongkan, dan halaman detail harus me-link ke transaksi sales."""
+
+    def setUp(self):
+        from django.utils import timezone
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        from apps.purchase.models import SubTransactionType
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+
+        User = get_user_model()
+        self.user = User.objects.create_user(email='rch@test.com', password='x')
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=tipe)
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        self.pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        self.piutang = Akun.objects.create(kode_akun='1.1.3', nama='Piutang')
+
+        self.sh = SalesHeader.objects.create(
+            transaction_id='TRX-SAL-001', tanggal=timezone.now().date())
+        seb = SalesEntitasBisnis.objects.create(sales_header=self.sh, entitas_bisnis=self.eb)
+        stt, _ = SubTransactionType.objects.get_or_create(
+            nama='Penjualan',
+            defaults={'module': 'sales', 'direction': 'out',
+                      'default_offset_account': hpp})
+        self.si = SalesItem.objects.create(
+            sales_eb=seb, item=self.item, sub_transaction_type=stt,
+            quantity=Decimal('4'), selling_price=Decimal('10'),
+            offset_coa_account=hpp, revenue_account=self.pendapatan,
+            payment_account=self.piutang, cogs_amount=Decimal('20'))
+
+        self.rtc = ReturCustomer.objects.create(tanggal=timezone.now().date(),
+                                                entitas_bisnis=self.eb)
+        ReturCustomerItem.objects.create(
+            retur=self.rtc, sales_item=self.si, item=self.item,
+            qty=Decimal('2'), unit_cost=Decimal('5'), harga_jual=Decimal('10'))
+
+    def test_sync_fills_sales_header_from_items(self):
+        from apps.inventory.services import sync_retur_customer_sales_header
+
+        self.assertIsNone(self.rtc.sales_header_id)
+        self.assertTrue(sync_retur_customer_sales_header(self.rtc))
+        self.rtc.refresh_from_db()
+        self.assertEqual(self.rtc.sales_header, self.sh)
+
+    def test_sync_skips_when_items_span_multiple_headers(self):
+        from django.utils import timezone
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        from apps.inventory.models import ReturCustomerItem
+        from apps.inventory.services import sync_retur_customer_sales_header
+
+        sh2 = SalesHeader.objects.create(
+            transaction_id='TRX-SAL-002', tanggal=timezone.now().date())
+        seb2 = SalesEntitasBisnis.objects.create(sales_header=sh2, entitas_bisnis=self.eb)
+        si2 = SalesItem.objects.create(
+            sales_eb=seb2, item=self.item, sub_transaction_type=self.si.sub_transaction_type,
+            quantity=Decimal('1'), selling_price=Decimal('10'),
+            offset_coa_account=self.si.offset_coa_account,
+            revenue_account=self.pendapatan, payment_account=self.piutang,
+            cogs_amount=Decimal('5'))
+        ReturCustomerItem.objects.create(
+            retur=self.rtc, sales_item=si2, item=self.item,
+            qty=Decimal('1'), unit_cost=Decimal('5'), harga_jual=Decimal('10'))
+
+        self.assertFalse(sync_retur_customer_sales_header(self.rtc))
+        self.rtc.refresh_from_db()
+        self.assertIsNone(self.rtc.sales_header_id)
+
+    def test_list_shows_transaction_id_linked_to_sales(self):
+        self.rtc.sales_header = self.sh
+        self.rtc.save(update_fields=['sales_header'])
+        resp = self.client.get('/inventory/retur-pelanggan/')
+        self.assertContains(resp, 'TRX-SAL-001')
+        self.assertContains(resp, f'/sales/{self.sh.pk}/')
+
+    def test_detail_page_renders(self):
+        self.rtc.sales_header = self.sh
+        self.rtc.save(update_fields=['sales_header'])
+        resp = self.client.get(f'/inventory/retur-pelanggan/{self.rtc.pk}/')
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, self.rtc.nomor)
+        self.assertContains(resp, 'TRX-SAL-001')

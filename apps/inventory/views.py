@@ -1590,6 +1590,42 @@ def retur_customer_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def retur_customer_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """Detail retur pelanggan: header, baris item, PPN diretur, dan jurnal terkait."""
+    from apps.pajak.models import PajakTransaksi
+
+    rtc = get_object_or_404(
+        ReturCustomer.objects.select_related(
+            'entitas_bisnis', 'entitas_bisnis_lv2', 'entitas_bisnis_lv3',
+            'warehouse', 'sales_header', 'jurnal_header'),
+        pk=pk)
+    items = list(rtc.items.select_related(
+        'item', 'sales_item', 'sales_item__sales_eb__sales_header').all())
+
+    ppn_map = {}
+    for pt in PajakTransaksi.objects.filter(
+        source_type='retur_customer_item', source_id__in=[d.pk for d in items],
+    ).exclude(status='dibatalkan'):
+        ppn_map[pt.source_id] = ppn_map.get(pt.source_id, Decimal('0')) + pt.jumlah_pajak
+
+    rows, total_hpp, total_jual = [], Decimal('0'), Decimal('0')
+    for d in items:
+        hpp = d.qty * d.unit_cost
+        jual = d.qty * d.harga_jual
+        total_hpp += hpp
+        total_jual += jual
+        rows.append({'d': d, 'hpp': hpp, 'jual': jual, 'ppn': ppn_map.get(d.pk, Decimal('0'))})
+
+    return render(request, 'inventory/retur_customer_detail.html', {
+        'rtc': rtc, 'rows': rows,
+        'total_hpp': total_hpp, 'total_jual': total_jual,
+        'total_ppn': sum(ppn_map.values(), Decimal('0')),
+        'jurnal_lines': (rtc.jurnal_header.details.select_related('akun').all()
+                         if rtc.jurnal_header else []),
+    })
+
+
+@login_required
 def retur_customer_delete(request: HttpRequest, pk: int) -> HttpResponse:
     """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus retur pelanggan."""
     rtc = get_object_or_404(ReturCustomer, pk=pk)
