@@ -1,0 +1,137 @@
+{% extends 'base.html' %}
+{% block title %}Transfer Baru{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Transfer Baru</h1>
+    <p class="ni-page-header__subtitle">Transfer persediaan antar gudang/cabang (posting langsung)</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:transfer_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.tanggal.label }}</label>
+          {{ form.tanggal }}
+          {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Asal</h3>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_asal.label }}</label>
+          {{ form.eb_asal }}
+          {% if form.eb_asal.errors %}<div class="ni-form-error">{{ form.eb_asal.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_asal_lv2.label }}</label>
+          {{ form.eb_asal_lv2 }}
+          {% if form.eb_asal_lv2.errors %}<div class="ni-form-error">{{ form.eb_asal_lv2.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_asal_lv3.label }}</label>
+          {{ form.eb_asal_lv3 }}
+          {% if form.eb_asal_lv3.errors %}<div class="ni-form-error">{{ form.eb_asal_lv3.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.warehouse_asal.label }}</label>
+          {{ form.warehouse_asal }}
+          {% if form.warehouse_asal.errors %}<div class="ni-form-error">{{ form.warehouse_asal.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Tujuan</h3>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_tujuan.label }}</label>
+          {{ form.eb_tujuan }}
+          {% if form.eb_tujuan.errors %}<div class="ni-form-error">{{ form.eb_tujuan.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_tujuan_lv2.label }}</label>
+          {{ form.eb_tujuan_lv2 }}
+          {% if form.eb_tujuan_lv2.errors %}<div class="ni-form-error">{{ form.eb_tujuan_lv2.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.eb_tujuan_lv3.label }}</label>
+          {{ form.eb_tujuan_lv3 }}
+          {% if form.eb_tujuan_lv3.errors %}<div class="ni-form-error">{{ form.eb_tujuan_lv3.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.warehouse_tujuan.label }}</label>
+          {{ form.warehouse_tujuan }}
+          {% if form.warehouse_tujuan.errors %}<div class="ni-form-error">{{ form.warehouse_tujuan.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.akun_perantara.label }}</label>
+          {{ form.akun_perantara }}
+          <p style="font-size:0.8rem;color:var(--ni-text-muted);margin-top:4px;">
+            Wajib diisi hanya untuk transfer lintas entitas bisnis.
+          </p>
+          {% if form.akun_perantara.errors %}<div class="ni-form-error">{{ form.akun_perantara.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group" style="flex:1">
+          <label class="ni-form-label">{{ form.keterangan.label }}</label>
+          {{ form.keterangan }}
+          {% if form.keterangan.errors %}<div class="ni-form-error">{{ form.keterangan.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Item Transfer</h3>
+      {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+      <div class="ni-form-error">{{ formset.non_form_errors }}</div>
+      {% endif %}
+      <div class="ni-table-wrapper">
+        <table class="ni-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Qty</th>
+              <th>Hapus</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item_form in formset %}
+            <tr>
+              {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+              <td>
+                {{ item_form.item }}
+                {% if item_form.item.errors %}<div class="ni-form-error">{{ item_form.item.errors }}</div>{% endif %}
+              </td>
+              <td>
+                {{ item_form.qty }}
+                {% if item_form.qty.errors %}<div class="ni-form-error">{{ item_form.qty.errors }}</div>{% endif %}
+              </td>
+              <td>
+                {% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary"
+                onclick="return confirm('Proses & posting transfer ini?')">
+          <i data-lucide="check" style="width:14px;height:14px"></i> Proses & Posting
+        </button>
+        <a href="{% url 'inventory:transfer_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

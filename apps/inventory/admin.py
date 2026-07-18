@@ -1,26 +1,10 @@
 """Inventory admin."""
 from django.contrib import admin
-from .models import MutasiInventoryHeader, MutasiInventoryDetail, InventoryRecord
-from apps.inventory.models import StockMovement, StockConsumption, Warehouse
-
-
-class MutasiInventoryDetailInline(admin.TabularInline):
-    model = MutasiInventoryDetail
-    extra = 0
-
-
-@admin.register(MutasiInventoryHeader)
-class MutasiInventoryHeaderAdmin(admin.ModelAdmin):
-    list_display = ('id', 'entitas_bisnis', 'dll')
-    list_select_related = ('entitas_bisnis',)
-    raw_id_fields = ('entitas_bisnis',)
-    inlines = (MutasiInventoryDetailInline,)
-
-
-@admin.register(MutasiInventoryDetail)
-class MutasiInventoryDetailAdmin(admin.ModelAdmin):
-    list_display = ('id', 'mutasi_inventory_header', 'dll')
-    list_select_related = ('mutasi_inventory_header',)
+from .models import InventoryRecord
+from apps.inventory.models import (
+    ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment, StockConsumption,
+    StockMovement, StockOpname, StockTransfer, Warehouse,
+)
 
 
 @admin.register(InventoryRecord)
@@ -64,3 +48,45 @@ class WarehouseAdmin(admin.ModelAdmin):
     list_filter = ('entitas_bisnis', 'is_active')
     search_fields = ('kode', 'nama')
     autocomplete_fields = ('entitas_bisnis',)
+
+
+@admin.register(StockAdjustment)
+class StockAdjustmentAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(StockOpname)
+class StockOpnameAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(StockTransfer)
+class StockTransferAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'eb_asal', 'warehouse_asal', 'eb_tujuan', 'warehouse_tujuan', 'status')
+    list_filter = ('status', 'eb_asal', 'eb_tujuan')
+    search_fields = ('nomor',)
+
+
+@admin.register(ReturCustomer)
+class ReturCustomerAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(ReturSupplier)
+class ReturSupplierAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(ItemReorderSetting)
+class ItemReorderSettingAdmin(admin.ModelAdmin):
+    list_display = ('item', 'warehouse', 'minimum_stock', 'reorder_point', 'reorder_qty')
+    list_filter = ('warehouse',)
+    search_fields = ('item__nama', 'item__item_id')

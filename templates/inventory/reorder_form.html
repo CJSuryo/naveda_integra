@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Pengaturan Reorder Baru{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Pengaturan Reorder Baru</h1>
+    <p class="ni-page-header__subtitle">Atur minimum stock &amp; titik pemesanan ulang untuk item + gudang</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:reorder_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:640px;">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.item.label }}</label>
+          {{ form.item }}
+          {% if form.item.errors %}<div class="ni-form-error">{{ form.item.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.warehouse.label }}</label>
+          {{ form.warehouse }}
+          {% if form.warehouse.errors %}<div class="ni-form-error">{{ form.warehouse.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.minimum_stock.label }}</label>
+          {{ form.minimum_stock }}
+          {% if form.minimum_stock.errors %}<div class="ni-form-error">{{ form.minimum_stock.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.reorder_point.label }}</label>
+          {{ form.reorder_point }}
+          {% if form.reorder_point.errors %}<div class="ni-form-error">{{ form.reorder_point.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.reorder_qty.label }}</label>
+          {{ form.reorder_qty }}
+          {% if form.reorder_qty.errors %}<div class="ni-form-error">{{ form.reorder_qty.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">
+          <i data-lucide="check" style="width:14px;height:14px"></i> Simpan
+        </button>
+        <a href="{% url 'inventory:reorder_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

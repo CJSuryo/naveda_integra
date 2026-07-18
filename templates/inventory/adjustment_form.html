@@ -1,0 +1,112 @@
+{% extends 'base.html' %}
+{% block title %}Adjustment Baru{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Adjustment Baru</h1>
+    <p class="ni-page-header__subtitle">Penyesuaian persediaan (posting langsung)</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'inventory:adjustment_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.tanggal.label }}</label>
+          {{ form.tanggal }}
+          {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
+          {{ form.entitas_bisnis }}
+          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.warehouse.label }}</label>
+          {{ form.warehouse }}
+          {% if form.warehouse.errors %}<div class="ni-form-error">{{ form.warehouse.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.entitas_bisnis_lv2.label }}</label>
+          {{ form.entitas_bisnis_lv2 }}
+          {% if form.entitas_bisnis_lv2.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv2.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.entitas_bisnis_lv3.label }}</label>
+          {{ form.entitas_bisnis_lv3 }}
+          {% if form.entitas_bisnis_lv3.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv3.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.akun_selisih.label }}</label>
+          {{ form.akun_selisih }}
+          {% if form.akun_selisih.errors %}<div class="ni-form-error">{{ form.akun_selisih.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group" style="flex:1">
+          <label class="ni-form-label">{{ form.keterangan.label }}</label>
+          {{ form.keterangan }}
+          {% if form.keterangan.errors %}<div class="ni-form-error">{{ form.keterangan.errors }}</div>{% endif %}
+        </div>
+      </div>
+
+      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Item Adjustment</h3>
+      {{ formset.management_form }}
+      {% if formset.non_form_errors %}
+      <div class="ni-form-error">{{ formset.non_form_errors }}</div>
+      {% endif %}
+      <div class="ni-table-wrapper">
+        <table class="ni-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Qty (+ / -)</th>
+              <th>Harga/Unit</th>
+              <th>Hapus</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item_form in formset %}
+            <tr>
+              {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+              <td>
+                {{ item_form.item }}
+                {% if item_form.item.errors %}<div class="ni-form-error">{{ item_form.item.errors }}</div>{% endif %}
+              </td>
+              <td>
+                {{ item_form.qty }}
+                {% if item_form.qty.errors %}<div class="ni-form-error">{{ item_form.qty.errors }}</div>{% endif %}
+              </td>
+              <td>
+                {{ item_form.unit_cost }}
+                {% if item_form.unit_cost.errors %}<div class="ni-form-error">{{ item_form.unit_cost.errors }}</div>{% endif %}
+              </td>
+              <td>
+                {% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary"
+                onclick="return confirm('Proses & posting adjustment ini?')">
+          <i data-lucide="check" style="width:14px;height:14px"></i> Proses & Posting
+        </button>
+        <a href="{% url 'inventory:adjustment_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

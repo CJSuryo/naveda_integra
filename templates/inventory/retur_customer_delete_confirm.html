@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Batalkan Retur Pelanggan {{ rtc.nomor }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Batalkan Retur Pelanggan</h1>
+    <p class="ni-page-header__subtitle">{{ rtc.nomor }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
+      Batalkan retur pelanggan <strong>{{ rtc.nomor }}</strong>
+      ({{ rtc.entitas_bisnis.nama }}{% if rtc.warehouse %}, {{ rtc.warehouse.nama }}{% endif %})?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      {% if rtc.status == 'posted' %}
+      Jurnal
+      {% if rtc.jurnal_header %}<strong>{{ rtc.jurnal_header.nomor_transaksi }}</strong>{% else %}terkait{% endif %}
+      akan dihapus dan stok dipulihkan ke kondisi sebelum retur ini diposting.
+      {% else %}
+      Retur ini masih berstatus draft (belum diposting), sehingga akan langsung dihapus.
+      {% endif %}
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Batalkan Retur</button>
+        <a href="{% url 'inventory:retur_customer_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

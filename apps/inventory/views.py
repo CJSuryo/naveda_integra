@@ -12,15 +12,31 @@ from django.contrib.auth.decorators import login_required
 from django_ratelimit.decorators import ratelimit
 
 from naveda_integra.ratelimit_utils import rate_from
-from django.db.models import Q, Sum
+from django.db import transaction
+from django.db.models import ProtectedError, Q, Sum
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import InventoryRecordForm, WarehouseForm
-from .models import InventoryRecord, Warehouse
+from .forms import (
+    InventoryRecordForm, ItemReorderSettingForm, ReturCustomerForm, ReturCustomerItemFormSet,
+    ReturSupplierForm, ReturSupplierItemFormSet,
+    StockAdjustmentForm, StockAdjustmentItemFormSet,
+    StockOpnameForm, StockOpnameItemFormSet, StockTransferForm, StockTransferItemFormSet,
+    WarehouseForm,
+)
+from .models import (
+    InventoryRecord, ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment,
+    StockOpname, StockTransfer, Warehouse,
+)
+from .services import (
+    process_adjustment, process_opname, process_retur_customer, process_retur_supplier,
+    process_transfer, reorder_status,
+    reverse_adjustment, reverse_opname, reverse_retur_customer, reverse_retur_supplier,
+    reverse_transfer,
+)
 
 BULK_TO_SATUAN_MAP = {'RMB': 'RM', 'FGB': 'FG', 'ITMB': 'ITM'}
 
@@ -1314,3 +1330,298 @@ def inventory_export_pdf(request: HttpRequest) -> HttpResponse:
         'total_nilai': total_nilai,
         'total_records': len(records),
     })
+
+
+# ── Stock Adjustment ───────────────────────────────────────────────────────
+
+@login_required
+def adjustment_list(request: HttpRequest) -> HttpResponse:
+    """List all stock adjustments."""
+    rows = StockAdjustment.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'akun_selisih').all()
+    return render(request, 'inventory/adjustment_list.html', {'rows': rows})
+
+
+@login_required
+def adjustment_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock adjustment (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockAdjustmentForm(request.POST)
+        formset = StockAdjustmentItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    adj = form.save()
+                    formset.instance = adj
+                    formset.save()
+                    header = process_adjustment(adj)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'Adjustment {adj.nomor} diposting. Jurnal {header.nomor_transaksi}.')
+                return redirect('inventory:adjustment_list')
+    else:
+        form = StockAdjustmentForm()
+        formset = StockAdjustmentItemFormSet()
+    return render(request, 'inventory/adjustment_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def adjustment_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus adjustment."""
+    adj = get_object_or_404(StockAdjustment, pk=pk)
+    if request.method == 'POST':
+        try:
+            if adj.status == 'posted':
+                reverse_adjustment(adj, request)
+            adj.delete()
+            messages.success(request, f'Adjustment {adj.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:adjustment_list')
+    return render(request, 'inventory/adjustment_delete_confirm.html', {'adj': adj})
+
+
+# ── Stock Opname ─────────────────────────────────────────────────────────
+
+@login_required
+def opname_list(request: HttpRequest) -> HttpResponse:
+    """List all stock opnames."""
+    rows = StockOpname.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'akun_selisih').all()
+    return render(request, 'inventory/opname_list.html', {'rows': rows})
+
+
+@login_required
+def opname_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock opname (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockOpnameForm(request.POST)
+        formset = StockOpnameItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    opn = form.save()
+                    formset.instance = opn
+                    formset.save()
+                    header = process_opname(opn)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                msg = f'Opname {opn.nomor} diposting.'
+                if header:
+                    msg += f' Jurnal {header.nomor_transaksi}.'
+                messages.success(request, msg)
+                return redirect('inventory:opname_list')
+    else:
+        form = StockOpnameForm()
+        formset = StockOpnameItemFormSet()
+    return render(request, 'inventory/opname_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def opname_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus opname."""
+    opn = get_object_or_404(StockOpname, pk=pk)
+    if request.method == 'POST':
+        try:
+            if opn.status == 'posted':
+                reverse_opname(opn, request)
+            opn.delete()
+            messages.success(request, f'Opname {opn.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:opname_list')
+    return render(request, 'inventory/opname_delete_confirm.html', {'opn': opn})
+
+
+# ── Stock Transfer ───────────────────────────────────────────────────────
+
+@login_required
+def transfer_list(request: HttpRequest) -> HttpResponse:
+    """List all stock transfers."""
+    rows = StockTransfer.objects.select_related(
+        'eb_asal', 'warehouse_asal', 'eb_tujuan', 'warehouse_tujuan', 'akun_perantara').all()
+    return render(request, 'inventory/transfer_list.html', {'rows': rows})
+
+
+@login_required
+def transfer_create(request: HttpRequest) -> HttpResponse:
+    """Create a stock transfer (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = StockTransferForm(request.POST)
+        formset = StockTransferItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    trf = form.save()
+                    formset.instance = trf
+                    formset.save()
+                    process_transfer(trf)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'Transfer {trf.nomor} diposting.')
+                return redirect('inventory:transfer_list')
+    else:
+        form = StockTransferForm()
+        formset = StockTransferItemFormSet()
+    return render(request, 'inventory/transfer_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def transfer_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus transfer."""
+    trf = get_object_or_404(StockTransfer, pk=pk)
+    if request.method == 'POST':
+        try:
+            if trf.status == 'posted':
+                reverse_transfer(trf, request)
+            trf.delete()
+            messages.success(request, f'Transfer {trf.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:transfer_list')
+    return render(request, 'inventory/transfer_delete_confirm.html', {'trf': trf})
+
+
+# ── Retur Pelanggan ─────────────────────────────────────────────────────
+
+@login_required
+def retur_customer_list(request: HttpRequest) -> HttpResponse:
+    """List all customer returns."""
+    rows = ReturCustomer.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'sales_header').all()
+    return render(request, 'inventory/retur_customer_list.html', {'rows': rows})
+
+
+@login_required
+def retur_customer_create(request: HttpRequest) -> HttpResponse:
+    """Create a customer return (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = ReturCustomerForm(request.POST)
+        formset = ReturCustomerItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    rtc = form.save()
+                    formset.instance = rtc
+                    formset.save()
+                    header = process_retur_customer(
+                        rtc,
+                        akun_pendapatan=form.cleaned_data.get('akun_pendapatan'),
+                        akun_piutang=form.cleaned_data.get('akun_piutang'),
+                        akun_hpp=form.cleaned_data.get('akun_hpp'),
+                    )
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'Retur Pelanggan {rtc.nomor} diposting. Jurnal {header.nomor_transaksi}.')
+                return redirect('inventory:retur_customer_list')
+    else:
+        form = ReturCustomerForm()
+        formset = ReturCustomerItemFormSet()
+    return render(request, 'inventory/retur_customer_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def retur_customer_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus retur pelanggan."""
+    rtc = get_object_or_404(ReturCustomer, pk=pk)
+    if request.method == 'POST':
+        try:
+            if rtc.status == 'posted':
+                reverse_retur_customer(rtc, request)
+            rtc.delete()
+            messages.success(request, f'Retur Pelanggan {rtc.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:retur_customer_list')
+    return render(request, 'inventory/retur_customer_delete_confirm.html', {'rtc': rtc})
+
+
+# ── Retur Supplier ────────────────────────────────────────────────────────
+
+@login_required
+def retur_supplier_list(request: HttpRequest) -> HttpResponse:
+    """List all supplier returns."""
+    rows = ReturSupplier.objects.select_related(
+        'entitas_bisnis', 'warehouse', 'purchase_header', 'akun_lawan').all()
+    return render(request, 'inventory/retur_supplier_list.html', {'rows': rows})
+
+
+@login_required
+def retur_supplier_create(request: HttpRequest) -> HttpResponse:
+    """Create a supplier return (header + items) and post it immediately."""
+    if request.method == 'POST':
+        form = ReturSupplierForm(request.POST)
+        formset = ReturSupplierItemFormSet(request.POST)
+        if form.is_valid() and formset.is_valid():
+            try:
+                with transaction.atomic():
+                    rts = form.save()
+                    formset.instance = rts
+                    formset.save()
+                    header = process_retur_supplier(rts)
+            except ValueError as e:
+                messages.error(request, str(e))
+            else:
+                messages.success(request, f'Retur Supplier {rts.nomor} diposting. Jurnal {header.nomor_transaksi}.')
+                return redirect('inventory:retur_supplier_list')
+    else:
+        form = ReturSupplierForm()
+        formset = ReturSupplierItemFormSet()
+    return render(request, 'inventory/retur_supplier_form.html', {'form': form, 'formset': formset})
+
+
+@login_required
+def retur_supplier_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Batalkan (reverse jurnal & stok bila sudah posted) lalu hapus retur supplier."""
+    rts = get_object_or_404(ReturSupplier, pk=pk)
+    if request.method == 'POST':
+        try:
+            if rts.status == 'posted':
+                reverse_retur_supplier(rts, request)
+            rts.delete()
+            messages.success(request, f'Retur Supplier {rts.nomor} dibatalkan.')
+        except (ValueError, ProtectedError) as e:
+            messages.error(request, f'Gagal membatalkan: {e}')
+        return redirect('inventory:retur_supplier_list')
+    return render(request, 'inventory/retur_supplier_delete_confirm.html', {'rts': rts})
+
+
+# ── Reorder Point ────────────────────────────────────────────────────────
+
+@login_required
+def reorder_list(request: HttpRequest) -> HttpResponse:
+    """List all reorder settings with computed stock status badge."""
+    rows = []
+    for s in ItemReorderSetting.objects.select_related('item', 'warehouse', 'warehouse__entitas_bisnis'):
+        rows.append({'setting': s,
+                     'status': reorder_status(s.item, s.warehouse.entitas_bisnis, s.warehouse)})
+    return render(request, 'inventory/reorder_list.html', {'rows': rows})
+
+
+@login_required
+def reorder_create(request: HttpRequest) -> HttpResponse:
+    """Create a reorder setting for an item+warehouse."""
+    if request.method == 'POST':
+        form = ItemReorderSettingForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Pengaturan reorder disimpan.')
+            return redirect('inventory:reorder_list')
+    else:
+        form = ItemReorderSettingForm()
+    return render(request, 'inventory/reorder_form.html', {'form': form})
+
+
+@login_required
+def reorder_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    """Delete a reorder setting."""
+    s = get_object_or_404(ItemReorderSetting, pk=pk)
+    if request.method == 'POST':
+        s.delete()
+        messages.success(request, 'Pengaturan reorder dihapus.')
+        return redirect('inventory:reorder_list')
+    return render(request, 'inventory/reorder_delete_confirm.html', {'setting': s})

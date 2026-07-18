@@ -6,38 +6,6 @@ from django.db import models
 from django.utils import timezone
 
 
-class MutasiInventoryHeader(models.Model):
-    entitas_bisnis = models.ForeignKey(
-        'entitas_bisnis.EntitasBisnis',
-        on_delete=models.PROTECT,
-        related_name='mutasi_inventory_headers',
-    )
-    dll = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        verbose_name = 'Mutasi Inventory Header'
-        verbose_name_plural = 'Mutasi Inventory Header'
-        indexes = [
-            # Per-entity inventory mutation lookups
-            models.Index(fields=['entitas_bisnis'], name='idx_mih_entitas'),
-        ]
-
-    def __str__(self) -> str:
-        return f'MutasiInventory {self.id} - {self.entitas_bisnis}'
-
-
-class MutasiInventoryDetail(models.Model):
-    mutasi_inventory_header = models.ForeignKey(MutasiInventoryHeader, on_delete=models.CASCADE, related_name='details')
-    dll = models.CharField(max_length=50, blank=True)
-
-    class Meta:
-        verbose_name = 'Mutasi Inventory Detail'
-        verbose_name_plural = 'Mutasi Inventory Detail'
-
-    def __str__(self) -> str:
-        return f'Detail {self.id} - Header {self.mutasi_inventory_header_id}'
-
-
 class InventoryRecord(models.Model):
     """Inventory record — one entry per purchase line item.
 
@@ -249,6 +217,14 @@ class StockMovement(models.Model):
         ('production_in', 'Produksi Masuk (FG)'),
         ('production_out', 'Produksi Keluar (RM)'),
         ('saldo_awal', 'Saldo Awal'),
+        ('adjustment_in', 'Penyesuaian Masuk'),
+        ('adjustment_out', 'Penyesuaian Keluar'),
+        ('opname_in', 'Opname Surplus'),
+        ('opname_out', 'Opname Minus'),
+        ('transfer_in', 'Transfer Masuk'),
+        ('transfer_out', 'Transfer Keluar'),
+        ('return_customer', 'Retur Pelanggan (Masuk)'),
+        ('return_supplier', 'Retur Supplier (Keluar)'),
     ]
     item = models.ForeignKey(
         'purchase.ItemMasterPurchase', on_delete=models.PROTECT,
@@ -349,3 +325,240 @@ class StockConsumption(models.Model):
 
     def __str__(self) -> str:
         return f'{self.out_movement_id} → {self.in_movement_id} × {self.qty}'
+
+
+class _NomorMixin:
+    """Helper penghasil nomor TRX-<PREFIX>-NNN, aman-konkuren."""
+    NOMOR_PREFIX = ''
+
+    def _generate_nomor(self):
+        from django.db import transaction as _t
+        with _t.atomic():
+            last = (
+                type(self).objects.select_for_update()
+                .filter(nomor__startswith=self.NOMOR_PREFIX)
+                .order_by('-nomor').values_list('nomor', flat=True).first()
+            )
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1 if last else 1
+            except (ValueError, IndexError):
+                seq = 1
+            return f'{self.NOMOR_PREFIX}{seq:03d}'
+
+
+class StockAdjustment(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-ADJ-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='stock_adjustments')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_adjustments')
+    akun_selisih = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='stock_adjustments', verbose_name='Akun Selisih Persediaan')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Adjustment'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockAdjustmentItem(models.Model):
+    adjustment = models.ForeignKey(StockAdjustment, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4, help_text='Bertanda: + naik, - turun')
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0, help_text='Untuk kenaikan')
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def __str__(self):
+        return f'{self.item.item_id} × {self.qty}'
+
+
+class StockOpname(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-OPN-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='stock_opnames')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='stock_opnames')
+    akun_selisih = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='stock_opnames')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Opname'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockOpnameItem(models.Model):
+    opname = models.ForeignKey(StockOpname, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty_sistem = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    qty_fisik = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    selisih = models.DecimalField(max_digits=15, decimal_places=4, default=0, editable=False)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+    def save(self, *args, **kwargs):
+        self.selisih = (self.qty_fisik or 0) - (self.qty_sistem or 0)
+        super().save(*args, **kwargs)
+
+
+class StockTransfer(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-TRF-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    eb_asal = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='transfers_asal')
+    eb_asal_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_asal_lv2')
+    eb_asal_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_asal_lv3')
+    warehouse_asal = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, related_name='transfers_out')
+    eb_tujuan = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='transfers_tujuan')
+    eb_tujuan_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_tujuan_lv2')
+    eb_tujuan_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers_tujuan_lv3')
+    warehouse_tujuan = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, related_name='transfers_in')
+    akun_perantara = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, null=True, blank=True, related_name='transfers', help_text='Wajib bila lintas entitas (EB lv1 berbeda).')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header_asal = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    jurnal_header_tujuan = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Stock Transfer'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    @property
+    def is_cross_entity(self):
+        return self.eb_asal_id != self.eb_tujuan_id
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class StockTransferItem(models.Model):
+    transfer = models.ForeignKey(StockTransfer, on_delete=models.CASCADE, related_name='items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement_out = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    movement_in = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class ReturCustomer(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-RTC-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    sales_header = models.ForeignKey('sales.SalesHeader', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers')
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='retur_customers')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_customers')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Retur Pelanggan'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class ReturCustomerItem(models.Model):
+    retur = models.ForeignKey(ReturCustomer, on_delete=models.CASCADE, related_name='items')
+    sales_item = models.ForeignKey('sales.SalesItem', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0, help_text='Biaya HPP asli dari transaksi penjualan')
+    harga_jual = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class ReturSupplier(_NomorMixin, models.Model):
+    NOMOR_PREFIX = 'TRX-RTS-'
+    STATUS_CHOICES = [('draft', 'Draft'), ('posted', 'Diposting')]
+    nomor = models.CharField(max_length=30, unique=True, editable=False)
+    tanggal = models.DateField()
+    purchase_header = models.ForeignKey('purchase.PurchaseHeader', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_suppliers')
+    entitas_bisnis = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, related_name='retur_suppliers')
+    entitas_bisnis_lv2 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv2', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_suppliers_lv2')
+    entitas_bisnis_lv3 = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_suppliers_lv3')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_suppliers')
+    akun_lawan = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_suppliers', help_text='Hutang/Kas yang dikreditkan balik')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
+    keterangan = models.TextField(blank=True)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Retur Supplier'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self):
+        return self.nomor
+
+    def save(self, *args, **kwargs):
+        if not self.nomor:
+            self.nomor = self._generate_nomor()
+        super().save(*args, **kwargs)
+
+
+class ReturSupplierItem(models.Model):
+    retur = models.ForeignKey(ReturSupplier, on_delete=models.CASCADE, related_name='items')
+    purchase_item = models.ForeignKey('purchase.PurchaseItem', on_delete=models.PROTECT, null=True, blank=True, related_name='retur_items')
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.PROTECT, related_name='+')
+    qty = models.DecimalField(max_digits=15, decimal_places=4)
+    unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
+    movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class ItemReorderSetting(models.Model):
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.CASCADE, related_name='reorder_settings')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.CASCADE, related_name='reorder_settings')
+    minimum_stock = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    reorder_point = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    reorder_qty = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+
+    class Meta:
+        unique_together = (('item', 'warehouse'),)
+        verbose_name = 'Pengaturan Reorder'
+
+    def __str__(self):
+        return f'{self.item.item_id} @ {self.warehouse.kode}'

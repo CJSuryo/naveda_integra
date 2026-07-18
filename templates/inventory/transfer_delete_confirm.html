@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Batalkan Transfer {{ trf.nomor }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Batalkan Transfer Stok</h1>
+    <p class="ni-page-header__subtitle">{{ trf.nomor }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
+      Batalkan transfer <strong>{{ trf.nomor }}</strong>
+      ({{ trf.eb_asal.nama }} — {{ trf.warehouse_asal.nama }}
+      &rarr; {{ trf.eb_tujuan.nama }} — {{ trf.warehouse_tujuan.nama }})?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      {% if trf.status == 'posted' %}
+      Jurnal terkait akan dihapus dan stok dipulihkan ke kondisi sebelum transfer ini diposting.
+      {% else %}
+      Transfer ini masih berstatus draft (belum diposting), sehingga akan langsung dihapus.
+      {% endif %}
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Batalkan Transfer</button>
+        <a href="{% url 'inventory:transfer_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

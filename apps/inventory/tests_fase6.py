@@ -1,0 +1,857 @@
+"""Tests Fase 6 — transaksi & kontrol stok."""
+from decimal import Decimal
+from django.test import TestCase
+
+from apps.entitas_bisnis.models import TipeEntitas, EntitasBisnis
+from apps.purchase.models import ItemMasterPurchase
+from apps.inventory.models import StockMovement
+from apps.inventory import ledger
+
+
+class MovementTypeChoicesTests(TestCase):
+    def test_new_movement_types_registered(self):
+        codes = {c for c, _ in StockMovement.MOVEMENT_TYPE_CHOICES}
+        for expected in {
+            'adjustment_in', 'adjustment_out', 'opname_in', 'opname_out',
+            'transfer_in', 'transfer_out', 'return_customer', 'return_supplier',
+        }:
+            self.assertIn(expected, codes)
+
+
+class ReversalSetTests(TestCase):
+    def test_outflow_set_includes_fase6(self):
+        for t in {'adjustment_out', 'opname_out', 'transfer_out', 'return_supplier'}:
+            self.assertIn(t, ledger.OUTFLOW_MOVEMENT_TYPES)
+
+    def test_inflow_set_includes_fase6(self):
+        for t in {'adjustment_in', 'opname_in', 'transfer_in', 'return_customer'}:
+            self.assertIn(t, ledger.INFLOW_MOVEMENT_TYPES)
+
+
+from apps.master_data.models import Akun
+
+
+class StockAdjustmentModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='Gudang 1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.akun = Akun.objects.create(kode_akun='5.9.1', nama='Selisih Persediaan')
+
+    def test_create_header_generates_nomor(self):
+        from apps.inventory.models import StockAdjustment
+        h = StockAdjustment.objects.create(
+            tanggal='2026-02-01', entitas_bisnis=self.eb, warehouse=self.wh,
+            akun_selisih=self.akun,
+        )
+        self.assertTrue(h.nomor.startswith('TRX-ADJ-'))
+        self.assertEqual(h.status, 'draft')
+
+    def test_item_signed_qty(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        h = StockAdjustment.objects.create(
+            tanggal='2026-02-01', entitas_bisnis=self.eb, warehouse=self.wh,
+            akun_selisih=self.akun,
+        )
+        d = StockAdjustmentItem.objects.create(
+            adjustment=h, item=self.item, qty=Decimal('-3'), unit_cost=Decimal('5'),
+        )
+        self.assertEqual(d.qty, Decimal('-3'))
+
+
+class ProcessAdjustmentTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih Persediaan')
+
+    def _header(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        h = StockAdjustment.objects.create(
+            tanggal='2026-02-01', entitas_bisnis=self.eb, warehouse=self.wh,
+            akun_selisih=self.selisih,
+        )
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item,
+                                           qty=Decimal('10'), unit_cost=Decimal('5'))
+        return h
+
+    def test_increase_creates_inflow_and_balanced_journal(self):
+        from apps.inventory.services import process_adjustment
+        from apps.inventory.ledger import get_available_stock
+        h = self._header()
+        header = process_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'posted')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        deb = sum(d.debit for d in header.details.all())
+        kre = sum(d.kredit for d in header.details.all())
+        self.assertEqual(deb, kre)
+        self.assertEqual(deb, Decimal('50'))
+
+    def test_decrease_consumes_stock(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+        record_inflow(self.item, self.eb, None, None, Decimal('20'), Decimal('4'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockAdjustment.objects.create(tanggal='2026-02-02', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item, qty=Decimal('-5'))
+        process_adjustment(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('15'))
+
+
+class ReverseAdjustmentTests(ProcessAdjustmentTests):
+    def test_reverse_restores_stock_and_removes_journal(self):
+        from apps.inventory.services import process_adjustment, reverse_adjustment
+        from apps.inventory.ledger import get_available_stock
+        from apps.jurnal.models import JurnalHeader
+        h = self._header()  # +10
+        header = process_adjustment(h)
+        reverse_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+    def test_reverse_consume_adjustment_restores_consumed_layer(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment, reverse_adjustment
+        record_inflow(self.item, self.eb, None, None, Decimal('20'), Decimal('4'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockAdjustment.objects.create(tanggal='2026-02-03', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item, qty=Decimal('-5'))
+        process_adjustment(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('15'))
+        reverse_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('20'))
+
+
+class AdjustmentFormTests(TestCase):
+    def test_form_fields(self):
+        from apps.inventory.forms import StockAdjustmentForm
+        f = StockAdjustmentForm()
+        for name in ('tanggal', 'entitas_bisnis', 'warehouse', 'akun_selisih', 'keterangan'):
+            self.assertIn(name, f.fields)
+
+    def test_formset_requires_at_least_one_item(self):
+        from apps.inventory.forms import StockAdjustmentItemFormSet
+        data = {
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '', 'items-0-unit_cost': '',
+        }
+        fs = StockAdjustmentItemFormSet(data=data)
+        self.assertFalse(fs.is_valid())
+
+
+from django.contrib.auth import get_user_model
+from django.urls import reverse
+
+User = get_user_model()
+
+
+class AdjustmentViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u@example.com', password='p', name='U')
+        self.client.force_login(self.user)
+
+    def test_list_renders(self):
+        resp = self.client.get(reverse('inventory:adjustment_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_create_get_renders(self):
+        resp = self.client.get(reverse('inventory:adjustment_create'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_create_post_success_posts_adjustment(self):
+        from apps.master_data.models import Akun
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.models import Warehouse, StockAdjustment
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        item.coa_account = persediaan
+        item.save()
+        selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        data = {
+            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'akun_selisih': selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '10', 'items-0-unit_cost': '5',
+        }
+        resp = self.client.post(reverse('inventory:adjustment_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockAdjustment.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'entitas_bisnis': '', 'warehouse': '',
+            'akun_selisih': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '', 'items-0-unit_cost': '',
+        }
+        resp = self.client.post(reverse('inventory:adjustment_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse, StockAdjustment
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih2')
+        adj = StockAdjustment.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                             warehouse=wh, akun_selisih=selisih)
+        resp = self.client.post(reverse('inventory:adjustment_delete', args=[adj.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockAdjustment.objects.filter(pk=adj.pk).exists())
+
+
+class StockOpnameModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.akun = Akun.objects.create(kode_akun='5.9.2', nama='Selisih Opname')
+
+    def test_selisih_autocompute(self):
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.akun)
+        d = StockOpnameItem.objects.create(opname=h, item=self.item,
+                                           qty_sistem=Decimal('10'), qty_fisik=Decimal('8'),
+                                           unit_cost=Decimal('5'))
+        self.assertEqual(d.selisih, Decimal('-2'))
+        self.assertTrue(h.nomor.startswith('TRX-OPN-'))
+
+
+class ProcessOpnameTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih Opname')
+
+    def test_posting_minus_consumes_and_balances(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('10'),
+                                       qty_fisik=Decimal('8'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('8'))
+        self.assertEqual(sum(d.debit for d in header.details.all()),
+                         sum(d.kredit for d in header.details.all()))
+
+    def test_zero_selisih_no_movement(self):
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname
+        h = StockOpname.objects.create(tanggal='2026-03-01', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('5'),
+                                       qty_fisik=Decimal('5'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        self.assertIsNone(header)  # tidak ada selisih → tidak ada jurnal
+
+    def test_reverse_restores_stock_and_removes_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockOpname, StockOpnameItem
+        from apps.inventory.services import process_opname, reverse_opname
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-02', 'purchase_in', warehouse=self.wh)
+        h = StockOpname.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                       warehouse=self.wh, akun_selisih=self.selisih)
+        StockOpnameItem.objects.create(opname=h, item=self.item, qty_sistem=Decimal('10'),
+                                       qty_fisik=Decimal('8'), unit_cost=Decimal('5'))
+        header = process_opname(h)
+        reverse_opname(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class OpnameViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u2@example.com', password='p', name='U2')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:opname_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:opname_create')).status_code, 200)
+
+    def test_create_post_success_posts_opname(self):
+        from apps.master_data.models import Akun
+        from apps.purchase.models import ItemMasterPurchase
+        from apps.inventory.models import Warehouse, StockOpname
+        from apps.inventory.ledger import record_inflow
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        item.coa_account = persediaan
+        item.save()
+        selisih = Akun.objects.create(kode_akun='5.9.2', nama='Selisih')
+        # Seed existing stock so the opname's decrease (10 -> 8) can be consumed.
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh)
+        data = {
+            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'akun_selisih': selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty_sistem': '10',
+            'items-0-qty_fisik': '8', 'items-0-unit_cost': '5',
+        }
+        resp = self.client.post(reverse('inventory:opname_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockOpname.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'entitas_bisnis': '', 'warehouse': '',
+            'akun_selisih': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty_sistem': '', 'items-0-qty_fisik': '',
+            'items-0-unit_cost': '',
+        }
+        resp = self.client.post(reverse('inventory:opname_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse, StockOpname
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        selisih = Akun.objects.create(kode_akun='5.9.3', nama='Selisih2')
+        opn = StockOpname.objects.create(tanggal='2026-03-02', entitas_bisnis=self.eb,
+                                         warehouse=wh, akun_selisih=selisih)
+        resp = self.client.post(reverse('inventory:opname_delete', args=[opn.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockOpname.objects.filter(pk=opn.pk).exists())
+
+
+class StockTransferModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_transfer(self):
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        h = StockTransfer.objects.create(
+            tanggal='2026-04-01', eb_asal=self.eb, warehouse_asal=self.wh1,
+            eb_tujuan=self.eb, warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('5'))
+        self.assertTrue(h.nomor.startswith('TRX-TRF-'))
+        self.assertFalse(h.is_cross_entity)
+
+
+class ProcessTransferTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G2')
+        self.wh3 = Warehouse.objects.create(entitas_bisnis=self.eb2, nama='G3')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.perantara = Akun.objects.create(kode_akun='1.1.9', nama='Perantara Transfer')
+
+    def test_intra_entity_moves_stock_no_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-01', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('6'))
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh2), Decimal('4'))
+        self.assertIsNone(h.jurnal_header_asal)
+
+    def test_cross_entity_creates_two_balanced_journals(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-01', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3, akun_perantara=self.perantara)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(get_available_stock(self.item, self.eb2, warehouse=self.wh3), Decimal('4'))
+        for hdr in (h.jurnal_header_asal, h.jurnal_header_tujuan):
+            self.assertIsNotNone(hdr)
+            self.assertEqual(sum(d.debit for d in hdr.details.all()),
+                             sum(d.kredit for d in hdr.details.all()))
+
+    def test_self_transfer_same_entity_same_warehouse_rejected(self):
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        h = StockTransfer.objects.create(tanggal='2026-04-02', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh1)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('1'))
+        with self.assertRaises(ValueError):
+            process_transfer(h)
+
+    def test_cross_entity_without_akun_perantara_rejected(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-03', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        with self.assertRaises(ValueError):
+            process_transfer(h)
+
+    def test_reverse_cross_entity_restores_stock_and_removes_both_journals(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer, reverse_transfer
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-04', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-04', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb2,
+                                         warehouse_tujuan=self.wh3, akun_perantara=self.perantara)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        h.refresh_from_db()
+        header_asal_pk = h.jurnal_header_asal.pk
+        header_tujuan_pk = h.jurnal_header_tujuan.pk
+        reverse_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('10'))
+        self.assertEqual(get_available_stock(self.item, self.eb2, warehouse=self.wh3), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header_asal_pk).exists())
+        self.assertFalse(JurnalHeader.objects.filter(pk=header_tujuan_pk).exists())
+
+    def test_reverse_intra_entity_restores_stock_no_journal_errors(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import StockTransfer, StockTransferItem
+        from apps.inventory.services import process_transfer, reverse_transfer
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-05', 'purchase_in', warehouse=self.wh1)
+        h = StockTransfer.objects.create(tanggal='2026-04-05', eb_asal=self.eb,
+                                         warehouse_asal=self.wh1, eb_tujuan=self.eb,
+                                         warehouse_tujuan=self.wh2)
+        StockTransferItem.objects.create(transfer=h, item=self.item, qty=Decimal('4'))
+        process_transfer(h)
+        reverse_transfer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh1), Decimal('10'))
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh2), Decimal('0'))
+
+
+class TransferViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb2 = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u3@example.com', password='p', name='U3')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:transfer_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:transfer_create')).status_code, 200)
+
+    def test_create_post_intra_entity_success(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import Warehouse, StockTransfer
+        from apps.purchase.models import ItemMasterPurchase
+        wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG1')
+        wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG2')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.9', nama='Persediaan Transfer')
+        item.save()
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh1)
+        data = {
+            'tanggal': '2026-04-01', 'eb_asal': self.eb.pk, 'warehouse_asal': wh1.pk,
+            'eb_tujuan': self.eb.pk, 'warehouse_tujuan': wh2.pk, 'akun_perantara': '',
+            'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '4',
+        }
+        resp = self.client.post(reverse('inventory:transfer_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(StockTransfer.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_invalid_rerenders_with_errors(self):
+        data = {
+            'tanggal': '', 'eb_asal': '', 'warehouse_asal': '',
+            'eb_tujuan': '', 'warehouse_tujuan': '', 'akun_perantara': '', 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': '', 'items-0-qty': '',
+        }
+        resp = self.client.post(reverse('inventory:transfer_create'), data)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(resp.context['form'].is_valid())
+
+    def test_delete_draft_just_deletes(self):
+        from apps.inventory.models import Warehouse, StockTransfer
+        wh1 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG3')
+        wh2 = Warehouse.objects.create(entitas_bisnis=self.eb, nama='TG4')
+        trf = StockTransfer.objects.create(tanggal='2026-04-02', eb_asal=self.eb,
+                                           warehouse_asal=wh1, eb_tujuan=self.eb,
+                                           warehouse_tujuan=wh2)
+        resp = self.client.post(reverse('inventory:transfer_delete', args=[trf.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(StockTransfer.objects.filter(pk=trf.pk).exists())
+
+
+class ReturCustomerModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_header(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(retur=h, item=self.item, qty=Decimal('2'),
+                                         unit_cost=Decimal('5'), harga_jual=Decimal('9'))
+        self.assertTrue(h.nomor.startswith('TRX-RTC-'))
+
+
+class ReturSupplierModelTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_create_header(self):
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        self.assertTrue(h.nomor.startswith('TRX-RTS-'))
+
+
+class ProcessReturCustomerTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        self.pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        self.piutang = Akun.objects.create(kode_akun='1.1.2', nama='Piutang')
+
+    def test_standalone_return_restores_stock_and_balances(self):
+        from apps.inventory.ledger import get_available_stock
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        header = process_retur_customer(h, akun_pendapatan=self.pendapatan,
+                                        akun_piutang=self.piutang, akun_hpp=self.hpp)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('2'))
+        deb = sum(x.debit for x in header.details.all())
+        kre = sum(x.kredit for x in header.details.all())
+        self.assertEqual(deb, kre)
+        self.assertEqual(deb, Decimal('28'))  # pendapatan 2*9=18 + HPP-balik 2*5=10
+
+    def test_missing_accounts_without_sales_item_rejected(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        with self.assertRaises(ValueError):
+            process_retur_customer(h)  # tanpa sales_item & tanpa akun eksplisit
+
+    def test_reverse_restores_consumed_stock_and_removes_journal(self):
+        from apps.inventory.ledger import get_available_stock
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer, reverse_retur_customer
+        from apps.jurnal.models import JurnalHeader
+        h = ReturCustomer.objects.create(tanggal='2026-05-03', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        header = process_retur_customer(h, akun_pendapatan=self.pendapatan,
+                                        akun_piutang=self.piutang, akun_hpp=self.hpp)
+        reverse_retur_customer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class ProcessReturSupplierTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.hutang = Akun.objects.create(kode_akun='2.1.1', nama='Hutang Usaha')
+
+    def test_supplier_return_consumes_and_balances(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_lawan=self.hutang)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        header = process_retur_supplier(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('7'))
+        self.assertEqual(sum(x.debit for x in header.details.all()),
+                         sum(x.kredit for x in header.details.all()))
+        self.assertEqual(sum(x.debit for x in header.details.all()), Decimal('15'))
+
+    def test_missing_akun_lawan_rejected(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)  # akun_lawan kosong
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        with self.assertRaises(ValueError):
+            process_retur_supplier(h)
+
+    def test_reverse_restores_consumed_stock_and_removes_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier, reverse_retur_supplier
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-03', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-03', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_lawan=self.hutang)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        header = process_retur_supplier(h)
+        reverse_retur_supplier(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class ReturViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u4@example.com', password='p', name='U4')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:retur_customer_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_customer_create')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_supplier_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:retur_supplier_create')).status_code, 200)
+
+    def test_create_post_retur_customer_success_with_override_akun(self):
+        from apps.inventory.models import Warehouse, ReturCustomer
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RC1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.10', nama='Persediaan RC')
+        item.save()
+        akun_pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        akun_piutang = Akun.objects.create(kode_akun='1.1.3', nama='Piutang')
+        akun_hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        data = {
+            'tanggal': '2026-05-05', 'sales_header': '', 'entitas_bisnis': self.eb.pk,
+            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'keterangan': '', 'akun_pendapatan': akun_pendapatan.pk,
+            'akun_piutang': akun_piutang.pk, 'akun_hpp': akun_hpp.pk,
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '2',
+            'items-0-unit_cost': '5', 'items-0-harga_jual': '9',
+        }
+        resp = self.client.post(reverse('inventory:retur_customer_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ReturCustomer.objects.filter(status='posted').count(), 1)
+
+    def test_create_post_retur_supplier_success(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import Warehouse, ReturSupplier
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RS1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        item.coa_account = Akun.objects.create(kode_akun='1.1.11', nama='Persediaan RS')
+        item.save()
+        record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=wh)
+        akun_lawan = Akun.objects.create(kode_akun='2.1.2', nama='Hutang RS')
+        data = {
+            'tanggal': '2026-05-06', 'purchase_header': '', 'entitas_bisnis': self.eb.pk,
+            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'akun_lawan': akun_lawan.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': item.pk, 'items-0-qty': '3',
+        }
+        resp = self.client.post(reverse('inventory:retur_supplier_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ReturSupplier.objects.filter(status='posted').count(), 1)
+
+    def test_delete_draft_retur_customer_just_deletes(self):
+        from apps.inventory.models import Warehouse, ReturCustomer
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RC2')
+        h = ReturCustomer.objects.create(tanggal='2026-05-07', entitas_bisnis=self.eb, warehouse=wh)
+        resp = self.client.post(reverse('inventory:retur_customer_delete', args=[h.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ReturCustomer.objects.filter(pk=h.pk).exists())
+
+    def test_delete_draft_retur_supplier_just_deletes(self):
+        from apps.inventory.models import Warehouse, ReturSupplier
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RS2')
+        h = ReturSupplier.objects.create(tanggal='2026-05-07', entitas_bisnis=self.eb, warehouse=wh)
+        resp = self.client.post(reverse('inventory:retur_supplier_delete', args=[h.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ReturSupplier.objects.filter(pk=h.pk).exists())
+
+
+class ReorderSettingTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_unique_item_warehouse(self):
+        from django.db import IntegrityError
+        from apps.inventory.models import ItemReorderSetting
+        ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                          minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        with self.assertRaises(IntegrityError):
+            ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                              minimum_stock=Decimal('3'), reorder_point=Decimal('8'))
+
+
+class ReorderIndicatorTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_status_levels(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import ItemReorderSetting
+        from apps.inventory.services import reorder_status
+        ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                          minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        record_inflow(self.item, self.eb, None, None, Decimal('4'), Decimal('1'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'critical')  # <=5
+        record_inflow(self.item, self.eb, None, None, Decimal('4'), Decimal('1'),
+                      '2026-01-02', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'warning')   # 8, <=10
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('1'),
+                      '2026-01-03', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'ok')        # 18
+
+    def test_no_setting_returns_none(self):
+        from apps.inventory.services import reorder_status
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'none')
+
+
+class ReorderViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u5@example.com', password='p', name='U5')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:reorder_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:reorder_create')).status_code, 200)
+
+    def test_create_post_success(self):
+        from apps.inventory.models import Warehouse, ItemReorderSetting
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RO1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        data = {'item': item.pk, 'warehouse': wh.pk, 'minimum_stock': '5',
+                'reorder_point': '10', 'reorder_qty': '20'}
+        resp = self.client.post(reverse('inventory:reorder_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ItemReorderSetting.objects.count(), 1)
+
+    def test_delete(self):
+        from apps.inventory.models import Warehouse, ItemReorderSetting
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RO2')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        s = ItemReorderSetting.objects.create(item=item, warehouse=wh,
+                                              minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        resp = self.client.post(reverse('inventory:reorder_delete', args=[s.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ItemReorderSetting.objects.filter(pk=s.pk).exists())
