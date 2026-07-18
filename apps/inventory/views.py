@@ -1663,6 +1663,119 @@ def stock_available(request: HttpRequest) -> JsonResponse:
     })
 
 
+class _PreviewDone(Exception):
+    """Sentinel untuk keluar dari atomic block preview membawa payload."""
+    def __init__(self, payload):
+        self.payload = payload
+
+
+def _serialize_journal(header):
+    lines, total_d, total_k = [], Decimal('0'), Decimal('0')
+    if header is not None:
+        for det in header.details.select_related('akun').all():
+            lines.append({
+                'akun': f'{det.akun.kode_akun} {det.akun.nama}',
+                'debit': str(det.debit), 'kredit': str(det.kredit),
+            })
+            total_d += det.debit
+            total_k += det.kredit
+    return lines, total_d, total_k
+
+
+def _mutation_row(item, movement, stok_sebelum, stok_sesudah):
+    if movement is None:
+        return {'item': item.item_id, 'movement_type': '-', 'delta': '0',
+                'stok_sebelum': str(stok_sebelum), 'stok_sesudah': str(stok_sebelum),
+                'unit_cost': '0', 'nilai': '0', 'catatan': 'tidak ada mutasi'}
+    qty = movement.qty
+    if qty and qty != 0:
+        nilai = abs(qty) * movement.unit_cost
+    else:
+        nilai = movement.unit_cost
+    return {'item': item.item_id, 'movement_type': movement.movement_type,
+            'delta': str(qty), 'stok_sebelum': str(stok_sebelum),
+            'stok_sesudah': str(stok_sesudah), 'unit_cost': str(movement.unit_cost),
+            'nilai': str(nilai)}
+
+
+@login_required
+def adjustment_preview(request: HttpRequest) -> JsonResponse:
+    """Simulasi posting adjustment (atomic + rollback) -> jurnal + mutasi persediaan."""
+    from . import ledger
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'errors': {'__all__': 'POST diperlukan.'}}, status=405)
+    form = StockAdjustmentForm(request.POST)
+    formset = StockAdjustmentItemFormSet(request.POST)
+    if not (form.is_valid() and formset.is_valid()):
+        errors = {**form.errors, 'formset': formset.errors}
+        return JsonResponse({'ok': False, 'errors': errors}, status=200)
+    try:
+        with transaction.atomic():
+            adj = form.save()
+            formset.instance = adj
+            formset.save()
+            items = list(adj.items.select_related('item').all())
+            before = {d.pk: ledger.get_available_stock(
+                d.item, adj.entitas_bisnis, adj.entitas_bisnis_lv2,
+                adj.entitas_bisnis_lv3, warehouse=adj.warehouse) for d in items}
+            header = process_adjustment(adj)
+            lines, td, tk = _serialize_journal(header)
+            mutasi = []
+            for d in adj.items.select_related('item', 'movement').all():
+                after = ledger.get_available_stock(
+                    d.item, adj.entitas_bisnis, adj.entitas_bisnis_lv2,
+                    adj.entitas_bisnis_lv3, warehouse=adj.warehouse)
+                mutasi.append(_mutation_row(d.item, d.movement, before[d.pk], after))
+            raise _PreviewDone({
+                'ok': True, 'balance': td == tk,
+                'jurnal': lines, 'total_debit': str(td), 'total_kredit': str(tk),
+                'mutasi': mutasi,
+            })
+    except _PreviewDone as done:
+        return JsonResponse(done.payload)
+    except ValueError as e:
+        return JsonResponse({'ok': False, 'errors': {'__all__': str(e)}}, status=200)
+
+
+@login_required
+def opname_preview(request: HttpRequest) -> JsonResponse:
+    """Simulasi posting opname (atomic + rollback) -> jurnal + mutasi persediaan."""
+    from . import ledger
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'errors': {'__all__': 'POST diperlukan.'}}, status=405)
+    form = StockOpnameForm(request.POST)
+    formset = StockOpnameItemFormSet(request.POST)
+    if not (form.is_valid() and formset.is_valid()):
+        errors = {**form.errors, 'formset': formset.errors}
+        return JsonResponse({'ok': False, 'errors': errors}, status=200)
+    try:
+        with transaction.atomic():
+            opn = form.save()
+            formset.instance = opn
+            formset.save()
+            items = list(opn.items.select_related('item').all())
+            before = {d.pk: ledger.get_available_stock(
+                d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2,
+                opn.entitas_bisnis_lv3, warehouse=opn.warehouse) for d in items}
+            header = process_opname(opn)
+            lines, td, tk = _serialize_journal(header)
+            mutasi = []
+            for d in opn.items.select_related('item', 'movement').all():
+                after = ledger.get_available_stock(
+                    d.item, opn.entitas_bisnis, opn.entitas_bisnis_lv2,
+                    opn.entitas_bisnis_lv3, warehouse=opn.warehouse)
+                mutasi.append(_mutation_row(d.item, d.movement, before[d.pk], after))
+            raise _PreviewDone({
+                'ok': True, 'balance': td == tk,
+                'jurnal': lines, 'total_debit': str(td), 'total_kredit': str(tk),
+                'mutasi': mutasi,
+            })
+    except _PreviewDone as done:
+        return JsonResponse(done.payload)
+    except ValueError as e:
+        return JsonResponse({'ok': False, 'errors': {'__all__': str(e)}}, status=200)
+
+
 @login_required
 def retur_ppn_preview(request: HttpRequest) -> JsonResponse:
     """Preview PPN yang akan diretur untuk (sales_item, qty) — proporsional dari faktur asal.

@@ -117,3 +117,61 @@ class EbHierarkiResolveTests(TestCase):
         from django.utils import timezone
         form = StockAdjustmentForm()
         self.assertEqual(form.fields['tanggal'].initial, timezone.localdate())
+
+
+class AdjustmentPreviewEndpointTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(email='u2@example.com', password='x')
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM',
+                                                      metode_biaya_persediaan='fifo')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                             Decimal('100'), '2026-01-01', 'adjustment_in', warehouse=self.wh)
+
+    def _post(self, qty):
+        return self.client.post('/inventory/adjustment/preview/', {
+            'tanggal': '2026-07-18', 'eb_hierarki': f'lv1:{self.eb.pk}',
+            'warehouse': self.wh.pk, 'akun_selisih': self.selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '1', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': self.item.pk, 'items-0-qty': qty, 'items-0-unit_cost': '100',
+        })
+
+    def test_preview_increase_returns_balanced_journal_and_mutation(self):
+        data = self._post('5')
+        self.assertTrue(data.status_code == 200)
+        j = data.json()
+        self.assertTrue(j['ok'])
+        self.assertTrue(j['balance'])
+        self.assertEqual(Decimal(j['total_debit']), Decimal(j['total_kredit']))
+        self.assertEqual(Decimal(j['total_debit']), Decimal('500'))  # 5 * 100
+        mut = j['mutasi'][0]
+        self.assertEqual(mut['movement_type'], 'adjustment_in')
+        self.assertEqual(Decimal(mut['stok_sebelum']), Decimal('10'))
+        self.assertEqual(Decimal(mut['stok_sesudah']), Decimal('15'))
+
+    def test_preview_does_not_persist(self):
+        from apps.inventory.models import StockAdjustment, StockMovement
+        before_adj = StockAdjustment.objects.count()
+        before_mv = StockMovement.objects.count()
+        self._post('5')
+        self.assertEqual(StockAdjustment.objects.count(), before_adj)
+        self.assertEqual(StockMovement.objects.count(), before_mv)
+
+    def test_preview_decrease_fifo_cost_exact(self):
+        # tambah layer kedua lebih mahal; turun 12 -> 10*100 + 2*120 = 1240
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                             Decimal('120'), '2026-01-05', 'adjustment_in', warehouse=self.wh)
+        data = self._post('-12')
+        j = data.json()
+        self.assertEqual(Decimal(j['total_debit']), Decimal('1240'))
+        self.assertEqual(j['mutasi'][0]['movement_type'], 'adjustment_out')
