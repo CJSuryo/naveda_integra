@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
-from .models import StockAdjustment, StockOpname, StockTransfer
+from .models import StockAdjustment, StockOpname, StockTransfer, ReturCustomer
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -235,3 +235,73 @@ def reverse_transfer(trf: StockTransfer, request=None) -> None:
     trf.jurnal_header_tujuan = None
     trf.status = 'draft'
     trf.save(update_fields=['jurnal_header_asal', 'jurnal_header_tujuan', 'status'])
+
+
+@transaction.atomic
+def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
+                           akun_piutang=None, akun_hpp=None) -> JurnalHeader:
+    """Retur pelanggan: barang masuk (inflow biaya HPP asli) + balik pendapatan & HPP.
+
+    Bila item punya sales_item asal, akun diambil dari sana (revenue_account,
+    payment_account atau sales_eb.payment_account sebagai fallback, offset_coa_account
+    untuk HPP). Parameter akun_pendapatan/akun_piutang/akun_hpp hanya dipakai bila
+    sales_item kosong (retur berdiri sendiri / unit test).
+    """
+    if rtc.status == 'posted':
+        raise ValueError('Retur sudah diposting.')
+    items = list(rtc.items.select_related('item', 'sales_item', 'sales_item__sales_eb').all())
+    if not items:
+        raise ValueError('Retur tanpa item.')
+
+    total_pendapatan = Decimal('0')
+    total_hpp = Decimal('0')
+    ap = api = ahpp = None
+    akun_persediaan = None
+    for d in items:
+        akun_persediaan = d.item.coa_account
+        if akun_persediaan is None:
+            raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
+        si = d.sales_item
+        if si is not None:
+            ap = si.revenue_account
+            api = si.payment_account or si.sales_eb.payment_account
+            ahpp = si.offset_coa_account
+        else:
+            ap = akun_pendapatan
+            api = akun_piutang
+            ahpp = akun_hpp
+        mv = ledger.record_inflow(
+            d.item, rtc.entitas_bisnis, rtc.entitas_bisnis_lv2, rtc.entitas_bisnis_lv3,
+            d.qty, d.unit_cost, rtc.tanggal, 'return_customer', source=rtc,
+            warehouse=rtc.warehouse)
+        d.movement = mv
+        d.save(update_fields=['movement'])
+        total_pendapatan += d.qty * d.harga_jual
+        total_hpp += d.qty * d.unit_cost
+
+    if not (ap and api and ahpp):
+        raise ValueError('Akun pendapatan/piutang/HPP retur tidak lengkap.')
+    lines = [
+        (ap, total_pendapatan, Decimal('0')),          # D Pendapatan (balik)
+        (api, Decimal('0'), total_pendapatan),         # K Piutang/Kas
+        (akun_persediaan, total_hpp, Decimal('0')),    # D Persediaan (balik HPP)
+        (ahpp, Decimal('0'), total_hpp),               # K HPP
+    ]
+    header = _post_journal(rtc.tanggal, 'TRX-RTC-',
+                           f'Retur Pelanggan {rtc.nomor}', rtc.entitas_bisnis, lines)
+    rtc.jurnal_header = header
+    rtc.status = 'posted'
+    rtc.save(update_fields=['jurnal_header', 'status'])
+    return header
+
+
+@transaction.atomic
+def reverse_retur_customer(rtc: ReturCustomer, request=None) -> None:
+    if rtc.status != 'posted':
+        raise ValueError('Retur belum diposting.')
+    ledger.reverse_inflow_movements(rtc)  # hapus layer return_customer
+    _reverse_journal(rtc.jurnal_header, request)
+    rtc.items.update(movement=None)
+    rtc.jurnal_header = None
+    rtc.status = 'draft'
+    rtc.save(update_fields=['jurnal_header', 'status'])

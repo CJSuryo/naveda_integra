@@ -583,3 +583,64 @@ class ReturSupplierModelTests(TestCase):
                                          warehouse=self.wh)
         ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
         self.assertTrue(h.nomor.startswith('TRX-RTS-'))
+
+
+class ProcessReturCustomerTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        self.pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        self.piutang = Akun.objects.create(kode_akun='1.1.2', nama='Piutang')
+
+    def test_standalone_return_restores_stock_and_balances(self):
+        from apps.inventory.ledger import get_available_stock
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        header = process_retur_customer(h, akun_pendapatan=self.pendapatan,
+                                        akun_piutang=self.piutang, akun_hpp=self.hpp)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('2'))
+        deb = sum(x.debit for x in header.details.all())
+        kre = sum(x.kredit for x in header.details.all())
+        self.assertEqual(deb, kre)
+        self.assertEqual(deb, Decimal('28'))  # pendapatan 2*9=18 + HPP-balik 2*5=10
+
+    def test_missing_accounts_without_sales_item_rejected(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        with self.assertRaises(ValueError):
+            process_retur_customer(h)  # tanpa sales_item & tanpa akun eksplisit
+
+    def test_reverse_restores_consumed_stock_and_removes_journal(self):
+        from apps.inventory.ledger import get_available_stock
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer, reverse_retur_customer
+        from apps.jurnal.models import JurnalHeader
+        h = ReturCustomer.objects.create(tanggal='2026-05-03', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)
+        ReturCustomerItem.objects.create(
+            retur=h, item=self.item, qty=Decimal('2'), unit_cost=Decimal('5'),
+            harga_jual=Decimal('9'))
+        header = process_retur_customer(h, akun_pendapatan=self.pendapatan,
+                                        akun_piutang=self.piutang, akun_hpp=self.hpp)
+        reverse_retur_customer(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
