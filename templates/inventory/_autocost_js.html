@@ -81,7 +81,7 @@ Param: preview_url (nama url), cost_field (nama field unit_cost di baris formset
     var modal = document.getElementById('invPreviewModal');
     var err = document.getElementById('invPreviewError');
     err.style.display = 'none';
-    modal.style.display = 'flex';
+    modal.classList.add('ni-modal-backdrop--visible');
     fetch(PREVIEW_URL, { method: 'POST', body: new FormData(form),
       headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (r) { return r.json(); })
@@ -117,7 +117,7 @@ Param: preview_url (nama url), cost_field (nama field unit_cost di baris formset
       });
   };
   window.closeInvPreview = function () {
-    document.getElementById('invPreviewModal').style.display = 'none';
+    document.getElementById('invPreviewModal').classList.remove('ni-modal-backdrop--visible');
   };
 })();
 </script>
