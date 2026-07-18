@@ -547,3 +547,18 @@ class ReturSupplierItem(models.Model):
     qty = models.DecimalField(max_digits=15, decimal_places=4)
     unit_cost = models.DecimalField(max_digits=19, decimal_places=4, default=0)
     movement = models.ForeignKey('inventory.StockMovement', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+
+
+class ItemReorderSetting(models.Model):
+    item = models.ForeignKey('purchase.ItemMasterPurchase', on_delete=models.CASCADE, related_name='reorder_settings')
+    warehouse = models.ForeignKey('inventory.Warehouse', on_delete=models.CASCADE, related_name='reorder_settings')
+    minimum_stock = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    reorder_point = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+    reorder_qty = models.DecimalField(max_digits=15, decimal_places=4, default=0)
+
+    class Meta:
+        unique_together = (('item', 'warehouse'),)
+        verbose_name = 'Pengaturan Reorder'
+
+    def __str__(self):
+        return f'{self.item.item_id} @ {self.warehouse.kode}'

@@ -776,3 +776,82 @@ class ReturViewTests(TestCase):
         resp = self.client.post(reverse('inventory:retur_supplier_delete', args=[h.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(ReturSupplier.objects.filter(pk=h.pk).exists())
+
+
+class ReorderSettingTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_unique_item_warehouse(self):
+        from django.db import IntegrityError
+        from apps.inventory.models import ItemReorderSetting
+        ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                          minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        with self.assertRaises(IntegrityError):
+            ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                              minimum_stock=Decimal('3'), reorder_point=Decimal('8'))
+
+
+class ReorderIndicatorTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_status_levels(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import ItemReorderSetting
+        from apps.inventory.services import reorder_status
+        ItemReorderSetting.objects.create(item=self.item, warehouse=self.wh,
+                                          minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        record_inflow(self.item, self.eb, None, None, Decimal('4'), Decimal('1'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'critical')  # <=5
+        record_inflow(self.item, self.eb, None, None, Decimal('4'), Decimal('1'),
+                      '2026-01-02', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'warning')   # 8, <=10
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('1'),
+                      '2026-01-03', 'purchase_in', warehouse=self.wh)
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'ok')        # 18
+
+    def test_no_setting_returns_none(self):
+        from apps.inventory.services import reorder_status
+        self.assertEqual(reorder_status(self.item, self.eb, self.wh), 'none')
+
+
+class ReorderViewTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.user = User.objects.create_user(email='u5@example.com', password='p', name='U5')
+        self.client.force_login(self.user)
+
+    def test_list_and_create_render(self):
+        self.assertEqual(self.client.get(reverse('inventory:reorder_list')).status_code, 200)
+        self.assertEqual(self.client.get(reverse('inventory:reorder_create')).status_code, 200)
+
+    def test_create_post_success(self):
+        from apps.inventory.models import Warehouse, ItemReorderSetting
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RO1')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        data = {'item': item.pk, 'warehouse': wh.pk, 'minimum_stock': '5',
+                'reorder_point': '10', 'reorder_qty': '20'}
+        resp = self.client.post(reverse('inventory:reorder_create'), data)
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(ItemReorderSetting.objects.count(), 1)
+
+    def test_delete(self):
+        from apps.inventory.models import Warehouse, ItemReorderSetting
+        wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='RO2')
+        item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        s = ItemReorderSetting.objects.create(item=item, warehouse=wh,
+                                              minimum_stock=Decimal('5'), reorder_point=Decimal('10'))
+        resp = self.client.post(reverse('inventory:reorder_delete', args=[s.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(ItemReorderSetting.objects.filter(pk=s.pk).exists())
