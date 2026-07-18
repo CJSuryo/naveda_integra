@@ -1,0 +1,36 @@
+{% comment %}
+Filter opsi gudang mengikuti lv1 pemilik dari eb_hierarki terpilih.
+eb_hierarki bernilai lv1:<pk>/lv2:<pk>/lv3:<pk>; lv1 diturunkan dengan menelusuri
+EB_OPTIONS (lv1 selalu muncul sebelum anak lv2/lv3-nya) — sama seperti purchase.
+{% endcomment %}
+<script>
+(function () {
+  var EB_OPTIONS = {{ eb_options_json|default:"[]"|safe }};
+  function getEBLv1Id(ebValue) {
+    if (!ebValue) return '';
+    if (ebValue.indexOf('lv1:') === 0) return ebValue.split(':')[1];
+    var lastLv1 = '';
+    for (var i = 0; i < EB_OPTIONS.length; i++) {
+      if (EB_OPTIONS[i].value.indexOf('lv1:') === 0) lastLv1 = EB_OPTIONS[i].value.split(':')[1];
+      if (EB_OPTIONS[i].value === ebValue) return lastLv1;
+    }
+    return '';
+  }
+  function applyFilter(whSelect, ebSelect) {
+    var lv1 = getEBLv1Id(ebSelect.value);
+    Array.prototype.forEach.call(whSelect.options, function (opt) {
+      var show = !opt.value || !lv1 || opt.getAttribute('data-eb') === lv1;
+      opt.hidden = !show; opt.disabled = !show;
+    });
+    var cur = whSelect.selectedOptions[0];
+    if (cur && cur.hidden) whSelect.value = '';
+  }
+  document.querySelectorAll('select[data-eb-filter]').forEach(function (whSelect) {
+    var ebSelect = document.getElementById(whSelect.getAttribute('data-eb-filter'));
+    if (!ebSelect) return;
+    ebSelect.addEventListener('change', function () { applyFilter(whSelect, ebSelect); });
+    applyFilter(whSelect, ebSelect);
+  });
+  window.__getEBLv1Id = getEBLv1Id;  // dipakai auto-cost JS
+})();
+</script>

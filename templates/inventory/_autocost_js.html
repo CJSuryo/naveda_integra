@@ -1,0 +1,123 @@
+{% comment %}
+Auto-fill harga/unit dari sistem (per metode costing) saat item/entitas/gudang berubah,
++ badge peringatan bila belum ada stok, + fetch endpoint preview untuk modal.
+Param: preview_url (nama url), cost_field (nama field unit_cost di baris formset).
+{% endcomment %}
+<script>
+(function () {
+  var STOCK_URL   = '{% url "inventory:stock_available" %}';
+  var PREVIEW_URL = '{% url preview_url %}';
+  var COST_FIELD  = '{{ cost_field }}';
+  var ebSel = document.getElementById('id_eb_hierarki');
+  var whSel = document.getElementById('id_warehouse');
+
+  function ebParams() {
+    var v = ebSel ? ebSel.value : '';
+    var p = {};
+    if (!v) return p;
+    var parts = v.split(':'), lvl = parts[0], pk = parts[1];
+    var lv1 = window.__getEBLv1Id ? window.__getEBLv1Id(v) : (lvl === 'lv1' ? pk : '');
+    if (lv1) p.eb = lv1;
+    if (lvl === 'lv2') p.eb_lv2 = pk;
+    if (lvl === 'lv3') p.eb_lv3 = pk;
+    return p;
+  }
+
+  function costInput(row) { return row.querySelector('input[name$="-' + COST_FIELD + '"]'); }
+  function itemSelect(row) { return row.querySelector('select[name$="-item"]'); }
+
+  function badge(row, show) {
+    var cell = costInput(row) ? costInput(row).parentNode : null;
+    if (!cell) return;
+    var b = cell.querySelector('.ni-nostock-badge');
+    if (show && !b) {
+      b = document.createElement('div');
+      b.className = 'ni-nostock-badge';
+      b.style.cssText = 'font-size:0.7rem;color:var(--ni-warning,#f59e0b);margin-top:2px;';
+      b.textContent = 'Belum ada stok di entitas/gudang ini — isi harga manual.';
+      cell.appendChild(b);
+    } else if (!show && b) { b.remove(); }
+  }
+
+  function fillCost(row) {
+    var itSel = itemSelect(row), costEl = costInput(row);
+    if (!itSel || !costEl || !itSel.value || !whSel || !whSel.value) return;
+    var params = ebParams();
+    params.item = itSel.value; params.warehouse = whSel.value;
+    var qs = Object.keys(params).map(function (k) {
+      return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]);
+    }).join('&');
+    fetch(STOCK_URL + '?' + qs).then(function (r) { return r.json(); }).then(function (d) {
+      var qsysEl = row.querySelector('input[name$="-qty_sistem"]');
+      if (qsysEl && d.available !== null && d.available !== undefined) qsysEl.value = d.available;
+      if (d.unit_cost === null || d.unit_cost === undefined) {
+        badge(row, true);
+      } else {
+        costEl.value = d.unit_cost; badge(row, false);
+      }
+    }).catch(function () {});
+  }
+
+  function bindRow(row) {
+    var itSel = itemSelect(row);
+    if (itSel && !itSel.dataset.autocostBound) {
+      itSel.dataset.autocostBound = '1';
+      itSel.addEventListener('change', function () { fillCost(row); });
+    }
+  }
+  function bindAll() {
+    document.querySelectorAll('.item-row').forEach(bindRow);
+  }
+  if (ebSel) ebSel.addEventListener('change', bindAll);
+  if (whSel) whSel.addEventListener('change', function () {
+    document.querySelectorAll('.item-row').forEach(fillCost);
+  });
+  document.addEventListener('DOMContentLoaded', bindAll);
+  bindAll();
+
+  function fmt(n) { return parseFloat(n || 0).toLocaleString('id-ID'); }
+  window.openInvPreview = function () {
+    var form = document.querySelector('form');
+    var modal = document.getElementById('invPreviewModal');
+    var err = document.getElementById('invPreviewError');
+    err.style.display = 'none';
+    modal.style.display = 'flex';
+    fetch(PREVIEW_URL, { method: 'POST', body: new FormData(form),
+      headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        var jb = document.getElementById('invPreviewJurnalBody');
+        var mb = document.getElementById('invPreviewMutasiBody');
+        jb.innerHTML = ''; mb.innerHTML = '';
+        if (!j.ok) {
+          err.style.display = 'block';
+          err.textContent = 'Tidak bisa membuat preview. Lengkapi/validasi form terlebih dulu.';
+          return;
+        }
+        j.jurnal.forEach(function (l) {
+          jb.innerHTML += '<tr><td>' + l.akun + '</td><td style="text-align:right">' +
+            fmt(l.debit) + '</td><td style="text-align:right">' + fmt(l.kredit) + '</td></tr>';
+        });
+        document.getElementById('invPreviewTotalD').textContent = fmt(j.total_debit);
+        document.getElementById('invPreviewTotalK').textContent = fmt(j.total_kredit);
+        var bal = document.getElementById('invPreviewBalance');
+        bal.textContent = j.balance ? '✓ Balance' : '✗ Tidak balance';
+        bal.style.color = j.balance ? 'var(--ni-success,#16a34a)' : 'var(--ni-danger)';
+        j.mutasi.forEach(function (m) {
+          var note = m.catatan ? ' <em style="color:var(--ni-text-muted)">(' + m.catatan + ')</em>' : '';
+          mb.innerHTML += '<tr><td>' + m.item + '</td><td>' + m.movement_type + note +
+            '</td><td style="text-align:right">' + fmt(m.stok_sebelum) +
+            '</td><td style="text-align:right">' + fmt(m.delta) +
+            '</td><td style="text-align:right">' + fmt(m.stok_sesudah) +
+            '</td><td style="text-align:right">' + fmt(m.nilai) + '</td></tr>';
+        });
+        if (window.lucide) lucide.createIcons();
+      }).catch(function () {
+        err.style.display = 'block'; err.textContent = 'Gagal memuat preview.';
+      });
+  };
+  window.closeInvPreview = function () {
+    document.getElementById('invPreviewModal').style.display = 'none';
+  };
+})();
+</script>

@@ -1,0 +1,37 @@
+<div class="ni-modal-backdrop" id="invPreviewModal" style="display:none;">
+  <div class="ni-modal ni-modal--xl">
+    <div class="ni-modal__header">
+      <h3 class="ni-modal__title" style="display:flex;align-items:center;gap:8px;">
+        <i data-lucide="book-open" style="width:18px;height:18px;"></i> Preview Jurnal &amp; Mutasi Persediaan
+      </h3>
+      <button type="button" class="ni-modal__close" onclick="closeInvPreview()" aria-label="Tutup">
+        <i data-lucide="x" style="width:20px;height:20px"></i>
+      </button>
+    </div>
+    <div class="ni-modal__body" style="overflow-x:auto;">
+      <div id="invPreviewError" class="ni-form-error" style="display:none;margin-bottom:12px;"></div>
+      <h4 style="margin:0 0 8px;font-size:0.9rem;color:var(--ni-primary);">Jurnal</h4>
+      <table class="ni-table" style="margin-bottom:20px;">
+        <thead><tr><th>Akun</th><th style="text-align:right">Debit</th><th style="text-align:right">Kredit</th></tr></thead>
+        <tbody id="invPreviewJurnalBody"></tbody>
+        <tfoot><tr>
+          <td style="text-align:right"><strong>Total</strong></td>
+          <td style="text-align:right"><strong id="invPreviewTotalD">0</strong></td>
+          <td style="text-align:right"><strong id="invPreviewTotalK">0</strong></td>
+        </tr>
+        <tr><td colspan="3" id="invPreviewBalance" style="text-align:right;font-size:0.8rem;"></td></tr>
+        </tfoot>
+      </table>
+      <h4 style="margin:0 0 8px;font-size:0.9rem;color:var(--ni-primary);">Mutasi Persediaan</h4>
+      <table class="ni-table">
+        <thead><tr><th>Item</th><th>Tipe</th><th style="text-align:right">Stok Sebelum</th>
+          <th style="text-align:right">Delta</th><th style="text-align:right">Stok Sesudah</th>
+          <th style="text-align:right">Nilai (Rp)</th></tr></thead>
+        <tbody id="invPreviewMutasiBody"></tbody>
+      </table>
+    </div>
+    <div class="ni-modal__footer">
+      <button type="button" class="ni-btn ni-btn--secondary" onclick="closeInvPreview()">Tutup</button>
+    </div>
+  </div>
+</div>

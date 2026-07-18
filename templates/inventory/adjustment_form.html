@@ -24,9 +24,9 @@
           {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
-          {{ form.entitas_bisnis }}
-          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+          <label class="ni-form-label">{{ form.eb_hierarki.label }}</label>
+          {{ form.eb_hierarki }}
+          {% if form.eb_hierarki.errors %}<div class="ni-form-error">{{ form.eb_hierarki.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
           <label class="ni-form-label">{{ form.warehouse.label }}</label>
@@ -35,16 +35,6 @@
         </div>
       </div>
       <div class="ni-form-row">
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv2.label }}</label>
-          {{ form.entitas_bisnis_lv2 }}
-          {% if form.entitas_bisnis_lv2.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv2.errors }}</div>{% endif %}
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv3.label }}</label>
-          {{ form.entitas_bisnis_lv3 }}
-          {% if form.entitas_bisnis_lv3.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv3.errors }}</div>{% endif %}
-        </div>
         <div class="ni-form-group">
           <label class="ni-form-label">{{ form.akun_selisih.label }}</label>
           {{ form.akun_selisih }}
@@ -106,6 +96,9 @@
       </div>
 
       <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="button" class="ni-btn ni-btn--secondary" onclick="openInvPreview()">
+          <i data-lucide="eye" style="width:14px;height:14px"></i> Preview Jurnal &amp; Mutasi
+        </button>
         <button type="submit" class="ni-btn ni-btn--primary"
                 onclick="return confirm('Proses & posting adjustment ini?')">
           <i data-lucide="check" style="width:14px;height:14px"></i> Proses & Posting
@@ -115,6 +108,8 @@
     </form>
   </div>
 </div>
+{% include 'inventory/_inv_preview_modal.html' %}
+{% include 'inventory/_eb_hierarki_scope_js.html' %}
+{% include 'inventory/_autocost_js.html' with preview_url='inventory:adjustment_preview' cost_field='unit_cost' %}
 {% include 'inventory/_item_formset_js.html' %}
-{% include 'inventory/_warehouse_scope_js.html' %}
 {% endblock %}

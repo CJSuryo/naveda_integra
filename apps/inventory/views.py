@@ -1345,6 +1345,7 @@ def adjustment_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def adjustment_create(request: HttpRequest) -> HttpResponse:
     """Create a stock adjustment (header + items) and post it immediately."""
+    from apps.purchase.views import _get_eb_dropdown_options
     if request.method == 'POST':
         form = StockAdjustmentForm(request.POST)
         formset = StockAdjustmentItemFormSet(request.POST)
@@ -1363,7 +1364,10 @@ def adjustment_create(request: HttpRequest) -> HttpResponse:
     else:
         form = StockAdjustmentForm()
         formset = StockAdjustmentItemFormSet()
-    return render(request, 'inventory/adjustment_form.html', {'form': form, 'formset': formset})
+    return render(request, 'inventory/adjustment_form.html', {
+        'form': form, 'formset': formset,
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
+    })
 
 
 @login_required
