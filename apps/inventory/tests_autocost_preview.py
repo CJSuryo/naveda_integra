@@ -48,3 +48,35 @@ class CurrentUnitCostTests(TestCase):
         self.item.save()
         c = ledger.current_unit_cost(self.item, self.eb, warehouse=self.wh)
         self.assertEqual(c, Decimal('120'))
+
+
+class StockAvailableEndpointTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(email='u1@example.com', password='x')
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM',
+                                                      metode_biaya_persediaan='fifo')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('4'),
+                             Decimal('100'), '2026-01-01', 'adjustment_in', warehouse=self.wh)
+
+    def test_returns_available_and_unit_cost(self):
+        resp = self.client.get('/inventory/api/stock-available/',
+                               {'item': self.item.pk, 'warehouse': self.wh.pk})
+        data = resp.json()
+        self.assertEqual(Decimal(data['available']), Decimal('4'))
+        self.assertEqual(Decimal(data['unit_cost']), Decimal('100'))
+
+    def test_unit_cost_null_when_no_stock(self):
+        other = ItemMasterPurchase.objects.create(nama='Teh', tipe_item='RM')
+        resp = self.client.get('/inventory/api/stock-available/',
+                               {'item': other.pk, 'warehouse': self.wh.pk})
+        data = resp.json()
+        self.assertIsNone(data['unit_cost'])

@@ -1656,7 +1656,14 @@ def stock_available(request: HttpRequest) -> JsonResponse:
     eb_lv3 = EntitasBisnisLv3.objects.filter(pk=request.GET.get('eb_lv3')).first()
 
     available = ledger.get_available_stock(item, eb, eb_lv2, eb_lv3, warehouse=warehouse)
-    return JsonResponse({'available': str(available)})
+    unit_cost = ledger.current_unit_cost(
+        item, eb, eb_lv2, eb_lv3, warehouse=warehouse,
+        metode=item.metode_biaya_persediaan,
+    )
+    return JsonResponse({
+        'available': str(available),
+        'unit_cost': (str(unit_cost) if unit_cost is not None else None),
+    })
 
 
 @login_required
