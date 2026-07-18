@@ -1399,6 +1399,7 @@ def opname_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def opname_create(request: HttpRequest) -> HttpResponse:
     """Create a stock opname (header + items) and post it immediately."""
+    from apps.purchase.views import _get_eb_dropdown_options
     if request.method == 'POST':
         form = StockOpnameForm(request.POST)
         formset = StockOpnameItemFormSet(request.POST)
@@ -1420,7 +1421,10 @@ def opname_create(request: HttpRequest) -> HttpResponse:
     else:
         form = StockOpnameForm()
         formset = StockOpnameItemFormSet()
-    return render(request, 'inventory/opname_form.html', {'form': form, 'formset': formset})
+    return render(request, 'inventory/opname_form.html', {
+        'form': form, 'formset': formset,
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
+    })
 
 
 @login_required
