@@ -726,8 +726,8 @@ class ReturViewTests(TestCase):
         akun_piutang = Akun.objects.create(kode_akun='1.1.3', nama='Piutang')
         akun_hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
         data = {
-            'tanggal': '2026-05-05', 'sales_header': '', 'entitas_bisnis': self.eb.pk,
-            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'tanggal': '2026-05-05', 'sales_header': '', 'eb_hierarki': f'lv1:{self.eb.pk}',
+            'warehouse': wh.pk,
             'keterangan': '', 'akun_pendapatan': akun_pendapatan.pk,
             'akun_piutang': akun_piutang.pk, 'akun_hpp': akun_hpp.pk,
             'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
@@ -750,8 +750,8 @@ class ReturViewTests(TestCase):
                       '2026-01-01', 'purchase_in', warehouse=wh)
         akun_lawan = Akun.objects.create(kode_akun='2.1.2', nama='Hutang RS')
         data = {
-            'tanggal': '2026-05-06', 'purchase_header': '', 'entitas_bisnis': self.eb.pk,
-            'entitas_bisnis_lv2': '', 'entitas_bisnis_lv3': '', 'warehouse': wh.pk,
+            'tanggal': '2026-05-06', 'purchase_header': '', 'eb_hierarki': f'lv1:{self.eb.pk}',
+            'warehouse': wh.pk,
             'akun_lawan': akun_lawan.pk, 'keterangan': '',
             'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',

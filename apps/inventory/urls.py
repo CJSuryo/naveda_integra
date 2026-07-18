@@ -42,4 +42,5 @@ urlpatterns = [
     path('reorder/<int:pk>/delete/', views.reorder_delete, name='reorder_delete'),
     path('api/stock-available/', views.stock_available, name='stock_available'),
     path('api/retur-ppn-preview/', views.retur_ppn_preview, name='retur_ppn_preview'),
+    path('api/retur-supplier-akun/', views.retur_supplier_akun_preview, name='retur_supplier_akun_preview'),
 ]

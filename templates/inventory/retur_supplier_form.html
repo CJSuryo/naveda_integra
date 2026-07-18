@@ -24,9 +24,9 @@
           {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
-          {{ form.entitas_bisnis }}
-          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+          <label class="ni-form-label">{{ form.eb_hierarki.label }}</label>
+          {{ form.eb_hierarki }}
+          {% if form.eb_hierarki.errors %}<div class="ni-form-error">{{ form.eb_hierarki.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
           <label class="ni-form-label">{{ form.warehouse.label }}</label>
@@ -36,28 +36,22 @@
       </div>
       <div class="ni-form-row">
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv2.label }}</label>
-          {{ form.entitas_bisnis_lv2 }}
-          {% if form.entitas_bisnis_lv2.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv2.errors }}</div>{% endif %}
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv3.label }}</label>
-          {{ form.entitas_bisnis_lv3 }}
-          {% if form.entitas_bisnis_lv3.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv3.errors }}</div>{% endif %}
-        </div>
-        <div class="ni-form-group">
           <label class="ni-form-label">{{ form.purchase_header.label }}</label>
           {{ form.purchase_header }}
           {% if form.purchase_header.errors %}<div class="ni-form-error">{{ form.purchase_header.errors }}</div>{% endif %}
+          <p style="font-size:0.75rem;color:var(--ni-text-muted);margin:4px 0 0;">
+            Pilih faktur pembelian asal → <strong>Akun Lawan</strong> terisi otomatis dari akun hutang faktur tsb.
+          </p>
         </div>
-      </div>
-      <div class="ni-form-row">
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.akun_lawan.label }}</label>
+          <label class="ni-form-label" title="Akun Hutang/Kas yang dulu dikredit saat pembelian, kini didebit balik saat retur. Otomatis dari faktur pembelian asal bila akun hutang seluruh itemnya seragam.">
+            {{ form.akun_lawan.label }}
+            <i data-lucide="info" style="width:12px;height:12px;vertical-align:-1px;color:var(--ni-text-muted);"></i>
+          </label>
           {{ form.akun_lawan }}
           {% if form.akun_lawan.errors %}<div class="ni-form-error">{{ form.akun_lawan.errors }}</div>{% endif %}
         </div>
-        <div class="ni-form-group" style="flex:2">
+        <div class="ni-form-group">
           <label class="ni-form-label">{{ form.keterangan.label }}</label>
           {{ form.keterangan }}
           {% if form.keterangan.errors %}<div class="ni-form-error">{{ form.keterangan.errors }}</div>{% endif %}
@@ -116,5 +110,28 @@
   </div>
 </div>
 {% include 'inventory/_item_formset_js.html' %}
-{% include 'inventory/_warehouse_scope_js.html' %}
+{% include 'inventory/_eb_hierarki_scope_js.html' %}
+<script>
+(function () {
+  var url = "{% url 'inventory:retur_supplier_akun_preview' %}";
+  var headerSel = document.getElementById('id_purchase_header');
+  var lawanSel = document.getElementById('id_akun_lawan');
+  if (!headerSel || !lawanSel) return;
+
+  // Saat ganti faktur pembelian asal → set Akun Lawan dari akun hutang faktur.
+  // Selalu timpa saat ganti faktur (bila akun tersedia & seragam).
+  headerSel.addEventListener('change', function () {
+    if (!headerSel.value) return;
+    var params = new URLSearchParams({ purchase_header: headerSel.value });
+    fetch(url + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok && d.akun_lawan) {
+          lawanSel.value = String(d.akun_lawan.pk);
+        }
+      })
+      .catch(function () {});
+  });
+})();
+</script>
 {% endblock %}

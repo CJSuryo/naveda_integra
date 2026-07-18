@@ -1558,7 +1558,11 @@ def retur_customer_create(request: HttpRequest) -> HttpResponse:
     else:
         form = ReturCustomerForm()
         formset = ReturCustomerItemFormSet()
-    return render(request, 'inventory/retur_customer_form.html', {'form': form, 'formset': formset})
+    from apps.purchase.views import _get_eb_dropdown_options
+    return render(request, 'inventory/retur_customer_form.html', {
+        'form': form, 'formset': formset,
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
+    })
 
 
 @login_required
@@ -1608,7 +1612,11 @@ def retur_supplier_create(request: HttpRequest) -> HttpResponse:
     else:
         form = ReturSupplierForm()
         formset = ReturSupplierItemFormSet()
-    return render(request, 'inventory/retur_supplier_form.html', {'form': form, 'formset': formset})
+    from apps.purchase.views import _get_eb_dropdown_options
+    return render(request, 'inventory/retur_supplier_form.html', {
+        'form': form, 'formset': formset,
+        'eb_options_json': safe_json(_get_eb_dropdown_options(request.user)),
+    })
 
 
 @login_required
@@ -1840,6 +1848,12 @@ def retur_ppn_preview(request: HttpRequest) -> JsonResponse:
     ).exclude(status='dibatalkan'):
         ppn += pt.jumlah_pajak * ratio
     unit_cost = (si.cogs_amount / qty_jual) if qty_jual else Decimal('0')
+
+    # Akun yang akan dipakai untuk baris retur ini (dari sales_item) — supaya UI
+    # bisa menampilkan dengan jelas akun pendapatan/piutang/HPP per baris.
+    si = (SalesItem.objects
+          .select_related('revenue_account', 'payment_account', 'offset_coa_account')
+          .get(pk=si.pk))
     return JsonResponse({
         'ok': True,
         'item': si.item_id,
@@ -1847,4 +1861,40 @@ def retur_ppn_preview(request: HttpRequest) -> JsonResponse:
         'harga_jual': str(si.selling_price),
         'unit_cost': str(unit_cost.quantize(Decimal('0.0001'))),
         'ppn': str(ppn.quantize(Decimal('0.01'))),
+        'akun_pendapatan': _akun_label(si.revenue_account),
+        'akun_piutang': _akun_label(si.payment_account),
+        'akun_hpp': _akun_label(si.offset_coa_account),
     })
+
+
+def _akun_label(akun):
+    """Serialize an Akun (or None) to {'pk', 'label'} for JSON auto-fill payloads."""
+    if akun is None:
+        return None
+    return {'pk': akun.pk, 'label': f'{akun.kode_akun} {akun.nama}'}
+
+
+@login_required
+def retur_supplier_akun_preview(request: HttpRequest) -> JsonResponse:
+    """Auto-fill Akun Lawan (Hutang/Kas) dari offset_coa_account faktur pembelian asal.
+
+    Kembalikan akun_lawan bila SEMUA item faktur memakai offset yang sama; bila
+    offset item berbeda-beda (tidak seragam), kembalikan None agar user memilih
+    manual — menghindari menebak akun yang salah.
+    """
+    from apps.purchase.models import PurchaseItem
+
+    header_id = request.GET.get('purchase_header')
+    if not header_id:
+        return JsonResponse({'ok': True, 'akun_lawan': None})
+    offsets = list(
+        PurchaseItem.objects
+        .filter(purchase_eb__purchase_header_id=header_id)
+        .values_list('offset_coa_account_id', flat=True)
+        .distinct()
+    )
+    if len(offsets) != 1 or offsets[0] is None:
+        return JsonResponse({'ok': True, 'akun_lawan': None})
+    from apps.master_data.models import Akun
+    akun = Akun.objects.filter(pk=offsets[0]).first()
+    return JsonResponse({'ok': True, 'akun_lawan': _akun_label(akun)})

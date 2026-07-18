@@ -357,6 +357,10 @@ StockTransferItemFormSet = inlineformset_factory(
 
 class ReturCustomerForm(forms.ModelForm):
     """Akun override (pendapatan/piutang/HPP) dipakai hanya untuk item tanpa sales_item asal."""
+    eb_hierarki = forms.ChoiceField(
+        label='Entitas Bisnis',
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_eb_hierarki'}),
+    )
     akun_pendapatan = forms.ModelChoiceField(queryset=Akun.objects.all(), required=False,
                                              widget=forms.Select(attrs={'class': 'ni-input'}))
     akun_piutang = forms.ModelChoiceField(queryset=Akun.objects.all(), required=False,
@@ -366,30 +370,36 @@ class ReturCustomerForm(forms.ModelForm):
 
     class Meta:
         model = ReturCustomer
-        fields = ('tanggal', 'sales_header', 'entitas_bisnis', 'entitas_bisnis_lv2',
-                  'entitas_bisnis_lv3', 'warehouse', 'keterangan')
+        fields = ('tanggal', 'sales_header', 'warehouse', 'keterangan')
         widgets = {
-            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}, format='%Y-%m-%d'),
             'sales_header': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
-            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_entitas_bisnis'}),
+            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['eb_hierarki'].choices = _eb_hierarki_choices()
         self.fields['sales_header'].required = False
-        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
-            status_aktif=True,
-        ).order_by('nama')
         self.fields['warehouse'].widget.eb_map = _warehouse_eb_map()
+        if not self.is_bound and not self.fields['tanggal'].initial:
+            self.fields['tanggal'].initial = timezone.localdate()
 
     def clean(self):
         cleaned_data = super().clean()
+        _resolve_eb_hierarki(cleaned_data.get('eb_hierarki'), cleaned_data, self)
         _validate_warehouse_scope(cleaned_data, 'entitas_bisnis', 'warehouse', self)
         return cleaned_data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.entitas_bisnis = self.cleaned_data['entitas_bisnis']
+        obj.entitas_bisnis_lv2 = self.cleaned_data['entitas_bisnis_lv2']
+        obj.entitas_bisnis_lv3 = self.cleaned_data['entitas_bisnis_lv3']
+        if commit:
+            obj.save()
+        return obj
 
 
 class SalesItemScopedSelect(forms.Select):
@@ -458,33 +468,44 @@ ReturCustomerItemFormSet = inlineformset_factory(
 
 
 class ReturSupplierForm(forms.ModelForm):
+    eb_hierarki = forms.ChoiceField(
+        label='Entitas Bisnis',
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_eb_hierarki'}),
+    )
+
     class Meta:
         model = ReturSupplier
-        fields = ('tanggal', 'purchase_header', 'entitas_bisnis', 'entitas_bisnis_lv2',
-                  'entitas_bisnis_lv3', 'warehouse', 'akun_lawan', 'keterangan')
+        fields = ('tanggal', 'purchase_header', 'warehouse', 'akun_lawan', 'keterangan')
         widgets = {
-            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}, format='%Y-%m-%d'),
             'purchase_header': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
-            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_entitas_bisnis'}),
-            'akun_lawan': forms.Select(attrs={'class': 'ni-input'}),
+            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
+            'akun_lawan': forms.Select(attrs={'class': 'ni-input', 'id': 'id_akun_lawan'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['eb_hierarki'].choices = _eb_hierarki_choices()
         self.fields['purchase_header'].required = False
-        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
-            status_aktif=True,
-        ).order_by('nama')
         self.fields['warehouse'].widget.eb_map = _warehouse_eb_map()
+        if not self.is_bound and not self.fields['tanggal'].initial:
+            self.fields['tanggal'].initial = timezone.localdate()
 
     def clean(self):
         cleaned_data = super().clean()
+        _resolve_eb_hierarki(cleaned_data.get('eb_hierarki'), cleaned_data, self)
         _validate_warehouse_scope(cleaned_data, 'entitas_bisnis', 'warehouse', self)
         return cleaned_data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.entitas_bisnis = self.cleaned_data['entitas_bisnis']
+        obj.entitas_bisnis_lv2 = self.cleaned_data['entitas_bisnis_lv2']
+        obj.entitas_bisnis_lv3 = self.cleaned_data['entitas_bisnis_lv3']
+        if commit:
+            obj.save()
+        return obj
 
 
 class ReturSupplierItemForm(forms.ModelForm):

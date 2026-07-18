@@ -24,9 +24,9 @@
           {% if form.tanggal.errors %}<div class="ni-form-error">{{ form.tanggal.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis.label }}</label>
-          {{ form.entitas_bisnis }}
-          {% if form.entitas_bisnis.errors %}<div class="ni-form-error">{{ form.entitas_bisnis.errors }}</div>{% endif %}
+          <label class="ni-form-label">{{ form.eb_hierarki.label }}</label>
+          {{ form.eb_hierarki }}
+          {% if form.eb_hierarki.errors %}<div class="ni-form-error">{{ form.eb_hierarki.errors }}</div>{% endif %}
         </div>
         <div class="ni-form-group">
           <label class="ni-form-label">{{ form.warehouse.label }}</label>
@@ -35,24 +35,26 @@
         </div>
       </div>
       <div class="ni-form-row">
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv2.label }}</label>
-          {{ form.entitas_bisnis_lv2 }}
-          {% if form.entitas_bisnis_lv2.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv2.errors }}</div>{% endif %}
-        </div>
-        <div class="ni-form-group">
-          <label class="ni-form-label">{{ form.entitas_bisnis_lv3.label }}</label>
-          {{ form.entitas_bisnis_lv3 }}
-          {% if form.entitas_bisnis_lv3.errors %}<div class="ni-form-error">{{ form.entitas_bisnis_lv3.errors }}</div>{% endif %}
-        </div>
-        <div class="ni-form-group">
+        <div class="ni-form-group" style="flex:1">
           <label class="ni-form-label">{{ form.sales_header.label }}</label>
           {{ form.sales_header }}
           {% if form.sales_header.errors %}<div class="ni-form-error">{{ form.sales_header.errors }}</div>{% endif %}
+          <p style="font-size:0.75rem;color:var(--ni-text-muted);margin:4px 0 0;">
+            Pilih dokumen penjualan asal untuk memfilter opsi <strong>Faktur Asal</strong> di tiap baris item.
+          </p>
         </div>
       </div>
 
-      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Akun Override (isi bila item tanpa dokumen penjualan asal)</h3>
+      <h3 style="margin:20px 0 6px;font-size:1rem;color:var(--ni-primary);display:flex;align-items:center;gap:6px;">
+        Akun Override
+        <i data-lucide="info" style="width:14px;height:14px;color:var(--ni-text-muted);"
+           title="Hanya dipakai untuk baris retur yang TIDAK memilih Faktur Asal. Baris yang punya Faktur Asal otomatis memakai akun (pendapatan/piutang/HPP) dari faktur tersebut."></i>
+      </h3>
+      <p style="font-size:0.8rem;color:var(--ni-text-muted);margin:0 0 12px;">
+        Baris yang memilih <strong>Faktur Asal</strong> otomatis memakai akun pendapatan/piutang/HPP dari faktur itu
+        (ditampilkan di kolom <strong>Akun Faktur</strong>). Isi field di bawah ini <strong>hanya</strong> sebagai
+        cadangan untuk baris <strong>tanpa</strong> Faktur Asal.
+      </p>
       <div class="ni-form-row">
         <div class="ni-form-group">
           <label class="ni-form-label">{{ form.akun_pendapatan.label }}</label>
@@ -94,6 +96,7 @@
           <thead>
             <tr>
               <th>Faktur Asal (opsional)</th>
+              <th>Akun Faktur</th>
               <th>Item</th>
               <th>Qty</th>
               <th>HPP/Unit</th>
@@ -109,6 +112,16 @@
               <td>
                 {{ item_form.sales_item }}
                 {% if item_form.sales_item.errors %}<div class="ni-form-error">{{ item_form.sales_item.errors }}</div>{% endif %}
+              </td>
+              <td>
+                <div class="retur-akun-faktur" style="font-size:0.72rem;line-height:1.5;color:var(--ni-text-muted);min-width:150px;">
+                  <span class="retur-akun-empty">— pakai Akun Override —</span>
+                  <div class="retur-akun-detail" style="display:none;">
+                    <div>Pdpt: <span class="retur-akun-pendapatan">-</span></div>
+                    <div>Piut: <span class="retur-akun-piutang">-</span></div>
+                    <div>HPP: <span class="retur-akun-hpp">-</span></div>
+                  </div>
+                </div>
               </td>
               <td>
                 {{ item_form.item }}
@@ -138,7 +151,7 @@
           </tbody>
           <tfoot>
             <tr>
-              <td colspan="5" class="ni-text-right"><strong>Total PPN Diretur</strong></td>
+              <td colspan="6" class="ni-text-right"><strong>Total PPN Diretur</strong></td>
               <td class="ni-text-right"><strong id="retur-ppn-total">0</strong></td>
               <td></td>
             </tr>
@@ -157,7 +170,7 @@
   </div>
 </div>
 {% include 'inventory/_item_formset_js.html' %}
-{% include 'inventory/_warehouse_scope_js.html' %}
+{% include 'inventory/_eb_hierarki_scope_js.html' %}
 <script>
 (function () {
   var url = "{% url 'inventory:retur_ppn_preview' %}";
@@ -172,8 +185,24 @@
       qty: row.querySelector('input[name$="-qty"]'),
       unit: row.querySelector('input[name$="-unit_cost"]'),
       harga: row.querySelector('input[name$="-harga_jual"]'),
-      ppn: row.querySelector('.retur-ppn')
+      ppn: row.querySelector('.retur-ppn'),
+      akunWrap: row.querySelector('.retur-akun-faktur')
     };
+  }
+
+  // Tampilkan/kosongkan akun faktur (pendapatan/piutang/HPP) untuk baris ini.
+  function setAkun(els, d) {
+    if (!els.akunWrap) return;
+    var empty = els.akunWrap.querySelector('.retur-akun-empty');
+    var detail = els.akunWrap.querySelector('.retur-akun-detail');
+    var has = d && d.ok && (d.akun_pendapatan || d.akun_piutang || d.akun_hpp);
+    if (empty) empty.style.display = has ? 'none' : '';
+    if (detail) detail.style.display = has ? '' : 'none';
+    if (!has) return;
+    function lbl(a) { return a ? a.label : '-'; }
+    els.akunWrap.querySelector('.retur-akun-pendapatan').textContent = lbl(d.akun_pendapatan);
+    els.akunWrap.querySelector('.retur-akun-piutang').textContent = lbl(d.akun_piutang);
+    els.akunWrap.querySelector('.retur-akun-hpp').textContent = lbl(d.akun_hpp);
   }
 
   function fmt(n) {
@@ -210,19 +239,20 @@
 
   function fetchPreview(row) {
     var els = rowEls(row);
-    if (!els.sales || !els.sales.value) { setPpn(els, 0); return; }
+    if (!els.sales || !els.sales.value) { setPpn(els, 0); setAkun(els, null); return; }
     var qty = (els.qty && els.qty.value) ? els.qty.value : '0';
     var params = new URLSearchParams({ sales_item: els.sales.value, qty: qty });
     fetch(url + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
       .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (!d || !d.ok) { setPpn(els, 0); return; }
+        if (!d || !d.ok) { setPpn(els, 0); setAkun(els, null); return; }
         if (els.item && d.item && !els.item.value) els.item.value = String(d.item);
         if (els.harga && (!els.harga.value || els.harga.value === '0')) els.harga.value = d.harga_jual;
         if (els.unit && (!els.unit.value || els.unit.value === '0')) els.unit.value = d.unit_cost;
         setPpn(els, parseFloat(d.ppn) || 0);
+        setAkun(els, d);
       })
-      .catch(function () { setPpn(els, 0); });
+      .catch(function () { setPpn(els, 0); setAkun(els, null); });
   }
 
   tbody.addEventListener('change', function (e) {
