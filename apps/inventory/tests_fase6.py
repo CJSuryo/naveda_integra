@@ -143,7 +143,7 @@ class AdjustmentFormTests(TestCase):
     def test_form_fields(self):
         from apps.inventory.forms import StockAdjustmentForm
         f = StockAdjustmentForm()
-        for name in ('tanggal', 'entitas_bisnis', 'warehouse', 'akun_selisih', 'keterangan'):
+        for name in ('tanggal', 'eb_hierarki', 'warehouse', 'akun_selisih', 'keterangan'):
             self.assertIn(name, f.fields)
 
     def test_formset_requires_at_least_one_item(self):
@@ -189,7 +189,7 @@ class AdjustmentViewTests(TestCase):
         item.save()
         selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
         data = {
-            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'tanggal': '2026-03-01', 'eb_hierarki': f'lv1:{self.eb.pk}', 'warehouse': wh.pk,
             'akun_selisih': selisih.pk, 'keterangan': '',
             'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
@@ -325,7 +325,7 @@ class OpnameViewTests(TestCase):
         record_inflow(item, self.eb, None, None, Decimal('10'), Decimal('5'),
                       '2026-01-01', 'purchase_in', warehouse=wh)
         data = {
-            'tanggal': '2026-03-01', 'entitas_bisnis': self.eb.pk, 'warehouse': wh.pk,
+            'tanggal': '2026-03-01', 'eb_hierarki': f'lv1:{self.eb.pk}', 'warehouse': wh.pk,
             'akun_selisih': selisih.pk, 'keterangan': '',
             'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
             'items-MIN_NUM_FORMS': '0', 'items-MAX_NUM_FORMS': '1000',
@@ -1058,7 +1058,7 @@ class WarehouseScopeValidationTests(TestCase):
     def test_adjustment_rejects_warehouse_of_other_entity(self):
         from apps.inventory.forms import StockAdjustmentForm
         form = StockAdjustmentForm(data={
-            'tanggal': '2026-02-01', 'entitas_bisnis': self.eb_a.pk,
+            'tanggal': '2026-02-01', 'eb_hierarki': f'lv1:{self.eb_a.pk}',
             'warehouse': self.wh_b.pk, 'akun_selisih': self.akun.pk, 'keterangan': '',
         })
         self.assertFalse(form.is_valid())
@@ -1069,7 +1069,7 @@ class WarehouseScopeValidationTests(TestCase):
         from apps.inventory.forms import StockAdjustmentForm
         wh_a = Warehouse.objects.create(entitas_bisnis=self.eb_a, nama='Gudang A')
         form = StockAdjustmentForm(data={
-            'tanggal': '2026-02-01', 'entitas_bisnis': self.eb_a.pk,
+            'tanggal': '2026-02-01', 'eb_hierarki': f'lv1:{self.eb_a.pk}',
             'warehouse': wh_a.pk, 'akun_selisih': self.akun.pk, 'keterangan': '',
         })
         self.assertTrue(form.is_valid(), form.errors)
@@ -1078,7 +1078,7 @@ class WarehouseScopeValidationTests(TestCase):
         from apps.inventory.forms import StockAdjustmentForm
         html = str(StockAdjustmentForm()['warehouse'])
         self.assertIn('data-eb="%d"' % self.eb_b.pk, html)
-        self.assertIn('data-eb-filter="id_entitas_bisnis"', html)
+        self.assertIn('data-eb-filter="id_eb_hierarki"', html)
 
 
 class ReturCustomerPPNTests(TestCase):
