@@ -644,3 +644,60 @@ class ProcessReturCustomerTests(TestCase):
         self.assertEqual(h.status, 'draft')
         self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('0'))
         self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())
+
+
+class ProcessReturSupplierTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        from apps.inventory.models import Warehouse
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.hutang = Akun.objects.create(kode_akun='2.1.1', nama='Hutang Usaha')
+
+    def test_supplier_return_consumes_and_balances(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_lawan=self.hutang)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        header = process_retur_supplier(h)
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('7'))
+        self.assertEqual(sum(x.debit for x in header.details.all()),
+                         sum(x.kredit for x in header.details.all()))
+        self.assertEqual(sum(x.debit for x in header.details.all()), Decimal('15'))
+
+    def test_missing_akun_lawan_rejected(self):
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh)  # akun_lawan kosong
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        with self.assertRaises(ValueError):
+            process_retur_supplier(h)
+
+    def test_reverse_restores_consumed_stock_and_removes_journal(self):
+        from apps.inventory.ledger import record_inflow, get_available_stock
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier, reverse_retur_supplier
+        from apps.jurnal.models import JurnalHeader
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-03', 'purchase_in', warehouse=self.wh)
+        h = ReturSupplier.objects.create(tanggal='2026-05-03', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_lawan=self.hutang)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        header = process_retur_supplier(h)
+        reverse_retur_supplier(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+        self.assertEqual(get_available_stock(self.item, self.eb, warehouse=self.wh), Decimal('10'))
+        self.assertFalse(JurnalHeader.objects.filter(pk=header.pk).exists())

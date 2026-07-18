@@ -6,7 +6,7 @@ from django.db import transaction
 from apps.jurnal.models import JurnalHeader, JurnalDetail
 
 from . import ledger
-from .models import StockAdjustment, StockOpname, StockTransfer, ReturCustomer
+from .models import StockAdjustment, StockOpname, StockTransfer, ReturCustomer, ReturSupplier
 
 
 def _next_nomor_jurnal(prefix: str) -> str:
@@ -314,3 +314,53 @@ def reverse_retur_customer(rtc: ReturCustomer, request=None) -> None:
     rtc.jurnal_header = None
     rtc.status = 'draft'
     rtc.save(update_fields=['jurnal_header', 'status'])
+
+
+@transaction.atomic
+def process_retur_supplier(rts: ReturSupplier, request=None) -> JurnalHeader:
+    """Retur supplier: barang keluar (consume via metode costing item) + K Persediaan / D Hutang-Kas."""
+    if rts.status == 'posted':
+        raise ValueError('Retur sudah diposting.')
+    if not rts.akun_lawan_id:
+        raise ValueError('Akun lawan (Hutang/Kas) wajib dipilih.')
+    items = list(rts.items.select_related('item').all())
+    if not items:
+        raise ValueError('Retur tanpa item.')
+
+    total_value = Decimal('0')
+    akun_persediaan = None
+    for d in items:
+        akun_persediaan = d.item.coa_account
+        if akun_persediaan is None:
+            raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
+        result = ledger.consume_stock(
+            d.item, rts.entitas_bisnis, rts.entitas_bisnis_lv2, rts.entitas_bisnis_lv3,
+            d.qty, rts.tanggal, 'return_supplier', source=rts,
+            metode=d.item.metode_biaya_persediaan, warehouse=rts.warehouse)
+        d.unit_cost = (result.total_cost / d.qty) if d.qty else Decimal('0')
+        d.movement = result.out_movement
+        d.save(update_fields=['unit_cost', 'movement'])
+        total_value += result.total_cost
+
+    lines = [
+        (rts.akun_lawan, total_value, Decimal('0')),      # D Hutang/Kas
+        (akun_persediaan, Decimal('0'), total_value),     # K Persediaan
+    ]
+    header = _post_journal(rts.tanggal, 'TRX-RTS-',
+                           f'Retur Supplier {rts.nomor}', rts.entitas_bisnis, lines)
+    rts.jurnal_header = header
+    rts.status = 'posted'
+    rts.save(update_fields=['jurnal_header', 'status'])
+    return header
+
+
+@transaction.atomic
+def reverse_retur_supplier(rts: ReturSupplier, request=None) -> None:
+    if rts.status != 'posted':
+        raise ValueError('Retur belum diposting.')
+    ledger.reverse_movements(rts)  # pulihkan layer yang dikonsumsi return_supplier
+    _reverse_journal(rts.jurnal_header, request)
+    rts.items.update(movement=None)
+    rts.jurnal_header = None
+    rts.status = 'draft'
+    rts.save(update_fields=['jurnal_header', 'status'])
