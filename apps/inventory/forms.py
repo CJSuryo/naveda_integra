@@ -1,8 +1,9 @@
 """Inventory forms."""
 from django import forms
 from django.forms import inlineformset_factory
+from django.utils import timezone
 
-from apps.entitas_bisnis.models import EntitasBisnis
+from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
 from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase
 
@@ -48,6 +49,65 @@ def _validate_warehouse_scope(cleaned_data, eb_field, warehouse_field, errors_fo
             warehouse_field,
             'Gudang yang dipilih bukan milik entitas bisnis tersebut.',
         )
+
+
+def _eb_hierarki_choices():
+    """[(value, label)] semua EntitasBisnis aktif (lv1/lv2/lv3) untuk validasi field.
+
+    Label indentasi untuk fallback; template merender opsi dari eb_options_json
+    (scoped user) — choices di sini hanya superset untuk validasi nilai.
+    """
+    choices = [('', '— Pilih Entitas Bisnis —')]
+    lv1s = list(EntitasBisnis.objects.filter(status_aktif=True).order_by('nama'))
+    lv2s = list(EntitasBisnisLv2.objects.filter(status_aktif=True)
+                .select_related('entitas_bisnis').order_by('nama'))
+    lv3s = list(EntitasBisnisLv3.objects.filter(status_aktif=True)
+                .select_related('parent_lv2').order_by('nama'))
+    lv2_by_lv1 = {}
+    for lv2 in lv2s:
+        lv2_by_lv1.setdefault(lv2.entitas_bisnis_id, []).append(lv2)
+    lv3_by_lv2 = {}
+    for lv3 in lv3s:
+        lv3_by_lv2.setdefault(lv3.parent_lv2_id, []).append(lv3)
+    for eb in lv1s:
+        choices.append((f'lv1:{eb.pk}', eb.nama))
+        for lv2 in lv2_by_lv1.get(eb.pk, []):
+            choices.append((f'lv2:{lv2.pk}', f'  ↳ {lv2.nama}'))
+            for lv3 in lv3_by_lv2.get(lv2.pk, []):
+                choices.append((f'lv3:{lv3.pk}', f'    ↳ {lv3.nama}'))
+    return choices
+
+
+def _resolve_eb_hierarki(value, cleaned_data, form):
+    """Isi entitas_bisnis/_lv2/_lv3 di cleaned_data dari 'lvN:<pk>'. Error -> add_error."""
+    cleaned_data['entitas_bisnis'] = None
+    cleaned_data['entitas_bisnis_lv2'] = None
+    cleaned_data['entitas_bisnis_lv3'] = None
+    if not value:
+        form.add_error('eb_hierarki', 'Entitas bisnis wajib dipilih.')
+        return
+    try:
+        level, pk = value.split(':')
+        pk = int(pk)
+    except (ValueError, AttributeError):
+        form.add_error('eb_hierarki', 'Nilai entitas bisnis tidak valid.')
+        return
+    if level == 'lv1':
+        cleaned_data['entitas_bisnis'] = EntitasBisnis.objects.filter(pk=pk).first()
+    elif level == 'lv2':
+        lv2 = EntitasBisnisLv2.objects.select_related('entitas_bisnis').filter(pk=pk).first()
+        if lv2:
+            cleaned_data['entitas_bisnis'] = lv2.entitas_bisnis
+            cleaned_data['entitas_bisnis_lv2'] = lv2
+    elif level == 'lv3':
+        lv3 = (EntitasBisnisLv3.objects
+               .select_related('parent_lv2__entitas_bisnis').filter(pk=pk).first())
+        if lv3:
+            cleaned_data['entitas_bisnis'] = lv3.parent_lv2.entitas_bisnis
+            cleaned_data['entitas_bisnis_lv2'] = lv3.parent_lv2
+            cleaned_data['entitas_bisnis_lv3'] = lv3
+    if cleaned_data['entitas_bisnis'] is None:
+        form.add_error('eb_hierarki', 'Entitas bisnis tidak ditemukan.')
 
 
 class InventoryRecordForm(forms.ModelForm):
@@ -102,31 +162,42 @@ class WarehouseForm(forms.ModelForm):
 
 
 class StockAdjustmentForm(forms.ModelForm):
+    eb_hierarki = forms.ChoiceField(
+        label='Entitas Bisnis',
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_eb_hierarki'}),
+    )
+
     class Meta:
         model = StockAdjustment
-        fields = ('tanggal', 'entitas_bisnis', 'entitas_bisnis_lv2',
-                  'entitas_bisnis_lv3', 'warehouse', 'akun_selisih', 'keterangan')
+        fields = ('tanggal', 'warehouse', 'akun_selisih', 'keterangan')
         widgets = {
             'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
-            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_entitas_bisnis'}),
+            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
             'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
-            status_aktif=True,
-        ).order_by('nama')
+        self.fields['eb_hierarki'].choices = _eb_hierarki_choices()
         self.fields['warehouse'].widget.eb_map = _warehouse_eb_map()
+        if not self.is_bound and not self.fields['tanggal'].initial:
+            self.fields['tanggal'].initial = timezone.localdate()
 
     def clean(self):
         cleaned_data = super().clean()
+        _resolve_eb_hierarki(cleaned_data.get('eb_hierarki'), cleaned_data, self)
         _validate_warehouse_scope(cleaned_data, 'entitas_bisnis', 'warehouse', self)
         return cleaned_data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.entitas_bisnis = self.cleaned_data['entitas_bisnis']
+        obj.entitas_bisnis_lv2 = self.cleaned_data['entitas_bisnis_lv2']
+        obj.entitas_bisnis_lv3 = self.cleaned_data['entitas_bisnis_lv3']
+        if commit:
+            obj.save()
+        return obj
 
 
 class StockAdjustmentItemForm(forms.ModelForm):
@@ -154,31 +225,42 @@ StockAdjustmentItemFormSet = inlineformset_factory(
 
 
 class StockOpnameForm(forms.ModelForm):
+    eb_hierarki = forms.ChoiceField(
+        label='Entitas Bisnis',
+        widget=forms.Select(attrs={'class': 'ni-input', 'id': 'id_eb_hierarki'}),
+    )
+
     class Meta:
         model = StockOpname
-        fields = ('tanggal', 'entitas_bisnis', 'entitas_bisnis_lv2',
-                  'entitas_bisnis_lv3', 'warehouse', 'akun_selisih', 'keterangan')
+        fields = ('tanggal', 'warehouse', 'akun_selisih', 'keterangan')
         widgets = {
             'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
-            'entitas_bisnis': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv2': forms.Select(attrs={'class': 'ni-input'}),
-            'entitas_bisnis_lv3': forms.Select(attrs={'class': 'ni-input'}),
-            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_entitas_bisnis'}),
+            'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
             'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['entitas_bisnis'].queryset = EntitasBisnis.objects.filter(
-            status_aktif=True,
-        ).order_by('nama')
+        self.fields['eb_hierarki'].choices = _eb_hierarki_choices()
         self.fields['warehouse'].widget.eb_map = _warehouse_eb_map()
+        if not self.is_bound and not self.fields['tanggal'].initial:
+            self.fields['tanggal'].initial = timezone.localdate()
 
     def clean(self):
         cleaned_data = super().clean()
+        _resolve_eb_hierarki(cleaned_data.get('eb_hierarki'), cleaned_data, self)
         _validate_warehouse_scope(cleaned_data, 'entitas_bisnis', 'warehouse', self)
         return cleaned_data
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.entitas_bisnis = self.cleaned_data['entitas_bisnis']
+        obj.entitas_bisnis_lv2 = self.cleaned_data['entitas_bisnis_lv2']
+        obj.entitas_bisnis_lv3 = self.cleaned_data['entitas_bisnis_lv3']
+        if commit:
+            obj.save()
+        return obj
 
 
 class StockOpnameItemForm(forms.ModelForm):

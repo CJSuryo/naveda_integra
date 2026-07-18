@@ -9,6 +9,8 @@ from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase
 from apps.inventory.models import Warehouse
 from apps.inventory import ledger
+from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
+from apps.inventory.forms import StockAdjustmentForm
 
 
 class CurrentUnitCostTests(TestCase):
@@ -80,3 +82,38 @@ class StockAvailableEndpointTests(TestCase):
                                {'item': other.pk, 'warehouse': self.wh.pk})
         data = resp.json()
         self.assertIsNone(data['unit_cost'])
+
+
+class EbHierarkiResolveTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.lv2 = EntitasBisnisLv2.objects.create(nama='Divisi A', entitas_bisnis=self.eb)
+        self.lv3 = EntitasBisnisLv3.objects.create(nama='Sub A1', parent_lv2=self.lv2)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+
+    def _data(self, eb_hierarki):
+        return {
+            'tanggal': '2026-07-18', 'eb_hierarki': eb_hierarki,
+            'warehouse': self.wh.pk, 'akun_selisih': self.selisih.pk, 'keterangan': '',
+        }
+
+    def test_lv3_resolves_all_three_fks(self):
+        form = StockAdjustmentForm(data=self._data(f'lv3:{self.lv3.pk}'))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['entitas_bisnis'], self.eb)
+        self.assertEqual(form.cleaned_data['entitas_bisnis_lv2'], self.lv2)
+        self.assertEqual(form.cleaned_data['entitas_bisnis_lv3'], self.lv3)
+
+    def test_lv1_resolves_only_lv1(self):
+        form = StockAdjustmentForm(data=self._data(f'lv1:{self.eb.pk}'))
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['entitas_bisnis'], self.eb)
+        self.assertIsNone(form.cleaned_data['entitas_bisnis_lv2'])
+        self.assertIsNone(form.cleaned_data['entitas_bisnis_lv3'])
+
+    def test_default_tanggal_is_today(self):
+        from django.utils import timezone
+        form = StockAdjustmentForm()
+        self.assertEqual(form.fields['tanggal'].initial, timezone.localdate())
