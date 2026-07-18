@@ -58,22 +58,22 @@ Param: preview_url (nama url), cost_field (nama field unit_cost di baris formset
     }).catch(function () {});
   }
 
-  function bindRow(row) {
-    var itSel = itemSelect(row);
-    if (itSel && !itSel.dataset.autocostBound) {
-      itSel.dataset.autocostBound = '1';
-      itSel.addEventListener('change', function () { fillCost(row); });
-    }
+  // Delegasi event di tbody (bukan bind per-baris) supaya baris baru hasil
+  // "Tambah Baris" (row.cloneNode di _item_formset_js.html) otomatis ikut
+  // ter-cover tanpa perlu re-binding manual.
+  var tbody = document.getElementById('item-tbody');
+  if (tbody) {
+    tbody.addEventListener('change', function (evt) {
+      var row = evt.target.closest('.item-row');
+      if (row && itemSelect(row) === evt.target) fillCost(row);
+    });
   }
-  function bindAll() {
-    document.querySelectorAll('.item-row').forEach(bindRow);
-  }
-  if (ebSel) ebSel.addEventListener('change', bindAll);
+  if (ebSel) ebSel.addEventListener('change', function () {
+    document.querySelectorAll('.item-row').forEach(fillCost);
+  });
   if (whSel) whSel.addEventListener('change', function () {
     document.querySelectorAll('.item-row').forEach(fillCost);
   });
-  document.addEventListener('DOMContentLoaded', bindAll);
-  bindAll();
 
   function fmt(n) { return parseFloat(n || 0).toLocaleString('id-ID'); }
   window.openInvPreview = function () {
