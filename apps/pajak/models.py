@@ -20,6 +20,7 @@ JENIS_PAJAK_CHOICES = [
 SOURCE_TYPE_CHOICES = [
     ('pendapatan_kp', 'Pendapatan — Kewajiban Pelaksanaan'),
     ('sales_item',    'Sales Item'),
+    ('retur_customer_item', 'Retur Pelanggan — Item'),
     ('purchase_item', 'Purchase Item'),
     ('piutang_item',  'Piutang Item'),
     ('utang_item',    'Utang Item'),

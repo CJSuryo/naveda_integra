@@ -209,8 +209,12 @@ def _next_pajak_journal_number() -> str:
     return f'{prefix}-{seq:08d}'
 
 
-def post_jurnal_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
-    """Create JurnalHeader + 2 JurnalDetail. Rounds jumlah_pajak to 2dp ROUND_HALF_UP."""
+def post_jurnal_pajak(pajak_trx: PajakTransaksi, reverse: bool = False) -> JurnalHeader:
+    """Create JurnalHeader + 2 JurnalDetail. Rounds jumlah_pajak to 2dp ROUND_HALF_UP.
+
+    reverse=True membalik arah debit/kredit — dipakai untuk nota retur/kredit yang
+    membalik pajak transaksi asal (mis. retur pelanggan mengurangi PPN Keluaran).
+    """
     jumlah = pajak_trx.jumlah_pajak.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
     if pajak_trx.sifat_pajak == 'potong_pungut':
@@ -220,12 +224,15 @@ def post_jurnal_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
         akun_debit  = pajak_trx.akun_pajak
         akun_kredit = pajak_trx.akun_lawan
 
+    if reverse:
+        akun_debit, akun_kredit = akun_kredit, akun_debit
+
     nomor = _next_pajak_journal_number()
     jh = JurnalHeader.objects.create(
         tanggal=pajak_trx.masa_pajak,
         nomor_transaksi=nomor,
         uraian_transaksi=(
-            f'Jurnal Pajak — {pajak_trx.get_jenis_pajak_display()} '
+            f'{"Retur Pajak" if reverse else "Jurnal Pajak"} — {pajak_trx.get_jenis_pajak_display()} '
             f'— {pajak_trx.source_type}:{pajak_trx.source_id}'
         ),
         entitas_bisnis=pajak_trx.entitas_bisnis,
@@ -238,8 +245,10 @@ def post_jurnal_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
     return jh
 
 
-def confirm_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
-    """Validate draft status + unlocked period, set status=final, post journal."""
+def confirm_pajak(pajak_trx: PajakTransaksi, reverse: bool = False) -> JurnalHeader:
+    """Validate draft status + unlocked period, set status=final, post journal.
+
+    reverse=True membalik arah jurnal (nota retur/kredit)."""
     if pajak_trx.status != 'draft':
         raise PajakStatusError(
             f'PajakTransaksi {pajak_trx.pk} berstatus "{pajak_trx.status}", bukan "draft".'
@@ -254,7 +263,7 @@ def confirm_pajak(pajak_trx: PajakTransaksi) -> JurnalHeader:
     except MasaPajak.DoesNotExist:
         pass  # period not created yet means open
 
-    jh = post_jurnal_pajak(pajak_trx)
+    jh = post_jurnal_pajak(pajak_trx, reverse=reverse)
     pajak_trx.jurnal_header = jh
     pajak_trx.status = 'final'
     pajak_trx.save(update_fields=['jurnal_header', 'status'])

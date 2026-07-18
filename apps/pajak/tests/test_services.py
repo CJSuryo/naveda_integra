@@ -467,3 +467,44 @@ class OverridePajakTest(TestCase):
         self.assertTrue(pt2.is_overridden)
         self.assertEqual(pt2.status, 'final')
         self.assertNotEqual(pt2.jurnal_header.pk, original_jh_pk)
+
+
+class ConfirmPajakReverseTest(TestCase):
+    """confirm_pajak(reverse=True) membalik arah jurnal — untuk nota retur."""
+
+    def _trx(self):
+        from datetime import date
+        from decimal import Decimal
+        from apps.pajak.models import PajakTransaksi
+        from apps.master_data.models import Akun
+        self.akun_pajak = Akun.objects.create(kategori_id='kewajiban', nama='PPN Keluaran', kode_akun='2.1.4')
+        self.akun_lawan = Akun.objects.create(kategori_id='aset', nama='Piutang PPN', kode_akun='1.2.4')
+        return PajakTransaksi.objects.create(
+            source_type='retur_customer_item', source_id=1,
+            masa_pajak=date(2026, 6, 1), jenis_pajak='ppn_umum',
+            dpp=Decimal('1000000'), tarif_persen=Decimal('11'),
+            jumlah_pajak=Decimal('110000'), sifat_pajak='potong_pungut',
+            status='draft', akun_pajak=self.akun_pajak, akun_lawan=self.akun_lawan)
+
+    def test_reverse_swaps_debit_kredit(self):
+        from apps.pajak.services import confirm_pajak
+        from decimal import Decimal
+        pt = self._trx()
+        jh = confirm_pajak(pt, reverse=True)
+        details = list(jh.details.all())
+        # normal potong_pungut = Dr akun_lawan / Cr akun_pajak; reversed = Dr akun_pajak / Cr akun_lawan
+        debited = next(d for d in details if d.debit > 0)
+        credited = next(d for d in details if d.kredit > 0)
+        self.assertEqual(debited.akun_id, self.akun_pajak.pk)   # PPN Keluaran didebit (berkurang)
+        self.assertEqual(credited.akun_id, self.akun_lawan.pk)
+        self.assertEqual(debited.debit, Decimal('110000.00'))
+        pt.refresh_from_db()
+        self.assertEqual(pt.status, 'final')
+
+    def test_default_direction_unchanged(self):
+        from apps.pajak.services import confirm_pajak
+        pt = self._trx()
+        jh = confirm_pajak(pt)  # reverse default False
+        details = list(jh.details.all())
+        debited = next(d for d in details if d.debit > 0)
+        self.assertEqual(debited.akun_id, self.akun_lawan.pk)   # arah asli tak berubah
