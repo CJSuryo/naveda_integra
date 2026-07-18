@@ -171,7 +171,7 @@ class StockAdjustmentForm(forms.ModelForm):
         model = StockAdjustment
         fields = ('tanggal', 'warehouse', 'akun_selisih', 'keterangan')
         widgets = {
-            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}, format='%Y-%m-%d'),
             'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
             'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
@@ -234,7 +234,7 @@ class StockOpnameForm(forms.ModelForm):
         model = StockOpname
         fields = ('tanggal', 'warehouse', 'akun_selisih', 'keterangan')
         widgets = {
-            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'type': 'date', 'class': 'ni-input'}, format='%Y-%m-%d'),
             'warehouse': EntitasScopedSelect(attrs={'class': 'ni-input', 'data-eb-filter': 'id_eb_hierarki'}),
             'akun_selisih': forms.Select(attrs={'class': 'ni-input'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
