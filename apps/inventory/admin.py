@@ -1,7 +1,10 @@
 """Inventory admin."""
 from django.contrib import admin
 from .models import InventoryRecord
-from apps.inventory.models import StockMovement, StockConsumption, Warehouse
+from apps.inventory.models import (
+    ItemReorderSetting, ReturCustomer, ReturSupplier, StockAdjustment, StockConsumption,
+    StockMovement, StockOpname, StockTransfer, Warehouse,
+)
 
 
 @admin.register(InventoryRecord)
@@ -45,3 +48,45 @@ class WarehouseAdmin(admin.ModelAdmin):
     list_filter = ('entitas_bisnis', 'is_active')
     search_fields = ('kode', 'nama')
     autocomplete_fields = ('entitas_bisnis',)
+
+
+@admin.register(StockAdjustment)
+class StockAdjustmentAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(StockOpname)
+class StockOpnameAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(StockTransfer)
+class StockTransferAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'eb_asal', 'warehouse_asal', 'eb_tujuan', 'warehouse_tujuan', 'status')
+    list_filter = ('status', 'eb_asal', 'eb_tujuan')
+    search_fields = ('nomor',)
+
+
+@admin.register(ReturCustomer)
+class ReturCustomerAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(ReturSupplier)
+class ReturSupplierAdmin(admin.ModelAdmin):
+    list_display = ('nomor', 'tanggal', 'entitas_bisnis', 'warehouse', 'status')
+    list_filter = ('status', 'entitas_bisnis', 'warehouse')
+    search_fields = ('nomor',)
+
+
+@admin.register(ItemReorderSetting)
+class ItemReorderSettingAdmin(admin.ModelAdmin):
+    list_display = ('item', 'warehouse', 'minimum_stock', 'reorder_point', 'reorder_qty')
+    list_filter = ('warehouse',)
+    search_fields = ('item__nama', 'item__item_id')
