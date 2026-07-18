@@ -219,3 +219,34 @@ class PreviewEqualsPostingTests(TestCase):
         self.assertEqual(Decimal(prev['total_debit']), Decimal('200'))  # 2 * 100
         self.assertEqual(prev['mutasi'][0]['movement_type'], 'opname_out')
         self.assertEqual(Decimal(prev['mutasi'][0]['stok_sesudah']), Decimal('18'))
+
+
+class LedgerUpdatedAfterPostTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_user(email='u4@example.com', password='x')
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM',
+                                                      metode_biaya_persediaan='fifo')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+
+    def test_adjustment_create_updates_ledger(self):
+        before = ledger.get_available_stock(self.item, self.eb, warehouse=self.wh)
+        self.assertEqual(before, Decimal('0'))
+        resp = self.client.post('/inventory/adjustment/create/', {
+            'tanggal': '2026-07-18', 'eb_hierarki': f'lv1:{self.eb.pk}',
+            'warehouse': self.wh.pk, 'akun_selisih': self.selisih.pk, 'keterangan': '',
+            'items-TOTAL_FORMS': '1', 'items-INITIAL_FORMS': '0',
+            'items-MIN_NUM_FORMS': '1', 'items-MAX_NUM_FORMS': '1000',
+            'items-0-item': self.item.pk, 'items-0-qty': '7', 'items-0-unit_cost': '100',
+        })
+        self.assertEqual(resp.status_code, 302)  # redirect ke list
+        after = ledger.get_available_stock(self.item, self.eb, warehouse=self.wh)
+        self.assertEqual(after, Decimal('7'))
