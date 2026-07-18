@@ -21,15 +21,43 @@ def _next_nomor_jurnal(prefix: str) -> str:
     return f'{prefix}{seq:03d}'
 
 
-def _post_journal(tanggal, prefix, uraian, entitas_bisnis, lines):
-    """lines = [(akun, debit, kredit), ...]. Balance-checked, satu JurnalHeader."""
+def _assert_single_inventory_account(items, participates=lambda d: True):
+    """Pastikan semua item yang berpartisipasi memakai satu akun persediaan (coa_account).
+
+    Jurnal per dokumen memposting nilai persediaan ke satu akun. Bila item dalam
+    satu dokumen memakai coa_account berbeda, jurnal GL akan salah akun meski
+    gerakan stok per-item benar — jadi tolak lebih dini. Kembalikan akun tunggal
+    tersebut (atau None bila tidak ada item yang berpartisipasi).
+    """
+    accounts = {}
+    for d in items:
+        if not participates(d):
+            continue
+        akun = d.item.coa_account
+        if akun is None:
+            raise ValueError(f'Item {d.item.item_id} belum punya coa_account (persediaan).')
+        accounts[akun.pk] = akun
+    if len(accounts) > 1:
+        raise ValueError(
+            'Semua item dalam satu dokumen harus memakai akun persediaan (coa_account) '
+            'yang sama. Pisahkan item dengan akun persediaan berbeda ke dokumen terpisah.'
+        )
+    return next(iter(accounts.values()), None)
+
+
+def _post_journal(tanggal, prefix, uraian, entitas_bisnis, lines, is_penyesuaian=False):
+    """lines = [(akun, debit, kredit), ...]. Balance-checked, satu JurnalHeader.
+
+    is_penyesuaian: True untuk jurnal penyesuaian persediaan (adjustment/opname),
+    False untuk transaksi biasa (transfer, retur).
+    """
     total_d = sum((d for _, d, _ in lines), Decimal('0'))
     total_k = sum((k for _, _, k in lines), Decimal('0'))
     if total_d != total_k:
         raise ValueError(f'Jurnal tidak balance: debit {total_d} != kredit {total_k}.')
     header = JurnalHeader.objects.create(
         tanggal=tanggal, nomor_transaksi=_next_nomor_jurnal(prefix),
-        uraian_transaksi=uraian, entitas_bisnis=entitas_bisnis, is_penyesuaian=False,
+        uraian_transaksi=uraian, entitas_bisnis=entitas_bisnis, is_penyesuaian=is_penyesuaian,
     )
     JurnalDetail.objects.bulk_create([
         JurnalDetail(jurnal_header=header, akun=akun, debit=d, kredit=k)
@@ -48,6 +76,7 @@ def process_adjustment(adj: StockAdjustment) -> JurnalHeader:
         raise ValueError('Adjustment tanpa item.')
     if not adj.akun_selisih_id:
         raise ValueError('Akun selisih wajib dipilih.')
+    _assert_single_inventory_account(items, lambda d: d.qty != 0)
 
     naik = Decimal('0')   # total nilai persediaan bertambah
     turun = Decimal('0')  # total nilai persediaan berkurang
@@ -85,7 +114,8 @@ def process_adjustment(adj: StockAdjustment) -> JurnalHeader:
         lines.append((akun_persediaan, Decimal('0'), turun))
 
     header = _post_journal(adj.tanggal, 'TRX-ADJ-',
-                           f'Penyesuaian Stok {adj.nomor}', adj.entitas_bisnis, lines)
+                           f'Penyesuaian Stok {adj.nomor}', adj.entitas_bisnis, lines,
+                           is_penyesuaian=True)
     adj.jurnal_header = header
     adj.status = 'posted'
     adj.save(update_fields=['jurnal_header', 'status'])
@@ -123,6 +153,7 @@ def process_opname(opn: StockOpname):
     if opn.status == 'posted':
         raise ValueError('Opname sudah diposting.')
     items = list(opn.items.select_related('item').all())
+    _assert_single_inventory_account(items, lambda d: d.selisih != 0)
     naik = Decimal('0')
     turun = Decimal('0')
     akun_persediaan = None
@@ -158,7 +189,8 @@ def process_opname(opn: StockOpname):
             lines.append((opn.akun_selisih, turun, Decimal('0')))
             lines.append((akun_persediaan, Decimal('0'), turun))
         header = _post_journal(opn.tanggal, 'TRX-OPN-',
-                               f'Opname Stok {opn.nomor}', opn.entitas_bisnis, lines)
+                               f'Opname Stok {opn.nomor}', opn.entitas_bisnis, lines,
+                               is_penyesuaian=True)
         opn.jurnal_header = header
     opn.status = 'posted'
     opn.save(update_fields=['jurnal_header', 'status'])
@@ -189,6 +221,7 @@ def process_transfer(trf: StockTransfer) -> None:
     items = list(trf.items.select_related('item').all())
     if not items:
         raise ValueError('Transfer tanpa item.')
+    _assert_single_inventory_account(items)
 
     total_value = Decimal('0')
     akun_persediaan = None
@@ -239,6 +272,61 @@ def reverse_transfer(trf: StockTransfer, request=None) -> None:
     trf.save(update_fields=['jurnal_header_asal', 'jurnal_header_tujuan', 'status'])
 
 
+def _post_retur_customer_ppn(rtc: ReturCustomer, items) -> None:
+    """Balik PPN Keluaran proporsional untuk tiap item retur yang tertaut sales_item.
+
+    Untuk tiap PajakTransaksi PPN penjualan asal (source_type='sales_item'), buat
+    PajakTransaksi retur (source_type='retur_customer_item') sebesar porsi qty yang
+    diretur (jumlah_pajak_asal × qty_retur/qty_jual) lalu posting jurnal arah
+    terbalik (mengurangi PPN Keluaran) via modul pajak — konsisten dengan SPT.
+    Item tanpa sales_item asal tidak dikenai PPN retur (keputusan: otomatis dari
+    faktur asal saja).
+    """
+    from datetime import datetime
+    from apps.pajak.models import PajakTransaksi
+    from apps.pajak.services import sync_pajak, confirm_pajak
+
+    tanggal = rtc.tanggal
+    if isinstance(tanggal, str):
+        tanggal = datetime.strptime(tanggal, '%Y-%m-%d').date()
+
+    for d in items:
+        si = d.sales_item
+        if si is None or not si.quantity:
+            continue
+        ratio = d.qty / si.quantity
+        sale_taxes = PajakTransaksi.objects.filter(
+            source_type='sales_item', source_id=si.pk,
+            jenis_pajak__startswith='ppn',
+        ).exclude(status='dibatalkan')
+        for pt in sale_taxes:
+            jumlah_retur = pt.jumlah_pajak * ratio
+            if jumlah_retur <= 0:
+                continue
+            retur_trx = sync_pajak(
+                source_type='retur_customer_item', source_obj=d,
+                dpp=pt.dpp * ratio, tanggal=tanggal,
+                jenis_pajak=pt.jenis_pajak, akun_pajak=pt.akun_pajak,
+                akun_lawan=pt.akun_lawan, sifat_pajak=pt.sifat_pajak,
+                override_amount=jumlah_retur,
+                entitas_bisnis_override=rtc.entitas_bisnis,
+            )
+            confirm_pajak(retur_trx, reverse=True)
+
+
+def _batal_retur_customer_ppn(rtc: ReturCustomer) -> None:
+    """Batalkan PajakTransaksi retur (posting reversal jurnalnya) saat retur dibatalkan."""
+    from apps.pajak.models import PajakTransaksi
+    from apps.pajak.services import batal_pajak
+
+    item_ids = list(rtc.items.values_list('pk', flat=True))
+    qs = PajakTransaksi.objects.filter(
+        source_type='retur_customer_item', source_id__in=item_ids,
+    ).exclude(status='dibatalkan')
+    for pt in qs:
+        batal_pajak(pt)
+
+
 @transaction.atomic
 def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
                            akun_piutang=None, akun_hpp=None) -> JurnalHeader:
@@ -249,57 +337,69 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
     untuk HPP). Parameter akun_pendapatan/akun_piutang/akun_hpp hanya dipakai bila
     sales_item kosong (retur berdiri sendiri / unit test).
 
-    Catatan untuk pemanggil (mis. UI/form): keputusan pakai akun sales_item vs.
-    override adalah PER ITEM (ReturCustomerItem.sales_item), bukan berdasarkan
-    ReturCustomer.sales_header di header. Kedua field tidak otomatis konsisten —
-    header bisa punya sales_header terisi sementara sebagian item tidak
-    terhubung ke sales_item manapun. UI yang menampilkan field override akun
-    harus mengecek sales_item per baris item, bukan hanya sales_header di header.
+    Akun ditentukan PER ITEM (ReturCustomerItem.sales_item): bila item punya
+    sales_item asal, akun diambil dari sana; bila tidak, dari parameter override.
+    Jurnal DIPECAH per kombinasi akun (Opsi A) — pendapatan/piutang dikelompokkan
+    per (revenue_account, piutang), dan HPP per (persediaan, hpp) — sehingga satu
+    retur yang mencakup barang lintas divisi/akun menghasilkan baris jurnal
+    terpisah per akun, bukan digabung ke satu akun (mis. "item terakhir menang").
+    Semua baris berada dalam satu JurnalHeader dan tetap balance.
     """
+    from collections import OrderedDict
+
     if rtc.status == 'posted':
         raise ValueError('Retur sudah diposting.')
     items = list(rtc.items.select_related('item', 'sales_item', 'sales_item__sales_eb').all())
     if not items:
         raise ValueError('Retur tanpa item.')
+    akun_persediaan = _assert_single_inventory_account(items)
 
-    total_pendapatan = Decimal('0')
-    total_hpp = Decimal('0')
-    ap = api = ahpp = None
-    akun_persediaan = None
+    revenue_map = OrderedDict()  # (ap.pk, api.pk) -> [ap, api, nilai]
+    hpp_map = OrderedDict()      # (persediaan.pk, ahpp.pk) -> [persediaan, ahpp, nilai]
     for d in items:
-        akun_persediaan = d.item.coa_account
-        if akun_persediaan is None:
-            raise ValueError(f'Item {d.item.item_id} belum punya coa_account.')
-        # Asumsi 1 set akun pendapatan/piutang/HPP per dokumen — bila item campuran
-        # (sebagian punya sales_item, sebagian tidak), item terakhir yang diproses menang.
         si = d.sales_item
         if si is not None:
             ap = si.revenue_account
             api = si.payment_account or si.sales_eb.payment_account
             ahpp = si.offset_coa_account
         else:
-            ap = akun_pendapatan
-            api = akun_piutang
-            ahpp = akun_hpp
+            ap, api, ahpp = akun_pendapatan, akun_piutang, akun_hpp
         mv = ledger.record_inflow(
             d.item, rtc.entitas_bisnis, rtc.entitas_bisnis_lv2, rtc.entitas_bisnis_lv3,
             d.qty, d.unit_cost, rtc.tanggal, 'return_customer', source=rtc,
             warehouse=rtc.warehouse)
         d.movement = mv
         d.save(update_fields=['movement'])
-        total_pendapatan += d.qty * d.harga_jual
-        total_hpp += d.qty * d.unit_cost
 
-    if not (ap and api and ahpp):
-        raise ValueError('Akun pendapatan/piutang/HPP retur tidak lengkap.')
-    lines = [
-        (ap, total_pendapatan, Decimal('0')),          # D Pendapatan (balik)
-        (api, Decimal('0'), total_pendapatan),         # K Piutang/Kas
-        (akun_persediaan, total_hpp, Decimal('0')),    # D Persediaan (balik HPP)
-        (ahpp, Decimal('0'), total_hpp),               # K HPP
-    ]
+        pendapatan = d.qty * d.harga_jual
+        if pendapatan:
+            if not (ap and api):
+                raise ValueError(
+                    f'Akun pendapatan/piutang retur tidak lengkap untuk item {d.item.item_id}.')
+            grp = revenue_map.setdefault((ap.pk, api.pk), [ap, api, Decimal('0')])
+            grp[2] += pendapatan
+        hpp = d.qty * d.unit_cost
+        if hpp:
+            if not ahpp:
+                raise ValueError(
+                    f'Akun HPP retur tidak lengkap untuk item {d.item.item_id}.')
+            grp = hpp_map.setdefault((akun_persediaan.pk, ahpp.pk),
+                                     [akun_persediaan, ahpp, Decimal('0')])
+            grp[2] += hpp
+
+    lines = []
+    for ap, api, nilai in revenue_map.values():
+        lines.append((ap, nilai, Decimal('0')))    # D Pendapatan (balik)
+        lines.append((api, Decimal('0'), nilai))    # K Piutang/Kas
+    for persediaan, ahpp, nilai in hpp_map.values():
+        lines.append((persediaan, nilai, Decimal('0')))  # D Persediaan (balik HPP)
+        lines.append((ahpp, Decimal('0'), nilai))         # K HPP
+    if not lines:
+        raise ValueError('Retur tanpa nilai untuk dijurnal.')
+
     header = _post_journal(rtc.tanggal, 'TRX-RTC-',
                            f'Retur Pelanggan {rtc.nomor}', rtc.entitas_bisnis, lines)
+    _post_retur_customer_ppn(rtc, items)  # balik PPN Keluaran proporsional (jurnal terpisah via modul pajak)
     rtc.jurnal_header = header
     rtc.status = 'posted'
     rtc.save(update_fields=['jurnal_header', 'status'])
@@ -310,6 +410,7 @@ def process_retur_customer(rtc: ReturCustomer, akun_pendapatan=None,
 def reverse_retur_customer(rtc: ReturCustomer, request=None) -> None:
     if rtc.status != 'posted':
         raise ValueError('Retur belum diposting.')
+    _batal_retur_customer_ppn(rtc)  # batalkan PPN retur (item_ids diambil sebelum penghapusan)
     ledger.reverse_inflow_movements(rtc)  # hapus layer return_customer
     _reverse_journal(rtc.jurnal_header, request)
     rtc.items.update(movement=None)
@@ -328,6 +429,7 @@ def process_retur_supplier(rts: ReturSupplier) -> JurnalHeader:
     items = list(rts.items.select_related('item').all())
     if not items:
         raise ValueError('Retur tanpa item.')
+    _assert_single_inventory_account(items)
 
     total_value = Decimal('0')
     akun_persediaan = None

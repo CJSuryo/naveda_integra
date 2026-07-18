@@ -38,4 +38,6 @@ urlpatterns = [
     path('reorder/', views.reorder_list, name='reorder_list'),
     path('reorder/create/', views.reorder_create, name='reorder_create'),
     path('reorder/<int:pk>/delete/', views.reorder_delete, name='reorder_delete'),
+    path('api/stock-available/', views.stock_available, name='stock_available'),
+    path('api/retur-ppn-preview/', views.retur_ppn_preview, name='retur_ppn_preview'),
 ]

@@ -1,0 +1,26 @@
+{% comment %}
+Filter opsi gudang mengikuti entitas bisnis terpilih.
+Setiap <select data-eb-filter="id_entitas_select"> hanya menampilkan opsi gudang
+yang data-eb-nya cocok dengan nilai select entitas yang dirujuk.
+{% endcomment %}
+<script>
+(function () {
+  function applyFilter(whSelect) {
+    var ebSelect = document.getElementById(whSelect.getAttribute('data-eb-filter'));
+    if (!ebSelect) return;
+    var ebVal = ebSelect.value;
+    Array.prototype.forEach.call(whSelect.options, function (opt) {
+      var show = !opt.value || !ebVal || opt.getAttribute('data-eb') === ebVal;
+      opt.hidden = !show;
+      opt.disabled = !show;
+    });
+    var cur = whSelect.selectedOptions[0];
+    if (cur && cur.hidden) whSelect.value = '';
+  }
+  document.querySelectorAll('select[data-eb-filter]').forEach(function (whSelect) {
+    var ebSelect = document.getElementById(whSelect.getAttribute('data-eb-filter'));
+    if (ebSelect) ebSelect.addEventListener('change', function () { applyFilter(whSelect); });
+    applyFilter(whSelect);
+  });
+})();
+</script>

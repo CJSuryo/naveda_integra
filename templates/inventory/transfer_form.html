@@ -89,7 +89,12 @@
         </div>
       </div>
 
-      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Item Transfer</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px;">
+        <h3 style="margin:0;font-size:1rem;color:var(--ni-primary);">Item Transfer</h3>
+        <button type="button" id="add-item-row" class="ni-btn ni-btn--secondary ni-btn--sm">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+        </button>
+      </div>
       {{ formset.management_form }}
       {% if formset.non_form_errors %}
       <div class="ni-form-error">{{ formset.non_form_errors }}</div>
@@ -103,9 +108,9 @@
               <th>Hapus</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="item-tbody">
             {% for item_form in formset %}
-            <tr>
+            <tr class="item-row">
               {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
               <td>
                 {{ item_form.item }}
@@ -116,7 +121,8 @@
                 {% if item_form.qty.errors %}<div class="ni-form-error">{{ item_form.qty.errors }}</div>{% endif %}
               </td>
               <td>
-                {% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}
+                <span style="display:none">{% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}</span>
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-row" title="Hapus baris">&#10005;</button>
               </td>
             </tr>
             {% endfor %}
@@ -134,4 +140,6 @@
     </form>
   </div>
 </div>
+{% include 'inventory/_item_formset_js.html' %}
+{% include 'inventory/_warehouse_scope_js.html' %}
 {% endblock %}

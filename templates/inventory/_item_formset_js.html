@@ -1,0 +1,54 @@
+{% comment %}
+Reusable "Tambah Baris" behaviour for inventory item inline-formsets.
+Requires in the including template:
+  - <tbody id="item-tbody"> with rows <tr class="item-row"> ... </tr>
+  - a button <button type="button" id="add-item-row">
+  - each removable row containing <button type="button" class="remove-item-row">
+All Fase 6 item formsets use the inline prefix "items" (related_name='items').
+{% endcomment %}
+<script>
+(function () {
+  var tbody = document.getElementById('item-tbody');
+  var addBtn = document.getElementById('add-item-row');
+  var totalForms = document.getElementById('id_items-TOTAL_FORMS');
+  if (!tbody || !addBtn || !totalForms) return;
+
+  function reindex() {
+    var rows = tbody.querySelectorAll('tr.item-row');
+    rows.forEach(function (row, i) {
+      row.querySelectorAll('input, select, textarea').forEach(function (el) {
+        if (el.name) el.name = el.name.replace(/-\d+-/, '-' + i + '-');
+        if (el.id) el.id = el.id.replace(/-\d+-/, '-' + i + '-');
+      });
+    });
+    totalForms.value = rows.length;
+  }
+
+  function attachRemove(row) {
+    var btn = row.querySelector('.remove-item-row');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (tbody.querySelectorAll('tr.item-row').length <= 1) return; // sisakan 1 baris
+      row.remove();
+      reindex();
+    });
+  }
+
+  tbody.querySelectorAll('tr.item-row').forEach(attachRemove);
+
+  addBtn.addEventListener('click', function () {
+    var rows = tbody.querySelectorAll('tr.item-row');
+    var clone = rows[0].cloneNode(true);
+    clone.querySelectorAll('.ni-form-error').forEach(function (e) { e.remove(); });
+    clone.querySelectorAll('input, select, textarea').forEach(function (el) {
+      if (el.type === 'checkbox' || el.type === 'radio') el.checked = false;
+      else el.value = '';
+      el.removeAttribute('readonly');
+    });
+    tbody.appendChild(clone);
+    reindex();
+    attachRemove(clone);
+    if (window.lucide) window.lucide.createIcons();
+  });
+})();
+</script>

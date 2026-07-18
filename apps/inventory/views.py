@@ -14,7 +14,7 @@ from django_ratelimit.decorators import ratelimit
 from naveda_integra.ratelimit_utils import rate_from
 from django.db import transaction
 from django.db.models import ProtectedError, Q, Sum
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -1625,3 +1625,72 @@ def reorder_delete(request: HttpRequest, pk: int) -> HttpResponse:
         messages.success(request, 'Pengaturan reorder dihapus.')
         return redirect('inventory:reorder_list')
     return render(request, 'inventory/reorder_delete_confirm.html', {'setting': s})
+
+
+# ── AJAX: saldo stok tersedia (untuk prefill Qty Sistem opname) ───────────
+
+@login_required
+def stock_available(request: HttpRequest) -> JsonResponse:
+    """Kembalikan saldo stok tersedia untuk (item, warehouse[, entitas lv1/2/3]) sebagai JSON.
+
+    Dipakai form opname untuk mengisi otomatis Qty Sistem sesuai cakupan yang
+    persis akan dikonsumsi saat posting (entitas + gudang yang sama).
+    """
+    from . import ledger
+    from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3
+    from apps.purchase.models import ItemMasterPurchase
+
+    item_id = request.GET.get('item')
+    warehouse_id = request.GET.get('warehouse')
+    if not (item_id and warehouse_id):
+        return JsonResponse({'available': None})
+    try:
+        item = ItemMasterPurchase.objects.get(pk=item_id)
+        warehouse = Warehouse.objects.select_related('entitas_bisnis').get(pk=warehouse_id)
+    except (ValueError, ItemMasterPurchase.DoesNotExist, Warehouse.DoesNotExist):
+        return JsonResponse({'available': None})
+
+    eb_id = request.GET.get('eb')
+    eb = (EntitasBisnis.objects.filter(pk=eb_id).first() if eb_id else None) or warehouse.entitas_bisnis
+    eb_lv2 = EntitasBisnisLv2.objects.filter(pk=request.GET.get('eb_lv2')).first()
+    eb_lv3 = EntitasBisnisLv3.objects.filter(pk=request.GET.get('eb_lv3')).first()
+
+    available = ledger.get_available_stock(item, eb, eb_lv2, eb_lv3, warehouse=warehouse)
+    return JsonResponse({'available': str(available)})
+
+
+@login_required
+def retur_ppn_preview(request: HttpRequest) -> JsonResponse:
+    """Preview PPN yang akan diretur untuk (sales_item, qty) — proporsional dari faktur asal.
+
+    Juga mengembalikan item/harga jual/HPP dari faktur untuk auto-fill baris retur.
+    """
+    from decimal import InvalidOperation
+    from apps.sales.models import SalesItem
+    from apps.pajak.models import PajakTransaksi
+
+    try:
+        si = SalesItem.objects.select_related('item').get(pk=request.GET.get('sales_item'))
+    except (ValueError, TypeError, SalesItem.DoesNotExist):
+        return JsonResponse({'ok': False})
+    try:
+        qty = Decimal(request.GET.get('qty') or '0')
+    except InvalidOperation:
+        qty = Decimal('0')
+
+    qty_jual = si.quantity or Decimal('0')
+    ratio = (qty / qty_jual) if qty_jual else Decimal('0')
+    ppn = Decimal('0')
+    for pt in PajakTransaksi.objects.filter(
+        source_type='sales_item', source_id=si.pk, jenis_pajak__startswith='ppn',
+    ).exclude(status='dibatalkan'):
+        ppn += pt.jumlah_pajak * ratio
+    unit_cost = (si.cogs_amount / qty_jual) if qty_jual else Decimal('0')
+    return JsonResponse({
+        'ok': True,
+        'item': si.item_id,
+        'qty_jual': str(qty_jual),
+        'harga_jual': str(si.selling_price),
+        'unit_cost': str(unit_cost.quantize(Decimal('0.0001'))),
+        'ppn': str(ppn.quantize(Decimal('0.01'))),
+    })

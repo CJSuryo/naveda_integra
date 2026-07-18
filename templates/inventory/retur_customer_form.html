@@ -79,7 +79,12 @@
         </div>
       </div>
 
-      <h3 style="margin:20px 0 12px;font-size:1rem;color:var(--ni-primary);">Item Retur</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin:20px 0 12px;">
+        <h3 style="margin:0;font-size:1rem;color:var(--ni-primary);">Item Retur</h3>
+        <button type="button" id="add-item-row" class="ni-btn ni-btn--secondary ni-btn--sm">
+          <i data-lucide="plus" style="width:14px;height:14px"></i> Tambah Baris
+        </button>
+      </div>
       {{ formset.management_form }}
       {% if formset.non_form_errors %}
       <div class="ni-form-error">{{ formset.non_form_errors }}</div>
@@ -88,17 +93,23 @@
         <table class="ni-table">
           <thead>
             <tr>
+              <th>Faktur Asal (opsional)</th>
               <th>Item</th>
               <th>Qty</th>
               <th>HPP/Unit</th>
               <th>Harga Jual/Unit</th>
+              <th class="ni-text-right">PPN Diretur</th>
               <th>Hapus</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="item-tbody">
             {% for item_form in formset %}
-            <tr>
+            <tr class="item-row">
               {% for hidden in item_form.hidden_fields %}{{ hidden }}{% endfor %}
+              <td>
+                {{ item_form.sales_item }}
+                {% if item_form.sales_item.errors %}<div class="ni-form-error">{{ item_form.sales_item.errors }}</div>{% endif %}
+              </td>
               <td>
                 {{ item_form.item }}
                 {% if item_form.item.errors %}<div class="ni-form-error">{{ item_form.item.errors }}</div>{% endif %}
@@ -115,12 +126,23 @@
                 {{ item_form.harga_jual }}
                 {% if item_form.harga_jual.errors %}<div class="ni-form-error">{{ item_form.harga_jual.errors }}</div>{% endif %}
               </td>
+              <td class="ni-text-right">
+                <span class="retur-ppn" data-val="0">0</span>
+              </td>
               <td>
-                {% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}
+                <span style="display:none">{% if item_form.DELETE %}{{ item_form.DELETE }}{% endif %}</span>
+                <button type="button" class="ni-btn ni-btn--xs ni-btn--danger remove-item-row" title="Hapus baris">&#10005;</button>
               </td>
             </tr>
             {% endfor %}
           </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" class="ni-text-right"><strong>Total PPN Diretur</strong></td>
+              <td class="ni-text-right"><strong id="retur-ppn-total">0</strong></td>
+              <td></td>
+            </tr>
+          </tfoot>
         </table>
       </div>
 
@@ -134,4 +156,86 @@
     </form>
   </div>
 </div>
+{% include 'inventory/_item_formset_js.html' %}
+{% include 'inventory/_warehouse_scope_js.html' %}
+<script>
+(function () {
+  var url = "{% url 'inventory:retur_ppn_preview' %}";
+  var tbody = document.getElementById('item-tbody');
+  var headerSel = document.getElementById('id_sales_header');
+  if (!tbody) return;
+
+  function rowEls(row) {
+    return {
+      sales: row.querySelector('select[name$="-sales_item"]'),
+      item: row.querySelector('select[name$="-item"]'),
+      qty: row.querySelector('input[name$="-qty"]'),
+      unit: row.querySelector('input[name$="-unit_cost"]'),
+      harga: row.querySelector('input[name$="-harga_jual"]'),
+      ppn: row.querySelector('.retur-ppn')
+    };
+  }
+
+  function fmt(n) {
+    return (n || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 });
+  }
+
+  function recomputeTotal() {
+    var total = 0;
+    tbody.querySelectorAll('tr.item-row').forEach(function (row) {
+      var ppn = row.querySelector('.retur-ppn');
+      total += parseFloat(ppn && ppn.getAttribute('data-val')) || 0;
+    });
+    var t = document.getElementById('retur-ppn-total');
+    if (t) t.textContent = fmt(total);
+  }
+
+  function setPpn(els, val) {
+    if (els.ppn) { els.ppn.setAttribute('data-val', val); els.ppn.textContent = fmt(val); }
+    recomputeTotal();
+  }
+
+  // Filter opsi faktur mengikuti "Dokumen Penjualan Asal" di header.
+  function filterSales() {
+    if (!headerSel) return;
+    var hv = headerSel.value;
+    tbody.querySelectorAll('select[name$="-sales_item"]').forEach(function (sel) {
+      Array.prototype.forEach.call(sel.options, function (opt) {
+        var show = !opt.value || !hv || opt.getAttribute('data-sales-header') === hv;
+        opt.hidden = !show; opt.disabled = !show;
+      });
+      if (sel.selectedOptions[0] && sel.selectedOptions[0].hidden) { sel.value = ''; }
+    });
+  }
+
+  function fetchPreview(row) {
+    var els = rowEls(row);
+    if (!els.sales || !els.sales.value) { setPpn(els, 0); return; }
+    var qty = (els.qty && els.qty.value) ? els.qty.value : '0';
+    var params = new URLSearchParams({ sales_item: els.sales.value, qty: qty });
+    fetch(url + '?' + params.toString(), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) { setPpn(els, 0); return; }
+        if (els.item && d.item && !els.item.value) els.item.value = String(d.item);
+        if (els.harga && (!els.harga.value || els.harga.value === '0')) els.harga.value = d.harga_jual;
+        if (els.unit && (!els.unit.value || els.unit.value === '0')) els.unit.value = d.unit_cost;
+        setPpn(els, parseFloat(d.ppn) || 0);
+      })
+      .catch(function () { setPpn(els, 0); });
+  }
+
+  tbody.addEventListener('change', function (e) {
+    var row = e.target.closest('tr.item-row');
+    if (!row) return;
+    if (e.target.matches('select[name$="-sales_item"]') || e.target.matches('input[name$="-qty"]')) {
+      fetchPreview(row);
+    }
+  });
+
+  if (headerSel) headerSel.addEventListener('change', filterSales);
+  filterSales();
+  recomputeTotal();
+})();
+</script>
 {% endblock %}

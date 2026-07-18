@@ -855,3 +855,375 @@ class ReorderViewTests(TestCase):
         resp = self.client.post(reverse('inventory:reorder_delete', args=[s.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertFalse(ItemReorderSetting.objects.filter(pk=s.pk).exists())
+
+
+class MixedInventoryAccountGuardTests(TestCase):
+    """Dokumen dengan item ber-coa_account persediaan berbeda harus ditolak."""
+
+    def setUp(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan_a = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan A')
+        self.persediaan_b = Akun.objects.create(kode_akun='1.1.5', nama='Persediaan B')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+        self.item_a = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.item_a.coa_account = self.persediaan_a
+        self.item_a.save()
+        self.item_b = ItemMasterPurchase.objects.create(nama='Gula', tipe_item='RM')
+        self.item_b.coa_account = self.persediaan_b
+        self.item_b.save()
+
+    def test_adjustment_mixed_accounts_rejected(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+        h = StockAdjustment.objects.create(tanggal='2026-02-01', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item_a,
+                                           qty=Decimal('5'), unit_cost=Decimal('2'))
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item_b,
+                                           qty=Decimal('5'), unit_cost=Decimal('2'))
+        with self.assertRaises(ValueError):
+            process_adjustment(h)
+        # tidak ada movement/stok yang tercipta (rollback via atomic pemanggil / raise dini)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'draft')
+
+    def test_adjustment_single_account_ok(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+        h = StockAdjustment.objects.create(tanggal='2026-02-01', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item_a,
+                                           qty=Decimal('5'), unit_cost=Decimal('2'))
+        header = process_adjustment(h)
+        h.refresh_from_db()
+        self.assertEqual(h.status, 'posted')
+        self.assertEqual(sum(d.debit for d in header.details.all()),
+                         sum(d.kredit for d in header.details.all()))
+
+
+class StockAvailableEndpointTests(TestCase):
+    """Endpoint AJAX prefill Qty Sistem opname."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.inventory.models import Warehouse
+        User = get_user_model()
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.user = User.objects.create_user(email='sa@example.com', password='p', name='SA')
+        self.client.force_login(self.user)
+
+    def test_returns_available_stock(self):
+        from django.urls import reverse
+        from apps.inventory.ledger import record_inflow
+        record_inflow(self.item, self.eb, None, None, Decimal('7'), Decimal('3'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        resp = self.client.get(reverse('inventory:stock_available'),
+                               {'item': self.item.pk, 'warehouse': self.wh.pk, 'eb': self.eb.pk})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Decimal(resp.json()['available']), Decimal('7'))
+
+    def test_missing_params_returns_null(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse('inventory:stock_available'), {'item': self.item.pk})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIsNone(resp.json()['available'])
+
+
+class ReturCustomerGroupedJournalTests(TestCase):
+    """Opsi A: jurnal retur pelanggan dipecah per kombinasi akun pendapatan/piutang/HPP."""
+
+    def setUp(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        # Divisi Retail
+        self.pend_retail = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan Retail')
+        self.piutang_retail = Akun.objects.create(kode_akun='1.1.2', nama='Piutang Retail')
+        # Divisi Sparepart
+        self.pend_spare = Akun.objects.create(kode_akun='4.1.2', nama='Pendapatan Sparepart')
+        self.piutang_spare = Akun.objects.create(kode_akun='1.1.3', nama='Piutang Sparepart')
+        self.item_a = ItemMasterPurchase.objects.create(nama='Ban', tipe_item='RM')
+        self.item_a.coa_account = self.persediaan
+        self.item_a.save()
+        self.item_b = ItemMasterPurchase.objects.create(nama='Busi', tipe_item='RM')
+        self.item_b.coa_account = self.persediaan
+        self.item_b.save()
+
+    def _sales_item(self, item, revenue, piutang):
+        from django.utils import timezone
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        from apps.purchase.models import SubTransactionType
+        sh = SalesHeader.objects.create(transaction_id=f'SO-{revenue.kode_akun}-{item.pk}',
+                                        tanggal=timezone.now().date())
+        seb = SalesEntitasBisnis.objects.create(sales_header=sh, entitas_bisnis=self.eb)
+        stt, _ = SubTransactionType.objects.get_or_create(
+            nama='Penjualan',
+            defaults={'module': 'sales', 'direction': 'out',
+                      'default_offset_account': self.hpp})
+        return SalesItem.objects.create(
+            sales_eb=seb, item=item, sub_transaction_type=stt,
+            quantity=Decimal('1'), selling_price=Decimal('10'),
+            offset_coa_account=self.hpp, revenue_account=revenue, payment_account=piutang)
+
+    def test_two_divisions_produce_separate_revenue_lines(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        si_a = self._sales_item(self.item_a, self.pend_retail, self.piutang_retail)
+        si_b = self._sales_item(self.item_b, self.pend_spare, self.piutang_spare)
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb, warehouse=self.wh)
+        ReturCustomerItem.objects.create(retur=h, item=self.item_a, sales_item=si_a,
+                                         qty=Decimal('2'), unit_cost=Decimal('5'), harga_jual=Decimal('50'))
+        ReturCustomerItem.objects.create(retur=h, item=self.item_b, sales_item=si_b,
+                                         qty=Decimal('1'), unit_cost=Decimal('4'), harga_jual=Decimal('30'))
+        header = process_retur_customer(h)
+        details = list(header.details.all())
+        # jurnal balance
+        self.assertEqual(sum(x.debit for x in details), sum(x.kredit for x in details))
+        # dua akun pendapatan berbeda muncul terpisah, dengan nilai masing-masing
+        pend_retail_lines = [x for x in details if x.akun_id == self.pend_retail.pk]
+        pend_spare_lines = [x for x in details if x.akun_id == self.pend_spare.pk]
+        self.assertEqual(len(pend_retail_lines), 1)
+        self.assertEqual(len(pend_spare_lines), 1)
+        self.assertEqual(pend_retail_lines[0].debit, Decimal('100'))  # 2*50
+        self.assertEqual(pend_spare_lines[0].debit, Decimal('30'))    # 1*30
+        # piutang per divisi
+        self.assertEqual(sum(x.kredit for x in details if x.akun_id == self.piutang_retail.pk), Decimal('100'))
+        self.assertEqual(sum(x.kredit for x in details if x.akun_id == self.piutang_spare.pk), Decimal('30'))
+        # HPP tergabung (akun persediaan & HPP sama) = 2*5 + 1*4 = 14
+        self.assertEqual(sum(x.debit for x in details if x.akun_id == self.persediaan.pk), Decimal('14'))
+
+
+class JournalPenyesuaianFlagTests(TestCase):
+    """adjustment/opname = is_penyesuaian True; transfer/retur = False."""
+
+    def setUp(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+
+    def test_adjustment_flagged_penyesuaian(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+        h = StockAdjustment.objects.create(tanggal='2026-02-01', entitas_bisnis=self.eb,
+                                           warehouse=self.wh, akun_selisih=self.selisih)
+        StockAdjustmentItem.objects.create(adjustment=h, item=self.item,
+                                           qty=Decimal('5'), unit_cost=Decimal('2'))
+        header = process_adjustment(h)
+        self.assertTrue(header.is_penyesuaian)
+
+    def test_retur_supplier_not_penyesuaian(self):
+        from apps.master_data.models import Akun
+        from apps.inventory.ledger import record_inflow
+        from apps.inventory.models import ReturSupplier, ReturSupplierItem
+        from apps.inventory.services import process_retur_supplier
+        record_inflow(self.item, self.eb, None, None, Decimal('10'), Decimal('5'),
+                      '2026-01-01', 'purchase_in', warehouse=self.wh)
+        hutang = Akun.objects.create(kode_akun='2.1.1', nama='Hutang')
+        h = ReturSupplier.objects.create(tanggal='2026-05-02', entitas_bisnis=self.eb,
+                                         warehouse=self.wh, akun_lawan=hutang)
+        ReturSupplierItem.objects.create(retur=h, item=self.item, qty=Decimal('3'))
+        header = process_retur_supplier(h)
+        self.assertFalse(header.is_penyesuaian)
+
+
+class WarehouseScopeValidationTests(TestCase):
+    """Gudang yang dipilih harus milik entitas bisnis yang dipilih."""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb_a = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.eb_b = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        self.wh_b = Warehouse.objects.create(entitas_bisnis=self.eb_b, nama='Gudang B')
+        self.akun = Akun.objects.create(kode_akun='5.9.1', nama='Selisih')
+
+    def test_adjustment_rejects_warehouse_of_other_entity(self):
+        from apps.inventory.forms import StockAdjustmentForm
+        form = StockAdjustmentForm(data={
+            'tanggal': '2026-02-01', 'entitas_bisnis': self.eb_a.pk,
+            'warehouse': self.wh_b.pk, 'akun_selisih': self.akun.pk, 'keterangan': '',
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn('warehouse', form.errors)
+
+    def test_adjustment_accepts_matching_warehouse(self):
+        from apps.inventory.models import Warehouse
+        from apps.inventory.forms import StockAdjustmentForm
+        wh_a = Warehouse.objects.create(entitas_bisnis=self.eb_a, nama='Gudang A')
+        form = StockAdjustmentForm(data={
+            'tanggal': '2026-02-01', 'entitas_bisnis': self.eb_a.pk,
+            'warehouse': wh_a.pk, 'akun_selisih': self.akun.pk, 'keterangan': '',
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_widget_marks_options_with_data_eb(self):
+        from apps.inventory.forms import StockAdjustmentForm
+        html = str(StockAdjustmentForm()['warehouse'])
+        self.assertIn('data-eb="%d"' % self.eb_b.pk, html)
+        self.assertIn('data-eb-filter="id_entitas_bisnis"', html)
+
+
+class ReturCustomerPPNTests(TestCase):
+    """Cara benar: PPN Keluaran diretur proporsional lewat modul pajak (SPT konsisten)."""
+
+    def setUp(self):
+        from apps.inventory.models import Warehouse
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        self.pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        self.piutang = Akun.objects.create(kode_akun='1.1.2', nama='Piutang')
+        self.ppn_keluaran = Akun.objects.create(kode_akun='2.1.4', nama='PPN Keluaran')
+        self.utang_ppn = Akun.objects.create(kode_akun='2.1.5', nama='Utang PPN')
+        self.item = ItemMasterPurchase.objects.create(nama='Ban', tipe_item='RM')
+        self.item.coa_account = self.persediaan
+        self.item.save()
+
+    def _sold_item_with_ppn(self, qty_sold, dpp, ppn):
+        from datetime import date
+        from django.utils import timezone
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        from apps.purchase.models import SubTransactionType
+        from apps.pajak.models import PajakTransaksi
+        sh = SalesHeader.objects.create(transaction_id='SO-PPN-1', tanggal=timezone.now().date())
+        seb = SalesEntitasBisnis.objects.create(sales_header=sh, entitas_bisnis=self.eb)
+        stt, _ = SubTransactionType.objects.get_or_create(
+            nama='Penjualan',
+            defaults={'module': 'sales', 'direction': 'out', 'default_offset_account': self.hpp})
+        si = SalesItem.objects.create(
+            sales_eb=seb, item=self.item, sub_transaction_type=stt,
+            quantity=qty_sold, selling_price=dpp / qty_sold, total_sales=dpp,
+            offset_coa_account=self.hpp, revenue_account=self.pendapatan,
+            payment_account=self.piutang)
+        PajakTransaksi.objects.create(
+            source_type='sales_item', source_id=si.pk, masa_pajak=date(2026, 4, 1),
+            jenis_pajak='ppn_umum', dpp=dpp, tarif_persen=Decimal('11'),
+            jumlah_pajak=ppn, sifat_pajak='potong_pungut', status='final',
+            akun_pajak=self.ppn_keluaran, akun_lawan=self.utang_ppn, entitas_bisnis=self.eb)
+        return si
+
+    def _retur(self, si, qty):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb, warehouse=self.wh)
+        d = ReturCustomerItem.objects.create(retur=h, item=self.item, sales_item=si,
+                                             qty=qty, unit_cost=Decimal('5'), harga_jual=Decimal('100000'))
+        return h, d
+
+    def test_partial_return_reverses_proportional_ppn(self):
+        from apps.inventory.services import process_retur_customer
+        from apps.pajak.models import PajakTransaksi
+        si = self._sold_item_with_ppn(Decimal('10'), Decimal('1000000'), Decimal('110000'))
+        h, d = self._retur(si, Decimal('4'))  # 4 dari 10 → 40%
+        process_retur_customer(h)
+        pt = PajakTransaksi.objects.get(source_type='retur_customer_item', source_id=d.pk)
+        self.assertEqual(pt.status, 'final')
+        self.assertEqual(pt.jumlah_pajak, Decimal('44000'))  # 110000 × 4/10
+        details = list(pt.jurnal_header.details.all())
+        debited = next(x for x in details if x.debit > 0)
+        self.assertEqual(debited.akun_id, self.ppn_keluaran.pk)  # PPN Keluaran didebit → berkurang
+        self.assertEqual(debited.debit, Decimal('44000.00'))
+
+    def test_reverse_cancels_retur_ppn(self):
+        from apps.inventory.services import process_retur_customer, reverse_retur_customer
+        from apps.pajak.models import PajakTransaksi
+        si = self._sold_item_with_ppn(Decimal('10'), Decimal('1000000'), Decimal('110000'))
+        h, d = self._retur(si, Decimal('4'))
+        process_retur_customer(h)
+        reverse_retur_customer(h)
+        pt = PajakTransaksi.objects.get(source_type='retur_customer_item', source_id=d.pk)
+        self.assertEqual(pt.status, 'dibatalkan')
+
+    def test_item_without_sales_item_no_ppn(self):
+        from apps.inventory.models import ReturCustomer, ReturCustomerItem
+        from apps.inventory.services import process_retur_customer
+        from apps.pajak.models import PajakTransaksi
+        h = ReturCustomer.objects.create(tanggal='2026-05-01', entitas_bisnis=self.eb, warehouse=self.wh)
+        ReturCustomerItem.objects.create(retur=h, item=self.item, qty=Decimal('2'),
+                                         unit_cost=Decimal('5'), harga_jual=Decimal('100000'))
+        process_retur_customer(h, akun_pendapatan=self.pendapatan,
+                               akun_piutang=self.piutang, akun_hpp=self.hpp)
+        self.assertFalse(PajakTransaksi.objects.filter(source_type='retur_customer_item').exists())
+
+
+class ReturPpnPreviewUITests(TestCase):
+    """Endpoint preview PPN retur + field sales_item pada form."""
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        from apps.inventory.models import Warehouse
+        User = get_user_model()
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.hpp = Akun.objects.create(kode_akun='5.1.1', nama='HPP')
+        self.pendapatan = Akun.objects.create(kode_akun='4.1.1', nama='Pendapatan')
+        self.piutang = Akun.objects.create(kode_akun='1.1.2', nama='Piutang')
+        self.ppn_keluaran = Akun.objects.create(kode_akun='2.1.4', nama='PPN Keluaran')
+        self.utang_ppn = Akun.objects.create(kode_akun='2.1.5', nama='Utang PPN')
+        self.item = ItemMasterPurchase.objects.create(nama='Ban', tipe_item='RM')
+        self.user = User.objects.create_user(email='ppn@example.com', password='p', name='P')
+        self.client.force_login(self.user)
+
+    def _sold_item(self, qty_sold, dpp, ppn, cogs):
+        from datetime import date
+        from django.utils import timezone
+        from apps.sales.models import SalesHeader, SalesEntitasBisnis, SalesItem
+        from apps.purchase.models import SubTransactionType
+        from apps.pajak.models import PajakTransaksi
+        sh = SalesHeader.objects.create(transaction_id='SO-UI-1', tanggal=timezone.now().date())
+        seb = SalesEntitasBisnis.objects.create(sales_header=sh, entitas_bisnis=self.eb)
+        stt, _ = SubTransactionType.objects.get_or_create(
+            nama='Penjualan',
+            defaults={'module': 'sales', 'direction': 'out', 'default_offset_account': self.hpp})
+        si = SalesItem.objects.create(
+            sales_eb=seb, item=self.item, sub_transaction_type=stt,
+            quantity=qty_sold, selling_price=dpp / qty_sold, total_sales=dpp,
+            cogs_amount=cogs, offset_coa_account=self.hpp,
+            revenue_account=self.pendapatan, payment_account=self.piutang)
+        PajakTransaksi.objects.create(
+            source_type='sales_item', source_id=si.pk, masa_pajak=date(2026, 4, 1),
+            jenis_pajak='ppn_umum', dpp=dpp, tarif_persen=Decimal('11'),
+            jumlah_pajak=ppn, sifat_pajak='potong_pungut', status='final',
+            akun_pajak=self.ppn_keluaran, akun_lawan=self.utang_ppn, entitas_bisnis=self.eb)
+        return si
+
+    def test_preview_returns_proportional_ppn_and_prefill(self):
+        from django.urls import reverse
+        si = self._sold_item(Decimal('10'), Decimal('1000000'), Decimal('110000'), Decimal('500000'))
+        resp = self.client.get(reverse('inventory:retur_ppn_preview'),
+                               {'sales_item': si.pk, 'qty': '4'})
+        data = resp.json()
+        self.assertTrue(data['ok'])
+        self.assertEqual(Decimal(data['ppn']), Decimal('44000.00'))     # 110000 × 4/10
+        self.assertEqual(data['item'], self.item.pk)
+        self.assertEqual(Decimal(data['unit_cost']), Decimal('50000'))  # cogs 500000 / 10
+        self.assertEqual(Decimal(data['harga_jual']), Decimal('100000'))
+
+    def test_form_has_sales_item_with_scope_attr(self):
+        from apps.inventory.forms import ReturCustomerItemForm
+        si = self._sold_item(Decimal('10'), Decimal('1000000'), Decimal('110000'), Decimal('0'))
+        f = ReturCustomerItemForm()
+        self.assertIn('sales_item', f.fields)
+        html = str(f['sales_item'])
+        self.assertIn('data-parent-filter="id_sales_header"', html)
+        self.assertIn('data-sales-header="%d"' % si.sales_eb.sales_header_id, html)
