@@ -423,6 +423,83 @@ class InventoryViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
 
 
+class InventoryDetailOtherMovementTypesTests(TestCase):
+    """Mutasi Persediaan di halaman detail lot harus ikut menampilkan transaksi
+    selain purchase/sales (adjustment/opname/transfer/retur/produksi) yang
+    mengonsumsi dari lot (InventoryRecord) tersebut, ditelusuri via StockConsumption."""
+
+    def setUp(self):
+        from apps.accounts.models import Role
+        from apps.master_data.models import Akun
+        from apps.inventory.models import Warehouse
+        from apps.inventory import ledger
+
+        role = Role.objects.create(kode='admin', nama='Admin')
+        self.user = User.objects.create_user(email='mutasi@test.com', password='pass', role=role)
+        self.client = Client()
+        self.client.force_login(self.user)
+
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.persediaan = Akun.objects.create(kode_akun='1.1.4', nama='Persediaan')
+        self.selisih = Akun.objects.create(kode_akun='5.9.1', nama='Selisih Persediaan')
+        self.item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', metode_biaya_persediaan='fifo',
+        )
+        self.item.coa_account = self.persediaan
+        self.item.save()
+
+        # Simulasikan lot yang dibuat oleh pembelian: satu InventoryRecord +
+        # satu StockMovement inflow yang me-mirror-nya (legacy_inventory_record).
+        self.record = InventoryRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb,
+            quantity=Decimal('10'), unit_price=Decimal('100'),
+        )
+        ledger.record_inflow(
+            self.item, self.eb, None, None, Decimal('10'), Decimal('100'),
+            '2026-01-01', 'purchase_in', warehouse=self.wh,
+            legacy_inventory_record=self.record,
+        )
+
+    def test_adjustment_out_consuming_this_lot_appears_in_mutasi(self):
+        from apps.inventory.models import StockAdjustment, StockAdjustmentItem
+        from apps.inventory.services import process_adjustment
+
+        adj = StockAdjustment.objects.create(
+            tanggal='2026-02-01', entitas_bisnis=self.eb, warehouse=self.wh,
+            akun_selisih=self.selisih,
+        )
+        StockAdjustmentItem.objects.create(
+            adjustment=adj, item=self.item, qty=Decimal('-4'), unit_cost=Decimal('100'),
+        )
+        process_adjustment(adj)
+
+        resp = self.client.get(reverse('inventory:detail', args=[self.record.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, adj.nomor)
+        self.assertContains(resp, 'Penyesuaian Keluar')
+
+    def test_sale_out_consumption_is_excluded_from_other_movements_query(self):
+        """sale_out sudah ditampilkan lewat SalesItemFIFOAllocation (lebih detail,
+        dengan link ke sales header) — query StockConsumption untuk tipe lain
+        harus mengecualikannya supaya tidak dobel."""
+        from apps.inventory.models import StockConsumption
+
+        inflow = self.record.stock_movements.get(movement_type='purchase_in')
+        outflow = StockMovement.objects.create(
+            item=self.item, entitas_bisnis=self.eb, tanggal='2026-02-01',
+            movement_type='sale_out', qty=Decimal('-2'), unit_cost=Decimal('100'),
+            remaining_qty=Decimal('0'),
+        )
+        StockConsumption.objects.create(
+            out_movement=outflow, in_movement=inflow, qty=Decimal('2'), unit_cost=Decimal('100'),
+        )
+
+        resp = self.client.get(reverse('inventory:detail', args=[self.record.pk]))
+        self.assertNotContains(resp, 'Keluar (Penjualan Keluar)')
+
+
 class ReverseInflowMovementsTests(DjangoTestCase):
     def setUp(self):
         self.tipe = TipeEntitas.objects.create(nama='PT')

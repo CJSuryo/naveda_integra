@@ -174,6 +174,35 @@ def inventory_detail(request: HttpRequest, pk: int) -> HttpResponse:
             'keterangan': f'Penjualan via {sh.transaction_id} ({alloc.sales_item.sales_eb.entitas_bisnis.nama})',
         })
 
+    # Transaksi lain (adjustment/opname/transfer/retur/produksi) yang mengonsumsi
+    # dari lot ini — ditelusuri via StockConsumption ke layer StockMovement yang
+    # dibuat sebagai mirror InventoryRecord ini (legacy_inventory_record).
+    # sale_out sengaja dilewati: sudah tampil di atas lewat SalesItemFIFOAllocation
+    # (lebih detail, ada link ke sales header) — supaya tidak dobel.
+    from .models import StockConsumption, StockMovement
+    other_consumptions = (
+        StockConsumption.objects
+        .filter(in_movement__legacy_inventory_record=record)
+        .exclude(out_movement__movement_type='sale_out')
+        .select_related('out_movement', 'out_movement__source_content_type')
+        .order_by('out_movement__tanggal')
+    )
+    movement_type_labels = dict(StockMovement.MOVEMENT_TYPE_CHOICES)
+    for cons in other_consumptions:
+        mv = cons.out_movement
+        tipe_label = movement_type_labels.get(mv.movement_type, mv.movement_type)
+        ref = getattr(mv.source, 'nomor', '') if mv.source is not None else ''
+        mutations.append({
+            'tanggal': mv.tanggal,
+            'tipe': f'Keluar ({tipe_label})',
+            'referensi': ref,
+            'url': None,
+            'quantity': (cons.qty * cons.unit_cost) if is_bulk else cons.qty,
+            'keterangan': f'{tipe_label} via {ref}' if ref else tipe_label,
+        })
+
+    mutations.sort(key=lambda m: m['tanggal'])
+
     context = {
         'record': record,
         'mutations': mutations,
