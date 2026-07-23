@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
-{% block title %}Konfigurasi Toko — {{ lv2.nama }}{% endblock %}
+{% block title %}Konfigurasi Cabang — {{ lv3.nama }}{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Konfigurasi Toko</h1>
-    <p class="ni-page-header__subtitle">{{ lv2.nama }}</p>
+    <h1 class="ni-page-header__title">Konfigurasi Cabang POS</h1>
+    <p class="ni-page-header__subtitle">{{ lv3.nama }} — {{ merchant.entitas_bisnis_lv2.nama }}</p>
   </div>
 </div>
 
@@ -13,23 +13,36 @@
 <div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
 {% endfor %}
 
-<div class="ni-card ni-animate-fade-in" style="max-width:720px;">
+<div class="ni-alert ni-alert--info">
+  Field yang dikosongkan akan mengikuti konfigurasi merchant
+  (<strong>{{ merchant.entitas_bisnis_lv2.nama }}</strong>).
+</div>
+
+<div class="ni-card ni-animate-fade-in ni-maxw-720">
   <div class="ni-card__body">
-    <form method="post">
+    <form method="post" enctype="multipart/form-data" action="?{% if next_url %}next={{ next_url }}{% endif %}">
       {% csrf_token %}
       {% for field in form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}</label>
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}<div class="ni-form-help">{{ field.help_text }}</div>{% endif %}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
       {% endfor %}
-      <div class="ni-btn-row" style="margin-top:24px;">
+      <div class="ni-btn-row ni-mt-4">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
         <a href="{% url 'pos_config:store_list' merchant.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>
 </div>
+
+{% if store.pk %}
+<div class="ni-btn-row ni-mt-4">
+  <a href="{% url 'pos_config:payment_method_list' store.pk %}" class="ni-btn ni-btn--secondary">Metode Pembayaran</a>
+  <a href="{% url 'pos_config:shift_list' store.pk %}" class="ni-btn ni-btn--secondary">Shift Kerja</a>
+</div>
+{% endif %}
 
 {% endblock %}

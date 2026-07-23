@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Log Webhook — {{ credential.get_aggregator_display }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Log Webhook</h1>
+    <p class="ni-page-header__subtitle">{{ credential.get_aggregator_display }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_aggregator:wizard' credential.pk %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+<div class="ni-alert ni-alert--info">
+  Ini tempat pertama yang diperiksa ketika pesanan berhenti masuk. Baris
+  <strong>Gagal</strong> berulang biasanya berarti outlet belum terhubung atau
+  secret webhook berubah.
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table ni-table--compact">
+      <thead>
+        <tr>
+          <th>Waktu</th>
+          <th>Event</th>
+          <th>Order</th>
+          <th>Outlet</th>
+          <th>Tanda tangan</th>
+          <th>Status</th>
+          <th>Percobaan</th>
+          <th>Pesan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
+        <tr>
+          <td class="ni-whitespace-nowrap">{{ event.received_at|date:"d/m H:i:s" }}</td>
+          <td>{{ event.event_type|default:"—" }}</td>
+          <td><code>{{ event.external_order_id|default:"—" }}</code></td>
+          <td><code>{{ event.external_store_id|default:"—" }}</code></td>
+          <td>
+            {% if event.signature_verified %}
+              <span class="ni-badge ni-badge--success">Valid</span>
+            {% else %}
+              <span class="ni-badge ni-badge--danger">Tidak valid</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if event.status == 'PROCESSED' %}
+              <span class="ni-badge ni-badge--success">Diproses</span>
+            {% elif event.status == 'DUPLICATE' %}
+              <span class="ni-badge ni-badge--secondary">Duplikat</span>
+            {% elif event.status == 'FAILED' %}
+              <span class="ni-badge ni-badge--danger">Gagal</span>
+            {% else %}
+              <span class="ni-badge ni-badge--warning">Diterima</span>
+            {% endif %}
+          </td>
+          <td>{{ event.attempts }}</td>
+          <td class="ni-text-xs">{{ event.error_message|default:"—"|truncatechars:120 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="ni-text-center ni-text-muted">Belum ada webhook diterima.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% endblock %}

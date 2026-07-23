@@ -180,10 +180,10 @@
         {% else %}
         <p class="ni-checklist-item__desc">Set akun akuntansi dan STT default — berlaku ke semua outlet.</p>
         {% endif %}
-        <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+        {% if checks.pos_lv2 %}<a href="{% url 'pos_config:merchant_config' checks.pos_lv2.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
           <i data-lucide="settings"></i>
           {% if checks.pos_cfg %}Edit POS Config{% else %}Setup POS Config{% endif %}
-        </a>
+        </a>{% endif %}
       </div>
     </div>
   </div>
@@ -219,9 +219,9 @@
         </a>
         {% else %}
         <p class="ni-checklist-item__desc">STT sudah ada tapi belum di-assign di POS Config.</p>
-        <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+        {% if checks.pos_lv2 %}<a href="{% url 'pos_config:merchant_config' checks.pos_lv2.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
           <i data-lucide="settings"></i> Assign STT di POS Config
-        </a>
+        </a>{% endif %}
         {% endif %}
       </div>
     </div>
@@ -295,10 +295,10 @@
         <p class="ni-checklist-item__desc">
           {% if checks.qris_ok %}Gambar QRIS sudah diupload.{% else %}Upload gambar QR code untuk pembayaran QRIS di kasir.{% endif %}
         </p>
-        <a href="{% url 'pos_config:merchant_config' eb.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
+        {% if checks.pos_lv2 %}<a href="{% url 'pos_config:merchant_config' checks.pos_lv2.pk %}?next={% url 'entitas_bisnis:setup_wizard' eb.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
           <i data-lucide="upload"></i>
           {% if checks.qris_ok %}Ganti QRIS{% else %}Upload QRIS{% endif %}
-        </a>
+        </a>{% endif %}
       </div>
     </div>
   </div>

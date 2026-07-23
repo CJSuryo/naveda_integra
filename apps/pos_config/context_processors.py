@@ -1,26 +1,31 @@
 def pos_nav_context(request):
+    """Expose the user's first accessible merchant/store to the sidebar.
+
+    Swallows errors on purpose: a context processor that raises breaks every
+    page, and the navigation degrades gracefully without these keys.
+    """
     if not getattr(request, 'user', None) or not request.user.is_authenticated:
         return {}
     try:
-        from pos_config.models import MerchantPOSConfig, StorePOSConfig
-        if request.user.is_superuser or getattr(request.user, 'is_admin', False):
-            merchant = MerchantPOSConfig.objects.select_related('entitas_bisnis').first()
-        else:
-            from apps.accounts.models import UserEntitasBisnis
-            ub = (
-                UserEntitasBisnis.objects
-                .filter(user=request.user)
-                .select_related('entitas_bisnis')
-                .first()
-            )
-            if not ub:
-                return {}
-            merchant = MerchantPOSConfig.objects.filter(
-                entitas_bisnis=ub.entitas_bisnis
-            ).select_related('entitas_bisnis').first()
+        from pos_config.access import accessible_merchant_qs
+        from pos_config.models import StorePOSConfig
+        merchant = (
+            accessible_merchant_qs(request.user)
+            .select_related('entitas_bisnis_lv2__entitas_bisnis')
+            .first()
+        )
         if not merchant:
             return {}
-        store = StorePOSConfig.objects.filter(merchant_config=merchant, is_active=True).first()
-        return {'pos_merchant': merchant, 'pos_first_store': store, 'pos_cashier_url': '/sales/pos/'}
+        store = (
+            StorePOSConfig.objects
+            .filter(merchant_config=merchant, is_active=True)
+            .select_related('entitas_bisnis_lv3')
+            .first()
+        )
+        return {
+            'pos_merchant': merchant,
+            'pos_first_store': store,
+            'pos_cashier_url': '/sales/pos/',
+        }
     except Exception:
         return {}

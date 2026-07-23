@@ -64,8 +64,8 @@ def tipe_entitas_delete(request: HttpRequest, pk: int) -> HttpResponse:
 def list_view(request: HttpRequest) -> HttpResponse:
     lv1_list = (
         EntitasBisnis.objects
-        .select_related('tipe_entitas', 'pos_config')
-        .prefetch_related('children_lv2__children_lv3')
+        .select_related('tipe_entitas')
+        .prefetch_related('children_lv2__pos_config', 'children_lv2__children_lv3')
         .all()
         .order_by('nama')
     )
@@ -234,8 +234,12 @@ def lv3_delete(request: HttpRequest, eb_pk: int, lv2_pk: int, pk: int) -> HttpRe
 def _compute_wizard_checks(eb) -> dict:
     """Compute completion status for all wizard checklist items.
 
-    eb must be fetched with select_related('pos_config') and
-    prefetch_related('children_lv2__children_lv3').
+    eb must be fetched with prefetch_related('children_lv2__children_lv3') and
+    select_related('tipe_entitas').
+
+    POS configuration lives on level 2 (the operating company), not on this
+    level-1 group. The wizard therefore targets ``pos_lv2`` — the first active
+    level-2 child — and reports that company's config.
     """
     from apps.purchase.models import SubTransactionType
     from apps.accounts.models import UserEntitasBisnis
@@ -249,7 +253,8 @@ def _compute_wizard_checks(eb) -> dict:
         for lv3 in lv2.children_lv3.all()
     )
 
-    pos_cfg = getattr(eb, 'pos_config', None)
+    pos_lv2 = lv2_list[0] if lv2_list else None
+    pos_cfg = getattr(pos_lv2, 'pos_config', None) if pos_lv2 else None
     pos_config_ok = bool(
         pos_cfg and
         pos_cfg.sub_transaction_type_id and
@@ -298,6 +303,7 @@ def _compute_wizard_checks(eb) -> dict:
         'lv3_ok': lv3_count > 0,
         'pos_config_ok': pos_config_ok,
         'pos_cfg': pos_cfg,
+        'pos_lv2': pos_lv2,
         'pos_missing': pos_missing,
         'stt_ok': stt_ok,
         'stt_exists': stt_exists,
@@ -317,8 +323,8 @@ def setup_wizard(request: HttpRequest, pk: int) -> HttpResponse:
     """Checklist dashboard wizard for configuring an Entitas Bisnis for Kasir."""
     eb = get_object_or_404(
         EntitasBisnis.objects
-        .select_related('pos_config', 'tipe_entitas')
-        .prefetch_related('children_lv2__children_lv3'),
+        .select_related('tipe_entitas')
+        .prefetch_related('children_lv2__pos_config', 'children_lv2__children_lv3'),
         pk=pk,
     )
     checks = _compute_wizard_checks(eb)

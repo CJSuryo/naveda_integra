@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Hubungkan Channel — {{ lv2.nama }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hubungkan Channel Pesan Antar</h1>
+    <p class="ni-page-header__subtitle">{{ lv2.nama }}</p>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-alert ni-alert--warning">
+  <strong>Sebelum mulai.</strong> Anda memerlukan akun merchant di channel
+  tersebut yang <em>sudah disetujui untuk akses Partner API</em>. Persetujuan ini
+  adalah proses komersial dengan pihak aggregator dan tidak bisa dipercepat dari
+  sini. Tanpa itu, langkah berikutnya akan gagal.
+</div>
+
+<div class="ni-card ni-animate-fade-in ni-maxw-480">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="ni-form-help">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="ni-btn-row ni-mt-4">
+        <button type="submit" class="ni-btn ni-btn--primary">Lanjutkan</button>
+        <a href="{% url 'pos_aggregator:channel_list' lv2.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

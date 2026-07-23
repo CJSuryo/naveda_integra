@@ -1,0 +1,229 @@
+/* ==========================================================================
+   POS AGGREGATOR — onboarding wizard and live order board
+   ========================================================================== */
+
+.ni-agg-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ni-agg-status__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ni-text-muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ni-agg-step__title {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ni-primary, #1f2937);
+}
+
+/* ── Checklists ─────────────────────────────────────────────────────────── */
+
+.ni-agg-checklist {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--ni-text-muted, #6b7280);
+}
+
+.ni-agg-checklist--status {
+  list-style: none;
+  padding-left: 0;
+}
+
+.ni-agg-checklist--status li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+/* ── Pre-flight checks ──────────────────────────────────────────────────── */
+
+.ni-agg-checks {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.ni-agg-check {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+}
+
+.ni-agg-check--pass {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.ni-agg-check--fail {
+  background: rgba(239, 68, 68, 0.07);
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.ni-agg-check__icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.ni-agg-check--pass .ni-agg-check__icon { color: #059669; }
+.ni-agg-check--fail .ni-agg-check__icon { color: #dc2626; }
+
+.ni-agg-check__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.875rem;
+}
+
+.ni-agg-check__remedy {
+  font-size: 0.8125rem;
+  color: #b91c1c;
+  line-height: 1.5;
+}
+
+/* ── Outlet picker ──────────────────────────────────────────────────────── */
+
+.ni-agg-outlets {
+  margin-bottom: 16px;
+}
+
+.ni-agg-outlet-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.ni-agg-outlet {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  text-align: left;
+  background: var(--ni-bg-white, #fff);
+  border: 1px solid var(--ni-border-color, #e5e7eb);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ni-agg-outlet:hover {
+  border-color: var(--ni-primary, #2563eb);
+}
+
+.ni-agg-outlet--active {
+  border-color: var(--ni-primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18);
+}
+
+.ni-agg-outlet__name {
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* Address is the field that actually distinguishes near-identical branches. */
+.ni-agg-outlet__address {
+  font-size: 0.8125rem;
+  color: var(--ni-text-muted, #6b7280);
+  line-height: 1.4;
+}
+
+.ni-agg-outlet__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--ni-text-muted, #9ca3af);
+}
+
+/* ── Branch link row ────────────────────────────────────────────────────── */
+
+.ni-agg-link-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ni-input--sm {
+  padding: 4px 8px;
+  font-size: 0.8125rem;
+  max-width: 160px;
+}
+
+/* Highlights where an armed outlet will be applied. */
+.ni-input--awaiting {
+  border-color: var(--ni-primary, #2563eb);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+/* ── Live order board ───────────────────────────────────────────────────── */
+
+.ni-agg-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.ni-agg-order {
+  border: 1px solid var(--ni-border-color, #e5e7eb);
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 14px;
+  background: var(--ni-bg-white, #fff);
+}
+
+.ni-agg-order--GOFOOD { border-left-color: #00aa13; }
+.ni-agg-order--GRABFOOD { border-left-color: #00b14f; }
+.ni-agg-order--SHOPEEFOOD { border-left-color: #ee4d2d; }
+
+.ni-agg-order--attention {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.ni-agg-order__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ni-agg-order__number {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.ni-agg-order__items {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.ni-agg-order__total {
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+@media (max-width: 640px) {
+  .ni-agg-link-form {
+    flex-wrap: wrap;
+  }
+
+  .ni-input--sm {
+    max-width: 100%;
+  }
+}

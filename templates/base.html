@@ -82,7 +82,7 @@
 
       <span class="ni-nav-label">Entitas Bisnis</span>
 
-      <div class="ni-nav-item {% if 'entitas-bisnis' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'entitas-bisnis' in request.path or 'pos/aggregator' in request.path or 'pos/config' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="building-2" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Entitas Bisnis</span>
@@ -95,6 +95,22 @@
           <a href="{% url 'entitas_bisnis:tipe_entitas_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Tipe Entitas</span>
           </a>
+          {% if pos_merchant %}
+          <a href="{% url 'pos_config:merchant_config' pos_merchant.entitas_bisnis_lv2_id %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Konfigurasi POS</span>
+          </a>
+          <a href="{% url 'pos_config:store_list' pos_merchant.pk %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Cabang POS</span>
+          </a>
+          <a href="{% url 'pos_aggregator:channel_list' pos_merchant.entitas_bisnis_lv2_id %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Channel Pesan Antar</span>
+          </a>
+          {% endif %}
+          {% if pos_first_store %}
+          <a href="{% url 'pos_aggregator:order_board' pos_first_store.pk %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Pesanan Masuk</span>
+          </a>
+          {% endif %}
         </div>
       </div>
 

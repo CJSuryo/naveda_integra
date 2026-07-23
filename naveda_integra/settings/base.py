@@ -58,6 +58,7 @@ INSTALLED_APPS = [
     'apps.posting',
     'pos_config',
     'pos_catalog',
+    'pos_aggregator',
     'axes',
 ]
 
@@ -233,6 +234,42 @@ CHANNEL_LAYERS = {
         "CONFIG": {"hosts": [os.environ.get("REDIS_URL", "redis://localhost:6379")]},
     }
 }
+
+# ── Celery ───────────────────────────────────────────────────────────────────
+# Background execution for aggregator menu pushes, webhook processing and OAuth
+# token refresh. Redis doubles as broker and result backend.
+CELERY_BROKER_URL = os.environ.get(
+    'CELERY_BROKER_URL', os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+)
+CELERY_RESULT_BACKEND = os.environ.get(
+    'CELERY_RESULT_BACKEND', os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+)
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'Asia/Jakarta'
+CELERY_ENABLE_UTC = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_RESULT_EXPIRES = 60 * 60 * 24
+# Run tasks inline when no broker is configured (tests, local dev without Redis)
+# so a missing worker never silently swallows work.
+CELERY_TASK_ALWAYS_EAGER = os.environ.get(
+    'CELERY_TASK_ALWAYS_EAGER', 'False'
+).lower() in ('true', '1', 'yes')
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# ── Aggregator integration ───────────────────────────────────────────────────
+# Fernet key encrypting aggregator client secrets and OAuth tokens at rest.
+# Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# When unset, the key is derived from SECRET_KEY so development still works;
+# production must set this explicitly (see pos_aggregator.crypto).
+AGGREGATOR_ENCRYPTION_KEY = os.environ.get('AGGREGATOR_ENCRYPTION_KEY', '')
+# Public base URL aggregators call back into. Must be HTTPS and reachable from
+# the internet, otherwise webhooks and OAuth redirects cannot be delivered.
+AGGREGATOR_PUBLIC_BASE_URL = os.environ.get('AGGREGATOR_PUBLIC_BASE_URL', '').rstrip('/')
 
 # ── Email + password-change link ─────────────────────────────────────────────
 PASSWORD_RESET_TIMEOUT = 900  # 15 min — governs the password-change link

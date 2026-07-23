@@ -1,15 +1,15 @@
 {% extends 'base.html' %}
-{% block title %}Daftar Toko — {{ merchant.entitas_bisnis.nama }}{% endblock %}
+{% block title %}Cabang POS — {{ merchant.entitas_bisnis_lv2.nama }}{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Toko POS</h1>
-    <p class="ni-page-header__subtitle">{{ merchant.entitas_bisnis.nama }}</p>
+    <h1 class="ni-page-header__title">Cabang POS</h1>
+    <p class="ni-page-header__subtitle">{{ merchant.entitas_bisnis_lv2.nama }}</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'pos_config:store_form' merchant.pk 'new' %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Toko
+    <a href="{% url 'pos_config:merchant_config' merchant.entitas_bisnis_lv2.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="settings" class="ni-icon-sm"></i> Konfigurasi Merchant
     </a>
   </div>
 </div>
@@ -23,8 +23,9 @@
     <table class="ni-table">
       <thead>
         <tr>
-          <th>Nama Toko</th>
+          <th>Cabang</th>
           <th>Alamat</th>
+          <th>Tax</th>
           <th>Status</th>
           <th>Aksi</th>
         </tr>
@@ -32,8 +33,9 @@
       <tbody>
         {% for store in stores %}
         <tr>
-          <td>{{ store.entitas_bisnis_lv2.nama }}</td>
-          <td>{{ store.entitas_bisnis_lv2.alamat|default:"-" }}</td>
+          <td>{{ store.entitas_bisnis_lv3.nama }}</td>
+          <td>{{ store.entitas_bisnis_lv3.alamat_lengkap|default:"—" }}</td>
+          <td>{{ store.effective_tax_pct }}%</td>
           <td>
             {% if store.is_active %}
               <span class="ni-badge ni-badge--success">Aktif</span>
@@ -43,16 +45,38 @@
           </td>
           <td>
             <div class="ni-btn-row">
-              <a href="{% url 'pos_config:store_form' merchant.pk store.entitas_bisnis_lv2.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'pos_config:store_form' merchant.pk store.entitas_bisnis_lv3.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
+              <a href="{% url 'pos_config:payment_method_list' store.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">Pembayaran</a>
+              <a href="{% url 'pos_config:shift_list' store.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">Shift</a>
             </div>
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada toko terdaftar.</td></tr>
+        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada cabang yang dikonfigurasi.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if unlinked_branches %}
+<div class="ni-section-header ni-mt-4">
+  <h2 class="ni-section-header__title">Cabang Belum Dikonfigurasi</h2>
+</div>
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <p class="ni-text-muted ni-mb-3">
+      Cabang (Entitas Bisnis Level 3) berikut belum punya konfigurasi POS. Klik untuk membuatnya.
+    </p>
+    <div class="ni-btn-row ni-flex-wrap ni-gap-2">
+      {% for lv3 in unlinked_branches %}
+      <a href="{% url 'pos_config:store_form' merchant.pk lv3.pk %}" class="ni-btn ni-btn--success ni-btn--sm">
+        <i data-lucide="plus" class="ni-icon-sm"></i> {{ lv3.nama }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% endblock %}

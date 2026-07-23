@@ -8,9 +8,11 @@ from pos_catalog.models import ModifierGroup, ModifierOption, ProductModifierGro
 
 
 def make_merchant():
+    """POS configuration lives on level 2 (the operating company)."""
     tipe = TipeEntitas.objects.create(nama='FnB')
     eb = EntitasBisnis.objects.create(nama='Kafe', tipe_entitas=tipe, relasi='pelanggan')
-    return MerchantPOSConfig.objects.create(entitas_bisnis=eb)
+    lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=eb, nama='PT Kafe')
+    return MerchantPOSConfig.objects.create(entitas_bisnis_lv2=lv2)
 
 
 def make_item_master(nama='Nasi Goreng', tipe='ITM'):

@@ -85,6 +85,23 @@ class EntitasBisnis(models.Model):
             EntitasBisnis.objects.filter(is_company_profile=True).exclude(pk=self.pk).update(is_company_profile=False)
         super().save(*args, **kwargs)
 
+    @property
+    def has_active_pos(self) -> bool:
+        """True when any level-2 child runs the POS.
+
+        POS configuration lives on level 2 (the operating company); a level-1
+        group has none of its own, so this rolls the children up for display.
+        """
+        return any(
+            getattr(lv2, 'pos_config', None) and lv2.pos_config.is_pos_active
+            for lv2 in self.children_lv2.all()
+        )
+
+    @property
+    def pos_merchants(self):
+        """Level-2 children that have a POS configuration."""
+        return [lv2 for lv2 in self.children_lv2.all() if getattr(lv2, 'pos_config', None)]
+
 
 class EntitasBisnisLv2(models.Model):
     """Level 2 of business entity hierarchy."""

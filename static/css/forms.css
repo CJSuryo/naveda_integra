@@ -475,3 +475,11 @@ body > .ts-dropdown {
   max-height: 480px;
   overflow-y: auto;
 }
+
+/* Help text rendered under a field from Django's `help_text`. */
+.ni-form-help {
+  margin-top: 4px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--ni-text-muted, #6b7280);
+}

@@ -1,22 +1,39 @@
 {% extends 'base.html' %}
-{% block title %}Shift — {{ store.entitas_bisnis_lv2.nama }}{% endblock %}
+{% block title %}Shift — {{ store.entitas_bisnis_lv3.nama }}{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
     <h1 class="ni-page-header__title">Shift Kerja</h1>
-    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv2.nama }}</p>
+    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv3.nama }}</p>
   </div>
   <div class="ni-page-header__actions">
-    <a href="{% url 'pos_config:shift_add' store.pk %}" class="ni-btn ni-btn--success">
-      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Shift
-    </a>
+    <a href="{% url 'pos_config:store_list' store.merchant_config_id %}" class="ni-btn ni-btn--secondary">Kembali</a>
   </div>
 </div>
 
 {% for msg in messages %}
 <div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
 {% endfor %}
+
+<div class="ni-card ni-animate-fade-in ni-maxw-720 ni-mb-4">
+  <div class="ni-card__body">
+    <h3 class="ni-text-primary ni-text-base ni-mt-0 ni-mb-3">Tambah Shift</h3>
+    <form method="post">
+      {% csrf_token %}
+      {% for field in form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <div class="ni-btn-row ni-mt-3">
+        <button type="submit" class="ni-btn ni-btn--primary">Tambah</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-table-wrapper">
@@ -27,7 +44,6 @@
           <th>Mulai</th>
           <th>Selesai</th>
           <th>Status</th>
-          <th>Aksi</th>
         </tr>
       </thead>
       <tbody>
@@ -43,14 +59,9 @@
               <span class="ni-badge ni-badge--danger">Nonaktif</span>
             {% endif %}
           </td>
-          <td>
-            <div class="ni-btn-row">
-              <a href="{% url 'pos_config:shift_edit' store.pk shift.pk %}" class="ni-btn ni-btn--warning ni-btn--sm">Edit</a>
-            </div>
-          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="5" class="ni-text-center ni-text-muted">Belum ada shift terdaftar.</td></tr>
+        <tr><td colspan="4" class="ni-text-center ni-text-muted">Belum ada shift terdaftar.</td></tr>
         {% endfor %}
       </tbody>
     </table>

@@ -37,3 +37,16 @@ GLOBAL_THROTTLE_ENABLE = False
 # django-axes deterministic config for tests.
 AXES_FAILURE_LIMIT = 2
 AXES_ENABLED = True
+
+# ── Celery ───────────────────────────────────────────────────────────────────
+# Run tasks inline. Without this, every `.delay()` blocks trying to reach a
+# Redis broker that is not running under test.
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_BROKER_URL = 'memory://'
+CELERY_RESULT_BACKEND = 'cache+memory://'
+
+# ── Aggregator ───────────────────────────────────────────────────────────────
+# A fixed key keeps ciphertexts stable across tests and independent of SECRET_KEY.
+AGGREGATOR_ENCRYPTION_KEY = 'IEDpFCFbZ8oGa2ZM_hGGX1AyDBqRZbi5PZLmHtd3S3s='
+AGGREGATOR_PUBLIC_BASE_URL = 'https://testserver.example.com'

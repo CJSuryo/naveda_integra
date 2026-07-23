@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block title %}Channel Pesan Antar — {{ lv2.nama }}{% endblock %}
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Channel Pesan Antar</h1>
+    <p class="ni-page-header__subtitle">{{ lv2.nama }} — {{ lv2.entitas_bisnis.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_aggregator:channel_connect' lv2.pk %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" class="ni-icon-sm"></i> Hubungkan Channel
+    </a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+<div class="ni-alert ni-alert--info">
+  Akun merchant GoFood / GrabFood / ShopeeFood dimiliki oleh
+  <strong>{{ lv2.nama }}</strong> (Entitas Bisnis Level 2). Setiap cabang
+  (Level 3) dihubungkan ke satu outlet di aggregator.
+</div>
+
+<div class="ni-card-grid ni-card-grid--3">
+  {% for channel in channels %}
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <div class="ni-d-flex ni-items-center ni-justify-between ni-mb-3">
+        <h3 class="ni-text-base ni-font-semibold ni-m-0">{{ channel.label }}</h3>
+        {% if channel.is_live %}
+          <span class="ni-badge ni-badge--success">Live</span>
+        {% elif channel.credential %}
+          <span class="ni-badge ni-badge--warning">{{ channel.state_label }}</span>
+        {% else %}
+          <span class="ni-badge ni-badge--secondary">Belum Dihubungkan</span>
+        {% endif %}
+      </div>
+
+      {% if channel.credential %}
+      <dl class="ni-detail-grid ni-mb-3">
+        <dt>Lingkungan</dt><dd>{{ channel.credential.get_environment_display }}</dd>
+        <dt>Cabang terhubung</dt><dd>{{ channel.store_count }}</dd>
+      </dl>
+      <a href="{% url 'pos_aggregator:wizard' channel.credential.pk %}" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="settings-2" class="ni-icon-sm"></i> Kelola
+      </a>
+      {% else %}
+      <p class="ni-text-muted ni-text-sm">
+        Belum dihubungkan. Anda memerlukan akun merchant {{ channel.label }} yang
+        sudah disetujui untuk akses Partner API.
+      </p>
+      <a href="{% url 'pos_aggregator:channel_connect' lv2.pk %}?aggregator={{ channel.value }}"
+         class="ni-btn ni-btn--secondary ni-btn--sm">
+        Mulai
+      </a>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

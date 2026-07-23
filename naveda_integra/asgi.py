@@ -2,10 +2,10 @@
 ASGI config for naveda_integra project.
 
 Exposes the ASGI callable as a module-level variable named ``application``.
-Django Channels is used to support WebSocket connections in addition to HTTP.
+Django Channels supports the live order board's WebSocket alongside HTTP.
 
-The legacy pos_orders websocket routing has been removed; there are currently
-no websocket routes. A new POS will register its routes here in future.
+Note the import order: ``django.setup()`` must run before any module that
+touches models is imported, which is why the routing import sits below it.
 """
 
 import os
@@ -19,11 +19,13 @@ from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.security.websocket import AllowedHostsOriginValidator
 
+from pos_aggregator.routing import websocket_urlpatterns
+
 application = ProtocolTypeRouter({
     "http": get_asgi_application(),
     "websocket": AllowedHostsOriginValidator(
         AuthMiddlewareStack(
-            URLRouter([])
+            URLRouter(websocket_urlpatterns)
         )
     ),
 })

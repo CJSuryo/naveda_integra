@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Pesanan Masuk — {{ store.entitas_bisnis_lv3.nama }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pos-aggregator.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Pesanan Masuk</h1>
+    <p class="ni-page-header__subtitle">{{ store.entitas_bisnis_lv3.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <span class="ni-badge ni-badge--secondary" data-agg-connection>Menghubungkan…</span>
+  </div>
+</div>
+
+<div class="ni-agg-board" data-agg-board data-store-pk="{{ store.pk }}">
+  {% for order in orders %}
+  <article class="ni-agg-order ni-agg-order--{{ order.aggregator }} {% if order.has_unmapped_items or order.posting_error %}ni-agg-order--attention{% endif %}">
+    <div class="ni-agg-order__head">
+      <span class="ni-agg-order__number">#{{ order.short_order_number|default:order.external_order_id }}</span>
+      <span class="ni-badge ni-badge--info">{{ order.get_status_display }}</span>
+    </div>
+    <div class="ni-text-xs ni-text-muted">
+      {{ order.get_aggregator_display }} · {{ order.get_order_type_display }}
+      {% if order.customer_name %} · {{ order.customer_name }}{% endif %}
+    </div>
+    <ul class="ni-agg-order__items">
+      {% for item in order.items.all %}
+      <li>{{ item.quantity|floatformat:"-2" }}× {{ item.name_snapshot }}</li>
+      {% endfor %}
+    </ul>
+    <div class="ni-agg-order__total">Rp {{ order.total_amount|floatformat:0 }}</div>
+    {% if order.has_unmapped_items %}
+    <div class="ni-text-xs ni-text-warning ni-mt-1">Ada item yang belum cocok dengan katalog.</div>
+    {% endif %}
+    {% if order.posting_error %}
+    <div class="ni-text-xs ni-text-danger ni-mt-1">Belum terbukukan: {{ order.posting_error }}</div>
+    {% endif %}
+    <a href="{% url 'pos_aggregator:order_detail' order.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm ni-mt-2">
+      Detail
+    </a>
+  </article>
+  {% empty %}
+  <div class="ni-card ni-card--empty">
+    <div class="ni-card__body ni-text-center ni-text-muted">
+      Belum ada pesanan aktif. Pesanan baru akan muncul di sini secara otomatis.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pos-aggregator-board.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Pesanan #{{ order.short_order_number|default:order.external_order_id }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pos-aggregator.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">
+      #{{ order.short_order_number|default:order.external_order_id }}
+    </h1>
+    <p class="ni-page-header__subtitle">
+      {{ order.get_aggregator_display }} — {{ order.store_link.store_config.entitas_bisnis_lv3.nama }}
+    </p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_aggregator:order_board' order.store_link.store_config_id %}" class="ni-btn ni-btn--secondary">
+      Kembali
+    </a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+{% if order.has_unmapped_items %}
+<div class="ni-alert ni-alert--warning">
+  Sebagian item tidak cocok dengan katalog, sehingga pesanan ini belum bisa
+  dibukukan. Petakan item tersebut di katalog lalu tekan "Bukukan Ulang".
+</div>
+{% endif %}
+
+{% if order.posting_error %}
+<div class="ni-alert ni-alert--danger">{{ order.posting_error }}</div>
+{% endif %}
+
+<div class="ni-card-grid ni-card-grid--2">
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h2 class="ni-agg-step__title">Ringkasan</h2>
+      <dl class="ni-detail-grid">
+        <dt>Status</dt><dd><span class="ni-badge ni-badge--info">{{ order.get_status_display }}</span></dd>
+        <dt>Jenis</dt><dd>{{ order.get_order_type_display }}</dd>
+        <dt>Pelanggan</dt><dd>{{ order.customer_name|default:"—" }}</dd>
+        <dt>Telepon</dt><dd>{{ order.customer_phone|default:"—" }}</dd>
+        <dt>Alamat</dt><dd>{{ order.delivery_address|default:"—" }}</dd>
+        <dt>Driver</dt><dd>{{ order.driver_name|default:"—" }}</dd>
+        <dt>Catatan</dt><dd>{{ order.notes|default:"—" }}</dd>
+        {% if order.cancel_reason %}
+        <dt>Alasan batal</dt><dd>{{ order.cancel_reason }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="ni-card ni-animate-fade-in">
+    <div class="ni-card__body">
+      <h2 class="ni-agg-step__title">Nilai</h2>
+      <dl class="ni-detail-grid">
+        <dt>Subtotal</dt><dd>Rp {{ order.subtotal|floatformat:0 }}</dd>
+        <dt>Diskon</dt><dd>Rp {{ order.discount_amount|floatformat:0 }}</dd>
+        <dt>— ditanggung merchant</dt><dd>Rp {{ order.merchant_funded_discount|floatformat:0 }}</dd>
+        <dt>Pajak</dt><dd>Rp {{ order.tax_amount|floatformat:0 }}</dd>
+        <dt>Ongkir</dt><dd>Rp {{ order.delivery_fee|floatformat:0 }}</dd>
+        <dt>Kemasan</dt><dd>Rp {{ order.packaging_fee|floatformat:0 }}</dd>
+        <dt>Total</dt><dd><strong>Rp {{ order.total_amount|floatformat:0 }}</strong></dd>
+        <dt>Penjualan</dt>
+        <dd>
+          {% if order.sales_header %}
+            <span class="ni-badge ni-badge--success">Terbukukan</span>
+          {% else %}
+            <span class="ni-badge ni-badge--warning">Belum</span>
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in ni-mt-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">Item</h2>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr><th>Item</th><th>Qty</th><th>Harga</th><th>Subtotal</th><th>Katalog</th></tr>
+        </thead>
+        <tbody>
+          {% for item in order.items.all %}
+          <tr>
+            <td>
+              {{ item.name_snapshot }}
+              {% for mod in item.modifiers.all %}
+              <div class="ni-text-xs ni-text-muted">+ {{ mod.name_snapshot }}</div>
+              {% endfor %}
+              {% if item.notes %}<div class="ni-text-xs ni-text-warning">{{ item.notes }}</div>{% endif %}
+            </td>
+            <td>{{ item.quantity|floatformat:"-2" }}</td>
+            <td>Rp {{ item.unit_price|floatformat:0 }}</td>
+            <td>Rp {{ item.line_total|floatformat:0 }}</td>
+            <td>
+              {% if item.item_id %}
+                <span class="ni-badge ni-badge--success">Cocok</span>
+              {% else %}
+                <span class="ni-badge ni-badge--danger">Belum cocok</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="ni-btn-row ni-mt-3">
+      <form method="post" action="{% url 'pos_aggregator:mark_order_ready' order.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Tandai Siap</button>
+      </form>
+      {% if not order.sales_header %}
+      <form method="post" action="{% url 'pos_aggregator:repost_order' order.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--secondary ni-btn--sm">Bukukan Ulang</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in ni-mt-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">Riwayat</h2>
+    <div class="ni-table-wrapper">
+      <table class="ni-table ni-table--compact">
+        <thead><tr><th>Waktu</th><th>Aksi</th><th>Detail</th></tr></thead>
+        <tbody>
+          {% for log in order.logs.all %}
+          <tr>
+            <td class="ni-whitespace-nowrap">{{ log.created_at|date:"d/m/Y H:i:s" }}</td>
+            <td>{{ log.action }}</td>
+            <td class="ni-text-xs">{{ log.detail|default:"—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

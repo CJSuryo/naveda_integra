@@ -93,17 +93,28 @@
     Setup Wizard
   </a>
 </div>
-{% if object.pos_config %}
+{% if object.pos_merchants %}
 <div class="ni-card ni-animate-fade-in">
   <div class="ni-card__body">
-    <dl class="ni-detail-grid">
-      <dt>Status POS</dt>
-      <dd>{% if object.pos_config.is_pos_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</dd>
-      <dt>Tax Default</dt><dd>{{ object.pos_config.default_tax_pct }}%</dd>
-      <dt>Sub-Transaction Type</dt><dd>{{ object.pos_config.sub_transaction_type|default:'—' }}</dd>
-      <dt>Revenue Account</dt><dd>{{ object.pos_config.revenue_account|default:'—' }}</dd>
-      <dt>HPP Account</dt><dd>{{ object.pos_config.offset_coa_account|default:'—' }}</dd>
-    </dl>
+    <p class="ni-text-muted ni-text-sm">
+      Konfigurasi POS berada di Entitas Bisnis Level 2 (perusahaan operasional).
+    </p>
+    <div class="ni-table-wrapper">
+      <table class="ni-table ni-table--compact">
+        <thead><tr><th>Perusahaan (Level 2)</th><th>POS</th><th>Tax</th><th>Cabang</th><th></th></tr></thead>
+        <tbody>
+          {% for lv2 in object.pos_merchants %}
+          <tr>
+            <td>{{ lv2.nama }}</td>
+            <td>{% if lv2.pos_config.is_pos_active %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}</td>
+            <td>{{ lv2.pos_config.default_tax_pct }}%</td>
+            <td>{{ lv2.pos_config.stores.count }}</td>
+            <td><a href="{% url 'pos_config:merchant_config' lv2.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">Kelola</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% else %}

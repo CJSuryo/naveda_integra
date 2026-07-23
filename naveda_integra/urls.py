@@ -24,6 +24,7 @@ urlpatterns = [
     path('manufacturing/', include('apps.manufacturing.urls')),
     path('pos/', include('pos_config.urls', namespace='pos_config')),
     path('pos/catalog/', include('pos_catalog.urls', namespace='pos_catalog')),
+    path('pos/aggregator/', include('pos_aggregator.urls', namespace='pos_aggregator')),
     path('piutang/', include('apps.piutang.urls', namespace='piutang')),
     path('pendapatan/', include('apps.pendapatan.urls', namespace='pendapatan')),
     path('pajak/', include('apps.pajak.urls', namespace='pajak')),

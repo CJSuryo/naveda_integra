@@ -1,6 +1,8 @@
 from decimal import Decimal
 from django.test import TestCase
-from apps.entitas_bisnis.models import EntitasBisnis, EntitasBisnisLv2, TipeEntitas
+from apps.entitas_bisnis.models import (
+    EntitasBisnis, EntitasBisnisLv2, EntitasBisnisLv3, TipeEntitas,
+)
 from apps.purchase.models import ItemMasterPurchase, KategoriItem, FIFOBatch
 from pos_config.models import MerchantPOSConfig, StorePOSConfig
 from pos_catalog.models import ModifierGroup, ModifierOption, ProductModifierGroup
@@ -8,11 +10,13 @@ from pos_catalog.services.product_service import check_stock, validate_modifier_
 
 
 def make_setup():
+    """lv1 group → lv2 operating company (merchant) → lv3 branch (store)."""
     tipe = TipeEntitas.objects.create(nama='FnB')
     eb = EntitasBisnis.objects.create(nama='Kafe', tipe_entitas=tipe, relasi='pelanggan')
-    lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=eb, nama='Cabang Utama')
-    merchant = MerchantPOSConfig.objects.create(entitas_bisnis=eb)
-    store = StorePOSConfig.objects.create(entitas_bisnis_lv2=lv2, merchant_config=merchant)
+    lv2 = EntitasBisnisLv2.objects.create(entitas_bisnis=eb, nama='PT Kafe')
+    lv3 = EntitasBisnisLv3.objects.create(parent_lv2=lv2, nama='Cabang Utama')
+    merchant = MerchantPOSConfig.objects.create(entitas_bisnis_lv2=lv2)
+    store = StorePOSConfig.objects.create(entitas_bisnis_lv3=lv3, merchant_config=merchant)
     kat = KategoriItem.objects.create(nama='Makanan', tipe_item='ITM')
     item = ItemMasterPurchase.objects.create(nama='Nasi Goreng', tipe_item='ITM', kategori=kat)
     return eb, lv2, merchant, store, item

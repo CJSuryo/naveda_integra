@@ -1,9 +1,10 @@
 {
   "permissions": {
     "allow": [
+      "Bash(*)",
+      "Bash(python *)",
       "Bash(python3 *)",
       "Bash",
-      "Bash *",
       "Bash(python3 -m pip show django)",
       "Bash(env/Scripts/python.exe -m pytest --version)",
       "Bash(env/Scripts/python.exe -m django test tests.pendapatan)",
@@ -21,7 +22,21 @@
       "Bash(.venv/Scripts/python.exe -c \"import django; print\\(django.__version__\\)\")",
       "Bash(python manage.py test tests.customers.test_views.CustomerCreateViewTest tests.customers.test_views.CustomerUpdateViewTest --verbosity=2)",
       "Bash(env/Scripts/python -c \"import pytest, pytest_django; print\\('pytest', pytest.__version__\\)\")",
-      "Bash(xargs head -30)"
+      "Bash(xargs head -30)",
+      "Bash(ls -a && echo \"--- .github:\" && ls -R .github 2>/dev/null; echo \"--- dockerfile:\"; cat Dockerfile 2>/dev/null; echo \"--- urls:\"; ls */urls.py *//*urls.py 2>/dev/null)",
+      "Read(//c/Users/chris/Documents/naveda_integra/\\\\*/**)",
+      "Bash(ssh -o ConnectTimeout=15 -o BatchMode=yes deploy@5.223.77.16 ' *)",
+      "Bash(gh auth *)",
+      "Bash(ssh -o ConnectTimeout=15 -o BatchMode=yes deploy@5.223.77.16 'cd apps/projects/naveda_integra && ./deploy.sh')",
+      "Bash(rm -f apps/pos_catalog/migrations/0*.py)",
+      "Bash(python manage.py makemigrations pos_config pos_catalog --settings=naveda_integra.settings.development)",
+      "Bash(python manage.py test apps.pos_config --settings=naveda_integra.settings.test)",
+      "Bash(python -)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import redis,celery;print\\('redis',redis.__version__,'celery',celery.__version__\\)\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\chris\\Documents\\potumsite"
     ]
   }
 }

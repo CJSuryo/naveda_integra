@@ -1,0 +1,410 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ credential.get_aggregator_display }} — {{ lv2.nama }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/pos-aggregator.css' %}">
+{% endblock %}
+
+{% block content %}
+
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">{{ credential.get_aggregator_display }}</h1>
+    <p class="ni-page-header__subtitle">{{ lv2.nama }} — {{ credential.get_environment_display }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_aggregator:webhook_log' credential.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="scroll-text" class="ni-icon-sm"></i> Log
+    </a>
+    <a href="{% url 'pos_aggregator:channel_list' lv2.pk %}" class="ni-btn ni-btn--secondary">Kembali</a>
+  </div>
+</div>
+
+{% for msg in messages %}
+<div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
+{% endfor %}
+
+{% if template_error %}
+<div class="ni-alert ni-alert--danger">{{ template_error }}</div>
+{% endif %}
+
+{% if session.last_error %}
+<div class="ni-alert ni-alert--danger">{{ session.last_error }}</div>
+{% endif %}
+
+<div class="ni-agg-status ni-mb-4">
+  <span class="ni-agg-status__label">Status</span>
+  {% if session.state == states.LIVE %}
+    <span class="ni-badge ni-badge--success">Live — menerima pesanan</span>
+  {% elif session.state == states.DISCONNECTED %}
+    <span class="ni-badge ni-badge--danger">Terputus</span>
+  {% else %}
+    <span class="ni-badge ni-badge--warning">{{ session.get_state_display }}</span>
+  {% endif %}
+</div>
+
+{# ── Step 1: prerequisites ────────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">1. Prasyarat</h2>
+    <ul class="ni-agg-checklist">
+      <li>Akun merchant {{ credential.get_aggregator_display }} sudah ada dan aktif.</li>
+      <li>Akses Partner API sudah disetujui oleh {{ credential.get_aggregator_display }}.</li>
+      <li>Semua cabang yang ingin dihubungkan sudah terdaftar di portal aggregator.</li>
+      <li>Katalog/menu di Naveda sudah benar — yang dikirim adalah isi katalog ini.</li>
+    </ul>
+    {% if session.state == states.NOT_STARTED %}
+    <form method="post" action="{% url 'pos_aggregator:confirm_prerequisites' credential.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Saya konfirmasi semua di atas</button>
+    </form>
+    {% else %}
+    <p class="ni-text-success ni-text-sm ni-m-0">
+      <i data-lucide="check" class="ni-icon-sm"></i> Dikonfirmasi.
+    </p>
+    {% endif %}
+  </div>
+</section>
+
+{# ── Step 2: credentials (restricted) ─────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">2. Kredensial</h2>
+    {% if can_manage_secrets %}
+      <p class="ni-text-muted ni-text-sm">
+        Nilai ini diberikan oleh aggregator. Disimpan terenkripsi dan tidak
+        pernah ditampilkan kembali.
+        {% if credential.client_id %}
+          Client ID saat ini: <code>{{ credential.client_id }}</code>,
+          secret: <code>{{ credential.masked_client_secret }}</code>.
+        {% endif %}
+      </p>
+      <form method="post" action="{% url 'pos_aggregator:save_secrets' credential.pk %}">
+        {% csrf_token %}
+        {% for field in secrets_form %}
+          <div class="ni-form-group">
+            <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<div class="ni-form-help">{{ field.help_text }}</div>{% endif %}
+          </div>
+        {% endfor %}
+        <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Simpan Kredensial</button>
+      </form>
+    {% else %}
+      <p class="ni-text-muted ni-text-sm ni-m-0">
+        Pengisian kredensial dibatasi untuk administrator. Hubungi tim teknis
+        bila bagian ini belum terisi.
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+{# ── Step 3: connect account ──────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">3. Hubungkan Akun</h2>
+    {% if template.supports_merchant_consent %}
+      <p class="ni-text-muted ni-text-sm">
+        Anda akan diarahkan ke situs {{ credential.get_aggregator_display }} untuk
+        memberi persetujuan.
+        {% if credential.aggregator == 'GOFOOD' %}
+          Siapkan nomor HP admin merchant — kode OTP dikirim ke sana dan hanya
+          berlaku sekitar 2 menit.
+        {% endif %}
+      </p>
+    {% else %}
+      <p class="ni-text-muted ni-text-sm">
+        {{ credential.get_aggregator_display }} tidak menyediakan alur persetujuan
+        otomatis. Menekan tombol di bawah akan memverifikasi kredensial yang tersimpan.
+      </p>
+    {% endif %}
+    <form method="post" action="{% url 'pos_aggregator:begin_connect' credential.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        {% if credential.is_active %}Hubungkan Ulang{% else %}Hubungkan Akun{% endif %}
+      </button>
+    </form>
+    {% if credential.is_active %}
+    <p class="ni-text-success ni-text-sm ni-mt-2 ni-mb-0">
+      <i data-lucide="check" class="ni-icon-sm"></i> Akun terhubung.
+    </p>
+    {% endif %}
+  </div>
+</section>
+
+{# ── Step 4: webhooks ─────────────────────────────────────────────────── #}
+{% if template.webhook_events %}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">4. Daftarkan Webhook</h2>
+    <p class="ni-text-muted ni-text-sm">
+      Memberi tahu {{ credential.get_aggregator_display }} ke mana pesanan harus
+      dikirim. Aman ditekan berulang kali — hanya yang gagal akan diperbaiki.
+    </p>
+    {% if webhook_subscriptions %}
+    <ul class="ni-agg-checklist ni-agg-checklist--status">
+      {% for sub in webhook_subscriptions %}
+      <li>
+        {% if sub.status == 'SUCCESS' %}
+          <span class="ni-badge ni-badge--success">OK</span>
+        {% else %}
+          <span class="ni-badge ni-badge--danger">Gagal</span>
+        {% endif %}
+        <code>{{ sub.event_name }}</code>
+        {% if sub.detail %}<span class="ni-text-muted ni-text-xs">{{ sub.detail }}</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <form method="post" action="{% url 'pos_aggregator:register_webhooks' credential.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Daftarkan / Sinkronkan Ulang</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{# ── Step 5: link branches ────────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">5. Hubungkan Cabang</h2>
+
+    {% if template.supports_outlet_discovery %}
+    <p class="ni-text-muted ni-text-sm">
+      Outlet dibaca otomatis dari akun merchant. <strong>Cocokkan berdasarkan
+      alamat, bukan nama</strong> — nama cabang sering mirip, dan salah pasang
+      mengirim pesanan ke dapur yang salah.
+    </p>
+    <button type="button" class="ni-btn ni-btn--secondary ni-btn--sm ni-mb-3"
+            data-agg-load-outlets
+            data-url="{% url 'pos_aggregator:outlet_picker' credential.pk %}">
+      <i data-lucide="download" class="ni-icon-sm"></i> Muat Daftar Outlet
+    </button>
+    <div class="ni-agg-outlets" data-agg-outlet-list hidden></div>
+    {% elif credential.aggregator == 'GRABFOOD' %}
+    <p class="ni-text-muted ni-text-sm">
+      Tekan <strong>Aktifkan</strong>, setujui di situs Grab, lalu Grab akan
+      mengirim Store ID secara otomatis. <strong>Anda tidak perlu mengetik ID
+      apa pun.</strong> Bila status masih "Menunggu", tunggu — jangan tekan
+      Aktifkan lagi.
+    </p>
+    {% else %}
+    <p class="ni-text-muted ni-text-sm">
+      {{ credential.get_aggregator_display }} tidak menyediakan pencarian outlet
+      otomatis. Salin Store ID outlet dari portal aggregator, lalu tempel di
+      kolom cabang yang sesuai. Pastikan itu ID <em>outlet</em>, bukan nama toko
+      atau ID akun.
+    </p>
+    {% endif %}
+
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Cabang (Level 3)</th>
+            <th>Alamat</th>
+            <th>Store ID</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in branches %}
+          <tr>
+            <td>{{ row.store.entitas_bisnis_lv3.nama }}</td>
+            <td class="ni-text-xs ni-text-muted">
+              {{ row.store.entitas_bisnis_lv3.alamat_lengkap|default:"—" }}
+            </td>
+            <td>
+              {% if row.link.external_store_id %}
+                <code>{{ row.link.external_store_id }}</code>
+                {% if row.link.external_store_name %}
+                  <div class="ni-text-xs ni-text-muted">{{ row.link.external_store_name }}</div>
+                {% endif %}
+              {% else %}
+                <span class="ni-text-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.link.is_live %}
+                <span class="ni-badge ni-badge--success">Live</span>
+              {% elif row.link.status == 'LINKED' %}
+                <span class="ni-badge ni-badge--info">Terhubung</span>
+              {% elif row.link.status == 'PENDING' %}
+                <span class="ni-badge ni-badge--warning">Menunggu</span>
+              {% elif row.link.status == 'FAILED' %}
+                <span class="ni-badge ni-badge--danger">Gagal</span>
+              {% else %}
+                <span class="ni-badge ni-badge--secondary">Belum</span>
+              {% endif %}
+              {% if row.link.status_detail %}
+                <div class="ni-text-xs ni-text-danger">{{ row.link.status_detail }}</div>
+              {% endif %}
+            </td>
+            <td>
+              {% if credential.aggregator == 'GRABFOOD' and not row.link.external_store_id %}
+                <form method="post" action="{% url 'pos_aggregator:activate_branch' credential.pk row.store.pk %}">
+                  {% csrf_token %}
+                  <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Aktifkan</button>
+                </form>
+              {% else %}
+                <form method="post" class="ni-agg-link-form"
+                      action="{% url 'pos_aggregator:link_branch' credential.pk row.store.pk %}">
+                  {% csrf_token %}
+                  <input type="text" name="external_store_id" class="ni-input ni-input--sm"
+                         value="{{ row.link.external_store_id|default:'' }}"
+                         placeholder="Store ID" autocomplete="off"
+                         data-agg-store-input="{{ row.store.pk }}">
+                  <input type="hidden" name="external_store_name"
+                         data-agg-store-name="{{ row.store.pk }}">
+                  <input type="hidden" name="external_store_address"
+                         data-agg-store-address="{{ row.store.pk }}">
+                  <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Simpan</button>
+                </form>
+              {% endif %}
+              {% if row.link %}
+                <form method="post" class="ni-mt-1"
+                      action="{% url 'pos_aggregator:unlink_branch' credential.pk row.link.pk %}"
+                      data-agg-confirm="Putuskan cabang ini dari {{ credential.get_aggregator_display }}? Pesanan baru untuk cabang ini akan berhenti masuk.">
+                  {% csrf_token %}
+                  <button type="submit" class="ni-btn ni-btn--danger ni-btn--sm">Putuskan</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="5" class="ni-text-center ni-text-muted">
+              Belum ada cabang. Buat Entitas Bisnis Level 3 dan konfigurasi POS-nya dulu.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+{# ── Step 6: channel settings ─────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">6. Pengaturan Channel</h2>
+    <form method="post" action="{% url 'pos_aggregator:save_settings' credential.pk %}">
+      {% csrf_token %}
+      {% for field in settings_form %}
+        <div class="ni-form-group">
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="ni-form-help">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Simpan Pengaturan</button>
+    </form>
+  </div>
+</section>
+
+{# ── Step 7: publish menu ─────────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">7. Kirim Menu</h2>
+    <p class="ni-text-muted ni-text-sm">
+      Mengirim katalog Naveda ke {{ credential.get_aggregator_display }}. Harga
+      dinaikkan sesuai markup channel. Bila ada item bermasalah, pesan kesalahan
+      akan menyebut item mana yang perlu diperbaiki.
+    </p>
+    {% for row in branches %}
+      {% if row.link.menu_sync_detail %}
+      <p class="ni-text-xs {% if row.link.menu_sync_status == 'FAILED' %}ni-text-danger{% else %}ni-text-muted{% endif %}">
+        {{ row.store.entitas_bisnis_lv3.nama }}: {{ row.link.menu_sync_detail }}
+      </p>
+      {% endif %}
+    {% endfor %}
+    <form method="post" action="{% url 'pos_aggregator:sync_menus' credential.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Kirim Menu Semua Cabang</button>
+    </form>
+  </div>
+</section>
+
+{# ── Step 8: preflight ────────────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">8. Pemeriksaan</h2>
+    <p class="ni-text-muted ni-text-sm">
+      Sistem yang memutuskan kesiapan, bukan Anda. Tombol Go Live baru terbuka
+      setelah semua hijau.
+    </p>
+    {% if preflight %}
+    <ul class="ni-agg-checks">
+      {% for check in preflight %}
+      <li class="ni-agg-check {% if check.passed %}ni-agg-check--pass{% else %}ni-agg-check--fail{% endif %}">
+        <span class="ni-agg-check__icon">
+          <i data-lucide="{% if check.passed %}check-circle-2{% else %}x-circle{% endif %}" class="ni-icon-sm"></i>
+        </span>
+        <span class="ni-agg-check__body">
+          <strong>{{ check.label }}</strong>
+          {% if check.detail %}<span class="ni-text-xs ni-text-muted">{{ check.detail }}</span>{% endif %}
+          {% if not check.passed and check.remedy %}
+            <span class="ni-agg-check__remedy">{{ check.remedy }}</span>
+          {% endif %}
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <form method="post" action="{% url 'pos_aggregator:run_checks' credential.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">Jalankan Pemeriksaan</button>
+    </form>
+  </div>
+</section>
+
+{# ── Step 9: go live ──────────────────────────────────────────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">9. Go Live</h2>
+    {% if session.preflight_passed %}
+      <form method="post" action="{% url 'pos_aggregator:go_live' credential.pk %}"
+            data-agg-confirm="Aktifkan channel ini? Cabang yang terhubung akan mulai menerima pesanan sungguhan.">
+        {% csrf_token %}
+        <button type="submit" class="ni-btn ni-btn--success">
+          <i data-lucide="rocket" class="ni-icon-sm"></i> Go Live
+        </button>
+      </form>
+      <p class="ni-text-muted ni-text-sm ni-mt-2 ni-mb-0">
+        Setelah live, buat satu pesanan uji dari aplikasi
+        {{ credential.get_aggregator_display }} untuk memastikan pesanan benar-benar masuk.
+      </p>
+    {% else %}
+      <p class="ni-text-muted ni-text-sm ni-m-0">
+        Terkunci sampai semua pemeriksaan di langkah 8 hijau.
+      </p>
+    {% endif %}
+  </div>
+</section>
+
+{# ── Disconnect ───────────────────────────────────────────────────────── #}
+{% if can_manage_secrets %}
+<section class="ni-card ni-card--danger-border ni-animate-fade-in">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">Putuskan Channel</h2>
+    <p class="ni-text-muted ni-text-sm">
+      Mencabut token, menghapus langganan webhook, dan menghentikan semua cabang
+      menerima pesanan dari channel ini.
+    </p>
+    <form method="post" action="{% url 'pos_aggregator:disconnect' credential.pk %}"
+          data-agg-confirm="Putuskan {{ credential.get_aggregator_display }} sepenuhnya? Semua cabang akan berhenti menerima pesanan dari channel ini.">
+      {% csrf_token %}
+      <button type="submit" class="ni-btn ni-btn--danger ni-btn--sm">Putuskan Channel</button>
+    </form>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/pos-aggregator-wizard.js' %}"></script>
+{% endblock %}

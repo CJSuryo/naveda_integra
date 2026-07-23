@@ -35,9 +35,9 @@ def api_kasir_config(request: HttpRequest, lv3_pk: int) -> JsonResponse:
     """Return resolved POS config for a lv3 outlet."""
     try:
         lv3 = EntitasBisnisLv3.objects.select_related(
-            'parent_lv2__entitas_bisnis__pos_config',
+            'parent_lv2__entitas_bisnis',
             'parent_lv2__pos_config',
-            'pos_config',
+            'pos_config__merchant_config',
         ).get(pk=lv3_pk, status_aktif=True)
     except EntitasBisnisLv3.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Store not found'}, status=404)
@@ -178,9 +178,9 @@ def api_kasir_submit(request: HttpRequest) -> JsonResponse:
 
     try:
         lv3 = EntitasBisnisLv3.objects.select_related(
-            'parent_lv2__entitas_bisnis__pos_config',
+            'parent_lv2__entitas_bisnis',
             'parent_lv2__pos_config',
-            'pos_config',
+            'pos_config__merchant_config',
         ).get(pk=int(lv3_pk), status_aktif=True)
     except EntitasBisnisLv3.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'Store not found'}, status=404)

@@ -281,8 +281,10 @@ class ComputeWizardChecksTests(TestCase):
         self.eb = EntitasBisnis.objects.create(nama='Wizard Kopi', tipe_entitas=tipe)
 
     def _get_eb(self):
-        return EntitasBisnis.objects.select_related('pos_config').prefetch_related(
-            'children_lv2__children_lv3'
+        # POS config hangs off level 2, so it is prefetched through the children
+        # rather than selected on the level-1 group.
+        return EntitasBisnis.objects.prefetch_related(
+            'children_lv2__pos_config', 'children_lv2__children_lv3'
         ).get(pk=self.eb.pk)
 
     def test_all_false_on_empty_eb(self):

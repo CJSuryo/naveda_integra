@@ -1,11 +1,16 @@
 {% extends 'base.html' %}
-{% block title %}Konfigurasi POS — {{ entitas.nama }}{% endblock %}
+{% block title %}Konfigurasi POS — {{ lv2.nama }}{% endblock %}
 {% block content %}
 
 <div class="ni-page-header">
   <div>
-    <h1 class="ni-page-header__title">Konfigurasi POS</h1>
-    <p class="ni-page-header__subtitle">{{ entitas.nama }}</p>
+    <h1 class="ni-page-header__title">Konfigurasi POS Merchant</h1>
+    <p class="ni-page-header__subtitle">{{ lv2.nama }} — {{ entitas.nama }}</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'pos_config:store_list' config.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="store" class="ni-icon-sm"></i> Cabang
+    </a>
   </div>
 </div>
 
@@ -13,19 +18,21 @@
 <div class="ni-alert ni-alert--{{ msg.tags }}">{{ msg }}</div>
 {% endfor %}
 
-<div class="ni-card ni-animate-fade-in" style="max-width:720px;">
+<div class="ni-card ni-animate-fade-in ni-maxw-720">
   <div class="ni-card__body">
     <form method="post" enctype="multipart/form-data" action="?{% if next_url %}next={{ next_url }}{% endif %}">
       {% csrf_token %}
       {% for field in form %}
         <div class="ni-form-group">
-          <label class="ni-form-label">{{ field.label }}</label>
+          <label class="ni-form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
+          {% if field.help_text %}<div class="ni-form-help">{{ field.help_text }}</div>{% endif %}
           {% if field.errors %}<div class="ni-form-error">{{ field.errors }}</div>{% endif %}
         </div>
       {% endfor %}
-      <div class="ni-btn-row" style="margin-top:24px;">
+      <div class="ni-btn-row ni-mt-4">
         <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'entitas_bisnis:lv2_detail' lv2.entitas_bisnis_id lv2.pk %}" class="ni-btn ni-btn--secondary">Batal</a>
       </div>
     </form>
   </div>

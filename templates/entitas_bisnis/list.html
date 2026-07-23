@@ -32,7 +32,7 @@
           {% endif %}
           {% if lv1.status_aktif %}<span class="ni-badge ni-badge--success">Aktif</span>{% else %}<span class="ni-badge ni-badge--secondary">Nonaktif</span>{% endif %}
           <span class="ni-badge ni-badge--secondary">{{ lv1.children_lv2.count }} cabang</span>
-          {% if lv1.pos_config and lv1.pos_config.is_pos_active %}<span class="ni-badge ni-badge--primary">POS Aktif</span>{% endif %}
+          {% if lv1.has_active_pos %}<span class="ni-badge ni-badge--primary">POS Aktif</span>{% endif %}
         </div>
         {% if lv1.email %}<div class="ni-eb-row__sub">{{ lv1.email }}</div>{% endif %}
       </div>
