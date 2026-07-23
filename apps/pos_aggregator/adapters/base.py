@@ -180,6 +180,17 @@ class BaseAdapter(ABC):
     def push_menu(self, store_link, menu: CanonicalMenu) -> dict:
         """Publish the full catalog for one outlet."""
 
+    def pull_menu(self, store_link) -> CanonicalMenu:
+        """Read the menu currently live on the aggregator for one outlet.
+
+        For an already-established business connecting for the first time,
+        this seeds Naveda's catalog from what already exists on the aggregator
+        instead of forcing a from-scratch rebuild. Not every aggregator's data
+        model supports this direction — raise ``NotSupported`` with a reason a
+        non-technical operator can read, rather than a bare 404.
+        """
+        raise NotSupported(f'{self.aggregator} has no menu read-back API.')
+
     def push_item_availability(self, store_link, external_item_id: str,
                                available: bool) -> dict:
         raise NotSupported(

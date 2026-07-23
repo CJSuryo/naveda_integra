@@ -231,6 +231,24 @@ class GrabFoodAdapter(BaseAdapter):
             json={'merchantID': store_link.external_store_id},
         )
 
+    def pull_menu(self, store_link):
+        """GrabFood has nothing to pull: it never stores a menu of its own.
+
+        Grab's model is the inverse of GoFood/ShopeeFood — Grab calls
+        ``grab_menu_pull`` and fetches whatever Naveda currently serves. There
+        is no separate "menu on Grab" to read back, even for a business that
+        already sells on GrabFood today. That existing menu must be entered
+        into Naveda's catalog once by hand; from then on the normal "Kirim
+        Menu" push keeps Grab in sync.
+        """
+        from .base import NotSupported
+        raise NotSupported(
+            'GrabFood tidak menyimpan menu sendiri — GrabFood selalu mengambil '
+            'menu dari Naveda, bukan sebaliknya. Menu yang sudah ada di GrabFood '
+            'hari ini perlu dimasukkan sekali secara manual ke katalog Naveda; '
+            'setelah itu tombol "Kirim Menu" akan menjaganya tetap sinkron.'
+        )
+
     def push_item_availability(self, store_link, external_item_id, available) -> dict:
         return self.request(
             'PUT', '/grabfood/partner/v1/merchant/menu/entity/status',

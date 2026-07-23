@@ -20,6 +20,10 @@ urlpatterns = [
     path('channel/<int:pk>/branch/<int:store_pk>/activate/', views.activate_branch, name='activate_branch'),
     path('channel/<int:pk>/link/<int:link_pk>/unlink/', views.unlink_branch, name='unlink_branch'),
     path('channel/<int:pk>/menu/', views.sync_menus, name='sync_menus'),
+    path(
+        'channel/<int:pk>/branch-link/<int:store_link_pk>/pull-menu/',
+        views.pull_menu, name='pull_menu',
+    ),
     path('channel/<int:pk>/checks/', views.run_checks, name='run_checks'),
     path('channel/<int:pk>/go-live/', views.go_live, name='go_live'),
     path('channel/<int:pk>/disconnect/', views.disconnect, name='disconnect'),

@@ -344,3 +344,77 @@ class ChannelEntryPointTest(TestCase):
         self.assertFalse(
             MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_foreign).exists()
         )
+
+
+class PullMenuViewTest(TestCase):
+    """The pull_menu view: permission, scoping, and honest failure reporting."""
+
+    def setUp(self):
+        from apps.accounts.models import NiPermission, Role, User, UserEntitasBisnis
+        from pos_config.tests.factories import make_lv1
+
+        role = Role.objects.create(kode=Role.BUSINESS_OWNER, nama='Owner', deskripsi='')
+        self.user = User.objects.create_user(
+            email='p@test.com', password='p', name='P', role=role
+        )
+        perm, _ = NiPermission.objects.get_or_create(
+            code='pos_aggregators_manage', defaults={'name': 'pos_aggregators_manage'}
+        )
+        self.user.ni_permissions.add(perm)
+
+        self.eb = make_lv1(nama='Grup Pull')
+        UserEntitasBisnis.objects.create(user=self.user, entitas_bisnis=self.eb)
+
+        self.credential = make_credential(aggregator=AggregatorType.GOFOOD)
+        self.credential.merchant_config.entitas_bisnis_lv2.entitas_bisnis = self.eb
+        self.credential.merchant_config.entitas_bisnis_lv2.save()
+        self.link = make_store_link(self.credential, external_store_id='OUTLET-1')
+
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.url = reverse('pos_aggregator:pull_menu', kwargs={
+            'pk': self.credential.pk, 'store_link_pk': self.link.pk,
+        })
+
+    def test_successful_pull_reports_counts(self):
+        from pos_aggregator.dto import CanonicalMenu, CanonicalMenuItem
+        menu = CanonicalMenu(external_store_id='OUTLET-1', items=[
+            CanonicalMenuItem(
+                external_id='ext-1', name='Es Teh', description='',
+                price=15000, is_available=True,
+            ),
+        ])
+        with patch(
+            'pos_aggregator.adapters.gofood.GoFoodAdapter.pull_menu', return_value=menu
+        ):
+            response = self.client.post(self.url)
+        self.assertRedirects(response, reverse('pos_aggregator:wizard', kwargs={'pk': self.credential.pk}))
+        messages = [str(m) for m in response.wsgi_request._messages]
+        self.assertTrue(any('1 item baru' in m for m in messages))
+
+    def test_grabfood_not_supported_shows_warning_not_a_crash(self):
+        grab_credential = make_credential(
+            merchant=self.credential.merchant_config, aggregator=AggregatorType.GRABFOOD
+        )
+        grab_link = make_store_link(grab_credential, external_store_id='OUTLET-GRAB')
+        url = reverse('pos_aggregator:pull_menu', kwargs={
+            'pk': grab_credential.pk, 'store_link_pk': grab_link.pk,
+        })
+        response = self.client.post(url)
+        self.assertEqual(response.status_code, 302)
+        messages = [str(m) for m in response.wsgi_request._messages]
+        self.assertTrue(any('tidak menyimpan menu' in m for m in messages))
+
+    def test_get_is_not_allowed(self):
+        self.assertEqual(self.client.get(self.url).status_code, 405)
+
+    def test_foreign_store_link_is_404(self):
+        from pos_config.tests.factories import make_lv1, make_lv2, make_merchant
+        foreign_credential = make_credential(
+            merchant=make_merchant(make_lv2(make_lv1(nama='Grup Lain')))
+        )
+        foreign_link = make_store_link(foreign_credential, external_store_id='OUTLET-X')
+        url = reverse('pos_aggregator:pull_menu', kwargs={
+            'pk': self.credential.pk, 'store_link_pk': foreign_link.pk,
+        })
+        self.assertEqual(self.client.post(url).status_code, 404)

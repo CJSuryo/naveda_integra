@@ -50,7 +50,41 @@
     <h2 class="ni-agg-step__title">1. Prasyarat</h2>
     <ul class="ni-agg-checklist">
       <li>Akun merchant {{ credential.get_aggregator_display }} sudah ada dan aktif.</li>
-      <li>Akses Partner API sudah disetujui oleh {{ credential.get_aggregator_display }}.</li>
+      <li>
+        Akses Partner API sudah disetujui oleh {{ credential.get_aggregator_display }}.
+        <span class="ni-tooltip">
+          <button type="button" class="ni-tooltip__trigger" aria-label="Cara mendapatkan akses Partner API">?</button>
+          <span class="ni-tooltip__content" role="tooltip">
+            {% if credential.aggregator == 'GOFOOD' %}
+              <strong>Cara mengajukan (GoFood/GoBiz):</strong><br>
+              Ini pengajuan tingkat perusahaan (sekali untuk semua klien), bukan per merchant.
+              Isi formulir kontak di
+              <a href="https://developer.gobiz.com/docs/docs/food-integration/facilitator/" target="_blank" rel="noopener">GoBiz Developer Portal — Facilitator Model</a>,
+              minta didaftarkan sebagai <em>GoBiz Partner (Facilitator)</em>.
+              Tim GoBiz akan menilai lalu menerbitkan Client ID/Secret. Tidak ada tombol
+              self-service — ini proses manual dengan tim GoBiz, waktu tunggu di luar kendali kita.
+            {% elif credential.aggregator == 'GRABFOOD' %}
+              <strong>Cara mengajukan (GrabFood):</strong><br>
+              Hubungi Account Manager Grab milik klien, atau ajukan lewat kontak bisnis Grab
+              untuk klien tersebut, dan minta <em>akses GrabFood Partner API</em> untuk
+              menghubungkan sistem kasir (POS) pihak ketiga. Grab akan meninjau lalu menerbitkan
+              Client ID/Secret setelah perjanjian partner disetujui.
+              <br><span class="ni-text-xs">⚠️ Langkah portal persis belum kami verifikasi — jika
+              klien belum punya Account Manager, cari kontak "GrabFood for Business" di aplikasi
+              Grab Merchant.</span>
+            {% elif credential.aggregator == 'SHOPEEFOOD' %}
+              <strong>Cara mengajukan (ShopeeFood):</strong><br>
+              ShopeeFood tidak punya formulir aplikasi publik. Hubungi Account Manager/Partner
+              Support Shopee milik klien dan minta <em>akses Partner/Open API untuk integrasi
+              POS ShopeeFood</em>. Persetujuan diberikan kasus per kasus oleh tim Shopee.
+              <br><span class="ni-text-xs">⚠️ Jika klien belum punya Account Manager Shopee,
+              proses ini mungkin tidak tersedia — tanyakan tim teknis sebelum menjanjikan ke klien.</span>
+            {% else %}
+              Hubungi tim partnership {{ credential.get_aggregator_display }} untuk meminta akses Partner API.
+            {% endif %}
+          </span>
+        </span>
+      </li>
       <li>Semua cabang yang ingin dihubungkan sudah terdaftar di portal aggregator.</li>
       <li>Katalog/menu di Naveda sudah benar — yang dikirim adalah isi katalog ini.</li>
     </ul>
@@ -283,6 +317,56 @@
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+{# ── Optional: import existing menu FROM the aggregator ───────────────── #}
+<section class="ni-card ni-animate-fade-in ni-mb-3">
+  <div class="ni-card__body">
+    <h2 class="ni-agg-step__title">
+      Tarik Menu dari {{ credential.get_aggregator_display }}
+      <span class="ni-badge ni-badge--secondary ni-text-xs">Opsional</span>
+    </h2>
+    <p class="ni-text-muted ni-text-sm">
+      Untuk bisnis yang <strong>sudah berjualan</strong> di
+      {{ credential.get_aggregator_display }} dan baru memasang Naveda: tarik
+      menu yang sudah ada di sana ke katalog Naveda, alih-alih mengetik ulang
+      semuanya dari nol. Item yang belum ada di katalog akan dibuat otomatis;
+      item yang sudah cocok hanya diperbarui harga channel-nya — <strong>harga
+      jual dasar yang sudah Anda ubah di Naveda tidak akan ditimpa.</strong>
+      Setelah menarik, periksa harga jual item baru sebelum digunakan.
+    </p>
+    {% if credential.aggregator == 'GRABFOOD' %}
+    <p class="ni-alert ni-alert--info ni-text-sm">
+      GrabFood tidak menyimpan menu sendiri — GrabFood selalu mengambil menu
+      dari Naveda, jadi tidak ada yang bisa ditarik dari sana. Menu yang sudah
+      ada di GrabFood hari ini perlu dimasukkan sekali secara manual ke
+      katalog Naveda, lalu jaga sinkron lewat "Kirim Menu" di bawah.
+    </p>
+    {% else %}
+      {% for row in branches %}
+        {% if row.link.external_store_id %}
+        <form method="post"
+              action="{% url 'pos_aggregator:pull_menu' credential.pk row.link.pk %}"
+              class="ni-d-flex ni-items-center ni-gap-2 ni-flex-wrap ni-mb-2">
+          {% csrf_token %}
+          <span class="ni-text-sm ni-font-medium">{{ row.store.entitas_bisnis_lv3.nama }}</span>
+          <select name="kategori_id" class="ni-input ni-input--sm">
+            <option value="">— Tanpa kategori —</option>
+            {% for kat in import_kategori_choices %}
+            <option value="{{ kat.pk }}">{{ kat.nama }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="ni-btn ni-btn--secondary ni-btn--sm">
+            <i data-lucide="download" class="ni-icon-sm"></i> Tarik Menu
+          </button>
+        </form>
+        {% endif %}
+      {% endfor %}
+      {% if not branches %}
+      <p class="ni-text-muted ni-text-sm ni-m-0">Hubungkan minimal satu cabang dulu (Langkah 5).</p>
+      {% endif %}
+    {% endif %}
   </div>
 </section>
 

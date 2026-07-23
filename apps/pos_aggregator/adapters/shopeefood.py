@@ -25,8 +25,9 @@ import requests
 
 from ..constants import AggregatorType, OrderStatus, OrderType
 from ..dto import (
-    CanonicalMenu, CanonicalModifier, CanonicalOrder, CanonicalOrderItem,
-    CanonicalStatusUpdate, ConnectAction, money,
+    CanonicalMenu, CanonicalMenuItem, CanonicalMenuModifier, CanonicalMenuModifierGroup,
+    CanonicalModifier, CanonicalOrder, CanonicalOrderItem, CanonicalStatusUpdate,
+    ConnectAction, money,
 )
 from .base import AuthError, BaseAdapter, SignatureError, constant_time_compare
 
@@ -269,6 +270,58 @@ class ShopeeFoodAdapter(BaseAdapter):
             ],
         }
         return self.request('POST', '/api/v2/food/menu/upload', json=payload)
+
+    def pull_menu(self, store_link) -> CanonicalMenu:
+        """Read the menu currently live on ShopeeFood — best-effort.
+
+        [VERIFY] Endpoint path against Shopee's Open Platform docs once
+        credentials exist. ShopeeFood's partner API access itself is granted
+        case-by-case, so this path is the least likely of the three to have
+        been exercised before a real sandbox run.
+        """
+        data = self.request(
+            'GET', '/api/v2/food/menu/get',
+            params={'store_id': store_link.external_store_id},
+        )
+        menus = data.get('menus') or data.get('response', {}).get('menus') or []
+        items = []
+        for category in menus:
+            category_name = category.get('name', 'Menu')
+            for raw in category.get('dishes', []) or []:
+                items.append(CanonicalMenuItem(
+                    external_id=str(raw.get('dish_id', '')),
+                    name=raw.get('name', ''),
+                    description=raw.get('description', ''),
+                    price=money(raw.get('price')),
+                    is_available=bool(raw.get('status', 1)),
+                    image_url=raw.get('photo', ''),
+                    display_order=int(raw.get('sort_order', 0) or 0),
+                    category=category_name,
+                    modifier_groups=[
+                        CanonicalMenuModifierGroup(
+                            external_id=str(group.get('group_id', '')),
+                            name=group.get('name', ''),
+                            min_selections=int(group.get('min_select', 0) or 0),
+                            max_selections=int(group.get('max_select', 1) or 1),
+                            is_required=bool(group.get('required', False)),
+                            options=[
+                                CanonicalMenuModifier(
+                                    external_id=str(o.get('option_id', '')),
+                                    name=o.get('name', ''),
+                                    price=money(o.get('price')),
+                                    is_available=bool(o.get('status', 1)),
+                                )
+                                for o in group.get('options', []) or []
+                            ],
+                        )
+                        for group in raw.get('option_groups', []) or []
+                    ],
+                ))
+        return CanonicalMenu(
+            external_store_id=store_link.external_store_id,
+            currency='IDR',
+            items=items,
+        )
 
     def push_item_availability(self, store_link, external_item_id, available) -> dict:
         return self.request(

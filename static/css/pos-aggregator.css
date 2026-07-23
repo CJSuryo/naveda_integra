@@ -227,3 +227,84 @@
     max-width: 100%;
   }
 }
+
+/* ── Inline help tooltip ────────────────────────────────────────────────── */
+/* Pure CSS, no JS: :focus-within keeps it reachable by keyboard, not just hover. */
+
+.ni-tooltip {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.ni-tooltip__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--ni-bg-muted, #e5e7eb);
+  color: var(--ni-text-muted, #6b7280);
+  cursor: help;
+  font: inherit;
+}
+
+.ni-tooltip__trigger:hover,
+.ni-tooltip__trigger:focus-visible {
+  background: var(--ni-primary, #2563eb);
+  color: #fff;
+}
+
+.ni-tooltip__content {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #1f2937;
+  color: #f9fafb;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-align: left;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  pointer-events: none;
+}
+
+.ni-tooltip__content a {
+  color: #93c5fd;
+}
+
+.ni-tooltip__content::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #1f2937;
+}
+
+.ni-tooltip:hover .ni-tooltip__content,
+.ni-tooltip:focus-within .ni-tooltip__content {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  .ni-tooltip__content {
+    max-width: 240px;
+  }
+}

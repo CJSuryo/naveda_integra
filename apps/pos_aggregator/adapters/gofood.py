@@ -31,8 +31,9 @@ import requests
 
 from ..constants import AggregatorType, OrderStatus, OrderType, SyncStatus
 from ..dto import (
-    CanonicalMenu, CanonicalModifier, CanonicalOrder, CanonicalOrderItem,
-    CanonicalStatusUpdate, ConnectAction, OutletInfo, money,
+    CanonicalMenu, CanonicalMenuItem, CanonicalMenuModifier, CanonicalMenuModifierGroup,
+    CanonicalModifier, CanonicalOrder, CanonicalOrderItem, CanonicalStatusUpdate,
+    ConnectAction, OutletInfo, money,
 )
 from .base import AuthError, BaseAdapter, SignatureError, UpstreamError, constant_time_compare
 
@@ -268,6 +269,58 @@ class GoFoodAdapter(BaseAdapter):
         }
         return self.request(
             'POST', f'/integrations/partner/{self.template.api_version}/catalog', json=catalog
+        )
+
+    def pull_menu(self, store_link) -> CanonicalMenu:
+        """Read the menu currently live on GoFood — seeds first-time onboarding
+        for a business that already has a working GoFood storefront.
+
+        [VERIFY] Endpoint path and payload shape against the GoBiz developer
+        portal once sandbox credentials exist; this mirrors ``push_menu``'s
+        payload shape, which is the documented catalog structure.
+        """
+        data = self.request(
+            'GET', f'/integrations/partner/{self.template.api_version}/catalog',
+            params={'outlet_id': store_link.external_store_id},
+        )
+        categories = data.get('categories') or data.get('data', {}).get('categories') or []
+        items = []
+        for category in categories:
+            category_name = category.get('name', 'Menu')
+            for raw in category.get('items', []) or []:
+                items.append(CanonicalMenuItem(
+                    external_id=str(raw.get('id', '')),
+                    name=raw.get('name', ''),
+                    description=raw.get('description', ''),
+                    price=money(raw.get('price')),
+                    is_available=bool(raw.get('is_available', True)),
+                    image_url=raw.get('image_url', ''),
+                    display_order=int(raw.get('position', 0) or 0),
+                    category=category_name,
+                    modifier_groups=[
+                        CanonicalMenuModifierGroup(
+                            external_id=str(group.get('id', '')),
+                            name=group.get('name', ''),
+                            min_selections=int(group.get('min_selection', 0) or 0),
+                            max_selections=int(group.get('max_selection', 1) or 1),
+                            is_required=bool(group.get('is_required', False)),
+                            options=[
+                                CanonicalMenuModifier(
+                                    external_id=str(v.get('id', '')),
+                                    name=v.get('name', ''),
+                                    price=money(v.get('price')),
+                                    is_available=bool(v.get('is_available', True)),
+                                )
+                                for v in group.get('variants', []) or []
+                            ],
+                        )
+                        for group in raw.get('variant_categories', []) or []
+                    ],
+                ))
+        return CanonicalMenu(
+            external_store_id=store_link.external_store_id,
+            currency=data.get('currency', 'IDR'),
+            items=items,
         )
 
     def push_item_availability(self, store_link, external_item_id, available) -> dict:

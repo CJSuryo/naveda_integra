@@ -147,6 +147,11 @@ def wizard(request, pk):
     except Exception as exc:
         template_error = str(exc)
 
+    from apps.purchase.models import KategoriItem
+    import_kategori_choices = KategoriItem.objects.filter(
+        tipe_item='ITM'
+    ).order_by('nama')
+
     return render(request, 'pos_aggregator/wizard.html', {
         'credential': credential,
         'session': session,
@@ -164,6 +169,7 @@ def wizard(request, pk):
         'states': OnboardingState,
         'can_manage_secrets': request.user.has_ni_perm('pos_config_manage'),
         'webhook_subscriptions': credential.webhook_subscriptions.all(),
+        'import_kategori_choices': import_kategori_choices,
     })
 
 
@@ -433,6 +439,59 @@ def sync_menus(request, pk):
         messages.error(request, failures[0]['error'])
     else:
         messages.success(request, f'Menu {len(results)} cabang terkirim.')
+    return redirect('pos_aggregator:wizard', pk=pk)
+
+
+@login_required
+@require_POST
+def pull_menu(request, pk, store_link_pk):
+    """Seed Naveda's catalog from a menu already live on the aggregator.
+
+    For a business connecting a channel it already sells on, this beats
+    rebuilding the whole menu by hand. Runs synchronously so the operator sees
+    exactly what was created versus already matched, right away.
+    """
+    denied = _check_perm(request.user, 'pos_aggregators_manage')
+    if denied:
+        return denied
+
+    credential = _get_credential(request, pk)
+    link = get_object_or_404(
+        AggregatorStoreLink, pk=store_link_pk, credential=credential
+    )
+
+    kategori = None
+    kategori_id = request.POST.get('kategori_id')
+    if kategori_id:
+        from apps.purchase.models import KategoriItem
+        kategori = KategoriItem.objects.filter(pk=kategori_id).first()
+
+    from .adapters import NotSupported
+    from .services.import_menu import import_menu_from_aggregator
+
+    try:
+        result = import_menu_from_aggregator(link, kategori=kategori)
+    except NotSupported as exc:
+        messages.warning(request, str(exc))
+        return redirect('pos_aggregator:wizard', pk=pk)
+    except Exception as exc:
+        messages.error(request, f'Gagal menarik menu: {exc}')
+        return redirect('pos_aggregator:wizard', pk=pk)
+
+    if result.errors:
+        messages.warning(
+            request,
+            f'{len(result.created_items)} item baru, {len(result.matched_existing)} '
+            f'cocok dengan katalog. {len(result.errors)} gagal: '
+            + '; '.join(result.errors[:5]),
+        )
+    else:
+        messages.success(
+            request,
+            f'{len(result.created_items)} item baru dibuat, '
+            f'{len(result.matched_existing)} sudah cocok dengan katalog. '
+            'Periksa harga jual item baru di halaman Catalog sebelum digunakan.',
+        )
     return redirect('pos_aggregator:wizard', pk=pk)
 
 
