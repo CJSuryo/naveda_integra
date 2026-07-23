@@ -3,6 +3,26 @@ from django.db import models
 from django.utils import timezone
 
 
+class LokasiAset(models.Model):
+    """Lokasi fisik aset — terpisah dari dimensi akuntansi (EntitasBisnis)."""
+    kode = models.CharField(max_length=50, unique=True, verbose_name='Kode Lokasi')
+    nama = models.CharField(max_length=255, verbose_name='Nama Lokasi')
+    entitas_bisnis = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT,
+        null=True, blank=True, related_name='lokasi_aset', verbose_name='Entitas Bisnis',
+    )
+    alamat = models.TextField(blank=True, verbose_name='Alamat')
+    is_active = models.BooleanField(default=True, verbose_name='Aktif')
+
+    class Meta:
+        verbose_name = 'Lokasi Aset'
+        verbose_name_plural = 'Lokasi Aset'
+        ordering = ['kode']
+
+    def __str__(self) -> str:
+        return f'{self.kode} - {self.nama}'
+
+
 class AsetTetapRecord(models.Model):
     """Fixed asset record — one entry per purchased fixed asset item."""
     KONDISI_CHOICES = [
@@ -116,10 +136,32 @@ class AsetTetapRecord(models.Model):
         verbose_name='Metode Penyusutan',
         help_text='Override metode penyusutan dari item master.',
     )
-    lokasi = models.CharField(
+    lokasi_legacy = models.CharField(
         max_length=255,
         blank=True,
+        verbose_name='Lokasi (Legacy)',
+        help_text='Lokasi free-text lama sebelum migrasi ke master Lokasi Aset.',
+    )
+    lokasi_aset = models.ForeignKey(
+        'LokasiAset',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aset_records',
         verbose_name='Lokasi Aset',
+    )
+    departemen = models.ForeignKey(
+        'entitas_bisnis.EntitasBisnisLv3',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aset_records',
+        verbose_name='Departemen',
+    )
+    pic = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name='Penanggung Jawab (PIC)',
     )
     kondisi = models.CharField(
         max_length=20,

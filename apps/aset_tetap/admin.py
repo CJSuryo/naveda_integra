@@ -12,5 +12,5 @@ class AsetTetapRecordAdmin(admin.ModelAdmin):
     )
     list_select_related = ('item', 'entitas_bisnis')
     list_filter = ('tanggal_perolehan', 'kondisi', 'metode_penyusutan')
-    search_fields = ('aset_number', 'item__nama', 'item__item_id', 'lokasi')
+    search_fields = ('aset_number', 'item__nama', 'item__item_id', 'lokasi_legacy')
     raw_id_fields = ('item', 'purchase_item', 'entitas_bisnis')

@@ -36,6 +36,14 @@ class KategoriItem(models.Model):
         related_name='kategori_items',
         verbose_name='Entitas Bisnis',
     )
+    masa_manfaat_default = models.PositiveIntegerField(
+        null=True, blank=True, verbose_name='Masa Manfaat Default (Tahun)',
+        help_text='Default umur ekonomis untuk aset kategori ini.',
+    )
+    metode_penyusutan_default = models.CharField(
+        max_length=30, blank=True, default='', verbose_name='Metode Penyusutan Default',
+        help_text='Default metode penyusutan untuk aset kategori ini.',
+    )
 
     class Meta:
         verbose_name = 'Kategori Item'

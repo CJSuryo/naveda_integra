@@ -93,8 +93,18 @@ def calculate_depreciation(record: AsetTetapRecord, tahun_ke: int = 1,
     Returns:
         Depreciation amount for this period.
     """
-    metode = record.metode_penyusutan or (record.item.metode_penyusutan if record.item else '')
-    masa = record.masa_manfaat or (record.item.masa_manfaat if record.item else 0) or 0
+    kategori = record.item.kategori if record.item else None
+    metode = (
+        record.metode_penyusutan
+        or (record.item.metode_penyusutan if record.item else '')
+        or (kategori.metode_penyusutan_default if kategori else '')
+    )
+    masa = (
+        record.masa_manfaat
+        or (record.item.masa_manfaat if record.item else 0)
+        or (kategori.masa_manfaat_default if kategori else 0)
+        or 0
+    )
     residu = record.nilai_residu
 
     if metode == 'straight_line':

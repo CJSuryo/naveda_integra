@@ -45,7 +45,7 @@
           -
         {% endif %}
       </dd>
-      <dt>Lokasi</dt><dd>{{ record.lokasi|default:'-' }}</dd>
+      <dt>Lokasi</dt><dd>{{ record.lokasi_legacy|default:'-' }}</dd>
       <dt>Kondisi</dt>
       <dd>
         {% if record.kondisi == 'baik' %}
