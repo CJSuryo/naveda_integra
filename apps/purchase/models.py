@@ -11,6 +11,18 @@ from django.utils import timezone
 
 # ── Item Master ──────────────────────────────────────────────────────────────
 
+# NOTE: Must stay in sync with apps.aset_tetap.models.AsetTetapRecord.METODE_PENYUSUTAN_CHOICES.
+# Duplicated here (rather than imported) to avoid a circular dependency: apps.aset_tetap
+# already imports from apps.purchase.
+METODE_PENYUSUTAN_CHOICES = [
+    ('straight_line', 'Garis Lurus (Straight Line Method)'),
+    ('double_declining', 'Saldo Menurun (Double Declining Balance Method)'),
+    ('sum_of_years', 'Jumlah Angka Tahun (Sum of The Year Digit Method)'),
+    ('service_hours', 'Satuan Jam Kerja (Service Hours Method)'),
+    ('units_of_production', 'Satuan Hasil Produksi (Productive Output Method)'),
+]
+
+
 class KategoriItem(models.Model):
     """Free-form item category (Coffee, Tea, Snacks, Bahan Masak, etc.)."""
     TIPE_ITEM_CHOICES = [
@@ -41,7 +53,8 @@ class KategoriItem(models.Model):
         help_text='Default umur ekonomis untuk aset kategori ini.',
     )
     metode_penyusutan_default = models.CharField(
-        max_length=30, blank=True, default='', verbose_name='Metode Penyusutan Default',
+        max_length=30, choices=METODE_PENYUSUTAN_CHOICES, blank=True, default='',
+        verbose_name='Metode Penyusutan Default',
         help_text='Default metode penyusutan untuk aset kategori ini.',
     )
 

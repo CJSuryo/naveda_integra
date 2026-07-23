@@ -7,6 +7,7 @@ from apps.entitas_bisnis.models import (
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.master_data.models import Akun
 from apps.aset_tetap.models import AsetTetapRecord, LokasiAset
+from apps.aset_tetap.services import calculate_depreciation
 
 
 def base_setup(self):
@@ -44,9 +45,6 @@ class FondasiDataTests(TestCase):
         self.assertEqual(self.aset.pic, 'Budi')
 
 
-from apps.aset_tetap.services import calculate_depreciation
-
-
 class KategoriDefaultTests(TestCase):
     def setUp(self):
         base_setup(self)
@@ -71,3 +69,33 @@ class KategoriDefaultTests(TestCase):
         # 36.500.000 / (10*365) = 10.000/hari; 30 hari = 300.000
         amount = calculate_depreciation(aset, days=30)
         self.assertEqual(amount, Decimal('300000'))
+
+    def test_fallback_priority_record_beats_item_beats_kategori(self):
+        """masa_manfaat/metode_penyusutan resolution must prefer:
+        record-level override > item master > kategori default.
+        """
+        kat = KategoriItem.objects.create(
+            nama='Kendaraan', tipe_item='ATP',
+            masa_manfaat_default=10, metode_penyusutan_default='straight_line',
+        )
+        item = ItemMasterPurchase.objects.create(
+            nama='Truk', tipe_item='ATP', kategori=kat,
+            masa_manfaat=5, metode_penyusutan='straight_line',
+        )
+        aset = AsetTetapRecord.objects.create(
+            item=item, entitas_bisnis=self.eb, quantity=1,
+            harga_perolehan=Decimal('36500000'), nilai_residu=Decimal('0'),
+        )
+
+        # No record-level override: item master (5 tahun) must beat kategori default (10 tahun).
+        # 36.500.000 / (5*365) = 20.000/hari; 30 hari = 600.000
+        amount = calculate_depreciation(aset, days=30)
+        self.assertEqual(amount, Decimal('600000'))
+
+        # Record-level override (2 tahun) must beat item master (5 tahun).
+        aset.masa_manfaat = 2
+        aset.metode_penyusutan = 'straight_line'
+        aset.save()
+        # 36.500.000 / (2*365) = 50.000/hari; 30 hari = 1.500.000
+        amount = calculate_depreciation(aset, days=30)
+        self.assertEqual(amount, Decimal('1500000'))
