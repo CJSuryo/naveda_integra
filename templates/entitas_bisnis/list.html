@@ -83,6 +83,12 @@
               onclick="niEB.openEditLv2({{ lv1.pk }}, {{ lv2.pk }}, '{{ lv2.nama|escapejs }}', '{{ lv2.email|default:''|escapejs }}', '{{ lv2.telepon|default:''|escapejs }}', '{{ lv2.tanggal_bergabung|date:'Y-m-d'|default:'' }}', {{ lv2.status_aktif|lower }})">
               <i data-lucide="pencil"></i> Edit
             </button>
+            <a href="{% url 'pos_config:merchant_config' lv2.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
+              <i data-lucide="settings"></i> POS
+            </a>
+            <a href="{% url 'pos_aggregator:channel_list' lv2.pk %}" class="ni-btn ni-btn--secondary ni-btn--sm">
+              <i data-lucide="bike"></i> Channel
+            </a>
             <button type="button" class="ni-btn ni-btn--outline-danger ni-btn--sm"
               onclick="openDeleteModal('{% url 'entitas_bisnis:lv2_delete' lv1.pk lv2.pk %}', '{{ lv2.nama|escapejs }}')">
               <i data-lucide="trash-2"></i> Hapus

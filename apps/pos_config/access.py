@@ -24,6 +24,21 @@ def _linked_eb_ids(user):
     )
 
 
+def accessible_lv2_qs(user):
+    """EntitasBisnisLv2 queryset limited to operating companies the user may access.
+
+    Use this to scope any view that fetches a lv2 by pk *before* a
+    ``MerchantPOSConfig`` necessarily exists for it (e.g. the aggregator
+    "connect a channel" flow, which get_or_creates the config on first visit) —
+    ``accessible_merchant_qs`` cannot scope a row that hasn't been created yet.
+    """
+    from apps.entitas_bisnis.models import EntitasBisnisLv2
+    qs = EntitasBisnisLv2.objects.all()
+    if _is_unrestricted(user):
+        return qs
+    return qs.filter(entitas_bisnis_id__in=_linked_eb_ids(user))
+
+
 def accessible_store_qs(user):
     """StorePOSConfig queryset limited to branches the user may access."""
     qs = StorePOSConfig.objects.all()

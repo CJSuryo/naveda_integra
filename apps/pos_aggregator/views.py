@@ -21,8 +21,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from apps.accounts.views import _check_perm
-from apps.entitas_bisnis.models import EntitasBisnisLv2
-from pos_config.access import accessible_merchant_qs, accessible_store_qs
+from pos_config.access import accessible_lv2_qs, accessible_merchant_qs, accessible_store_qs
 from pos_config.models import MerchantPOSConfig, StorePOSConfig
 
 from .constants import AggregatorType, OnboardingState, OrderStatus
@@ -54,11 +53,12 @@ def channel_list(request, lv2_pk):
         return denied
 
     lv2 = get_object_or_404(
-        EntitasBisnisLv2.objects.select_related('entitas_bisnis'), pk=lv2_pk
+        accessible_lv2_qs(request.user).select_related('entitas_bisnis'), pk=lv2_pk
     )
-    merchant = get_object_or_404(
-        accessible_merchant_qs(request.user), entitas_bisnis_lv2=lv2
-    )
+    # The channel list is the entry point before any config exists yet, so the
+    # merchant row is created on first visit rather than 404ing for a company
+    # that hasn't touched POS/aggregator setup before.
+    merchant, _ = MerchantPOSConfig.objects.get_or_create(entitas_bisnis_lv2=lv2)
 
     existing = {c.aggregator: c for c in merchant.aggregator_credentials.select_related('onboarding')}
     channels = []
@@ -90,10 +90,8 @@ def channel_connect(request, lv2_pk):
     if denied:
         return denied
 
-    lv2 = get_object_or_404(EntitasBisnisLv2, pk=lv2_pk)
-    merchant = get_object_or_404(
-        accessible_merchant_qs(request.user), entitas_bisnis_lv2=lv2
-    )
+    lv2 = get_object_or_404(accessible_lv2_qs(request.user), pk=lv2_pk)
+    merchant, _ = MerchantPOSConfig.objects.get_or_create(entitas_bisnis_lv2=lv2)
 
     if request.method == 'POST':
         form = ConnectChannelForm(request.POST)

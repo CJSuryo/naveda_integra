@@ -2,8 +2,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from apps.accounts.views import _check_perm
-from apps.entitas_bisnis.models import EntitasBisnisLv2, EntitasBisnisLv3
-from .access import accessible_merchant_qs, accessible_store_qs
+from apps.entitas_bisnis.models import EntitasBisnisLv3
+from .access import accessible_lv2_qs, accessible_merchant_qs, accessible_store_qs
 from .models import MerchantPOSConfig, StorePOSConfig
 from .forms import MerchantPOSConfigForm, StorePOSConfigForm, PaymentMethodForm, WorkShiftForm
 
@@ -21,7 +21,7 @@ def merchant_config(request, lv2_pk):
     if denied:
         return denied
     lv2 = get_object_or_404(
-        EntitasBisnisLv2.objects.select_related('entitas_bisnis'), pk=lv2_pk
+        accessible_lv2_qs(request.user).select_related('entitas_bisnis'), pk=lv2_pk
     )
     config, _ = MerchantPOSConfig.objects.get_or_create(entitas_bisnis_lv2=lv2)
     next_url = _safe_next(request)

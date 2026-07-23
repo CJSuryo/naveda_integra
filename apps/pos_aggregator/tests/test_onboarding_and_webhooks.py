@@ -275,3 +275,72 @@ class WizardAccessTest(TestCase):
         response = anon.get(url)
         self.assertEqual(response.status_code, 302)
         self.assertIn('/login/', response['Location'])
+
+
+class ChannelEntryPointTest(TestCase):
+    """channel_list/channel_connect are the entry point *before* any
+    MerchantPOSConfig necessarily exists — they must get_or_create it, not
+    404, and must still scope the lv2 lookup by tenant.
+    """
+
+    def setUp(self):
+        from apps.accounts.models import NiPermission, Role, User, UserEntitasBisnis
+        from pos_config.tests.factories import make_lv1, make_lv2
+
+        role = Role.objects.create(kode=Role.BUSINESS_OWNER, nama='Owner', deskripsi='')
+        self.user = User.objects.create_user(
+            email='c@test.com', password='p', name='C', role=role
+        )
+        for code in ('pos_aggregators_manage', 'pos_config_manage'):
+            perm, _ = NiPermission.objects.get_or_create(code=code, defaults={'name': code})
+            self.user.ni_permissions.add(perm)
+
+        self.eb_a = make_lv1(nama='Grup A')
+        self.eb_b = make_lv1(nama='Grup B')
+        UserEntitasBisnis.objects.create(user=self.user, entitas_bisnis=self.eb_a)
+
+        self.lv2_own = make_lv2(self.eb_a, nama='PT Milik Sendiri')
+        self.lv2_foreign = make_lv2(self.eb_b, nama='PT Orang Lain')
+
+        self.client = Client()
+        self.client.force_login(self.user)
+
+    def test_channel_list_creates_merchant_config_on_first_visit(self):
+        from pos_config.models import MerchantPOSConfig
+        self.assertFalse(
+            MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_own).exists()
+        )
+        url = reverse('pos_aggregator:channel_list', kwargs={'lv2_pk': self.lv2_own.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(
+            MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_own).exists()
+        )
+
+    def test_channel_list_for_foreign_lv2_is_404_not_created(self):
+        from pos_config.models import MerchantPOSConfig
+        url = reverse('pos_aggregator:channel_list', kwargs={'lv2_pk': self.lv2_foreign.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_foreign).exists()
+        )
+
+    def test_channel_connect_for_foreign_lv2_is_404_not_created(self):
+        from pos_config.models import MerchantPOSConfig
+        url = reverse('pos_aggregator:channel_connect', kwargs={'lv2_pk': self.lv2_foreign.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_foreign).exists()
+        )
+
+    def test_merchant_config_for_foreign_lv2_is_404_not_created(self):
+        """Same gap in pos_config.views.merchant_config, fixed alongside."""
+        from pos_config.models import MerchantPOSConfig
+        url = reverse('pos_config:merchant_config', kwargs={'lv2_pk': self.lv2_foreign.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(
+            MerchantPOSConfig.objects.filter(entitas_bisnis_lv2=self.lv2_foreign).exists()
+        )
