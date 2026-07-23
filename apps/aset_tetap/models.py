@@ -303,24 +303,7 @@ class AssetDisposal(models.Model):
 
     @staticmethod
     def _generate_disposal_number() -> str:
-        from django.db import transaction as db_transaction
-        with db_transaction.atomic():
-            last = (
-                AssetDisposal.objects
-                .select_for_update()
-                .filter(disposal_number__startswith='DSP-')
-                .order_by('-disposal_number')
-                .values_list('disposal_number', flat=True)
-                .first()
-            )
-            if last:
-                try:
-                    seq = int(last.rsplit('-', 1)[1]) + 1
-                except (ValueError, IndexError):
-                    seq = 1
-            else:
-                seq = 1
-            return f'DSP-{seq:03d}'
+        return _next_event_number(AssetDisposal, 'disposal_number', 'DSP-')
 
 
 class AssetMaintenance(models.Model):
