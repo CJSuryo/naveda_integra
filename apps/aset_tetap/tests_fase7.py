@@ -6,10 +6,9 @@ from apps.entitas_bisnis.models import (
 )
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.master_data.models import Akun
-from apps.aset_tetap.models import AsetTetapRecord, LokasiAset
+from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance
 from apps.aset_tetap.services import calculate_depreciation
-from apps.jurnal.models import JurnalHeader, JurnalDetail
-from apps.aset_tetap.models import AssetMaintenance
+from apps.jurnal.models import JurnalHeader
 
 
 def base_setup(self):
