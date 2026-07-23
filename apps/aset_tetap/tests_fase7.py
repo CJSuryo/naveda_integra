@@ -6,7 +6,7 @@ from apps.entitas_bisnis.models import (
 )
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.master_data.models import Akun
-from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance
+from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance, AssetTransfer
 from apps.aset_tetap.services import calculate_depreciation
 from apps.jurnal.models import JurnalHeader
 
@@ -160,3 +160,79 @@ class MaintenanceTests(TestCase):
         self.aset.refresh_from_db()
         self.assertEqual(self.aset.kondisi, 'rusak_ringan')
         self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-MTN-').count(), 0)
+
+
+class TransferIntraEBTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.lok1 = LokasiAset.objects.create(kode='L1', nama='Gudang 1')
+        self.lok2 = LokasiAset.objects.create(kode='L2', nama='Gudang 2')
+
+    def test_intra_eb_no_journal(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='intra_eb',
+            lokasi_tujuan=self.lok2, dept_tujuan=self.dept, pic_baru='Andi',
+        )
+        header = process_asset_transfer(trf)
+        self.assertIsNone(header)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.lokasi_aset, self.lok2)
+        self.assertEqual(self.aset.departemen, self.dept)
+        self.assertEqual(self.aset.pic, 'Andi')
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-TRF-').count(), 0)
+
+
+class TransferAntarEBTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        # akun aset harus dapat di-resolve (item.coa_account)
+        self.akun_aset = Akun.objects.create(kode_akun='1.2.1', nama='Mesin')
+        self.akun_akum = Akun.objects.create(kode_akun='1.2.7.1', nama='Akum Penyusutan Mesin')
+        self.akun_antar = Akun.objects.create(kode_akun='1.1.9', nama='RK Antar Entitas')
+        self.item.coa_account = self.akun_aset
+        self.item.save()
+
+    def test_antar_eb_dual_journal_balanced(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        # aset: HP 100jt, akumulasi 20jt, nilai buku 80jt
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='antar_eb',
+            eb_tujuan=self.eb2, akun_antar_entitas=self.akun_antar,
+            akun_akumulasi=self.akun_akum,
+        )
+        process_asset_transfer(trf)
+        h_asal = trf.jurnal_header_asal
+        h_tujuan = trf.jurnal_header_tujuan
+        # tiap jurnal balance
+        for h in (h_asal, h_tujuan):
+            d = sum(x.debit for x in h.details.all())
+            k = sum(x.kredit for x in h.details.all())
+            self.assertEqual(d, k)
+        # EB berbeda
+        self.assertEqual(h_asal.entitas_bisnis, self.eb)
+        self.assertEqual(h_tujuan.entitas_bisnis, self.eb2)
+        # akun antar-entitas saling hapus: asal debit 80jt, tujuan kredit 80jt
+        self.assertEqual(h_asal.details.get(akun=self.akun_antar).debit, Decimal('80000000'))
+        self.assertEqual(h_tujuan.details.get(akun=self.akun_antar).kredit, Decimal('80000000'))
+        # aset pindah EB
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.entitas_bisnis, self.eb2)
+
+    def test_antar_eb_requires_akun_antar(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        trf = AssetTransfer.objects.create(aset=self.aset, jenis='antar_eb', eb_tujuan=self.eb2, akun_akumulasi=self.akun_akum)
+        with self.assertRaises(ValueError):
+            process_asset_transfer(trf)
+
+    def test_antar_eb_reverse(self):
+        from apps.aset_tetap.services import process_asset_transfer, reverse_asset_transfer
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='antar_eb', eb_tujuan=self.eb2,
+            akun_antar_entitas=self.akun_antar, akun_akumulasi=self.akun_akum,
+        )
+        process_asset_transfer(trf)
+        reverse_asset_transfer(trf)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.entitas_bisnis, self.eb)
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-TRF-').count(), 0)

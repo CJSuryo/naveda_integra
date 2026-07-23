@@ -336,3 +336,42 @@ class AssetMaintenance(models.Model):
         if not self.maintenance_number:
             self.maintenance_number = _next_event_number(AssetMaintenance, 'maintenance_number', 'MTN-')
         super().save(*args, **kwargs)
+
+
+class AssetTransfer(models.Model):
+    """Mutasi aset — lokasi/departemen/PIC (intra-EB) atau antar EntitasBisnis (dengan jurnal)."""
+    JENIS_CHOICES = [('intra_eb', 'Dalam Entitas'), ('antar_eb', 'Antar Entitas')]
+
+    transfer_number = models.CharField(max_length=50, unique=True, editable=False, verbose_name='Nomor Transfer')
+    aset = models.ForeignKey('AsetTetapRecord', on_delete=models.PROTECT, related_name='transfers', verbose_name='Aset')
+    tanggal = models.DateField(default=timezone.now, db_index=True, verbose_name='Tanggal')
+    jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, verbose_name='Jenis')
+    lokasi_asal = models.ForeignKey('LokasiAset', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfer_asal')
+    lokasi_tujuan = models.ForeignKey('LokasiAset', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfer_tujuan')
+    dept_asal = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfer_asal')
+    dept_tujuan = models.ForeignKey('entitas_bisnis.EntitasBisnisLv3', on_delete=models.SET_NULL, null=True, blank=True, related_name='transfer_tujuan')
+    eb_asal = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, null=True, blank=True, related_name='transfer_asal')
+    eb_tujuan = models.ForeignKey('entitas_bisnis.EntitasBisnis', on_delete=models.PROTECT, null=True, blank=True, related_name='transfer_tujuan')
+    pic_lama = models.CharField(max_length=255, blank=True)
+    pic_baru = models.CharField(max_length=255, blank=True)
+    akun_antar_entitas = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, null=True, blank=True, related_name='transfer_antar', verbose_name='Akun Antar-Entitas')
+    akun_akumulasi = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, null=True, blank=True, related_name='transfer_akum', verbose_name='Akun Akumulasi Penyusutan')
+    perolehan = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    akumulasi = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    jurnal_header_asal = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    jurnal_header_tujuan = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    keterangan = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Transfer Aset'
+        verbose_name_plural = 'Transfer Aset'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return self.transfer_number
+
+    def save(self, *args, **kwargs):
+        if not self.transfer_number:
+            self.transfer_number = _next_event_number(AssetTransfer, 'transfer_number', 'TRF-')
+        super().save(*args, **kwargs)
