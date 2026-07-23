@@ -375,3 +375,39 @@ class AssetTransfer(models.Model):
         if not self.transfer_number:
             self.transfer_number = _next_event_number(AssetTransfer, 'transfer_number', 'TRF-')
         super().save(*args, **kwargs)
+
+
+class AssetRevaluation(models.Model):
+    """Peristiwa revaluasi aset ke nilai wajar — memicu jurnal surplus/rugi revaluasi."""
+    METODE_CHOICES = [('eliminasi', 'Eliminasi Akumulasi'), ('proporsional', 'Restatement Proporsional')]
+
+    revaluation_number = models.CharField(max_length=50, unique=True, editable=False, verbose_name='Nomor Revaluasi')
+    aset = models.ForeignKey('AsetTetapRecord', on_delete=models.PROTECT, related_name='revaluations', verbose_name='Aset')
+    tanggal = models.DateField(default=timezone.now, db_index=True, verbose_name='Tanggal')
+    nilai_wajar_baru = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Nilai Wajar Baru')
+    metode_revaluasi = models.CharField(max_length=15, choices=METODE_CHOICES, verbose_name='Metode Revaluasi')
+    akun_akumulasi = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='rev_akum', verbose_name='Akun Akumulasi Penyusutan')
+    akun_surplus_revaluasi = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='rev_surplus', verbose_name='Akun Surplus Revaluasi')
+    akun_rugi_revaluasi = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='rev_rugi', verbose_name='Akun Rugi Revaluasi')
+    perolehan_lama = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    akumulasi_lama = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    nilai_buku_lama = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    perolehan_baru = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    akumulasi_baru = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    selisih = models.DecimalField(max_digits=19, decimal_places=4, editable=False, default=0)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    keterangan = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Revaluasi Aset'
+        verbose_name_plural = 'Revaluasi Aset'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return self.revaluation_number
+
+    def save(self, *args, **kwargs):
+        if not self.revaluation_number:
+            self.revaluation_number = _next_event_number(AssetRevaluation, 'revaluation_number', 'REV-')
+        super().save(*args, **kwargs)

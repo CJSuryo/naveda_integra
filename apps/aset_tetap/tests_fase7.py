@@ -6,7 +6,7 @@ from apps.entitas_bisnis.models import (
 )
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.master_data.models import Akun
-from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance, AssetTransfer
+from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance, AssetTransfer, AssetRevaluation
 from apps.aset_tetap.services import calculate_depreciation
 from apps.jurnal.models import JurnalHeader
 
@@ -271,3 +271,85 @@ class TransferAntarEBTests(TestCase):
         self.aset.refresh_from_db()
         self.assertEqual(self.aset.entitas_bisnis, self.eb)
         self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-TRF-').count(), 0)
+
+
+class RevaluationTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.akun_aset = Akun.objects.create(kode_akun='1.2.1', nama='Mesin')
+        self.akun_akum = Akun.objects.create(kode_akun='1.2.7.1', nama='Akum Penyusutan')
+        self.akun_surplus = Akun.objects.create(kode_akun='3.2.1', nama='Surplus Revaluasi')
+        self.akun_rugi = Akun.objects.create(kode_akun='5.9.9', nama='Rugi Revaluasi')
+        self.item.coa_account = self.akun_aset
+        self.item.save()
+
+    def test_eliminasi_kenaikan_sets_nilai_buku(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        # nilai buku lama 80jt, nilai wajar 120jt -> selisih +40jt
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('120000000'),
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        header = process_asset_revaluation(rev)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.nilai_buku, Decimal('120000000'))
+        self.assertEqual(self.aset.akumulasi_penyusutan, Decimal('0'))
+        d = sum(x.debit for x in header.details.all())
+        k = sum(x.kredit for x in header.details.all())
+        self.assertEqual(d, k)
+        self.assertEqual(header.details.get(akun=self.akun_surplus).kredit, Decimal('40000000'))
+
+    def test_eliminasi_penurunan_uses_rugi(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        # nilai buku lama 80jt, nilai wajar 50jt -> selisih -30jt
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('50000000'),
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        header = process_asset_revaluation(rev)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.nilai_buku, Decimal('50000000'))
+        self.assertEqual(header.details.get(akun=self.akun_rugi).debit, Decimal('30000000'))
+
+    def test_default_metode_follows_sak_emkm_warning(self):
+        from apps.aset_tetap.services import default_metode_revaluasi, revaluation_warning
+        self.eb.standar_akuntansi = 'sak_emkm'
+        self.eb.save()
+        self.assertEqual(default_metode_revaluasi(self.eb), 'eliminasi')
+        self.assertIn('EMKM', revaluation_warning(self.eb))
+
+    def test_reverse_revaluation(self):
+        from apps.aset_tetap.services import process_asset_revaluation, reverse_asset_revaluation
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('120000000'),
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        process_asset_revaluation(rev)
+        reverse_asset_revaluation(rev)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.harga_perolehan, Decimal('100000000'))
+        self.assertEqual(self.aset.akumulasi_penyusutan, Decimal('20000000'))
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-REV-').count(), 0)
+
+    def test_proporsional_balanced(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        # nb lama 80jt, nilai wajar 100jt -> rasio 1.25; HP 100->125jt, akum 20->25jt, selisih +20jt
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('100000000'),
+            metode_revaluasi='proporsional',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        header = process_asset_revaluation(rev)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.total_value, Decimal('125000000'))
+        self.assertEqual(self.aset.akumulasi_penyusutan, Decimal('25000000'))
+        self.assertEqual(self.aset.nilai_buku, Decimal('100000000'))
+        self.assertEqual(sum(x.debit for x in header.details.all()),
+                         sum(x.kredit for x in header.details.all()))
