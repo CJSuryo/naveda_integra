@@ -3,6 +3,27 @@ from django.db import models
 from django.utils import timezone
 
 
+def _next_event_number(model_cls, field_name, prefix):
+    """Nomor urut event: PREFIX + 3-digit sequence, dengan select_for_update."""
+    from django.db import transaction as db_transaction
+    with db_transaction.atomic():
+        last = (
+            model_cls.objects.select_for_update()
+            .filter(**{f'{field_name}__startswith': prefix})
+            .order_by(f'-{field_name}')
+            .values_list(field_name, flat=True)
+            .first()
+        )
+        if last:
+            try:
+                seq = int(last.rsplit('-', 1)[1]) + 1
+            except (ValueError, IndexError):
+                seq = 1
+        else:
+            seq = 1
+        return f'{prefix}{seq:03d}'
+
+
 class LokasiAset(models.Model):
     """Lokasi fisik aset — terpisah dari dimensi akuntansi (EntitasBisnis)."""
     kode = models.CharField(max_length=50, unique=True, verbose_name='Kode Lokasi')
@@ -300,3 +321,35 @@ class AssetDisposal(models.Model):
             else:
                 seq = 1
             return f'DSP-{seq:03d}'
+
+
+class AssetMaintenance(models.Model):
+    """Peristiwa pemeliharaan aset — memicu jurnal beban."""
+    JENIS_CHOICES = [('rutin', 'Rutin'), ('perbaikan', 'Perbaikan'), ('servis', 'Servis')]
+
+    maintenance_number = models.CharField(max_length=50, unique=True, editable=False, verbose_name='Nomor Maintenance')
+    aset = models.ForeignKey('AsetTetapRecord', on_delete=models.PROTECT, related_name='maintenances', verbose_name='Aset')
+    tanggal = models.DateField(default=timezone.now, db_index=True, verbose_name='Tanggal')
+    jenis = models.CharField(max_length=10, choices=JENIS_CHOICES, verbose_name='Jenis')
+    vendor = models.CharField(max_length=255, blank=True, verbose_name='Vendor')
+    biaya = models.DecimalField(max_digits=19, decimal_places=4, verbose_name='Biaya')
+    akun_beban = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='mtn_beban', verbose_name='Akun Beban Pemeliharaan')
+    akun_kas_utang = models.ForeignKey('master_data.Akun', on_delete=models.PROTECT, related_name='mtn_kas', verbose_name='Akun Kas/Utang')
+    kondisi_setelah = models.CharField(max_length=20, choices=AsetTetapRecord.KONDISI_CHOICES, blank=True, verbose_name='Kondisi Setelah')
+    kondisi_sebelum = models.CharField(max_length=20, blank=True, editable=False)
+    jurnal_header = models.ForeignKey('jurnal.JurnalHeader', on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    keterangan = models.TextField(blank=True, verbose_name='Keterangan')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Maintenance Aset'
+        verbose_name_plural = 'Maintenance Aset'
+        ordering = ['-tanggal', '-created_at']
+
+    def __str__(self) -> str:
+        return self.maintenance_number
+
+    def save(self, *args, **kwargs):
+        if not self.maintenance_number:
+            self.maintenance_number = _next_event_number(AssetMaintenance, 'maintenance_number', 'MTN-')
+        super().save(*args, **kwargs)

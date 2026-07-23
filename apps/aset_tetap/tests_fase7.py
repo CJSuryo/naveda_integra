@@ -8,6 +8,8 @@ from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.master_data.models import Akun
 from apps.aset_tetap.models import AsetTetapRecord, LokasiAset
 from apps.aset_tetap.services import calculate_depreciation
+from apps.jurnal.models import JurnalHeader, JurnalDetail
+from apps.aset_tetap.models import AssetMaintenance
 
 
 def base_setup(self):
@@ -99,3 +101,63 @@ class KategoriDefaultTests(TestCase):
         # 36.500.000 / (2*365) = 50.000/hari; 30 hari = 1.500.000
         amount = calculate_depreciation(aset, days=30)
         self.assertEqual(amount, Decimal('1500000'))
+
+
+class MaintenanceTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.akun_beban = Akun.objects.create(kode_akun='5.2.1', nama='Beban Pemeliharaan')
+        self.akun_kas = Akun.objects.create(kode_akun='1.1.1', nama='Kas')
+
+    def test_process_maintenance_creates_journal(self):
+        from apps.aset_tetap.services import process_asset_maintenance
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='servis', biaya=Decimal('500000'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+            kondisi_setelah='baik',
+        )
+        header = process_asset_maintenance(mtn)
+        self.assertTrue(mtn.maintenance_number.startswith('MTN-'))
+        self.assertTrue(header.nomor_transaksi.startswith('TRX-MTN-'))
+        details = list(header.details.all())
+        self.assertEqual(sum(d.debit for d in details), Decimal('500000'))
+        self.assertEqual(sum(d.kredit for d in details), Decimal('500000'))
+        beban = header.details.get(akun=self.akun_beban)
+        self.assertEqual(beban.debit, Decimal('500000'))
+
+    def test_maintenance_updates_kondisi(self):
+        from apps.aset_tetap.services import process_asset_maintenance
+        self.aset.kondisi = 'rusak_ringan'
+        self.aset.save()
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='perbaikan', biaya=Decimal('1000000'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+            kondisi_setelah='baik',
+        )
+        process_asset_maintenance(mtn)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.kondisi, 'baik')
+
+    def test_maintenance_biaya_must_be_positive(self):
+        from apps.aset_tetap.services import process_asset_maintenance
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='rutin', biaya=Decimal('0'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+        )
+        with self.assertRaises(ValueError):
+            process_asset_maintenance(mtn)
+
+    def test_reverse_maintenance(self):
+        from apps.aset_tetap.services import process_asset_maintenance, reverse_asset_maintenance
+        self.aset.kondisi = 'rusak_ringan'
+        self.aset.save()
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='perbaikan', biaya=Decimal('1000000'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+            kondisi_setelah='baik',
+        )
+        process_asset_maintenance(mtn)
+        reverse_asset_maintenance(mtn)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.kondisi, 'rusak_ringan')
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-MTN-').count(), 0)
