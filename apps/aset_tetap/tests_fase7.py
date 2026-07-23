@@ -182,6 +182,29 @@ class TransferIntraEBTests(TestCase):
         self.assertEqual(self.aset.pic, 'Andi')
         self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-TRF-').count(), 0)
 
+    def test_intra_eb_reverse(self):
+        from apps.aset_tetap.services import process_asset_transfer, reverse_asset_transfer
+        # Set an initial lokasi/dept/pic so the "restore" assertion is meaningful.
+        self.aset.lokasi_aset = self.lok1
+        self.aset.departemen = self.dept
+        self.aset.pic = 'Budi'
+        self.aset.save()
+
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='intra_eb',
+            lokasi_tujuan=self.lok2, dept_tujuan=None, pic_baru='Andi',
+        )
+        process_asset_transfer(trf)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.lokasi_aset, self.lok2)
+        self.assertEqual(self.aset.pic, 'Andi')
+
+        reverse_asset_transfer(trf)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.lokasi_aset, self.lok1)
+        self.assertEqual(self.aset.departemen, self.dept)
+        self.assertEqual(self.aset.pic, 'Budi')
+
 
 class TransferAntarEBTests(TestCase):
     def setUp(self):
@@ -222,6 +245,18 @@ class TransferAntarEBTests(TestCase):
     def test_antar_eb_requires_akun_antar(self):
         from apps.aset_tetap.services import process_asset_transfer
         trf = AssetTransfer.objects.create(aset=self.aset, jenis='antar_eb', eb_tujuan=self.eb2, akun_akumulasi=self.akun_akum)
+        with self.assertRaises(ValueError):
+            process_asset_transfer(trf)
+
+    def test_antar_eb_negative_nilai_buku_raises(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        # akumulasi_penyusutan (150jt) > harga_perolehan * quantity (100jt) -> nilai_buku negatif
+        self.aset.akumulasi_penyusutan = Decimal('150000000')
+        self.aset.save()
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='antar_eb', eb_tujuan=self.eb2,
+            akun_antar_entitas=self.akun_antar, akun_akumulasi=self.akun_akum,
+        )
         with self.assertRaises(ValueError):
             process_asset_transfer(trf)
 

@@ -273,8 +273,8 @@ def process_asset_disposal(disposal: AssetDisposal) -> JurnalHeader:
     akun_aset = _resolve_asset_account(aset)
     if not akun_aset:
         raise ValueError('Akun Aset tidak dapat ditentukan (coa_account item/purchase kosong).')
-    akun_akumulasi = Akun.objects.filter(kode_akun__startswith='1.2.7').first()
-    if not akun_akumulasi:
+    akumulasi_akun = Akun.objects.filter(kode_akun__startswith='1.2.7').first()
+    if not akumulasi_akun:
         raise ValueError('Akun Akumulasi Penyusutan (1.2.7.xx) belum tersedia di Chart of Accounts.')
 
     # Snapshot pro-rata
@@ -288,7 +288,7 @@ def process_asset_disposal(disposal: AssetDisposal) -> JurnalHeader:
     # Baris jurnal: (akun, debit, kredit)
     lines = [
         (akun_aset, Decimal('0'), perolehan_dilepas),        # Kredit aset
-        (akun_akumulasi, akumulasi_dilepas, Decimal('0')),   # Debit akumulasi
+        (akumulasi_akun, akumulasi_dilepas, Decimal('0')),   # Debit akumulasi
     ]
     if jenis == 'jual' and harga_jual > 0:
         lines.append((disposal.akun_kas, harga_jual, Decimal('0')))   # Debit kas
@@ -454,7 +454,12 @@ def _process_transfer_antar_eb(trf: 'AssetTransfer') -> JurnalHeader:
 
     hp = aset.total_value
     akum = aset.akumulasi_penyusutan
-    nilai_buku = hp - akum
+    nilai_buku = aset.nilai_buku
+    if nilai_buku < 0:
+        raise ValueError(
+            f'Nilai buku aset negatif ({nilai_buku:,.0f}) — akumulasi penyusutan '
+            f'({akum:,.0f}) melebihi harga perolehan ({hp:,.0f}). Transfer tidak dapat diproses.'
+        )
     eb_asal = aset.entitas_bisnis
 
     with transaction.atomic():
