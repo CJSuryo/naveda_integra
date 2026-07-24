@@ -1988,6 +1988,7 @@ def _month_range(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def laporan_valuasi(request):
     from . import reports
     eb_ids, eb_filter_list = _report_eb_ids(request)
@@ -2020,6 +2021,7 @@ def laporan_valuasi(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def laporan_hpp(request):
     from . import reports
     eb_ids, eb_filter_list = _report_eb_ids(request)
@@ -2048,6 +2050,7 @@ def laporan_hpp(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def laporan_velocity(request):
     from . import reports
     eb_ids, eb_filter_list = _report_eb_ids(request)
