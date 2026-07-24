@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Tambah Maintenance{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Tambah Maintenance</h1>
+    <p class="ni-page-header__subtitle">Catat pemeliharaan aset tetap</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'aset_tetap:maintenance_list' %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:700px;">
+  <div class="ni-card__body">
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="ni-btn-row" style="margin-top:24px;">
+        <button type="submit" class="ni-btn ni-btn--primary">Simpan</button>
+        <a href="{% url 'aset_tetap:maintenance_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

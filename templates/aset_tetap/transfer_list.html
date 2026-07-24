@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Transfer Aset{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Transfer Aset</h1>
+    <p class="ni-page-header__subtitle">Daftar mutasi/transfer aset tetap</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'aset_tetap:transfer_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Transfer
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor</th><th>Aset</th><th>Tanggal</th><th>Jenis</th>
+            <th>Tujuan</th><th>PIC Baru</th><th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in items %}
+          <tr>
+            <td>{{ t.transfer_number }}</td>
+            <td>{{ t.aset }}</td>
+            <td>{{ t.tanggal }}</td>
+            <td>{{ t.get_jenis_display }}</td>
+            <td>
+              {% if t.jenis == 'antar_eb' %}{{ t.eb_tujuan }}{% else %}{{ t.lokasi_tujuan }}{% if t.dept_tujuan %} / {{ t.dept_tujuan }}{% endif %}{% endif %}
+            </td>
+            <td>{{ t.pic_baru }}</td>
+            <td>
+              <a href="{% url 'aset_tetap:transfer_delete' t.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i> Batalkan
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" style="text-align:center;color:var(--ni-text-muted);">Belum ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

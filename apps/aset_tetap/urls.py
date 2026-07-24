@@ -18,4 +18,16 @@ urlpatterns = [
     path('bulk-penyusutan/preview/', views.aset_tetap_bulk_preview, name='bulk_preview'),
     path('<int:pk>/lepas/', views.aset_tetap_dispose, name='dispose'),
     path('<int:pk>/pelepasan/<int:disposal_pk>/batal/', views.aset_tetap_disposal_delete, name='disposal_delete'),
+
+    path('maintenance/', views.maintenance_list, name='maintenance_list'),
+    path('maintenance/create/', views.maintenance_create, name='maintenance_create'),
+    path('maintenance/<int:pk>/delete/', views.maintenance_delete, name='maintenance_delete'),
+    path('transfer/', views.transfer_list, name='transfer_list'),
+    path('transfer/create/', views.transfer_create, name='transfer_create'),
+    path('transfer/<int:pk>/delete/', views.transfer_delete, name='transfer_delete'),
+    path('revaluation/', views.revaluation_list, name='revaluation_list'),
+    path('revaluation/create/', views.revaluation_create, name='revaluation_create'),
+    path('revaluation/<int:pk>/delete/', views.revaluation_delete, name='revaluation_delete'),
+    path('laporan-penyusutan/', views.laporan_penyusutan, name='laporan_penyusutan'),
+    path('<int:pk>/schedule/', views.depreciation_schedule, name='depreciation_schedule'),
 ]

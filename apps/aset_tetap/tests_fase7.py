@@ -448,3 +448,36 @@ class LaporanPenyusutanTests(TestCase):
         other_dept = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Marketing')
         rows = laporan_penyusutan(departemen=other_dept)
         self.assertEqual(len(rows), 0)
+
+
+from django.urls import reverse
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+
+class Fase7ViewSmokeTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.client_user = User.objects.create_user(email='u@u.com', password='p')
+        self.client.force_login(self.client_user)
+
+    def test_maintenance_list_renders(self):
+        resp = self.client.get(reverse('aset_tetap:maintenance_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_transfer_list_renders(self):
+        resp = self.client.get(reverse('aset_tetap:transfer_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_revaluation_list_renders(self):
+        resp = self.client.get(reverse('aset_tetap:revaluation_list'))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_depreciation_schedule_renders(self):
+        resp = self.client.get(reverse('aset_tetap:depreciation_schedule', args=[self.aset.pk]))
+        self.assertEqual(resp.status_code, 200)
+
+    def test_laporan_penyusutan_renders(self):
+        resp = self.client.get(reverse('aset_tetap:laporan_penyusutan'))
+        self.assertEqual(resp.status_code, 200)

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Jadwal Penyusutan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Jadwal Penyusutan — {{ aset }}</h1>
+    <p class="ni-page-header__subtitle">Proyeksi penyusutan ke depan (belum tersimpan)</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'aset_tetap:detail' aset.pk %}" class="ni-btn ni-btn--secondary">
+      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th class="ni-text-right">Penyusutan</th>
+            <th class="ni-text-right">Akumulasi Akhir</th>
+            <th class="ni-text-right">Nilai Buku Akhir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.index }}</td>
+            <td class="ni-text-right">{{ row.penyusutan|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.akumulasi_akhir|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.nilai_buku_akhir|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="4" style="text-align:center;color:var(--ni-text-muted);">Tidak ada proyeksi.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -15,12 +15,19 @@ from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase, KategoriItem
 from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
 
-from .forms import AsetTetapRecordForm, AssetDisposalForm
-from .models import AsetTetapRecord, AssetDisposal
+from .forms import (
+    AsetTetapRecordForm, AssetDisposalForm,
+    AssetMaintenanceForm, AssetTransferForm, AssetRevaluationForm,
+)
+from .models import (
+    AsetTetapRecord, AssetDisposal, AssetMaintenance, AssetTransfer, AssetRevaluation, LokasiAset,
+)
+from . import services, reports
 from .services import (
     calculate_depreciation, process_depreciation,
     process_asset_disposal, reverse_asset_disposal,
 )
+from .documents import list_bukti_aset
 
 DEFAULT_DAYS = 30  # monthly processing default
 
@@ -150,6 +157,7 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
     from datetime import date as _dc
     disposal_form = AssetDisposalForm(aset=record, initial={'tanggal': _dc.today(), 'quantity': record.quantity})
     disposals = record.disposals.select_related('akun_kas', 'akun_laba_rugi', 'jurnal_header').all()
+    dokumen_list = list_bukti_aset(record)
 
     return render(request, 'aset_tetap/aset_tetap_detail.html', {
         'record': record,
@@ -168,6 +176,7 @@ def aset_tetap_detail(request: HttpRequest, pk: int) -> HttpResponse:
         'disposal_form': disposal_form,
         'disposals': disposals,
         'can_dispose': record.status == 'aktif' and record.quantity > 0,
+        'dokumen_list': dokumen_list,
     })
 
 
@@ -717,3 +726,132 @@ def aset_tetap_export_pdf(request: HttpRequest) -> HttpResponse:
         'total_buku': total_buku,
         'total_records': len(records),
     })
+
+
+# ── Maintenance views ────────────────────────────────────────────────────────
+
+@login_required
+def maintenance_list(request: HttpRequest) -> HttpResponse:
+    items = AssetMaintenance.objects.select_related('aset').all()
+    return render(request, 'aset_tetap/maintenance_list.html', {'items': items})
+
+
+@login_required
+def maintenance_create(request: HttpRequest) -> HttpResponse:
+    if request.method == 'POST':
+        form = AssetMaintenanceForm(request.POST)
+        if form.is_valid():
+            mtn = form.save()
+            try:
+                services.process_asset_maintenance(mtn)
+                messages.success(request, f'Maintenance {mtn.maintenance_number} tersimpan.')
+                return redirect('aset_tetap:maintenance_list')
+            except ValueError as e:
+                mtn.delete()
+                messages.error(request, str(e))
+    else:
+        form = AssetMaintenanceForm()
+    return render(request, 'aset_tetap/maintenance_form.html', {'form': form})
+
+
+@login_required
+def maintenance_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    mtn = get_object_or_404(AssetMaintenance, pk=pk)
+    services.reverse_asset_maintenance(mtn, request)
+    messages.success(request, 'Maintenance dibatalkan.')
+    return redirect('aset_tetap:maintenance_list')
+
+
+# ── Transfer views ───────────────────────────────────────────────────────────
+
+@login_required
+def transfer_list(request: HttpRequest) -> HttpResponse:
+    items = AssetTransfer.objects.select_related('aset').all()
+    return render(request, 'aset_tetap/transfer_list.html', {'items': items})
+
+
+@login_required
+def transfer_create(request: HttpRequest) -> HttpResponse:
+    if request.method == 'POST':
+        form = AssetTransferForm(request.POST)
+        if form.is_valid():
+            trf = form.save()
+            try:
+                services.process_asset_transfer(trf)
+                messages.success(request, f'Transfer {trf.transfer_number} tersimpan.')
+                return redirect('aset_tetap:transfer_list')
+            except ValueError as e:
+                trf.delete()
+                messages.error(request, str(e))
+    else:
+        form = AssetTransferForm()
+    return render(request, 'aset_tetap/transfer_form.html', {'form': form})
+
+
+@login_required
+def transfer_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    trf = get_object_or_404(AssetTransfer, pk=pk)
+    services.reverse_asset_transfer(trf, request)
+    messages.success(request, 'Transfer dibatalkan.')
+    return redirect('aset_tetap:transfer_list')
+
+
+# ── Revaluation views ────────────────────────────────────────────────────────
+
+@login_required
+def revaluation_list(request: HttpRequest) -> HttpResponse:
+    items = AssetRevaluation.objects.select_related('aset').all()
+    return render(request, 'aset_tetap/revaluation_list.html', {'items': items})
+
+
+@login_required
+def revaluation_create(request: HttpRequest) -> HttpResponse:
+    warning = ''
+    if request.method == 'POST':
+        form = AssetRevaluationForm(request.POST)
+        if form.is_valid():
+            rev = form.save()
+            try:
+                services.process_asset_revaluation(rev)
+                messages.success(request, f'Revaluasi {rev.revaluation_number} tersimpan.')
+                return redirect('aset_tetap:revaluation_list')
+            except ValueError as e:
+                rev.delete()
+                messages.error(request, str(e))
+    else:
+        form = AssetRevaluationForm()
+    return render(request, 'aset_tetap/revaluation_form.html', {'form': form, 'warning': warning})
+
+
+@login_required
+def revaluation_delete(request: HttpRequest, pk: int) -> HttpResponse:
+    rev = get_object_or_404(AssetRevaluation, pk=pk)
+    services.reverse_asset_revaluation(rev, request)
+    messages.success(request, 'Revaluasi dibatalkan.')
+    return redirect('aset_tetap:revaluation_list')
+
+
+# ── Reports ──────────────────────────────────────────────────────────────────
+
+@login_required
+def depreciation_schedule(request: HttpRequest, pk: int) -> HttpResponse:
+    aset = get_object_or_404(AsetTetapRecord, pk=pk)
+    periods = int(request.GET.get('periods', 12))
+    rows = reports.depreciation_schedule(aset, periods=periods)
+    return render(request, 'aset_tetap/depreciation_schedule.html', {'aset': aset, 'rows': rows})
+
+
+@login_required
+def laporan_penyusutan(request: HttpRequest) -> HttpResponse:
+    from apps.purchase.models import KategoriItem
+    from apps.entitas_bisnis.models import EntitasBisnisLv3
+
+    kategori_id = request.GET.get('kategori') or None
+    lokasi_id = request.GET.get('lokasi') or None
+    dept_id = request.GET.get('departemen') or None
+    rows = reports.laporan_penyusutan(
+        kategori=KategoriItem.objects.filter(pk=kategori_id).first() if kategori_id else None,
+        lokasi=LokasiAset.objects.filter(pk=lokasi_id).first() if lokasi_id else None,
+        departemen=EntitasBisnisLv3.objects.filter(pk=dept_id).first() if dept_id else None,
+    )
+    return render(request, 'aset_tetap/laporan_penyusutan.html', {'rows': rows})

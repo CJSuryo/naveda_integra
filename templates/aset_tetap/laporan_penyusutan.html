@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Laporan Penyusutan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Penyusutan</h1>
+    <p class="ni-page-header__subtitle">Ringkasan nilai aset per aset, dengan filter kategori/lokasi/departemen</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <form method="get" class="ni-form-row" style="margin-bottom:16px;">
+      <div class="ni-form-group">
+        <label class="ni-form-label">Kategori (ID)</label>
+        <input type="text" name="kategori" class="ni-input" value="{{ request.GET.kategori }}">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Lokasi (ID)</label>
+        <input type="text" name="lokasi" class="ni-input" value="{{ request.GET.lokasi }}">
+      </div>
+      <div class="ni-form-group">
+        <label class="ni-form-label">Departemen (ID)</label>
+        <input type="text" name="departemen" class="ni-input" value="{{ request.GET.departemen }}">
+      </div>
+      <div class="ni-form-group" style="align-self:flex-end;">
+        <button type="submit" class="ni-btn ni-btn--primary">Filter</button>
+      </div>
+    </form>
+
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor Aset</th><th>Nama</th><th>Kategori</th><th>Lokasi</th><th>Departemen</th>
+            <th class="ni-text-right">Perolehan</th><th class="ni-text-right">Akumulasi</th><th class="ni-text-right">Nilai Buku</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.aset_number }}</td>
+            <td>{{ row.nama }}</td>
+            <td>{{ row.kategori }}</td>
+            <td>{{ row.lokasi }}</td>
+            <td>{{ row.departemen }}</td>
+            <td class="ni-text-right">{{ row.perolehan|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.akumulasi|floatformat:0|intcomma }}</td>
+            <td class="ni-text-right">{{ row.nilai_buku|floatformat:0|intcomma }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" style="text-align:center;color:var(--ni-text-muted);">Tidak ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

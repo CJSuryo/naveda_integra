@@ -7,7 +7,9 @@ from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
 from apps.purchase.models import ItemMasterPurchase
 
-from .models import AsetTetapRecord, AssetDisposal
+from .models import (
+    AsetTetapRecord, AssetDisposal, AssetMaintenance, AssetTransfer, AssetRevaluation,
+)
 
 
 class AsetTetapRecordForm(forms.ModelForm):
@@ -97,3 +99,87 @@ class AssetDisposalForm(forms.ModelForm):
             self.add_error('akun_kas', 'Akun Kas/Piutang wajib untuk pelepasan jenis jual.')
 
         return cleaned
+
+
+class AssetMaintenanceForm(forms.ModelForm):
+    class Meta:
+        model = AssetMaintenance
+        fields = ['aset', 'tanggal', 'jenis', 'vendor', 'biaya',
+                  'akun_beban', 'akun_kas_utang', 'kondisi_setelah', 'keterangan']
+        widgets = {
+            'aset': forms.Select(attrs={'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'jenis': forms.Select(attrs={'class': 'ni-input'}),
+            'vendor': forms.TextInput(attrs={'class': 'ni-input'}),
+            'biaya': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'akun_beban': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_kas_utang': forms.Select(attrs={'class': 'ni-input'}),
+            'kondisi_setelah': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['aset'].queryset = AsetTetapRecord.objects.all().order_by('aset_number')
+        self.fields['akun_beban'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun_kas_utang'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['vendor'].required = False
+        self.fields['kondisi_setelah'].required = False
+        self.fields['keterangan'].required = False
+
+
+class AssetTransferForm(forms.ModelForm):
+    class Meta:
+        model = AssetTransfer
+        fields = ['aset', 'tanggal', 'jenis', 'lokasi_tujuan', 'dept_tujuan',
+                  'eb_tujuan', 'pic_baru', 'akun_antar_entitas', 'akun_akumulasi', 'keterangan']
+        widgets = {
+            'aset': forms.Select(attrs={'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'jenis': forms.Select(attrs={'class': 'ni-input'}),
+            'lokasi_tujuan': forms.Select(attrs={'class': 'ni-input'}),
+            'dept_tujuan': forms.Select(attrs={'class': 'ni-input'}),
+            'eb_tujuan': forms.Select(attrs={'class': 'ni-input'}),
+            'pic_baru': forms.TextInput(attrs={'class': 'ni-input'}),
+            'akun_antar_entitas': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_akumulasi': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['aset'].queryset = AsetTetapRecord.objects.all().order_by('aset_number')
+        self.fields['akun_antar_entitas'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun_akumulasi'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['lokasi_tujuan'].required = False
+        self.fields['dept_tujuan'].required = False
+        self.fields['eb_tujuan'].required = False
+        self.fields['pic_baru'].required = False
+        self.fields['akun_antar_entitas'].required = False
+        self.fields['akun_akumulasi'].required = False
+        self.fields['keterangan'].required = False
+
+
+class AssetRevaluationForm(forms.ModelForm):
+    class Meta:
+        model = AssetRevaluation
+        fields = ['aset', 'tanggal', 'nilai_wajar_baru', 'metode_revaluasi',
+                  'akun_akumulasi', 'akun_surplus_revaluasi', 'akun_rugi_revaluasi', 'keterangan']
+        widgets = {
+            'aset': forms.Select(attrs={'class': 'ni-input'}),
+            'tanggal': forms.DateInput(attrs={'class': 'ni-input', 'type': 'date'}),
+            'nilai_wajar_baru': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.0001'}),
+            'metode_revaluasi': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_akumulasi': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_surplus_revaluasi': forms.Select(attrs={'class': 'ni-input'}),
+            'akun_rugi_revaluasi': forms.Select(attrs={'class': 'ni-input'}),
+            'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['aset'].queryset = AsetTetapRecord.objects.all().order_by('aset_number')
+        self.fields['akun_akumulasi'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun_surplus_revaluasi'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['akun_rugi_revaluasi'].queryset = Akun.objects.all().order_by('kode_akun')
+        self.fields['keterangan'].required = False

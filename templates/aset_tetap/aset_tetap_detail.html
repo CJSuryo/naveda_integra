@@ -248,5 +248,33 @@
 </div>
 {% endif %}
 
+{% if dokumen_list %}
+<!-- Dokumen/Foto Aset -->
+<div class="ni-card ni-animate-fade-in" style="margin-top:16px;">
+  <div class="ni-card__body">
+    <h3 style="margin:0 0 16px;font-size:1rem;color:var(--ni-primary);">
+      <i data-lucide="paperclip" style="width:16px;height:16px;vertical-align:text-bottom;"></i>
+      Dokumen/Foto Aset
+    </h3>
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr><th>Tipe</th><th>File</th><th>Diunggah</th></tr>
+        </thead>
+        <tbody>
+          {% for b in dokumen_list %}
+          <tr>
+            <td>{{ b.tipe_dokumen }}</td>
+            <td>{{ b.filepath }}</td>
+            <td>{{ b.uploaded_at }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% include 'components/delete_modal.html' %}
 {% endblock %}

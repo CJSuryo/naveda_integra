@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Maintenance Aset{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Maintenance Aset</h1>
+    <p class="ni-page-header__subtitle">Daftar riwayat pemeliharaan aset tetap</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="{% url 'aset_tetap:maintenance_create' %}" class="ni-btn ni-btn--success">
+      <i data-lucide="plus" style="width:16px;height:16px"></i> Tambah Maintenance
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-card__body">
+    <div class="ni-table-wrapper">
+      <table class="ni-table">
+        <thead>
+          <tr>
+            <th>Nomor</th><th>Aset</th><th>Tanggal</th><th>Jenis</th><th>Vendor</th>
+            <th class="ni-text-right">Biaya</th><th>Jurnal</th><th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in items %}
+          <tr>
+            <td>{{ m.maintenance_number }}</td>
+            <td>{{ m.aset }}</td>
+            <td>{{ m.tanggal }}</td>
+            <td>{{ m.get_jenis_display }}</td>
+            <td>{{ m.vendor }}</td>
+            <td class="ni-text-right">{{ m.biaya|floatformat:0|intcomma }}</td>
+            <td>{% if m.jurnal_header %}<a href="{% url 'jurnal:header_detail' m.jurnal_header.pk %}" style="color:var(--ni-primary);">{{ m.jurnal_header.nomor_transaksi }}</a>{% else %}—{% endif %}</td>
+            <td>
+              <a href="{% url 'aset_tetap:maintenance_delete' m.pk %}" class="ni-btn ni-btn--outline-danger ni-btn--sm">
+                <i data-lucide="trash-2" style="width:12px;height:12px"></i> Batalkan
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" style="text-align:center;color:var(--ni-text-muted);">Belum ada data.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
