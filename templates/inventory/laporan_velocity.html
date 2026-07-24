@@ -1,0 +1,98 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Laporan Slow/Fast Moving{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Slow/Fast Moving</h1>
+    <p class="ni-page-header__subtitle">Kecepatan pergerakan stok dibandingkan dengan tag velocity manual</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?{{ request.GET.urlencode }}&export=csv" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
+    <a href="?{{ request.GET.urlencode }}&export=pdf" class="ni-btn ni-btn--secondary" target="_blank">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" id="velocityFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Gudang</label>
+        <select name="warehouse" class="ni-input">
+          <option value="">— Semua Gudang —</option>
+          {% for w in warehouses %}
+          <option value="{{ w.pk }}" {% if wh_filter == w.pk|stringformat:'s' %}selected{% endif %}>{{ w.kode }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Tag Velocity</label>
+        <select name="velocity" class="ni-input">
+          <option value="">— Semua Tag —</option>
+          {% for val, label in velocity_choices %}
+          <option value="{{ val }}" {% if velocity_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Dari Tanggal</label>
+        <input type="date" name="tanggal_dari" class="ni-input" value="{{ tanggal_dari }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Sampai Tanggal</label>
+        <input type="date" name="tanggal_sampai" class="ni-input" value="{{ tanggal_sampai }}">
+      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="velocityFilterForm" %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'inventory:laporan_velocity' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Nama</th>
+          <th>Kategori</th>
+          <th>Tag</th>
+          <th class="ni-text-right">Qty Keluar</th>
+          <th class="ni-text-right">Gerakan</th>
+          <th class="ni-text-right">Hari Idle</th>
+          <th class="ni-text-right">On-hand</th>
+          <th>Catatan</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td>{{ r.item_id }}</td>
+          <td>{{ r.nama }}</td>
+          <td>{{ r.kategori }}</td>
+          <td>{{ r.velocity_label }}</td>
+          <td class="ni-text-right">{{ r.qty_keluar|floatformat:'-2' }}</td>
+          <td class="ni-text-right">{{ r.jumlah_gerakan }}</td>
+          <td class="ni-text-right">{{ r.hari_sejak_keluar_terakhir|default:'—' }}</td>
+          <td class="ni-text-right">{{ r.on_hand|floatformat:'-2' }}</td>
+          <td>
+            {% if r.mismatch_flag %}
+            <span class="ni-badge ni-badge--warning">Tag ≠ realita</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="ni-text-center ni-text-muted">Tidak ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
