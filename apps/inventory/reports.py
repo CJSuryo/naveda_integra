@@ -17,6 +17,19 @@ def _kategori_nama(item) -> str:
     return item.kategori.nama if getattr(item, 'kategori', None) else '(Tanpa Kategori)'
 
 
+def _base_movements(eb_ids, *, warehouse_id=None):
+    """StockMovement terisolasi ke EB yang diizinkan, dengan filter warehouse opsional.
+
+    Logika filter EB + warehouse ini dipakai oleh valuation_report, hpp_report,
+    dan velocity_report; filter movement_type/tanggal/remaining_qty lain tetap
+    di masing-masing fungsi karena berbeda-beda per laporan.
+    """
+    qs = StockMovement.objects.filter(entitas_bisnis_id__in=eb_ids)
+    if warehouse_id:
+        qs = qs.filter(warehouse_id=warehouse_id)
+    return qs
+
+
 def valuation_report(eb_lv1_ids, *, warehouse_id=None, tipe_item=None, as_of=None):
     """Nilai persediaan on-hand dari layer inflow tersisa (remaining_qty > 0).
 
@@ -26,13 +39,10 @@ def valuation_report(eb_lv1_ids, *, warehouse_id=None, tipe_item=None, as_of=Non
     """
     eb_ids = list(eb_lv1_ids)
     layers = (
-        StockMovement.objects
-        .filter(remaining_qty__gt=0, entitas_bisnis_id__in=eb_ids,
-                item__tipe_item__in=INVENTORY_TIPE_ITEMS)
+        _base_movements(eb_ids, warehouse_id=warehouse_id)
+        .filter(remaining_qty__gt=0, item__tipe_item__in=INVENTORY_TIPE_ITEMS)
         .select_related('item', 'item__kategori', 'item__stock_uom', 'warehouse')
     )
-    if warehouse_id:
-        layers = layers.filter(warehouse_id=warehouse_id)
     if tipe_item:
         layers = layers.filter(item__tipe_item=tipe_item)
     if as_of:
@@ -85,13 +95,11 @@ def hpp_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *, warehouse_id=None):
     """
     eb_ids = list(eb_lv1_ids)
     out_qs = (
-        StockMovement.objects
-        .filter(movement_type='sale_out', entitas_bisnis_id__in=eb_ids,
+        _base_movements(eb_ids, warehouse_id=warehouse_id)
+        .filter(movement_type='sale_out',
                 tanggal__gte=tanggal_dari, tanggal__lte=tanggal_sampai)
         .select_related('item', 'item__kategori', 'item__stock_uom')
     )
-    if warehouse_id:
-        out_qs = out_qs.filter(warehouse_id=warehouse_id)
 
     agg = defaultdict(lambda: {'qty': Decimal('0'), 'hpp': Decimal('0')})
     meta = {}
@@ -110,13 +118,11 @@ def hpp_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *, warehouse_id=None):
 
     # retur pelanggan mengurangi HPP & qty (pembalik penjualan)
     ret_qs = (
-        StockMovement.objects
-        .filter(movement_type='return_customer', entitas_bisnis_id__in=eb_ids,
+        _base_movements(eb_ids, warehouse_id=warehouse_id)
+        .filter(movement_type='return_customer',
                 tanggal__gte=tanggal_dari, tanggal__lte=tanggal_sampai)
         .select_related('item')
     )
-    if warehouse_id:
-        ret_qs = ret_qs.filter(warehouse_id=warehouse_id)
     for mv in ret_qs:
         if mv.item_id in agg:
             agg[mv.item_id]['qty'] -= mv.qty  # inflow qty positif -> kurangi
@@ -160,10 +166,8 @@ def velocity_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *,
     from datetime import date as _date
     eb_ids = list(eb_lv1_ids)
 
-    base = StockMovement.objects.filter(
-        entitas_bisnis_id__in=eb_ids, item__tipe_item__in=INVENTORY_TIPE_ITEMS)
-    if warehouse_id:
-        base = base.filter(warehouse_id=warehouse_id)
+    base = _base_movements(eb_ids, warehouse_id=warehouse_id).filter(
+        item__tipe_item__in=INVENTORY_TIPE_ITEMS)
 
     # item-item yang punya gerakan apa pun dalam scope
     items = {}
