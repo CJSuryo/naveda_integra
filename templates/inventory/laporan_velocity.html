@@ -80,7 +80,7 @@
           <td>{{ r.velocity_label }}</td>
           <td class="ni-text-right">{{ r.qty_keluar|floatformat:'-2' }}</td>
           <td class="ni-text-right">{{ r.jumlah_gerakan }}</td>
-          <td class="ni-text-right">{{ r.hari_sejak_keluar_terakhir|default:'—' }}</td>
+          <td class="ni-text-right">{{ r.hari_sejak_keluar_terakhir|default_if_none:'—' }}</td>
           <td class="ni-text-right">{{ r.on_hand|floatformat:'-2' }}</td>
           <td>
             {% if r.mismatch_flag %}
