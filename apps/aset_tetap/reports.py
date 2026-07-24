@@ -1,4 +1,5 @@
 """Laporan aset tetap — depreciation schedule (proyeksi) & agregasi per dimensi."""
+from collections import defaultdict
 from copy import copy
 from decimal import Decimal
 
@@ -62,3 +63,70 @@ def laporan_penyusutan(entitas_bisnis=None, kategori=None, lokasi=None, departem
             'nilai_buku': a.nilai_buku,
         })
     return rows
+
+
+def asset_register(eb_lv1_ids, *, kategori_id=None, lokasi_id=None,
+                   departemen_id=None, pic=None, status=None, group_by='kategori'):
+    """Asset register terfilter dengan subtotal per dimensi grouping.
+
+    group_by: 'kategori' | 'lokasi' | 'departemen'. Nilai perolehan memakai
+    total_value (quantity*harga_perolehan). Kembalikan rows + subtotals + grand.
+    """
+    qs = (AsetTetapRecord.objects
+          .filter(entitas_bisnis_id__in=list(eb_lv1_ids))
+          .select_related('item', 'item__kategori', 'lokasi_aset', 'departemen'))
+    if kategori_id:
+        qs = qs.filter(item__kategori_id=kategori_id)
+    if lokasi_id:
+        qs = qs.filter(lokasi_aset_id=lokasi_id)
+    if departemen_id:
+        qs = qs.filter(departemen_id=departemen_id)
+    if pic:
+        qs = qs.filter(pic__icontains=pic)
+    if status:
+        qs = qs.filter(status=status)
+
+    def _group_key(a):
+        if group_by == 'lokasi':
+            return a.lokasi_aset.nama if a.lokasi_aset else '(Tanpa Lokasi)'
+        if group_by == 'departemen':
+            return a.departemen.nama if a.departemen else '(Tanpa Departemen)'
+        return a.item.kategori.nama if a.item and a.item.kategori else '(Tanpa Kategori)'
+
+    rows = []
+    subtotals = defaultdict(lambda: {
+        'harga_perolehan': Decimal('0'), 'akumulasi': Decimal('0'),
+        'nilai_buku': Decimal('0')})
+    grand = {'harga_perolehan': Decimal('0'), 'akumulasi': Decimal('0'),
+             'nilai_buku': Decimal('0')}
+    for a in qs:
+        perolehan = a.total_value or Decimal('0')
+        akum = a.akumulasi_penyusutan or Decimal('0')
+        nb = a.nilai_buku
+        gk = _group_key(a)
+        rows.append({
+            'aset': a,
+            'kode': a.aset_number,
+            'nama': a.item.nama if a.item else '',
+            'kategori': a.item.kategori.nama if a.item and a.item.kategori else '',
+            'lokasi': a.lokasi_aset.nama if a.lokasi_aset else '',
+            'departemen': a.departemen.nama if a.departemen else '',
+            'pic': a.pic or '',
+            'tanggal_perolehan': a.tanggal_perolehan,
+            'harga_perolehan': perolehan,
+            'akumulasi_penyusutan': akum,
+            'nilai_buku': nb,
+            'status': a.get_status_display(),
+            'kondisi': a.get_kondisi_display(),
+            'group_key': gk,
+        })
+        subtotals[gk]['harga_perolehan'] += perolehan
+        subtotals[gk]['akumulasi'] += akum
+        subtotals[gk]['nilai_buku'] += nb
+        grand['harga_perolehan'] += perolehan
+        grand['akumulasi'] += akum
+        grand['nilai_buku'] += nb
+
+    rows.sort(key=lambda r: (r['group_key'], r['kode']))
+    return {'rows': rows, 'subtotals': dict(subtotals), 'grand_total': grand,
+            'group_by': group_by}
