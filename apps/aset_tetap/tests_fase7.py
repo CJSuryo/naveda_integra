@@ -9,6 +9,7 @@ from apps.master_data.models import Akun
 from apps.aset_tetap.models import AsetTetapRecord, LokasiAset, AssetMaintenance, AssetTransfer, AssetRevaluation
 from apps.aset_tetap.services import calculate_depreciation
 from apps.jurnal.models import JurnalHeader
+from apps.master_data.models import Bukti
 
 
 def base_setup(self):
@@ -388,3 +389,16 @@ class RevaluationTests(TestCase):
         )
         with self.assertRaises(ValueError):
             process_asset_revaluation(rev)
+
+
+class AssetDocumentTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+
+    def test_list_bukti_for_aset(self):
+        from apps.aset_tetap.documents import list_bukti_aset, attach_bukti_aset
+        attach_bukti_aset(self.aset, tipe='foto_aset', filepath='/media/a.jpg', file_hash='h1')
+        attach_bukti_aset(self.aset, tipe='dokumen_aset', filepath='/media/b.pdf', file_hash='h2')
+        buktis = list_bukti_aset(self.aset)
+        self.assertEqual(buktis.count(), 2)
+        self.assertTrue(all(b.referensi_eksternal == self.aset.aset_number for b in buktis))
