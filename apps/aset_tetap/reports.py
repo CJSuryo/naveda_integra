@@ -2,6 +2,7 @@
 from copy import copy
 from decimal import Decimal
 
+from .models import AsetTetapRecord
 from .services import calculate_depreciation
 
 
@@ -39,7 +40,6 @@ def laporan_penyusutan(entitas_bisnis=None, kategori=None, lokasi=None, departem
     Mengembalikan list dict: aset_number, nama, kategori, lokasi, departemen,
     perolehan, akumulasi, nilai_buku.
     """
-    from .models import AsetTetapRecord
     qs = AsetTetapRecord.objects.select_related('item', 'item__kategori', 'lokasi_aset', 'departemen')
     if entitas_bisnis:
         qs = qs.filter(entitas_bisnis=entitas_bisnis)
