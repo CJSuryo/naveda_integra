@@ -46,7 +46,7 @@ __all__ = [
     'process_asset_maintenance',
     'reverse_asset_maintenance',
     'process_asset_transfer',
-    '_process_transfer_antar_eb',
+    '_process_transfer_antar_eb',  # internal helper, not public API — exported for test access only
     'reverse_asset_transfer',
     'default_metode_revaluasi',
     'revaluation_warning',
