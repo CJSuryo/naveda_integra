@@ -481,3 +481,169 @@ class Fase7ViewSmokeTests(TestCase):
     def test_laporan_penyusutan_renders(self):
         resp = self.client.get(reverse('aset_tetap:laporan_penyusutan'))
         self.assertEqual(resp.status_code, 200)
+
+
+class DeleteConfirmationTests(TestCase):
+    """Task 7 review fix: GET must show confirmation only; POST performs the reversal."""
+
+    def setUp(self):
+        base_setup(self)
+        self.client_user = User.objects.create_user(email='u2@u.com', password='p')
+        self.client.force_login(self.client_user)
+        self.akun_beban = Akun.objects.create(kode_akun='5.2.1', nama='Beban Pemeliharaan')
+        self.akun_kas = Akun.objects.create(kode_akun='1.1.1', nama='Kas')
+        self.lok1 = LokasiAset.objects.create(kode='L1', nama='Gudang 1')
+        self.lok2 = LokasiAset.objects.create(kode='L2', nama='Gudang 2')
+        self.akun_aset = Akun.objects.create(kode_akun='1.2.1', nama='Mesin')
+        self.akun_akum = Akun.objects.create(kode_akun='1.2.7.1', nama='Akum Penyusutan')
+        self.akun_surplus = Akun.objects.create(kode_akun='3.2.1', nama='Surplus Revaluasi')
+        self.akun_rugi = Akun.objects.create(kode_akun='5.9.9', nama='Rugi Revaluasi')
+        self.item.coa_account = self.akun_aset
+        self.item.save()
+
+    def test_maintenance_delete_get_does_not_reverse(self):
+        from apps.aset_tetap.services import process_asset_maintenance
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='servis', biaya=Decimal('500000'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+            kondisi_setelah='baik',
+        )
+        process_asset_maintenance(mtn)
+        journal_count_before = JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-MTN-').count()
+
+        resp = self.client.get(reverse('aset_tetap:maintenance_delete', args=[mtn.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(AssetMaintenance.objects.filter(pk=mtn.pk).exists())
+        self.assertEqual(
+            JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-MTN-').count(),
+            journal_count_before,
+        )
+
+    def test_maintenance_delete_post_reverses(self):
+        from apps.aset_tetap.services import process_asset_maintenance
+        mtn = AssetMaintenance.objects.create(
+            aset=self.aset, jenis='servis', biaya=Decimal('500000'),
+            akun_beban=self.akun_beban, akun_kas_utang=self.akun_kas,
+            kondisi_setelah='baik',
+        )
+        process_asset_maintenance(mtn)
+
+        resp = self.client.post(reverse('aset_tetap:maintenance_delete', args=[mtn.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(AssetMaintenance.objects.filter(pk=mtn.pk).exists())
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-MTN-').count(), 0)
+
+    def test_transfer_delete_get_does_not_reverse(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='intra_eb',
+            lokasi_tujuan=self.lok2, pic_baru='Andi',
+        )
+        process_asset_transfer(trf)
+
+        resp = self.client.get(reverse('aset_tetap:transfer_delete', args=[trf.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(AssetTransfer.objects.filter(pk=trf.pk).exists())
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.lokasi_aset, self.lok2)
+
+    def test_transfer_delete_post_reverses(self):
+        from apps.aset_tetap.services import process_asset_transfer
+        self.aset.lokasi_aset = self.lok1
+        self.aset.save()
+        trf = AssetTransfer.objects.create(
+            aset=self.aset, jenis='intra_eb',
+            lokasi_tujuan=self.lok2, pic_baru='Andi',
+        )
+        process_asset_transfer(trf)
+
+        resp = self.client.post(reverse('aset_tetap:transfer_delete', args=[trf.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(AssetTransfer.objects.filter(pk=trf.pk).exists())
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.lokasi_aset, self.lok1)
+
+    def test_revaluation_delete_get_does_not_reverse(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('120000000'),
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        process_asset_revaluation(rev)
+        journal_count_before = JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-REV-').count()
+
+        resp = self.client.get(reverse('aset_tetap:revaluation_delete', args=[rev.pk]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(AssetRevaluation.objects.filter(pk=rev.pk).exists())
+        self.assertEqual(
+            JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-REV-').count(),
+            journal_count_before,
+        )
+
+    def test_revaluation_delete_post_reverses(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('120000000'),
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        process_asset_revaluation(rev)
+
+        resp = self.client.post(reverse('aset_tetap:revaluation_delete', args=[rev.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(AssetRevaluation.objects.filter(pk=rev.pk).exists())
+        self.assertEqual(JurnalHeader.objects.filter(nomor_transaksi__startswith='TRX-REV-').count(), 0)
+
+
+class RevaluationEmkmWarningViewTests(TestCase):
+    """Task 7 review fix: SAK EMKM cost-model warning must surface to the user."""
+
+    def setUp(self):
+        base_setup(self)
+        self.client_user = User.objects.create_user(email='u3@u.com', password='p')
+        self.client.force_login(self.client_user)
+        self.akun_aset = Akun.objects.create(kode_akun='1.2.1', nama='Mesin')
+        self.akun_akum = Akun.objects.create(kode_akun='1.2.7.1', nama='Akum Penyusutan')
+        self.akun_surplus = Akun.objects.create(kode_akun='3.2.1', nama='Surplus Revaluasi')
+        self.akun_rugi = Akun.objects.create(kode_akun='5.9.9', nama='Rugi Revaluasi')
+        self.item.coa_account = self.akun_aset
+        self.item.save()
+
+    def test_emkm_entity_revaluation_shows_warning_message(self):
+        self.eb.standar_akuntansi = 'sak_emkm'
+        self.eb.save()
+        data = {
+            'aset': self.aset.pk,
+            'tanggal': '2026-07-24',
+            'nilai_wajar_baru': '120000000',
+            'metode_revaluasi': 'eliminasi',
+            'akun_akumulasi': self.akun_akum.pk,
+            'akun_surplus_revaluasi': self.akun_surplus.pk,
+            'akun_rugi_revaluasi': self.akun_rugi.pk,
+            'keterangan': '',
+        }
+        resp = self.client.post(reverse('aset_tetap:revaluation_create'), data, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        messages_list = list(resp.context['messages'])
+        warning_texts = [m.message for m in messages_list if 'warning' in m.tags]
+        self.assertTrue(any('EMKM' in t for t in warning_texts))
+
+    def test_non_emkm_entity_revaluation_has_no_warning(self):
+        data = {
+            'aset': self.aset.pk,
+            'tanggal': '2026-07-24',
+            'nilai_wajar_baru': '120000000',
+            'metode_revaluasi': 'eliminasi',
+            'akun_akumulasi': self.akun_akum.pk,
+            'akun_surplus_revaluasi': self.akun_surplus.pk,
+            'akun_rugi_revaluasi': self.akun_rugi.pk,
+            'keterangan': '',
+        }
+        resp = self.client.post(reverse('aset_tetap:revaluation_create'), data, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        messages_list = list(resp.context['messages'])
+        warning_texts = [m.message for m in messages_list if 'warning' in m.tags]
+        self.assertEqual(warning_texts, [])

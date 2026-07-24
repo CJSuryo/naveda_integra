@@ -757,9 +757,12 @@ def maintenance_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def maintenance_delete(request: HttpRequest, pk: int) -> HttpResponse:
     mtn = get_object_or_404(AssetMaintenance, pk=pk)
-    services.reverse_asset_maintenance(mtn, request)
-    messages.success(request, 'Maintenance dibatalkan.')
-    return redirect('aset_tetap:maintenance_list')
+    if request.method == 'POST':
+        maintenance_number = mtn.maintenance_number
+        services.reverse_asset_maintenance(mtn, request)
+        messages.success(request, f'Maintenance {maintenance_number} dibatalkan.')
+        return redirect('aset_tetap:maintenance_list')
+    return render(request, 'aset_tetap/maintenance_delete_confirm.html', {'mtn': mtn})
 
 
 # ── Transfer views ───────────────────────────────────────────────────────────
@@ -791,9 +794,12 @@ def transfer_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def transfer_delete(request: HttpRequest, pk: int) -> HttpResponse:
     trf = get_object_or_404(AssetTransfer, pk=pk)
-    services.reverse_asset_transfer(trf, request)
-    messages.success(request, 'Transfer dibatalkan.')
-    return redirect('aset_tetap:transfer_list')
+    if request.method == 'POST':
+        transfer_number = trf.transfer_number
+        services.reverse_asset_transfer(trf, request)
+        messages.success(request, f'Transfer {transfer_number} dibatalkan.')
+        return redirect('aset_tetap:transfer_list')
+    return render(request, 'aset_tetap/transfer_delete_confirm.html', {'trf': trf})
 
 
 # ── Revaluation views ────────────────────────────────────────────────────────
@@ -814,6 +820,9 @@ def revaluation_create(request: HttpRequest) -> HttpResponse:
             try:
                 services.process_asset_revaluation(rev)
                 messages.success(request, f'Revaluasi {rev.revaluation_number} tersimpan.')
+                emkm_warning = services.revaluation_warning(rev.aset.entitas_bisnis)
+                if emkm_warning:
+                    messages.warning(request, emkm_warning)
                 return redirect('aset_tetap:revaluation_list')
             except ValueError as e:
                 rev.delete()
@@ -826,9 +835,12 @@ def revaluation_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def revaluation_delete(request: HttpRequest, pk: int) -> HttpResponse:
     rev = get_object_or_404(AssetRevaluation, pk=pk)
-    services.reverse_asset_revaluation(rev, request)
-    messages.success(request, 'Revaluasi dibatalkan.')
-    return redirect('aset_tetap:revaluation_list')
+    if request.method == 'POST':
+        revaluation_number = rev.revaluation_number
+        services.reverse_asset_revaluation(rev, request)
+        messages.success(request, f'Revaluasi {revaluation_number} dibatalkan.')
+        return redirect('aset_tetap:revaluation_list')
+    return render(request, 'aset_tetap/revaluation_delete_confirm.html', {'rev': rev})
 
 
 # ── Reports ──────────────────────────────────────────────────────────────────
@@ -843,7 +855,6 @@ def depreciation_schedule(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def laporan_penyusutan(request: HttpRequest) -> HttpResponse:
-    from apps.purchase.models import KategoriItem
     from apps.entitas_bisnis.models import EntitasBisnisLv3
 
     kategori_id = request.GET.get('kategori') or None

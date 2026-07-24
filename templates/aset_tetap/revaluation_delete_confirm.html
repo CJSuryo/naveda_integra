@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Batalkan Revaluasi {{ rev.revaluation_number }}{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Batalkan Revaluasi Aset</h1>
+    <p class="ni-page-header__subtitle">{{ rev.aset.aset_number }}</p>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="max-width:560px;">
+  <div class="ni-card__body" style="text-align:center;padding:40px 32px;">
+    <div style="width:48px;height:48px;border-radius:50%;background:#fef2f2;color:var(--ni-danger);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <i data-lucide="trash-2" style="width:24px;height:24px"></i>
+    </div>
+    <p style="font-size:1rem;color:var(--ni-text);margin-bottom:8px;">
+      Batalkan revaluasi <strong>{{ rev.revaluation_number }}</strong>
+      ({{ rev.get_metode_revaluasi_display }}, nilai wajar {{ rev.nilai_wajar_baru|floatformat:0|intcomma }})
+      untuk aset <strong>{{ rev.aset.aset_number }}</strong>?
+    </p>
+    <p style="font-size:0.875rem;color:var(--ni-text-muted);margin-bottom:20px;">
+      Jurnal
+      {% if rev.jurnal_header %}<strong>{{ rev.jurnal_header.nomor_transaksi }}</strong>{% else %}terkait{% endif %}
+      akan dihapus dan harga perolehan &amp; akumulasi penyusutan aset dikembalikan ke nilai sebelum revaluasi.
+    </p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="ni-btn-row" style="justify-content:center;">
+        <button type="submit" class="ni-btn ni-btn--danger">Ya, Batalkan Revaluasi</button>
+        <a href="{% url 'aset_tetap:revaluation_list' %}" class="ni-btn ni-btn--secondary">Batal</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
