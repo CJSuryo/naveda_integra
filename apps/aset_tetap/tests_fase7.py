@@ -353,3 +353,38 @@ class RevaluationTests(TestCase):
         self.assertEqual(self.aset.nilai_buku, Decimal('100000000'))
         self.assertEqual(sum(x.debit for x in header.details.all()),
                          sum(x.kredit for x in header.details.all()))
+
+    def test_proporsional_penurunan(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        # nb lama 80jt, nilai wajar 40jt -> rasio 0.5; HP 100->50jt, akum 20->10jt, selisih -40jt
+        rev = AssetRevaluation.objects.create(
+            aset=self.aset, nilai_wajar_baru=Decimal('40000000'),
+            metode_revaluasi='proporsional',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        header = process_asset_revaluation(rev)
+        self.aset.refresh_from_db()
+        self.assertEqual(self.aset.total_value, Decimal('50000000'))
+        self.assertEqual(self.aset.akumulasi_penyusutan, Decimal('10000000'))
+        self.assertEqual(self.aset.nilai_buku, Decimal('40000000'))
+        self.assertEqual(sum(x.debit for x in header.details.all()),
+                         sum(x.kredit for x in header.details.all()))
+        self.assertEqual(header.details.get(akun=self.akun_rugi).debit, Decimal('40000000'))
+
+    def test_no_change_raises_error(self):
+        from apps.aset_tetap.services import process_asset_revaluation
+        # Fresh asset, never depreciated: nilai_buku == harga_perolehan.
+        aset_baru = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb,
+            quantity=1, harga_perolehan=Decimal('100000000'),
+            akumulasi_penyusutan=Decimal('0'),
+        )
+        rev = AssetRevaluation.objects.create(
+            aset=aset_baru, nilai_wajar_baru=aset_baru.nilai_buku,
+            metode_revaluasi='eliminasi',
+            akun_akumulasi=self.akun_akum, akun_surplus_revaluasi=self.akun_surplus,
+            akun_rugi_revaluasi=self.akun_rugi,
+        )
+        with self.assertRaises(ValueError):
+            process_asset_revaluation(rev)

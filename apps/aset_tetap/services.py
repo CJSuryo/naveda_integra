@@ -584,18 +584,21 @@ def process_asset_revaluation(rev: 'AssetRevaluation') -> JurnalHeader:
         d_aset = (perolehan_baru - hp_lama).quantize(quantize)
         d_akum = (akumulasi_baru - akum_lama).quantize(quantize)
         # net efek ke ekuitas = selisih
-        if d_aset >= 0:
+        if d_aset > 0:
             lines.append((akun_aset, d_aset, Decimal('0')))
-        else:
+        elif d_aset < 0:
             lines.append((akun_aset, Decimal('0'), -d_aset))
-        if d_akum >= 0:
+        if d_akum > 0:
             lines.append((rev.akun_akumulasi, Decimal('0'), d_akum))
-        else:
+        elif d_akum < 0:
             lines.append((rev.akun_akumulasi, -d_akum, Decimal('0')))
         if selisih > 0:
             lines.append((rev.akun_surplus_revaluasi, Decimal('0'), selisih))
         elif selisih < 0:
             lines.append((rev.akun_rugi_revaluasi, -selisih, Decimal('0')))
+
+    if not lines:
+        raise ValueError('Tidak ada perubahan nilai; revaluasi tidak diperlukan.')
 
     total_debit = sum((d for _, d, _ in lines), Decimal('0'))
     total_kredit = sum((k for _, _, k in lines), Decimal('0'))
