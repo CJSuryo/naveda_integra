@@ -9,6 +9,7 @@ from naveda_integra.ratelimit_utils import rate_from
 from django.db import models
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from apps.entitas_bisnis.models import EntitasBisnis
 from apps.master_data.models import Akun
@@ -866,3 +867,101 @@ def laporan_penyusutan(request: HttpRequest) -> HttpResponse:
         departemen=EntitasBisnisLv3.objects.filter(pk=dept_id).first() if dept_id else None,
     )
     return render(request, 'aset_tetap/laporan_penyusutan.html', {'rows': rows})
+
+
+def _register_eb_ids(request):
+    """Resolve EB filter selections to lv1 ids the user may access.
+
+    Bila tak ada filter, pakai seluruh lv1 yang terjangkau user (None dari
+    accessible_eb_lv1_ids berarti tak terbatas / superuser).
+    """
+    from apps.purchase.views import accessible_eb_lv1_ids
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        return _resolve_eb_lv1_ids(eb_filter_list, request.user), eb_filter_list
+    allowed = accessible_eb_lv1_ids(request.user)
+    if allowed is not None:
+        return allowed, eb_filter_list
+    from apps.entitas_bisnis.models import EntitasBisnis
+    ids = set(EntitasBisnis.objects.filter(status_aktif=True).values_list('pk', flat=True))
+    return ids, eb_filter_list
+
+
+@login_required
+def laporan_register(request):
+    from . import reports
+    from apps.aset_tetap.models import LokasiAset
+    from apps.entitas_bisnis.models import EntitasBisnisLv3
+
+    eb_ids, eb_filter_list = _register_eb_ids(request)
+
+    kategori_id = request.GET.get('kategori') or None
+    lokasi_id = request.GET.get('lokasi') or None
+    departemen_id = request.GET.get('departemen') or None
+    pic = request.GET.get('pic') or None
+    status = request.GET.get('status') or None
+    group_by = request.GET.get('group_by') or 'kategori'
+
+    data = reports.asset_register(
+        eb_ids, kategori_id=kategori_id, lokasi_id=lokasi_id,
+        departemen_id=departemen_id, pic=pic, status=status, group_by=group_by)
+
+    if request.GET.get('export') == 'csv':
+        return _export_register_xlsx(data)
+    if request.GET.get('export') == 'pdf':
+        return render(request, 'inventory/_laporan_print.html', {
+            'title': 'Asset Register', 'generated_at': timezone.now(),
+            'columns': ['Kode', 'Nama', 'Kategori', 'Lokasi', 'Departemen', 'PIC',
+                        'Perolehan', 'Akumulasi', 'Nilai Buku', 'Status'],
+            'rows': [[r['kode'], r['nama'], r['kategori'], r['lokasi'], r['departemen'],
+                      r['pic'], r['harga_perolehan'], r['akumulasi_penyusutan'],
+                      r['nilai_buku'], r['status']] for r in data['rows']],
+            'total_label': 'Total Nilai Buku', 'total_value': data['grand_total']['nilai_buku'],
+        })
+
+    return render(request, 'aset_tetap/laporan_register.html', {
+        'title': 'Asset Register', 'data': data,
+        'kategori_list': KategoriItem.objects.order_by('nama'),
+        'lokasi_list': LokasiAset.objects.order_by('nama'),
+        'departemen_list': EntitasBisnisLv3.objects.order_by('nama'),
+        'status_choices': [('aktif', 'Aktif'), ('dilepas', 'Dilepas')],
+        'group_choices': [('kategori', 'Kategori'), ('lokasi', 'Lokasi'), ('departemen', 'Departemen')],
+        'eb_tree': _get_eb_tree(request.user), 'eb_filter_list': eb_filter_list,
+        'kategori_filter': kategori_id or '', 'lokasi_filter': lokasi_id or '',
+        'departemen_filter': departemen_id or '', 'pic_filter': pic or '',
+        'status_filter': status or '', 'group_by': group_by,
+    })
+
+
+def _export_register_xlsx(data):
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Asset Register'
+    headers = ['Kode', 'Nama', 'Kategori', 'Lokasi', 'Departemen', 'PIC',
+               'Tgl Perolehan', 'Perolehan', 'Akumulasi', 'Nilai Buku', 'Status', 'Kondisi']
+    numeric = {8, 9, 10}
+    hf = Font(bold=True)
+    fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = hf
+        c.fill = fill
+    for rnum, r in enumerate(data['rows'], 2):
+        vals = [r['kode'], r['nama'], r['kategori'], r['lokasi'], r['departemen'], r['pic'],
+                str(r['tanggal_perolehan']), float(r['harga_perolehan']),
+                float(r['akumulasi_penyusutan']), float(r['nilai_buku']), r['status'], r['kondisi']]
+        for col, val in enumerate(vals, 1):
+            c = ws.cell(row=rnum, column=col, value=val)
+            if col in numeric:
+                c.alignment = Alignment(horizontal='right')
+                c.number_format = '#,##0.00'
+    for i in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 18
+    resp = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = 'attachment; filename="asset_register.xlsx"'
+    wb.save(resp)
+    return resp

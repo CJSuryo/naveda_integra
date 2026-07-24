@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% load humanize %}
+{% block title %}Asset Register{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Asset Register</h1>
+    <p class="ni-page-header__subtitle">Daftar lengkap aset tetap dengan filter dimensi dan subtotal per grup</p>
+  </div>
+  <div class="ni-page-header__actions">
+    <a href="?{{ request.GET.urlencode }}&export=csv" class="ni-btn ni-btn--secondary">
+      <i data-lucide="download" style="width:16px;height:16px"></i> Export XLSX
+    </a>
+    <a href="?{{ request.GET.urlencode }}&export=pdf" class="ni-btn ni-btn--secondary" target="_blank">
+      <i data-lucide="file-text" style="width:16px;height:16px"></i> Export PDF
+    </a>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in" style="margin-bottom:16px;">
+  <div class="ni-card__body" style="padding:16px;">
+    <form method="get" id="registerFilterForm" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Kategori</label>
+        <select name="kategori" class="ni-input">
+          <option value="">— Semua Kategori —</option>
+          {% for k in kategori_list %}
+          <option value="{{ k.pk }}" {% if kategori_filter == k.pk|stringformat:'s' %}selected{% endif %}>{{ k.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Lokasi</label>
+        <select name="lokasi" class="ni-input">
+          <option value="">— Semua Lokasi —</option>
+          {% for l in lokasi_list %}
+          <option value="{{ l.pk }}" {% if lokasi_filter == l.pk|stringformat:'s' %}selected{% endif %}>{{ l.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:160px;">
+        <label class="ni-form-label">Departemen</label>
+        <select name="departemen" class="ni-input">
+          <option value="">— Semua Departemen —</option>
+          {% for d in departemen_list %}
+          <option value="{{ d.pk }}" {% if departemen_filter == d.pk|stringformat:'s' %}selected{% endif %}>{{ d.nama }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">PIC</label>
+        <input type="text" name="pic" class="ni-input" value="{{ pic_filter }}">
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Status</label>
+        <select name="status" class="ni-input">
+          <option value="">— Semua Status —</option>
+          {% for val, label in status_choices %}
+          <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="ni-form-group" style="margin:0;flex:1;min-width:140px;">
+        <label class="ni-form-label">Group By</label>
+        <select name="group_by" class="ni-input">
+          {% for val, label in group_choices %}
+          <option value="{{ val }}" {% if group_by == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% include 'components/eb_filter_modal.html' with filter_form_id="registerFilterForm" %}
+      <button type="submit" class="ni-btn ni-btn--primary ni-btn--sm">
+        <i data-lucide="search" style="width:14px;height:14px"></i> Filter
+      </button>
+      <a href="{% url 'aset_tetap:laporan_register' %}" class="ni-btn ni-btn--secondary ni-btn--sm">Reset</a>
+    </form>
+  </div>
+</div>
+
+<div class="ni-card ni-animate-fade-in">
+  <div class="ni-table-wrapper">
+    <table class="ni-table">
+      <thead>
+        <tr>
+          <th>Kode</th>
+          <th>Nama</th>
+          <th>Kategori</th>
+          <th>Lokasi</th>
+          <th>Departemen</th>
+          <th>PIC</th>
+          <th>Tgl Perolehan</th>
+          <th class="ni-text-right">Perolehan</th>
+          <th class="ni-text-right">Akumulasi</th>
+          <th class="ni-text-right">Nilai Buku</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in data.rows %}
+        <tr>
+          <td>{{ r.kode }}</td>
+          <td>{{ r.nama }}</td>
+          <td>{{ r.kategori }}</td>
+          <td>{{ r.lokasi }}</td>
+          <td>{{ r.departemen }}</td>
+          <td>{{ r.pic }}</td>
+          <td>{{ r.tanggal_perolehan|date:"d M Y" }}</td>
+          <td class="ni-text-right">{{ r.harga_perolehan|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ r.akumulasi_penyusutan|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right">{{ r.nilai_buku|floatformat:0|intcomma }}</td>
+          <td>{{ r.status }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="11" style="text-align:center;color:var(--ni-text-muted);">Tidak ada data.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if data.rows %}
+      <tfoot>
+        <tr>
+          <td colspan="7" style="font-weight:600;">Grand Total</td>
+          <td class="ni-text-right" style="font-weight:600;">{{ data.grand_total.harga_perolehan|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="font-weight:600;">{{ data.grand_total.akumulasi|floatformat:0|intcomma }}</td>
+          <td class="ni-text-right" style="font-weight:600;">{{ data.grand_total.nilai_buku|floatformat:0|intcomma }}</td>
+          <td></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endblock %}
