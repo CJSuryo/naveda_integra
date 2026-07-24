@@ -46,6 +46,9 @@
         {% endif %}
       </dd>
       <dt>Lokasi</dt><dd>{{ record.lokasi_legacy|default:'-' }}</dd>
+      <dt>Lokasi Aset</dt><dd>{{ record.lokasi_aset|default:'-' }}</dd>
+      <dt>Departemen</dt><dd>{{ record.departemen.nama|default:'-' }}</dd>
+      <dt>PIC</dt><dd>{{ record.pic|default:'-' }}</dd>
       <dt>Kondisi</dt>
       <dd>
         {% if record.kondisi == 'baik' %}

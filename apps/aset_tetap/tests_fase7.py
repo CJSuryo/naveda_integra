@@ -647,3 +647,19 @@ class RevaluationEmkmWarningViewTests(TestCase):
         messages_list = list(resp.context['messages'])
         warning_texts = [m.message for m in messages_list if 'warning' in m.tags]
         self.assertEqual(warning_texts, [])
+
+
+class LokasiAsetAdminAndFormTests(TestCase):
+    """Holistic review fix: LokasiAset must have an admin UI, and lokasi_aset/departemen/pic
+    must be editable directly on AsetTetapRecordForm."""
+
+    def test_lokasi_aset_registered_in_admin(self):
+        from django.contrib import admin as django_admin
+        self.assertIn(LokasiAset, django_admin.site._registry)
+
+    def test_aset_tetap_record_form_exposes_lokasi_departemen_pic(self):
+        from apps.aset_tetap.forms import AsetTetapRecordForm
+        form = AsetTetapRecordForm()
+        for field_name in ('lokasi_aset', 'departemen', 'pic'):
+            self.assertIn(field_name, form.fields)
+            self.assertFalse(form.fields[field_name].required)

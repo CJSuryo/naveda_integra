@@ -19,7 +19,8 @@ class AsetTetapRecordForm(forms.ModelForm):
             'item', 'entitas_bisnis', 'quantity', 'harga_perolehan',
             'tanggal_perolehan', 'masa_manfaat', 'metode_penyusutan',
             'akumulasi_penyusutan', 'nilai_residu', 'estimasi_jam_kerja',
-            'estimasi_unit_produksi', 'lokasi_legacy', 'kondisi', 'keterangan',
+            'estimasi_unit_produksi', 'lokasi_legacy', 'lokasi_aset', 'departemen',
+            'pic', 'kondisi', 'keterangan',
         )
         widgets = {
             'item': forms.Select(attrs={'class': 'ni-input'}),
@@ -34,6 +35,9 @@ class AsetTetapRecordForm(forms.ModelForm):
             'estimasi_jam_kerja': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
             'estimasi_unit_produksi': forms.NumberInput(attrs={'class': 'ni-input', 'step': '0.01'}),
             'lokasi_legacy': forms.TextInput(attrs={'class': 'ni-input'}),
+            'lokasi_aset': forms.Select(attrs={'class': 'ni-input'}),
+            'departemen': forms.Select(attrs={'class': 'ni-input'}),
+            'pic': forms.TextInput(attrs={'class': 'ni-input'}),
             'kondisi': forms.Select(attrs={'class': 'ni-input'}),
             'keterangan': forms.Textarea(attrs={'class': 'ni-input', 'rows': 3}),
         }
@@ -52,6 +56,9 @@ class AsetTetapRecordForm(forms.ModelForm):
         self.fields['estimasi_jam_kerja'].required = False
         self.fields['estimasi_unit_produksi'].required = False
         self.fields['lokasi_legacy'].required = False
+        self.fields['lokasi_aset'].required = False
+        self.fields['departemen'].required = False
+        self.fields['pic'].required = False
         self.fields['keterangan'].required = False
 
 

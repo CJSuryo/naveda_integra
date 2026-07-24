@@ -71,6 +71,23 @@
           {{ form.lokasi_legacy }}
           {% if form.lokasi_legacy.errors %}<div class="ni-form-error">{{ form.lokasi_legacy.errors }}</div>{% endif %}
         </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.lokasi_aset.label }}</label>
+          {{ form.lokasi_aset }}
+          {% if form.lokasi_aset.errors %}<div class="ni-form-error">{{ form.lokasi_aset.errors }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="ni-form-row">
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.departemen.label }}</label>
+          {{ form.departemen }}
+          {% if form.departemen.errors %}<div class="ni-form-error">{{ form.departemen.errors }}</div>{% endif %}
+        </div>
+        <div class="ni-form-group">
+          <label class="ni-form-label">{{ form.pic.label }}</label>
+          {{ form.pic }}
+          {% if form.pic.errors %}<div class="ni-form-error">{{ form.pic.errors }}</div>{% endif %}
+        </div>
       </div>
       <hr style="margin:16px 0;border:none;border-top:1px solid var(--ni-border);">
       <p style="font-size:0.8125rem;color:var(--ni-text-muted);margin:0 0 12px;">Override Parameter (opsional — kosongkan untuk pakai nilai item master)</p>
