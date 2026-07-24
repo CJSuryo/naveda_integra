@@ -106,3 +106,42 @@ class VelocityReportTests(TestCase):
         self.assertEqual(row['qty_keluar'], Decimal('6'))
         self.assertEqual(row['jumlah_gerakan'], 1)
         self.assertEqual(row['on_hand'], Decimal('4'))
+
+    def test_dead_tag_with_movement_flags_mismatch(self):
+        item = ItemMasterPurchase.objects.create(
+            nama='Gula', tipe_item='RM', velocity_category='dead')
+        ledger.record_inflow(item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        ledger.consume_stock(item, self.eb, None, None, Decimal('3'),
+                             date(2026, 1, 15), 'sale_out', warehouse=self.wh)
+        rows = reports.velocity_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        row = next(r for r in rows if r['item'].pk == item.pk)
+        self.assertEqual(row['qty_keluar'], Decimal('3'))
+        self.assertTrue(row['mismatch_flag'])
+
+    def test_velocity_filter_narrows_results(self):
+        fast_item = ItemMasterPurchase.objects.create(
+            nama='Kopi Cepat', tipe_item='RM', velocity_category='fast')
+        slow_item = ItemMasterPurchase.objects.create(
+            nama='Kopi Lambat', tipe_item='RM', velocity_category='slow')
+        ledger.record_inflow(fast_item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        ledger.record_inflow(slow_item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+
+        rows = reports.velocity_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31),
+                                        velocity_filter='fast')
+        item_ids = {r['item'].pk for r in rows}
+        self.assertIn(fast_item.pk, item_ids)
+        self.assertNotIn(slow_item.pk, item_ids)
+
+    def test_velocity_isolates_eb(self):
+        eb_b = EntitasBisnis.objects.create(nama='PT B', tipe_entitas=self.tipe)
+        item = ItemMasterPurchase.objects.create(
+            nama='Beras', tipe_item='RM', velocity_category='fast')
+        ledger.record_inflow(item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+
+        rows = reports.velocity_report({eb_b.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        item_ids = {r['item'].pk for r in rows}
+        self.assertNotIn(item.pk, item_ids)

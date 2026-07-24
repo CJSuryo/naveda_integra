@@ -3,12 +3,14 @@
 Semua fungsi murni (tanpa request). Kuantitas & nilai dalam base uom (Decimal).
 """
 from collections import defaultdict
+from datetime import date
 from decimal import Decimal
 
 from django.db.models import Sum
 
 from .ledger import OUTFLOW_MOVEMENT_TYPES
 from .models import StockConsumption, StockMovement
+from apps.purchase.models import ItemMasterPurchase
 
 INVENTORY_TIPE_ITEMS = ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB')
 
@@ -20,9 +22,11 @@ def _kategori_nama(item) -> str:
 def _base_movements(eb_ids, *, warehouse_id=None):
     """StockMovement terisolasi ke EB yang diizinkan, dengan filter warehouse opsional.
 
-    Logika filter EB + warehouse ini dipakai oleh valuation_report, hpp_report,
-    dan velocity_report; filter movement_type/tanggal/remaining_qty lain tetap
-    di masing-masing fungsi karena berbeda-beda per laporan.
+    Kontrak: fungsi ini HANYA menerapkan filter isolasi EB
+    (entitas_bisnis_id__in) dan warehouse (opsional). Filter lain — mis.
+    movement_type, rentang tanggal, tipe_item, remaining_qty, as_of — bukan
+    tanggung jawab fungsi ini dan harus diterapkan oleh caller di atas queryset
+    yang dikembalikan.
     """
     qs = StockMovement.objects.filter(entitas_bisnis_id__in=eb_ids)
     if warehouse_id:
@@ -163,16 +167,19 @@ def velocity_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *,
     True bila tag 'fast'/'medium' tapi tak ada gerakan keluar pada rentang, atau
     tag 'dead' tapi ADA gerakan.
     """
-    from datetime import date as _date
     eb_ids = list(eb_lv1_ids)
 
     base = _base_movements(eb_ids, warehouse_id=warehouse_id).filter(
         item__tipe_item__in=INVENTORY_TIPE_ITEMS)
 
-    # item-item yang punya gerakan apa pun dalam scope
-    items = {}
-    for mv in base.select_related('item', 'item__kategori', 'item__stock_uom'):
-        items[mv.item_id] = mv.item
+    # item-item yang punya gerakan apa pun dalam scope — dedup di DB, lalu
+    # hydrate hanya satu baris per item (bukan satu baris per gerakan).
+    item_ids = base.values_list('item_id', flat=True).distinct()
+    items = {
+        item.pk: item
+        for item in ItemMasterPurchase.objects.filter(pk__in=item_ids)
+            .select_related('kategori', 'stock_uom')
+    }
 
     outflow = base.filter(
         movement_type__in=OUTFLOW_MOVEMENT_TYPES,
@@ -192,7 +199,7 @@ def velocity_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *,
             s=Sum('remaining_qty')):
         onhand[r['item_id']] = r['s'] or Decimal('0')
 
-    today = _date.today()
+    today = date.today()
     rows = []
     for item_id, item in items.items():
         vc = item.velocity_category or ''
