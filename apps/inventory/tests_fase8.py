@@ -42,3 +42,36 @@ class ValuationReportTests(TestCase):
         result = reports.valuation_report({eb_b.pk})
         self.assertEqual(result['rows'], [])
         self.assertEqual(result['grand_total_value'], Decimal('0'))
+
+
+class HppReportTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+        self.item = ItemMasterPurchase.objects.create(nama='Kopi', tipe_item='RM')
+
+    def test_hpp_fifo_across_two_layers(self):
+        # 10 @ 4, then 10 @ 6; sell 15 FIFO -> HPP = 10*4 + 5*6 = 70
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                             Decimal('6'), date(2026, 1, 2), 'purchase_in', warehouse=self.wh)
+        ledger.consume_stock(self.item, self.eb, None, None, Decimal('15'),
+                             date(2026, 1, 10), 'sale_out', warehouse=self.wh)
+
+        result = reports.hpp_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        self.assertEqual(len(result['rows']), 1)
+        row = result['rows'][0]
+        self.assertEqual(row['qty_terjual'], Decimal('15'))
+        self.assertEqual(row['total_hpp'], Decimal('70'))
+        self.assertEqual(result['grand_total_hpp'], Decimal('70'))
+
+    def test_hpp_excludes_out_of_range(self):
+        ledger.record_inflow(self.item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        ledger.consume_stock(self.item, self.eb, None, None, Decimal('5'),
+                             date(2026, 2, 10), 'sale_out', warehouse=self.wh)
+        result = reports.hpp_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        self.assertEqual(result['rows'], [])
+        self.assertEqual(result['grand_total_hpp'], Decimal('0'))
