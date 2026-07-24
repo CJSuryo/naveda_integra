@@ -5,6 +5,9 @@ Semua fungsi murni (tanpa request). Kuantitas & nilai dalam base uom (Decimal).
 from collections import defaultdict
 from decimal import Decimal
 
+from django.db.models import Sum
+
+from .ledger import OUTFLOW_MOVEMENT_TYPES
 from .models import StockConsumption, StockMovement
 
 INVENTORY_TIPE_ITEMS = ('RM', 'FG', 'ITM', 'RMB', 'FGB', 'ITMB')
@@ -96,6 +99,10 @@ def hpp_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *, warehouse_id=None):
         # qty pada outflow bertanda negatif; qty terjual = -qty
         agg[mv.item_id]['qty'] += -mv.qty
         hpp = Decimal('0')
+        # Jumlahkan biaya per-layer dari StockConsumption, bukan qty*mv.unit_cost:
+        # unit_cost pada movement adalah rata-rata FIFO yang sudah dikuantisasi
+        # (DecimalField), sehingga qty*unit_cost bisa meleset tipis (mis. 70.0005
+        # vs 70.0000) dibanding penjumlahan biaya aktual tiap layer FIFO.
         for alloc in StockConsumption.objects.filter(out_movement=mv):
             hpp += alloc.qty * alloc.unit_cost
         agg[mv.item_id]['hpp'] += hpp
@@ -139,3 +146,72 @@ def hpp_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *, warehouse_id=None):
         'subtotals_kategori': dict(sub_kat),
         'grand_total_hpp': grand,
     }
+
+
+def velocity_report(eb_lv1_ids, tanggal_dari, tanggal_sampai, *,
+                    warehouse_id=None, velocity_filter=None):
+    """Slow/Fast moving: tag manual velocity_category + metrik aktual per item.
+
+    Untuk tiap item persediaan dalam scope EB: total qty keluar & jumlah gerakan
+    pada rentang, hari sejak keluar terakhir, on-hand saat ini. mismatch_flag
+    True bila tag 'fast'/'medium' tapi tak ada gerakan keluar pada rentang, atau
+    tag 'dead' tapi ADA gerakan.
+    """
+    from datetime import date as _date
+    eb_ids = list(eb_lv1_ids)
+
+    base = StockMovement.objects.filter(
+        entitas_bisnis_id__in=eb_ids, item__tipe_item__in=INVENTORY_TIPE_ITEMS)
+    if warehouse_id:
+        base = base.filter(warehouse_id=warehouse_id)
+
+    # item-item yang punya gerakan apa pun dalam scope
+    items = {}
+    for mv in base.select_related('item', 'item__kategori', 'item__stock_uom'):
+        items[mv.item_id] = mv.item
+
+    outflow = base.filter(
+        movement_type__in=OUTFLOW_MOVEMENT_TYPES,
+        tanggal__gte=tanggal_dari, tanggal__lte=tanggal_sampai)
+
+    qty_keluar = defaultdict(lambda: Decimal('0'))
+    jumlah = defaultdict(int)
+    last_out = {}
+    for mv in outflow:
+        qty_keluar[mv.item_id] += -mv.qty
+        jumlah[mv.item_id] += 1
+        if mv.item_id not in last_out or mv.tanggal > last_out[mv.item_id]:
+            last_out[mv.item_id] = mv.tanggal
+
+    onhand = defaultdict(lambda: Decimal('0'))
+    for r in base.filter(remaining_qty__gt=0).values('item_id').annotate(
+            s=Sum('remaining_qty')):
+        onhand[r['item_id']] = r['s'] or Decimal('0')
+
+    today = _date.today()
+    rows = []
+    for item_id, item in items.items():
+        vc = item.velocity_category or ''
+        if velocity_filter and vc != velocity_filter:
+            continue
+        qk = qty_keluar[item_id]
+        moved = qk > 0
+        last = last_out.get(item_id)
+        mismatch = (vc in ('fast', 'medium') and not moved) or (vc == 'dead' and moved)
+        rows.append({
+            'item': item,
+            'item_id': item.item_id,
+            'nama': item.nama,
+            'kategori': _kategori_nama(item),
+            'satuan': item.stock_uom.kode if getattr(item, 'stock_uom', None) else '',
+            'velocity_category': vc,
+            'velocity_label': item.get_velocity_category_display() if vc else '(Belum ditag)',
+            'qty_keluar': qk,
+            'jumlah_gerakan': jumlah[item_id],
+            'hari_sejak_keluar_terakhir': (today - last).days if last else None,
+            'on_hand': onhand[item_id],
+            'mismatch_flag': mismatch,
+        })
+
+    rows.sort(key=lambda r: (-r['qty_keluar'], r['item_id']))
+    return rows

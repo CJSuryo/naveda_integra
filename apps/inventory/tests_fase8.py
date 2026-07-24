@@ -75,3 +75,34 @@ class HppReportTests(TestCase):
         result = reports.hpp_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
         self.assertEqual(result['rows'], [])
         self.assertEqual(result['grand_total_hpp'], Decimal('0'))
+
+
+class VelocityReportTests(TestCase):
+    def setUp(self):
+        self.tipe = TipeEntitas.objects.create(nama='PT')
+        self.eb = EntitasBisnis.objects.create(nama='PT A', tipe_entitas=self.tipe)
+        self.wh = Warehouse.objects.create(entitas_bisnis=self.eb, nama='G1')
+
+    def test_fast_tag_without_movement_flags_mismatch(self):
+        item = ItemMasterPurchase.objects.create(
+            nama='Kopi', tipe_item='RM', velocity_category='fast')
+        ledger.record_inflow(item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        rows = reports.velocity_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        row = next(r for r in rows if r['item'].pk == item.pk)
+        self.assertEqual(row['qty_keluar'], Decimal('0'))
+        self.assertTrue(row['mismatch_flag'])
+        self.assertEqual(row['on_hand'], Decimal('10'))
+
+    def test_movement_metrics_computed(self):
+        item = ItemMasterPurchase.objects.create(
+            nama='Teh', tipe_item='RM', velocity_category='slow')
+        ledger.record_inflow(item, self.eb, None, None, Decimal('10'),
+                             Decimal('4'), date(2026, 1, 1), 'purchase_in', warehouse=self.wh)
+        ledger.consume_stock(item, self.eb, None, None, Decimal('6'),
+                             date(2026, 1, 20), 'sale_out', warehouse=self.wh)
+        rows = reports.velocity_report({self.eb.pk}, date(2026, 1, 1), date(2026, 1, 31))
+        row = next(r for r in rows if r['item'].pk == item.pk)
+        self.assertEqual(row['qty_keluar'], Decimal('6'))
+        self.assertEqual(row['jumlah_gerakan'], 1)
+        self.assertEqual(row['on_hand'], Decimal('4'))
