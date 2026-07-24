@@ -18,7 +18,7 @@ from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids
+from apps.purchase.views import _get_eb_tree, _resolve_eb_lv1_ids, accessible_eb_lv1_ids
 
 from .forms import (
     InventoryRecordForm, ItemReorderSettingForm, ReturCustomerForm, ReturCustomerItemFormSet,
@@ -1958,3 +1958,180 @@ def retur_supplier_akun_preview(request: HttpRequest) -> JsonResponse:
     from apps.master_data.models import Akun
     akun = Akun.objects.filter(pk=offsets[0]).first()
     return JsonResponse({'ok': True, 'akun_lawan': _akun_label(akun)})
+
+
+# ── Laporan Fase 8 ───────────────────────────────────────────────────────────
+
+def _report_eb_ids(request):
+    """Resolve EB filter selections to lv1 ids the user may access.
+
+    Bila tak ada filter, pakai seluruh lv1 yang terjangkau user (None dari
+    accessible_eb_lv1_ids berarti tak terbatas / superuser).
+    """
+    eb_filter_list = [v for v in request.GET.getlist('entitas_bisnis') if v]
+    if eb_filter_list:
+        return _resolve_eb_lv1_ids(eb_filter_list, request.user), eb_filter_list
+    allowed = accessible_eb_lv1_ids(request.user)
+    if allowed is not None:
+        return allowed, eb_filter_list
+    from apps.entitas_bisnis.models import EntitasBisnis
+    ids = set(EntitasBisnis.objects.filter(status_aktif=True).values_list('pk', flat=True))
+    return ids, eb_filter_list
+
+
+def _month_range(request):
+    today = timezone.now().date()
+    default_dari = today.replace(day=1)
+    dari = request.GET.get('tanggal_dari') or default_dari.isoformat()
+    sampai = request.GET.get('tanggal_sampai') or today.isoformat()
+    return dari, sampai
+
+
+@login_required
+def laporan_valuasi(request):
+    from . import reports
+    eb_ids, eb_filter_list = _report_eb_ids(request)
+    wh_id = request.GET.get('warehouse') or None
+    tipe = request.GET.get('tipe') or None
+    as_of = request.GET.get('as_of') or None
+    data = reports.valuation_report(eb_ids, warehouse_id=wh_id, tipe_item=tipe, as_of=as_of)
+
+    export = request.GET.get('export')
+    if export == 'csv':
+        return _export_valuasi_xlsx(data)
+    if export == 'pdf':
+        return render(request, 'inventory/_laporan_print.html', {
+            'title': 'Laporan Valuasi Persediaan', 'generated_at': timezone.now(),
+            'columns': ['Kategori', 'Item', 'Nama', 'Satuan', 'On-hand', 'Biaya/Unit', 'Nilai'],
+            'rows': [[r['kategori'], r['item_id'], r['nama'], r['satuan'],
+                      r['on_hand_qty'], r['unit_cost_avg'], r['total_value']] for r in data['rows']],
+            'total_label': 'Total Nilai', 'total_value': data['grand_total_value'],
+        })
+
+    return render(request, 'inventory/laporan_valuasi.html', {
+        'title': 'Laporan Valuasi Persediaan', 'data': data,
+        'items_tipe': [('RM', 'Raw Material'), ('FG', 'Finished Good'), ('ITM', 'Item Lainnya'),
+                       ('RMB', 'Raw Material (Bulk)'), ('FGB', 'Finished Good (Bulk)'),
+                       ('ITMB', 'Item Lainnya (Bulk)')],
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
+        'eb_tree': _get_eb_tree(request.user), 'eb_filter_list': eb_filter_list,
+        'wh_filter': wh_id or '', 'tipe_filter': tipe or '', 'as_of': as_of or '',
+    })
+
+
+@login_required
+def laporan_hpp(request):
+    from . import reports
+    eb_ids, eb_filter_list = _report_eb_ids(request)
+    wh_id = request.GET.get('warehouse') or None
+    dari, sampai = _month_range(request)
+    data = reports.hpp_report(eb_ids, dari, sampai, warehouse_id=wh_id)
+
+    export = request.GET.get('export')
+    if export == 'csv':
+        return _export_hpp_xlsx(data)
+    if export == 'pdf':
+        return render(request, 'inventory/_laporan_print.html', {
+            'title': f'Laporan HPP {dari} s/d {sampai}', 'generated_at': timezone.now(),
+            'columns': ['Kategori', 'Item', 'Nama', 'Satuan', 'Qty Terjual', 'Total HPP'],
+            'rows': [[r['kategori'], r['item_id'], r['nama'], r['satuan'],
+                      r['qty_terjual'], r['total_hpp']] for r in data['rows']],
+            'total_label': 'Total HPP', 'total_value': data['grand_total_hpp'],
+        })
+
+    return render(request, 'inventory/laporan_hpp.html', {
+        'title': 'Laporan HPP (COGS)', 'data': data,
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
+        'eb_tree': _get_eb_tree(request.user), 'eb_filter_list': eb_filter_list,
+        'wh_filter': wh_id or '', 'tanggal_dari': dari, 'tanggal_sampai': sampai,
+    })
+
+
+@login_required
+def laporan_velocity(request):
+    from . import reports
+    eb_ids, eb_filter_list = _report_eb_ids(request)
+    wh_id = request.GET.get('warehouse') or None
+    dari, sampai = _month_range(request)
+    vc = request.GET.get('velocity') or None
+    rows = reports.velocity_report(eb_ids, dari, sampai, warehouse_id=wh_id, velocity_filter=vc)
+
+    export = request.GET.get('export')
+    if export == 'csv':
+        return _export_velocity_xlsx(rows)
+    if export == 'pdf':
+        return render(request, 'inventory/_laporan_print.html', {
+            'title': f'Laporan Slow/Fast Moving {dari} s/d {sampai}',
+            'generated_at': timezone.now(),
+            'columns': ['Item', 'Nama', 'Tag', 'Qty Keluar', 'Gerakan', 'Hari Idle', 'On-hand', 'Mismatch'],
+            'rows': [[r['item_id'], r['nama'], r['velocity_label'], r['qty_keluar'],
+                      r['jumlah_gerakan'],
+                      r['hari_sejak_keluar_terakhir'] if r['hari_sejak_keluar_terakhir'] is not None else '-',
+                      r['on_hand'], 'YA' if r['mismatch_flag'] else ''] for r in rows],
+            'total_label': '', 'total_value': None,
+        })
+
+    return render(request, 'inventory/laporan_velocity.html', {
+        'title': 'Laporan Slow/Fast Moving', 'rows': rows,
+        'velocity_choices': [('fast', 'Fast Moving'), ('medium', 'Medium (B)'),
+                             ('slow', 'Slow (C)'), ('dead', 'Dead Stock')],
+        'warehouses': Warehouse.objects.filter(is_active=True).order_by('kode'),
+        'eb_tree': _get_eb_tree(request.user), 'eb_filter_list': eb_filter_list,
+        'wh_filter': wh_id or '', 'tanggal_dari': dari, 'tanggal_sampai': sampai,
+        'velocity_filter': vc or '',
+    })
+
+
+def _xlsx_response(title, headers, data_rows, numeric_cols, filename):
+    """Bangun XLSX satu-sheet (pola sama dengan inventory_export)."""
+    import openpyxl
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = title[:31]
+    hf = Font(bold=True)
+    fill = PatternFill(start_color='D9E1F2', end_color='D9E1F2', fill_type='solid')
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = hf
+        c.fill = fill
+        c.alignment = Alignment(horizontal='center')
+    for rnum, row in enumerate(data_rows, 2):
+        for col, val in enumerate(row, 1):
+            c = ws.cell(row=rnum, column=col,
+                        value=float(val) if col in numeric_cols and val is not None else val)
+            if col in numeric_cols:
+                c.alignment = Alignment(horizontal='right')
+                c.number_format = '#,##0.00'
+    for i in range(1, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(i)].width = 18
+    resp = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    resp['Content-Disposition'] = f'attachment; filename="{filename}"'
+    wb.save(resp)
+    return resp
+
+
+def _export_valuasi_xlsx(data):
+    headers = ['Kategori', 'Item ID', 'Nama', 'Tipe', 'Satuan', 'On-hand', 'Biaya/Unit', 'Nilai']
+    rows = [[r['kategori'], r['item_id'], r['nama'], r['tipe_item'], r['satuan'],
+             r['on_hand_qty'], r['unit_cost_avg'], r['total_value']] for r in data['rows']]
+    return _xlsx_response('Valuasi', headers, rows, {6, 7, 8}, 'valuasi_persediaan.xlsx')
+
+
+def _export_hpp_xlsx(data):
+    headers = ['Kategori', 'Item ID', 'Nama', 'Satuan', 'Qty Terjual', 'Total HPP']
+    rows = [[r['kategori'], r['item_id'], r['nama'], r['satuan'],
+             r['qty_terjual'], r['total_hpp']] for r in data['rows']]
+    return _xlsx_response('HPP', headers, rows, {5, 6}, 'laporan_hpp.xlsx')
+
+
+def _export_velocity_xlsx(rows_in):
+    headers = ['Item ID', 'Nama', 'Kategori', 'Tag Velocity', 'Qty Keluar', 'Jml Gerakan',
+               'Hari Idle', 'On-hand', 'Mismatch']
+    rows = [[r['item_id'], r['nama'], r['kategori'], r['velocity_label'], r['qty_keluar'],
+             r['jumlah_gerakan'],
+             r['hari_sejak_keluar_terakhir'] if r['hari_sejak_keluar_terakhir'] is not None else '',
+             r['on_hand'], 'YA' if r['mismatch_flag'] else ''] for r in rows_in]
+    return _xlsx_response('Velocity', headers, rows, {5, 6, 8}, 'slow_fast_moving.xlsx')
