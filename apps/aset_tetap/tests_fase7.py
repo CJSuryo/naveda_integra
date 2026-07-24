@@ -402,3 +402,49 @@ class AssetDocumentTests(TestCase):
         buktis = list_bukti_aset(self.aset)
         self.assertEqual(buktis.count(), 2)
         self.assertTrue(all(b.referensi_eksternal == self.aset.aset_number for b in buktis))
+
+
+class DepreciationScheduleTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.item.masa_manfaat = 10
+        self.item.metode_penyusutan = 'straight_line'
+        self.item.save()
+        # aset baru bersih: HP 36.5jt, residu 0, akum 0
+        self.aset2 = AsetTetapRecord.objects.create(
+            item=self.item, entitas_bisnis=self.eb, quantity=1,
+            harga_perolehan=Decimal('36500000'), nilai_residu=Decimal('0'),
+        )
+
+    def test_schedule_reaches_residu(self):
+        from apps.aset_tetap.reports import depreciation_schedule
+        rows = depreciation_schedule(self.aset2, periods=12, days_per_period=30)
+        self.assertEqual(len(rows), 12)
+        # tiap periode 300.000 penyusutan
+        self.assertEqual(rows[0]['penyusutan'], Decimal('300000'))
+        # nilai buku menurun monoton
+        self.assertTrue(rows[0]['nilai_buku_akhir'] > rows[1]['nilai_buku_akhir'])
+        # tidak pernah di bawah residu
+        self.assertTrue(all(r['nilai_buku_akhir'] >= self.aset2.nilai_residu for r in rows))
+
+
+class LaporanPenyusutanTests(TestCase):
+    def setUp(self):
+        base_setup(self)
+        self.lok = LokasiAset.objects.create(kode='L1', nama='Gudang 1')
+        self.aset.lokasi_aset = self.lok
+        self.aset.departemen = self.dept
+        self.aset.save()
+
+    def test_filter_by_lokasi(self):
+        from apps.aset_tetap.reports import laporan_penyusutan
+        rows = laporan_penyusutan(lokasi=self.lok)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['aset_number'], self.aset.aset_number)
+        self.assertEqual(rows[0]['nilai_buku'], Decimal('80000000'))
+
+    def test_filter_excludes_other_dept(self):
+        from apps.aset_tetap.reports import laporan_penyusutan
+        other_dept = EntitasBisnisLv3.objects.create(parent_lv2=self.lv2, nama='Marketing')
+        rows = laporan_penyusutan(departemen=other_dept)
+        self.assertEqual(len(rows), 0)
