@@ -27,6 +27,12 @@ class ReportViewSmokeTests(TestCase):
     def test_hub_renders(self):
         self.assertEqual(self.client.get(reverse('inventory:laporan_hub')).status_code, 200)
 
+    # NOTE: test_valuasi_renders + test_valuasi_xlsx_export together make exactly
+    # 2 requests to laporan_valuasi, which is the full test-env rate limit for
+    # this view (rate_from('export') == '2/m', see naveda_integra/settings/test.py).
+    # Do not add a 3rd request to laporan_valuasi in this class without either
+    # removing one of these two or bumping/documenting the limit — a 3rd hit
+    # will trip the rate limiter and fail with a confusing 429/403.
     def test_valuasi_renders(self):
         self.assertEqual(self.client.get(reverse('inventory:laporan_valuasi')).status_code, 200)
 
@@ -43,3 +49,14 @@ class ReportViewSmokeTests(TestCase):
         resp = self.client.get(reverse('inventory:laporan_valuasi'), {'export': 'csv'})
         self.assertEqual(resp.status_code, 200)
         self.assertIn('spreadsheetml', resp['Content-Type'])
+
+    def test_hpp_pdf_export(self):
+        # Uses laporan_hpp (not laporan_valuasi) so it has its own independent
+        # rate-limit bucket and doesn't touch the valuasi 2/2min quota above.
+        # Exercises the shared print template inventory/_laporan_print.html
+        # used by all four Fase 8 report PDF exports.
+        resp = self.client.get(reverse('inventory:laporan_hpp'), {'export': 'pdf'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn(b'Laporan HPP', resp.content)
+        self.assertIn(b'Qty Terjual', resp.content)
+        self.assertIn(b'Total HPP', resp.content)
