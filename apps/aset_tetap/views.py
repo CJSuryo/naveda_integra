@@ -910,6 +910,8 @@ def laporan_register(request):
     if request.GET.get('export') == 'csv':
         return _export_register_xlsx(data)
     if request.GET.get('export') == 'pdf':
+        # Shared cross-app print layout — see apps/inventory/views.py's
+        # laporan_* views for the sibling report pages that also use it.
         return render(request, 'inventory/_laporan_print.html', {
             'title': 'Asset Register', 'generated_at': timezone.now(),
             'columns': ['Kode', 'Nama', 'Kategori', 'Lokasi', 'Departemen', 'PIC',
