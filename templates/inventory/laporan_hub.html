@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% block title %}Hub Laporan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Hub Laporan</h1>
+    <p class="ni-page-header__subtitle">Semua laporan Inventory &amp; Aset Tetap dalam satu tempat.</p>
+  </div>
+</div>
+
+<h2>Persediaan</h2>
+<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
+  <a href="{% url 'inventory:laporan_valuasi' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Valuasi Persediaan</h3>
+      <p class="ni-card__subtitle">Nilai stok on-hand dari ledger.</p>
+    </div>
+  </a>
+  <a href="{% url 'inventory:laporan_hpp' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan HPP</h3>
+      <p class="ni-card__subtitle">Harga pokok penjualan per periode.</p>
+    </div>
+  </a>
+  <a href="{% url 'inventory:laporan_velocity' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Slow / Fast Moving</h3>
+      <p class="ni-card__subtitle">Velocity item + realita gerakan.</p>
+    </div>
+  </a>
+  <a href="{% url 'inventory:stock_card' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Kartu Stok</h3>
+      <p class="ni-card__subtitle">Layer &amp; saldo per item.</p>
+    </div>
+  </a>
+  <a href="{% url 'inventory:stock_ledger' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Buku Persediaan</h3>
+      <p class="ni-card__subtitle">Semua pergerakan + saldo berjalan.</p>
+    </div>
+  </a>
+  <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan Persediaan</h3>
+      <p class="ni-card__subtitle">Ringkasan komprehensif.</p>
+    </div>
+  </a>
+</div>
+
+<h2>Aset Tetap</h2>
+<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
+  <a href="{% url 'aset_tetap:laporan_register' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Asset Register</h3>
+      <p class="ni-card__subtitle">Daftar aset per kategori/lokasi/departemen.</p>
+    </div>
+  </a>
+  <a href="{% url 'aset_tetap:laporan_penyusutan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan Penyusutan</h3>
+      <p class="ni-card__subtitle">Penyusutan per dimensi.</p>
+    </div>
+  </a>
+</div>
+{% endblock %}

@@ -308,6 +308,9 @@
           <a href="{% url 'inventory:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Daftar Inventory</span>
           </a>
+          <a href="{% url 'inventory:laporan_hub' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Hub Laporan</span>
+          </a>
           <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Laporan Persediaan</span>
           </a>
@@ -375,6 +378,12 @@
         <div class="ni-nav-submenu">
           <a href="{% url 'aset_tetap:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Daftar Aset Tetap</span>
+          </a>
+          <a href="{% url 'aset_tetap:laporan_register' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Asset Register</span>
+          </a>
+          <a href="{% url 'aset_tetap:laporan_penyusutan' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Penyusutan</span>
           </a>
         </div>
       </div>

@@ -2085,6 +2085,12 @@ def laporan_velocity(request):
     })
 
 
+@login_required
+def laporan_hub(request):
+    """Landing page kartu tautan semua laporan Inventory & Aset Tetap."""
+    return render(request, 'inventory/laporan_hub.html', {'title': 'Hub Laporan'})
+
+
 def _xlsx_response(title, headers, data_rows, numeric_cols, filename):
     """Bangun XLSX satu-sheet (pola sama dengan inventory_export)."""
     import openpyxl

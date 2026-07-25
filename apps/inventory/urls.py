@@ -9,6 +9,7 @@ urlpatterns = [
     path('export/', views.inventory_export, name='export'),
     path('export/pdf/', views.inventory_export_pdf, name='export_pdf'),
     path('laporan/', views.laporan_persediaan, name='laporan_persediaan'),
+    path('laporan/hub/', views.laporan_hub, name='laporan_hub'),
     path('create/', views.inventory_create, name='create'),
     path('<int:pk>/', views.inventory_detail, name='detail'),
     path('<int:pk>/convert-to-satuan/', views.convert_bulk_to_satuan, name='convert_to_satuan'),
