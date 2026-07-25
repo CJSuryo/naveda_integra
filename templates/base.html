@@ -298,7 +298,7 @@
         </div>
       </div>
 
-      <div class="ni-nav-item {% if 'inventory' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'inventory' in request.path and '/inventory/laporan' not in request.path and '/inventory/ledger/' not in request.path and '/inventory/kartu-stok/' not in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="warehouse" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Inventory</span>
@@ -308,20 +308,8 @@
           <a href="{% url 'inventory:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Daftar Inventory</span>
           </a>
-          <a href="{% url 'inventory:laporan_hub' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Hub Laporan</span>
-          </a>
-          <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Laporan Persediaan</span>
-          </a>
           <a href="{% url 'inventory:warehouse_list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Gudang</span>
-          </a>
-          <a href="{% url 'inventory:stock_ledger' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Buku Persediaan</span>
-          </a>
-          <a href="{% url 'inventory:stock_card' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Kartu Stok</span>
           </a>
           <a href="{% url 'uom:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Master Satuan</span>
@@ -369,7 +357,7 @@
         </div>
       </div>
 
-      <div class="ni-nav-item {% if 'aset-tetap' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'aset-tetap' in request.path and '/aset-tetap/laporan' not in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="building" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Aset Tetap</span>
@@ -378,12 +366,6 @@
         <div class="ni-nav-submenu">
           <a href="{% url 'aset_tetap:list' %}" class="ni-nav-link">
             <span class="ni-nav-link__text">Daftar Aset Tetap</span>
-          </a>
-          <a href="{% url 'aset_tetap:laporan_register' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Asset Register</span>
-          </a>
-          <a href="{% url 'aset_tetap:laporan_penyusutan' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Laporan Penyusutan</span>
           </a>
         </div>
       </div>
@@ -436,30 +418,21 @@
         </div>
       </div>
 
-      <div class="ni-nav-item {% if 'neraca-saldo' in request.path or 'buku-besar' in request.path or 'laporan-laba-rugi' in request.path or '/jurnal/neraca/' in request.path or 'laporan-perubahan-ekuitas' in request.path or 'analisis-keuangan' in request.path %}ni-nav-item--open{% endif %}">
+      <div class="ni-nav-item {% if 'neraca-saldo' in request.path or 'buku-besar' in request.path or 'laporan-laba-rugi' in request.path or '/jurnal/neraca/' in request.path or 'laporan-perubahan-ekuitas' in request.path or 'analisis-keuangan' in request.path or 'laporan-keuangan' in request.path or '/inventory/laporan' in request.path or '/inventory/ledger/' in request.path or '/inventory/kartu-stok/' in request.path or '/aset-tetap/laporan' in request.path %}ni-nav-item--open{% endif %}">
         <div class="ni-nav-link" data-toggle="submenu">
           <i data-lucide="bar-chart-2" class="ni-nav-link__icon"></i>
           <span class="ni-nav-link__text">Laporan</span>
           <i data-lucide="chevron-right" class="ni-nav-link__arrow"></i>
         </div>
         <div class="ni-nav-submenu">
-          <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Neraca Saldo</span>
+          <a href="{% url 'jurnal:laporan_keuangan_hub' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Keuangan</span>
           </a>
-          <a href="{% url 'jurnal:buku_besar' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Buku Besar</span>
+          <a href="{% url 'inventory:laporan_hub' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Persediaan</span>
           </a>
-          <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Laporan Laba Rugi</span>
-          </a>
-          <a href="{% url 'jurnal:neraca' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Neraca</span>
-          </a>
-          <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Laporan Perubahan Ekuitas</span>
-          </a>
-          <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-nav-link">
-            <span class="ni-nav-link__text">Analisis Keuangan</span>
+          <a href="{% url 'aset_tetap:laporan_aset_hub' %}" class="ni-nav-link">
+            <span class="ni-nav-link__text">Laporan Aset</span>
           </a>
         </div>
       </div>

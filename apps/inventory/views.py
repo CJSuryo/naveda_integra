@@ -2087,8 +2087,8 @@ def laporan_velocity(request):
 
 @login_required
 def laporan_hub(request):
-    """Landing page kartu tautan semua laporan Inventory & Aset Tetap."""
-    return render(request, 'inventory/laporan_hub.html', {'title': 'Hub Laporan'})
+    """Landing page kartu tautan semua laporan Persediaan."""
+    return render(request, 'inventory/laporan_hub.html', {'title': 'Laporan Persediaan'})
 
 
 def _xlsx_response(title, headers, data_rows, numeric_cols, filename):

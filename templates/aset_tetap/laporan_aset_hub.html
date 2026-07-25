@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Aset{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Aset</h1>
+    <p class="ni-page-header__subtitle">Semua laporan Aset Tetap dalam satu tempat.</p>
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
+  <a href="{% url 'aset_tetap:laporan_register' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Asset Register</h3>
+      <p class="ni-card__subtitle">Daftar aset per kategori/lokasi/departemen.</p>
+    </div>
+  </a>
+  <a href="{% url 'aset_tetap:laporan_penyusutan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan Penyusutan</h3>
+      <p class="ni-card__subtitle">Penyusutan per dimensi.</p>
+    </div>
+  </a>
+</div>
+{% endblock %}

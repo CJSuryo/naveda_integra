@@ -22,6 +22,9 @@ urlpatterns = [
     path('manual/<int:pk>/remove-akun/<int:mapping_pk>/', views.automasi_remove_akun, name='automasi_remove_akun'),
     path('manual/<int:pk>/entry/', views.automasi_entry, name='automasi_entry'),
 
+    # Laporan Keuangan (hub)
+    path('laporan-keuangan/', views.laporan_keuangan_hub, name='laporan_keuangan_hub'),
+
     # Neraca Saldo (Trial Balance)
     path('neraca-saldo/', views.neraca_saldo, name='neraca_saldo'),
 

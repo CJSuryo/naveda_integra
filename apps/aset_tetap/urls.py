@@ -30,5 +30,6 @@ urlpatterns = [
     path('revaluation/<int:pk>/delete/', views.revaluation_delete, name='revaluation_delete'),
     path('laporan-penyusutan/', views.laporan_penyusutan, name='laporan_penyusutan'),
     path('laporan-register/', views.laporan_register, name='laporan_register'),
+    path('laporan-aset/', views.laporan_aset_hub, name='laporan_aset_hub'),
     path('<int:pk>/schedule/', views.depreciation_schedule, name='depreciation_schedule'),
 ]

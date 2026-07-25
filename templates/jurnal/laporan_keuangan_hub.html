@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Laporan Keuangan{% endblock %}
+{% block content %}
+<div class="ni-page-header">
+  <div>
+    <h1 class="ni-page-header__title">Laporan Keuangan</h1>
+    <p class="ni-page-header__subtitle">Semua laporan keuangan dalam satu tempat.</p>
+  </div>
+</div>
+
+<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
+  <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Neraca Saldo</h3>
+      <p class="ni-card__subtitle">Trial balance — saldo tiap akun.</p>
+    </div>
+  </a>
+  <a href="{% url 'jurnal:buku_besar' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Buku Besar</h3>
+      <p class="ni-card__subtitle">Mutasi per akun (general ledger).</p>
+    </div>
+  </a>
+  <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan Laba Rugi</h3>
+      <p class="ni-card__subtitle">Pendapatan, beban, dan laba/rugi periode.</p>
+    </div>
+  </a>
+  <a href="{% url 'jurnal:neraca' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Neraca</h3>
+      <p class="ni-card__subtitle">Posisi aset, kewajiban, dan ekuitas.</p>
+    </div>
+  </a>
+  <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Laporan Perubahan Ekuitas</h3>
+      <p class="ni-card__subtitle">Pergerakan modal selama periode.</p>
+    </div>
+  </a>
+  <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
+    <div class="ni-card__body">
+      <h3 class="ni-card__title">Analisis Keuangan</h3>
+      <p class="ni-card__subtitle">Rasio &amp; indikator kinerja keuangan.</p>
+    </div>
+  </a>
+</div>
+{% endblock %}

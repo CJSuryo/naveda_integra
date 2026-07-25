@@ -968,3 +968,9 @@ def _export_register_xlsx(data):
     resp['Content-Disposition'] = 'attachment; filename="asset_register.xlsx"'
     wb.save(resp)
     return resp
+
+
+@login_required
+def laporan_aset_hub(request):
+    """Landing page kartu tautan semua laporan Aset Tetap."""
+    return render(request, 'aset_tetap/laporan_aset_hub.html', {'title': 'Laporan Aset'})

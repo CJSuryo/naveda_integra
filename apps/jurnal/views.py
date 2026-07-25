@@ -2433,3 +2433,9 @@ def buku_besar(request: HttpRequest) -> HttpResponse:
         'total_kredit': sum((r['kredit'] for r in rows), Decimal('0')),
         'saldo_akhir': rows[-1]['saldo'] if rows else saldo_awal,
     })
+
+
+@login_required
+def laporan_keuangan_hub(request):
+    """Landing page kartu tautan semua laporan keuangan."""
+    return render(request, 'jurnal/laporan_keuangan_hub.html', {'title': 'Laporan Keuangan'})
