@@ -36,6 +36,9 @@ class ReportViewSmokeTests(TestCase):
     def test_valuasi_renders(self):
         self.assertEqual(self.client.get(reverse('inventory:laporan_valuasi')).status_code, 200)
 
+    # NOTE: test_hpp_renders + test_hpp_pdf_export together make exactly 2
+    # requests to laporan_hpp — same '2/m' test-env quota constraint as
+    # laporan_valuasi above. Don't add a 3rd request to laporan_hpp here.
     def test_hpp_renders(self):
         self.assertEqual(self.client.get(reverse('inventory:laporan_hpp')).status_code, 200)
 
