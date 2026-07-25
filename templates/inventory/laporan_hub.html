@@ -1,54 +1,79 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Laporan Persediaan{% endblock %}
-{% block content %}
-<div class="ni-page-header">
-  <div>
-    <h1 class="ni-page-header__title">Laporan Persediaan</h1>
-    <p class="ni-page-header__subtitle">Semua laporan persediaan dalam satu tempat.</p>
-  </div>
-  <div class="ni-page-header__actions">
-    <button type="button" class="ni-btn ni-btn--secondary" onclick="history.back()">
-      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
-    </button>
-  </div>
-</div>
 
-<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
-  <a href="{% url 'inventory:laporan_valuasi' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Valuasi Persediaan</h3>
-      <p class="ni-card__subtitle">Nilai stok on-hand dari ledger.</p>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/report-hub.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="ni-rhub ni-rhub--persediaan ni-animate-fade-in">
+  <button type="button" class="ni-rhub__back" onclick="history.back()">
+    <i data-lucide="arrow-left" aria-hidden="true"></i> Kembali
+  </button>
+
+  <div class="ni-rhub__hero">
+    <div class="ni-rhub__hero-glow" aria-hidden="true"></div>
+    <div class="ni-rhub__hero-icon" aria-hidden="true"><i data-lucide="warehouse"></i></div>
+    <div class="ni-rhub__hero-text">
+      <h1 class="ni-rhub__hero-title">Laporan Persediaan</h1>
+      <p class="ni-rhub__hero-sub">Semua laporan persediaan dalam satu tempat — pilih laporan untuk membuka.</p>
     </div>
-  </a>
-  <a href="{% url 'inventory:laporan_hpp' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Laporan HPP</h3>
-      <p class="ni-card__subtitle">Harga pokok penjualan per periode.</p>
-    </div>
-  </a>
-  <a href="{% url 'inventory:laporan_velocity' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Slow / Fast Moving</h3>
-      <p class="ni-card__subtitle">Velocity item + realita gerakan.</p>
-    </div>
-  </a>
-  <a href="{% url 'inventory:stock_card' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Kartu Stok</h3>
-      <p class="ni-card__subtitle">Layer &amp; saldo per item.</p>
-    </div>
-  </a>
-  <a href="{% url 'inventory:stock_ledger' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Buku Persediaan</h3>
-      <p class="ni-card__subtitle">Semua pergerakan + saldo berjalan.</p>
-    </div>
-  </a>
-  <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Laporan Persediaan</h3>
-      <p class="ni-card__subtitle">Ringkasan komprehensif.</p>
-    </div>
-  </a>
+    <div class="ni-rhub__hero-count"><b>6</b><span>Laporan</span></div>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Nilai &amp; Biaya</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'inventory:laporan_valuasi' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="bar-chart-3"></i></div>
+      <h3 class="ni-rhub__card-title">Valuasi Persediaan</h3>
+      <p class="ni-rhub__card-desc">Nilai stok on-hand dari ledger.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'inventory:laporan_hpp' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="dollar-sign"></i></div>
+      <h3 class="ni-rhub__card-title">Laporan HPP</h3>
+      <p class="ni-rhub__card-desc">Harga pokok penjualan per periode.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Pergerakan Stok</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'inventory:stock_card' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="layout-grid"></i></div>
+      <h3 class="ni-rhub__card-title">Kartu Stok</h3>
+      <p class="ni-rhub__card-desc">Layer &amp; saldo per item.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'inventory:stock_ledger' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="book"></i></div>
+      <h3 class="ni-rhub__card-title">Buku Persediaan</h3>
+      <p class="ni-rhub__card-desc">Semua pergerakan + saldo berjalan.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Analisis &amp; Ringkasan</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'inventory:laporan_velocity' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="trending-up"></i></div>
+      <h3 class="ni-rhub__card-title">Slow / Fast Moving</h3>
+      <p class="ni-rhub__card-desc">Velocity item + realita gerakan.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'inventory:laporan_persediaan' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="file-text"></i></div>
+      <h3 class="ni-rhub__card-title">Laporan Persediaan</h3>
+      <p class="ni-rhub__card-desc">Ringkasan komprehensif.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
 </div>
 {% endblock %}
