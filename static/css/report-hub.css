@@ -1,12 +1,7 @@
 /* report-hub.css — halaman hub laporan bertema (.ni-rhub). Hanya dimuat di 3 hub. */
 
 /* ── Tema per kategori (default = keuangan) ───────────────────────────── */
-.ni-rhub{
-  --rhub-c1:#0054a6; --rhub-c2:#3b82f6;
-  --rhub-chip-bg:#e8f0fe; --rhub-chip-fg:#0054a6;
-  --rhub-glow:rgba(0,84,166,.14); --rhub-shadow:rgba(0,84,166,.42);
-}
-.ni-rhub--keuangan{
+.ni-rhub, .ni-rhub--keuangan{
   --rhub-c1:#0054a6; --rhub-c2:#3b82f6;
   --rhub-chip-bg:#e8f0fe; --rhub-chip-fg:#0054a6;
   --rhub-glow:rgba(0,84,166,.14); --rhub-shadow:rgba(0,84,166,.42);
