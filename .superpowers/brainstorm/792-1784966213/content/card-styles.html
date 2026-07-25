@@ -1,0 +1,80 @@
+<style>
+  .cmp { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:8px; }
+  @media (max-width:900px){ .cmp{ grid-template-columns:1fr; } }
+  .pick { cursor:pointer; border:2px solid transparent; border-radius:18px; padding:16px; background:#f1f5f9; transition:.18s; }
+  .pick:hover{ transform:translateY(-3px); }
+  .pick .plabel{ font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:#64748b; margin-bottom:12px; }
+  .stage{ background:#f8fafc; border-radius:12px; padding:18px; }
+
+  /* Shared card base (real ni palette) */
+  .rc{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; text-align:left; font-family:inherit; }
+  .rc h4{ margin:0; color:#1e293b; font-size:15px; font-weight:650; }
+  .rc p{ margin:4px 0 0; color:#64748b; font-size:12.5px; line-height:1.45; }
+
+  /* A — Icon tile */
+  .a{ padding:18px; display:flex; gap:14px; align-items:flex-start; box-shadow:0 1px 2px rgba(0,0,0,.05); }
+  .a .ic{ width:44px;height:44px;border-radius:11px;background:#e8f0fe;color:#0054a6;display:grid;place-items:center;flex-shrink:0; }
+  .a .ic svg{width:22px;height:22px;}
+
+  /* B — Accent bar */
+  .b{ padding:16px 18px 16px 16px; border-left:4px solid #0054a6; box-shadow:0 1px 2px rgba(0,0,0,.05); position:relative; }
+  .b .top{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .b .ic{ width:34px;height:34px;border-radius:9px;background:#e8f0fe;color:#0054a6;display:grid;place-items:center; }
+  .b .ic svg{width:18px;height:18px;}
+  .b .go{ position:absolute; right:14px; top:16px; color:#94a3b8; font-size:12px; font-weight:600; }
+
+  /* C — Gradient hero */
+  .c{ padding:22px; box-shadow:0 4px 6px -1px rgba(0,0,0,.08); position:relative; overflow:hidden; }
+  .c .ic{ width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#0054a6,#6366f1);color:#fff;display:grid;place-items:center;margin-bottom:14px;box-shadow:0 6px 14px -4px rgba(0,84,166,.5); }
+  .c .ic svg{width:26px;height:26px;}
+  .c h4{ font-size:16px; }
+  .c .chip{ display:inline-flex; align-items:center; gap:5px; margin-top:14px; font-size:12px; font-weight:600; color:#0054a6; background:#e8f0fe; padding:5px 11px; border-radius:999px; }
+  .c .glow{ position:absolute; right:-30px; top:-30px; width:110px; height:110px; background:radial-gradient(circle,rgba(99,102,241,.16),transparent 70%); }
+</style>
+
+<h2>Tiga arah gaya kartu laporan</h2>
+<p class="subtitle">Semua memakai warna asli aplikasi (biru #0054a6, indigo, hijau, dll). Klik yang paling terasa pas — atau bilang di terminal kalau mau campuran/perubahan.</p>
+
+<div class="cmp">
+  <!-- A -->
+  <div class="pick" data-choice="a-tile" onclick="toggleSelect(this)">
+    <div class="plabel">A · Icon Tile — tenang &amp; rapi</div>
+    <div class="stage">
+      <div class="rc a">
+        <div class="ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg></div>
+        <div><h4>Valuasi Persediaan</h4><p>Nilai stok on-hand dari ledger.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div class="pick" data-choice="b-accent" onclick="toggleSelect(this)">
+    <div class="plabel">B · Accent Bar — terstruktur</div>
+    <div class="stage">
+      <div class="rc b">
+        <span class="go">Buka →</span>
+        <div class="top">
+          <div class="ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg></div>
+          <h4>Valuasi Persediaan</h4>
+        </div>
+        <p>Nilai stok on-hand dari ledger.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div class="pick" data-choice="c-hero" onclick="toggleSelect(this)">
+    <div class="plabel">C · Gradient Hero — paling "wow"</div>
+    <div class="stage">
+      <div class="rc c">
+        <div class="glow"></div>
+        <div class="ic"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><rect x="7" y="10" width="3" height="8"/><rect x="12" y="6" width="3" height="12"/><rect x="17" y="13" width="3" height="5"/></svg></div>
+        <h4>Valuasi Persediaan</h4>
+        <p>Nilai stok on-hand dari ledger.</p>
+        <span class="chip">Lihat laporan →</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:20px;">Catatan: warna ikon nanti mengikuti kategori tiap hub (Keuangan = biru, Persediaan = hijau/teal, Aset = indigo, dst).</p>
