@@ -888,6 +888,7 @@ def _register_eb_ids(request):
 
 
 @login_required
+@ratelimit(key='user', rate=rate_from('export'), method='GET', block=True)
 def laporan_register(request):
     from . import reports
     from apps.aset_tetap.models import LokasiAset
