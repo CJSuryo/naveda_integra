@@ -1,54 +1,79 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Laporan Keuangan{% endblock %}
-{% block content %}
-<div class="ni-page-header">
-  <div>
-    <h1 class="ni-page-header__title">Laporan Keuangan</h1>
-    <p class="ni-page-header__subtitle">Semua laporan keuangan dalam satu tempat.</p>
-  </div>
-  <div class="ni-page-header__actions">
-    <button type="button" class="ni-btn ni-btn--secondary" onclick="history.back()">
-      <i data-lucide="arrow-left" style="width:16px;height:16px"></i> Kembali
-    </button>
-  </div>
-</div>
 
-<div class="ni-card-grid ni-card-grid--3 ni-animate-fade-in">
-  <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Neraca Saldo</h3>
-      <p class="ni-card__subtitle">Trial balance — saldo tiap akun.</p>
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'css/report-hub.css' %}">
+{% endblock %}
+
+{% block content %}
+<div class="ni-rhub ni-rhub--keuangan ni-animate-fade-in">
+  <button type="button" class="ni-rhub__back" onclick="history.back()">
+    <i data-lucide="arrow-left" aria-hidden="true"></i> Kembali
+  </button>
+
+  <div class="ni-rhub__hero">
+    <div class="ni-rhub__hero-glow" aria-hidden="true"></div>
+    <div class="ni-rhub__hero-icon" aria-hidden="true"><i data-lucide="bar-chart-2"></i></div>
+    <div class="ni-rhub__hero-text">
+      <h1 class="ni-rhub__hero-title">Laporan Keuangan</h1>
+      <p class="ni-rhub__hero-sub">Semua laporan keuangan dalam satu tempat — pilih laporan untuk membuka.</p>
     </div>
-  </a>
-  <a href="{% url 'jurnal:buku_besar' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Buku Besar</h3>
-      <p class="ni-card__subtitle">Mutasi per akun (general ledger).</p>
-    </div>
-  </a>
-  <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Laporan Laba Rugi</h3>
-      <p class="ni-card__subtitle">Pendapatan, beban, dan laba/rugi periode.</p>
-    </div>
-  </a>
-  <a href="{% url 'jurnal:neraca' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Neraca</h3>
-      <p class="ni-card__subtitle">Posisi aset, kewajiban, dan ekuitas.</p>
-    </div>
-  </a>
-  <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Laporan Perubahan Ekuitas</h3>
-      <p class="ni-card__subtitle">Pergerakan modal selama periode.</p>
-    </div>
-  </a>
-  <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-card ni-card--hover" style="display:block;text-decoration:none;color:inherit;">
-    <div class="ni-card__body">
-      <h3 class="ni-card__title">Analisis Keuangan</h3>
-      <p class="ni-card__subtitle">Rasio &amp; indikator kinerja keuangan.</p>
-    </div>
-  </a>
+    <div class="ni-rhub__hero-count"><b>6</b><span>Laporan</span></div>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Laporan Utama</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'jurnal:laporan_laba_rugi' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="trending-up"></i></div>
+      <h3 class="ni-rhub__card-title">Laporan Laba Rugi</h3>
+      <p class="ni-rhub__card-desc">Pendapatan, beban, dan laba/rugi periode.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'jurnal:neraca' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="scale"></i></div>
+      <h3 class="ni-rhub__card-title">Neraca</h3>
+      <p class="ni-rhub__card-desc">Posisi aset, kewajiban, dan ekuitas.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'jurnal:laporan_perubahan_ekuitas' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="arrow-left-right"></i></div>
+      <h3 class="ni-rhub__card-title">Laporan Perubahan Ekuitas</h3>
+      <p class="ni-rhub__card-desc">Pergerakan modal selama periode.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Buku &amp; Saldo</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'jurnal:neraca_saldo' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="scale-3d"></i></div>
+      <h3 class="ni-rhub__card-title">Neraca Saldo</h3>
+      <p class="ni-rhub__card-desc">Trial balance — saldo tiap akun.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+    <a href="{% url 'jurnal:buku_besar' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="book-open"></i></div>
+      <h3 class="ni-rhub__card-title">Buku Besar</h3>
+      <p class="ni-rhub__card-desc">Mutasi per akun (general ledger).</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
+
+  <div class="ni-rhub__section-label"><span>Analisis</span></div>
+  <div class="ni-rhub__grid">
+    <a href="{% url 'jurnal:analisis_keuangan' %}" class="ni-rhub__card">
+      <div class="ni-rhub__card-glow" aria-hidden="true"></div>
+      <div class="ni-rhub__card-icon" aria-hidden="true"><i data-lucide="line-chart"></i></div>
+      <h3 class="ni-rhub__card-title">Analisis Keuangan</h3>
+      <p class="ni-rhub__card-desc">Rasio &amp; indikator kinerja keuangan.</p>
+      <span class="ni-rhub__card-chip">Lihat laporan <i data-lucide="arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </div>
 </div>
 {% endblock %}
