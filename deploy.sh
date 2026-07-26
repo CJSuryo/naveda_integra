@@ -27,6 +27,13 @@ docker compose exec -T web python manage.py migrate --no-input
 # staticfiles/ is gitignored, so a pull never brings it — only this rebuilds it.
 docker compose exec -T web python manage.py collectstatic --no-input
 
+# ManifestStaticFilesStorage loads staticfiles.json into memory once per worker,
+# at process boot, and never reloads it. Workers started by `up -d` above can boot
+# before this collectstatic call finishes writing the new manifest, so they keep
+# serving from a stale/missing manifest until restarted — even though the file on
+# disk is already correct. Restart so already-running workers pick it up.
+docker compose restart web
+
 echo "Waiting for health..."
 for i in $(seq 1 30); do
   # -H Host: ALLOWED_HOSTS has no "localhost", so a bare request gets
